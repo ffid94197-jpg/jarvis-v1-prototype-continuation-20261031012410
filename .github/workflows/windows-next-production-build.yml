@@ -1,0 +1,48 @@
+name: Windows Next.js Standalone Build (not V1 release)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'prisma/**'
+      - 'next.config.ts'
+      - '.github/workflows/windows-next-production-build.yml'
+jobs:
+  standalone-build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies (creates lockfile if absent)
+        run: npm install --no-audit --no-fund
+      - name: Prisma client
+        run: npm run db:generate
+        env:
+          DATABASE_URL: file:./jarvis-ci-build-only.db
+      - name: Next standalone compilation and artifact verification
+        run: npm run build
+        env:
+          DATABASE_URL: file:./jarvis-ci-build-only.db
+          JARVIS_LOCAL_DEV_NO_LOGIN: '0'
+          NODE_ENV: production
+      - name: TypeScript check
+        run: npm run typecheck
+      - name: Production build evidence (NOT V1 certification)
+        run: node scripts/verify-production-build.mjs --check . --output PRODUCTION_BUILD_ARTIFACTS.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jarvis-windows-build-evidence
+          path: |
+            PRODUCTION_BUILD_ARTIFACTS.json
+            package-lock.json
+          if-no-files-found: warn

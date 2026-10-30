@@ -1,0 +1,10 @@
+playwright>=1.50,<2
+mss>=10,<11
+Pillow>=11,<13
+# Windows UI Automation. 1.0.0b1 explicitly advertises Python 3.14; prerelease pinned.
+pywinauto==1.0.0b1
+# Optional local perception (face recognition + offline voice transcription)
+opencv-python>=4.10,<5
+numpy>=1.26,<3
+cryptography>=43,<47
+vosk>=0.3.45,<1

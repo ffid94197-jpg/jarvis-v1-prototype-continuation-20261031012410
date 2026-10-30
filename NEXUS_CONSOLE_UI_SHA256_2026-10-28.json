@@ -1,0 +1,10 @@
+{
+  "package.json": "9b4df5c4c49595bddc81ba555521ebf9e84f3f40a05bcd08cd20ca0f110fe860",
+  "scripts/verify-nexus-settings.cjs": "23e08d7cdf674569e15f14a3ccb016323dc5fe0fd3bdcd25a807b43e8bd07405",
+  "scripts/verify-nexus-ui-stress.cjs": "070e38c15830aa3458b4d0f8f3a9b045577d7f0366b8abff55efbcd23a6faf3d",
+  "src/app/globals.css": "7f9b0a5b2ef9af02469477c423417e9b9aa521b275a1dbdfd2d29ce16e840fd1",
+  "src/app/page.tsx": "98634c7cf63024d0c1c4271c09fe60577a07f972fe489675e64fd9ca74cabefd",
+  "src/components/AssistantPanel.tsx": "b7aacfba748ebaa9757c79078274ba35f3cbf26f0fb583cd10dec9ec49410d52",
+  "src/components/DeviceManager.tsx": "6867bebfe20e8cb541d6f79ad995b9c5cf40213792d4e96050fa0f9d53a5b00c",
+  "src/components/ModelManager.tsx": "109c6d96eb613be8be3e4a127c37b41b84d68191ec75da2d2069e7da10e156b5"
+}

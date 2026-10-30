@@ -1,0 +1,19 @@
+{
+  "base": "JARVIS_V1_GPT6_LONGRUN_AUTONOMOUS_AGENT_FULL_SOURCE_2026-10-28.zip",
+  "target": "JARVIS_V1_GPT6_VOICE_OWNER_2026-10-28",
+  "changed_files": {
+    "src/app/page.tsx": "b82fee87d66bd55531d07aebad95617cbcc8ea904c56207319d88eea4eb38e5b",
+    "src/components/AssistantPanel.tsx": "0146a61fb3468c72e77824a69f9dd28227c819c628099a461f645230ef844ad0",
+    "src/components/ModelManager.tsx": "ddf657ee66d50e1360a64b015e89adb9a7368150da2b8a64f83e2a3a87d877c7",
+    "src/components/OwnerVoice.tsx": "4fe6813ce301636e1df084fbc702d9ea631dfc1f9669c3db6d8247d889241900",
+    "src/components/PerceptionPanel.tsx": "4f9399bc9d08f66688893b22fa10a209a192ef6bc9b672eedb0d1764aa537e91",
+    "src/app/api/jarvis/perception/route.ts": "0dac5be7af2c5c79b6ef94ea814be9fae9d6f5bdf31be776c77aed2422caab24",
+    "src/app/api/jarvis/tts/route.ts": "319cd65350862c54516e65e374f53465d0be78b8292b28ed4cc741fea5b7a8a5",
+    "windows-companion/perception/biometric_cli.py": "8c01d6ecfda67864246415aebd4be3914afbf84fd25b5725da0afa7bf6c93360",
+    "windows-companion/perception/piper_speak.py": "1ec83ab08aa2d3190b6d2ea53e021fe40e2a1db55ad19133c16273ba72389009",
+    "scripts/perception/verify_owner_wake_tts.py": "2feb247408e89ffef3ae2ce6d35e4bd6ac3d184b08c8dd72ca1533354e54ec18",
+    "INSTALL_JARVIS_PIPER_VOICE.ps1": "1fbd57dd42630dce86f2f97aae9b8db87a509a44625f7bd94982c84f8fb9cc36",
+    "JARVIS_VOICE_OWNER_SETUP.md": "a7c734c9dcdfe81f910235d71df15492b9ba6521be52d7a9e6229dd10e1e9858"
+  },
+  "note": "Offline integration; actual Windows runtime, wake accuracy, real Piper ONNX synthesis are not verified."
+}

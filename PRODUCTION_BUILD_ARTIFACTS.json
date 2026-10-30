@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "kind": "next-standalone-artifact-check",
+  "projectPath": "C:\\Users\\Aslam\\AppData\\Local\\JARVIS-V1-Developer\\app",
+  "generatedAtUtc": "2026-10-29T15:55:15.557Z",
+  "passed": true,
+  "checks": {
+    "nextBuildId": true,
+    "standaloneServer": true,
+    "nextRuntimeManifest": true,
+    "staticAssets": true,
+    "prismaSchema": true,
+    "dependencyLock": true,
+    "manifestParses": true
+  },
+  "artifacts": {
+    "nextBuildId": {
+      "sha256": "e28a2a557f9e5183443f14ff132bdebe88b9a887ce0a6cfc2413170ac06505e6",
+      "bytes": 21
+    },
+    "standaloneServer": {
+      "sha256": "12b35717217ff36d77c484da474eb24a86389779c670ea072fb523e4533cbe58",
+      "bytes": 7782
+    },
+    "nextRuntimeManifest": {
+      "sha256": "d7e1d56e7cff9d0511336baf62d1b1190afcd77221400bfc1102865c971777e5",
+      "bytes": 10599
+    },
+    "prismaSchema": {
+      "sha256": "4d1d235a76fd584693be3b03532995b865bff27a20e6fa46907164ea9107dcb8",
+      "bytes": 8770
+    },
+    "dependencyLock": {
+      "sha256": "bf3dc38503d0d11f8b622d1315063e2169f6ee681c16cae342658d27b002887b",
+      "bytes": 540078
+    }
+  },
+  "limitation": "Standalone build artifacts only; no native LPAC, full application functionality, release signing or V1 certification."
+}

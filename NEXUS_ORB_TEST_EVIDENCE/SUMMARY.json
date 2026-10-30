@@ -1,0 +1,86 @@
+[
+  {
+    "test": "nexus-settings",
+    "script": "scripts/verify-nexus-settings.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "NEXUS_CONSOLE_SETTINGS 34/34 PASS (source contracts; not live browser)"
+  },
+  {
+    "test": "orb-navigation",
+    "script": "scripts/verify-nexus-orb-navigation.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "NEXUS_ORB_NAVIGATION 11/11 PASS (source contract; live rendering not tested)"
+  },
+  {
+    "test": "ui-model-stress",
+    "script": "scripts/verify-nexus-ui-stress.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "}"
+  },
+  {
+    "test": "local-auth",
+    "script": "scripts/verify-local-dev-no-login.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "LOCAL_DEV_NO_LOGIN: 20/20 PASS (mock database and HTTP route, not Windows integration)"
+  },
+  {
+    "test": "provider-offline",
+    "script": "scripts/verify-provider-offline.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "12/12 offline provider and LAYA checks PASS"
+  },
+  {
+    "test": "laya-router",
+    "script": "scripts/model-manager/verify-laya-router.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "LAYA_ROUTER: 24/24 PASS"
+  },
+  {
+    "test": "model-manager",
+    "script": "scripts/model-manager/verify-model-manager.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "MODEL_MANAGER_OFFLINE: 32/32 PASS"
+  },
+  {
+    "test": "models-route",
+    "script": "scripts/model-manager/verify-model-route.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "MODEL_ROUTE: 16/16 PASS"
+  },
+  {
+    "test": "minecraft-progression",
+    "script": "windows-companion/minecraft-bot/verify_progression.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "PROGRESSION EXTENDED PASS (offline planner checks only; live server not tested)"
+  },
+  {
+    "test": "minecraft-late-game",
+    "script": "windows-companion/minecraft-bot/verify_late_game.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "LATE_GAME_PLANNER 200033/200033 PASS (100,000 offline randomized snapshots; NOT 100,000 playthroughs)"
+  },
+  {
+    "test": "minecraft-bridge",
+    "script": "scripts/verify-minecraft-bridge-policy.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "MINECRAFT_TYPESCRIPT_BRIDGE 60/60 PASS (policy only, not live gameplay)"
+  },
+  {
+    "test": "windows-policy",
+    "script": "scripts/verify-windows-policy.cjs",
+    "status": "PASS",
+    "exit_code": 0,
+    "last_line": "WINDOWS_POLICY: 56/56 offline assertions PASS; native Windows runtime NOT tested"
+  }
+]

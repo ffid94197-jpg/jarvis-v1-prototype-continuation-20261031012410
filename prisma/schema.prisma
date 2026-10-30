@@ -1,0 +1,256 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════
+// JARVIS AGENT RUNTIME — durable task state, step
+// settlement, and Guardian audit trail.
+// ═══════════════════════════════════════════════
+
+// ——— PHASE 01: identity, sessions, ownership ———
+// Opaque server-side sessions: the cookie carries a random
+// 256-bit token; only its SHA-256 hash is stored. The server
+// ALWAYS derives the authoritative principal from the session —
+// a client-submitted owner id is never trusted.
+
+model Principal {
+  id        String    @id @default(uuid())
+  // OWNER | DEVICE
+  role      String
+  // ACTIVE | PENDING | REVOKED  (PENDING = paired device
+  // awaiting owner approval; REVOKED = denied or withdrawn)
+  status    String    @default("ACTIVE")
+  label     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  sessions  Session[]
+  tasks     AgentTask[]
+  memories  JarvisMemory[]
+  observations JarvisWorldObservation[]
+}
+
+model Session {
+  id          String    @id @default(uuid())
+  principalId String
+  // SHA-256 of the opaque bearer token (never the token itself)
+  tokenHash   String    @unique
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  lastSeenAt  DateTime  @default(now())
+  principal   Principal @relation(fields: [principalId], references: [id], onDelete: Cascade)
+
+  @@index([principalId])
+}
+
+model AgentTask {
+  id        String      @id @default(uuid())
+  objective String
+  // planning | executing | paused | completed | failed | denied | cancelled
+  // (Phase 02 extends this into the explicit task state machine)
+  status    String
+  stepsUsed Int         @default(0)
+  finalText String?
+  // ——— Phase 01: ownership (server-derived, never client-supplied) ———
+  // null ONLY for legacy rows created before identity existed:
+  // those rows are QUARANTINED history (not actionable by anyone).
+  ownerId           String?
+  owner             Principal? @relation(fields: [ownerId], references: [id])
+  // Session/device snapshots at creation time (§4.3 mapping).
+  sessionId         String?
+  createdByDeviceId String?
+  // ——— Phase 02/04: optimistic concurrency + plan lineage ———
+  version     Int         @default(0)
+  planRevision Int        @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  steps     AgentStep[]
+  audits    AuditLog[]
+  effects   EffectRecord[]
+}
+
+model AgentStep {
+  id         String    @id @default(uuid())
+  taskId     String
+  seq        Int
+  // plan | tool_call | tool_result | guardian_deny | guardian_allow | final | pause | error
+  kind       String
+  tool       String?
+  argsJson   String?
+  resultJson String?
+  note       String?
+  createdAt  DateTime  @default(now())
+  task       AgentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, seq])
+}
+
+model AuditLog {
+  id        String     @id @default(uuid())
+  taskId    String?
+  tool      String
+  argsJson  String
+  // ALLOW | DENY
+  verdict   String
+  reason    String
+  createdAt DateTime   @default(now())
+  task      AgentTask? @relation(fields: [taskId], references: [id])
+
+  @@index([taskId])
+  @@index([createdAt])
+}
+
+// ——— PHASE 02/04: durable effect admission protocol ———
+// Journal-before-effect: an effectful call is ATOMICALLY RESERVED
+// here (unique taskId+effectKey) BEFORE the executor runs, and is
+// settled only from the real receipt. A crash between admission and
+// settlement leaves an honest ADMITTED-but-unsettled row that
+// recovery must reconcile — never blindly replay (§5.4, §7.2).
+
+model EffectRecord {
+  id        String    @id @default(uuid())
+  taskId    String
+  // Canonical identity: planRevision | tool | canonical-sorted args
+  effectKey String
+  // ADMITTED | SETTLED | FAILED | EFFECT_UNKNOWN
+  status    String
+  // The EXACT tool + args admitted (reconciliation never guesses)
+  tool      String
+  argsJson  String?
+  // Executor receipt (JSON) — populated at settlement
+  receiptJson String?
+  // Attempt sequence for this effect (a failed attempt may be retried
+  // with a new ADMITTED row only under a new attempt id)
+  attempt   Int       @default(1)
+  admittedAt DateTime @default(now())
+  settledAt  DateTime?
+  task      AgentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, effectKey])
+  @@index([taskId])
+}
+// JARVIS memory is opt-in and principal-scoped. It is NOT silently included
+// in cloud model prompts. Each record tracks provenance and explicit origin.
+model JarvisMemory {
+  id          String    @id @default(uuid())
+  principalId String
+  key         String
+  content     String
+  // LOCAL_PRIVATE | CLOUD_APPROVED; the caller does not set provider egress.
+  dataClass   String    @default("LOCAL_PRIVATE")
+  source      String    @default("OWNER_EXPLICIT")
+  version     Int       @default(0)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  principal   Principal @relation(fields: [principalId], references: [id], onDelete: Cascade)
+
+  @@unique([principalId, key])
+  @@index([principalId, deletedAt])
+}
+
+// Observations are NOT automatically facts: source/trust and freshness are
+// mandatory. Public owner endpoint can only create USER_REPORTED observations.
+model JarvisWorldObservation {
+  id           String    @id @default(uuid())
+  principalId  String
+  subject      String
+  predicate    String
+  value        String
+  // USER_REPORTED | VERIFIED_TOOL | MODEL_HYPOTHESIS
+  source       String
+  provenance   String
+  confidence   Float
+  observedAt   DateTime  @default(now())
+  expiresAt    DateTime?
+  retractedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  principal    Principal @relation(fields: [principalId], references: [id], onDelete: Cascade)
+
+  @@index([principalId, subject, predicate])
+  @@index([principalId, retractedAt])
+}
+
+// Owner-created, auditable long-running routines. The dedicated worker is
+// allowed to act only for ACTIVE principals, with a fenced scheduler lease.
+model AgentRoutine {
+  id             String   @id @default(uuid())
+  ownerId        String
+  title          String
+  objective      String
+  planJson       String
+  mode           String   @default("once") // once | interval
+  intervalMinutes Int     @default(0)
+  enabled        Boolean  @default(true)
+  status         String   @default("scheduled") // scheduled | running | blocked | done | disabled
+  nextRunAt      DateTime
+  leaseOwner     String?
+  leaseUntil     DateTime?
+  activeTaskId   String?
+  stepIndex      Int      @default(0)
+  routeIndex     Int      @default(0)
+  sliceCount     Int      @default(0)
+  runCount       Int      @default(0)
+  maxRuns        Int      @default(1)
+  maxTotalSteps  Int      @default(192)
+  lastError      String?
+  lastRunAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  runs           AgentRoutineAttempt[]
+  @@index([enabled, nextRunAt])
+  @@index([ownerId, createdAt])
+}
+
+model AgentRoutineAttempt {
+  id         String    @id @default(uuid())
+  routineId  String
+  taskId     String    @unique
+  stepIndex  Int
+  routeIndex Int
+  outcome    String    @default("running")
+  summary    String?
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+  routine    AgentRoutine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  @@index([routineId, startedAt])
+}
+
+// Worker availability signal. Not a security authority; lease owner remains
+// attached to each routine and must be checked on every mutation.
+model AgentWorkerPulse {
+  id         String   @id
+  workerId   String
+  pid        Int
+  startedAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+}

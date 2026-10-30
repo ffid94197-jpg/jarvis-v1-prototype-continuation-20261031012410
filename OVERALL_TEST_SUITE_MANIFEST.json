@@ -1,0 +1,238 @@
+[
+  {
+    "name": "provider",
+    "command": [
+      "node",
+      "scripts/verify-provider-offline.cjs"
+    ]
+  },
+  {
+    "name": "memory_contracts",
+    "command": [
+      "node",
+      "scripts/verify-memory-contracts.cjs"
+    ]
+  },
+  {
+    "name": "memory_route",
+    "command": [
+      "node",
+      "scripts/verify-memory-route.cjs"
+    ]
+  },
+  {
+    "name": "local_fallback",
+    "command": [
+      "node",
+      "scripts/verify-local-fallback.cjs"
+    ]
+  },
+  {
+    "name": "path_containment",
+    "command": [
+      "node",
+      "scripts/verify-path-containment.cjs"
+    ]
+  },
+  {
+    "name": "local_no_login",
+    "command": [
+      "node",
+      "scripts/verify-local-dev-no-login.cjs"
+    ]
+  },
+  {
+    "name": "windows_intent",
+    "command": [
+      "node",
+      "scripts/verify-windows-intent.cjs"
+    ]
+  },
+  {
+    "name": "agent_tool_wiring",
+    "command": [
+      "node",
+      "scripts/verify-agent-tool-wiring.cjs"
+    ]
+  },
+  {
+    "name": "windows_policy",
+    "command": [
+      "node",
+      "scripts/verify-windows-policy.cjs"
+    ]
+  },
+  {
+    "name": "full_desktop_policy",
+    "command": [
+      "node",
+      "scripts/verify-full-desktop-policy.cjs"
+    ]
+  },
+  {
+    "name": "native_tool_wiring",
+    "command": [
+      "node",
+      "scripts/verify-native-tool-wiring.cjs"
+    ]
+  },
+  {
+    "name": "model_manager",
+    "command": [
+      "node",
+      "scripts/model-manager/verify-model-manager.cjs"
+    ]
+  },
+  {
+    "name": "model_route",
+    "command": [
+      "node",
+      "scripts/model-manager/verify-model-route.cjs"
+    ]
+  },
+  {
+    "name": "laya_router",
+    "command": [
+      "node",
+      "scripts/model-manager/verify-laya-router.cjs"
+    ]
+  },
+  {
+    "name": "laya_owner_priority",
+    "command": [
+      "node",
+      "scripts/model-manager/verify-owner-priority.cjs"
+    ]
+  },
+  {
+    "name": "autonomy_supervisor",
+    "command": [
+      "node",
+      "scripts/verify-autonomy-supervisor.cjs"
+    ]
+  },
+  {
+    "name": "longrun_planner",
+    "command": [
+      "node",
+      "scripts/longrun/verify-longrun.mjs"
+    ]
+  },
+  {
+    "name": "adoption",
+    "command": [
+      "node",
+      "scripts/adoption/verify-adoption.mjs"
+    ]
+  },
+  {
+    "name": "minecraft_friend",
+    "command": [
+      "node",
+      "windows-companion/minecraft-bot/verify_friend_offline.cjs"
+    ]
+  },
+  {
+    "name": "mcp_security",
+    "command": [
+      "node",
+      "scripts/adoption/stress-security.mjs"
+    ]
+  },
+  {
+    "name": "windows_companion",
+    "command": [
+      "python3",
+      "windows-companion/verify_companion_offline.py"
+    ]
+  },
+  {
+    "name": "agent_tools",
+    "command": [
+      "python3",
+      "windows-companion/verify_agent_tools_offline.py"
+    ]
+  },
+  {
+    "name": "app_catalog",
+    "command": [
+      "python3",
+      "windows-companion/verify_app_catalog_offline.py"
+    ]
+  },
+  {
+    "name": "app_launch",
+    "command": [
+      "python3",
+      "windows-companion/verify_app_launch_offline.py"
+    ]
+  },
+  {
+    "name": "full_desktop",
+    "command": [
+      "python3",
+      "windows-companion/verify_full_desktop_offline.py"
+    ]
+  },
+  {
+    "name": "desktop_input",
+    "command": [
+      "python3",
+      "windows-companion/verify_desktop_action_fixture.py"
+    ]
+  },
+  {
+    "name": "native_uia",
+    "command": [
+      "python3",
+      "windows-companion/verify_native_uia_offline.py"
+    ]
+  },
+  {
+    "name": "autonomy_native",
+    "command": [
+      "python3",
+      "windows-companion/verify_autonomy_native_offline.py"
+    ]
+  },
+  {
+    "name": "face_voice",
+    "command": [
+      "python3",
+      "scripts/perception/verify_face_voice.py",
+      "--rounds",
+      "1",
+      "--cases",
+      "25"
+    ]
+  },
+  {
+    "name": "owner_wake",
+    "command": [
+      "python3",
+      "scripts/perception/verify_owner_wake_tts.py",
+      "--rounds",
+      "1",
+      "--cases",
+      "35"
+    ]
+  },
+  {
+    "name": "biometric_adversarial",
+    "command": [
+      "python3",
+      "scripts/perception/verify_biometric_adversarial.py",
+      "--rounds",
+      "1",
+      "--cases",
+      "25"
+    ]
+  },
+  {
+    "name": "mcp_live",
+    "command": [
+      "node",
+      "scripts/adoption/stress-live.mjs"
+    ]
+  }
+]

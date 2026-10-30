@@ -1,0 +1,86 @@
+{
+  "release_status": "NOT_COMPLETE",
+  "basis": "archived 2026-10-28 NEXUS source and 39 passing offline scripts; not an audit of live Windows worktree",
+  "mandatory_gate_count": 18,
+  "gate_status": {
+    "G00": {
+      "status": "IN_PROGRESS",
+      "next_required_proof": "Full locked-dependency install, TypeScript/Next build and source integrity acceptance on Windows still required"
+    },
+    "G01": {
+      "status": "NOT_TESTED",
+      "next_required_proof": "Prove secure first-owner claim with concurrency, remote rejection, CSRF and production login"
+    },
+    "G02": {
+      "status": "IN_PROGRESS",
+      "next_required_proof": "Run fail-closed release test runner and inject deliberate failing mandatory gate"
+    },
+    "G03": {
+      "status": "IN_PROGRESS",
+      "next_required_proof": "Native Core-Guardian effect settlement, UNKNOWN/retry, crash and E-stop proof"
+    },
+    "G04": {
+      "status": "BLOCKED",
+      "next_required_proof": "Windows-native integrated LPAC worker, secure IPC, token and process boundary denial tests"
+    },
+    "G05": {
+      "status": "IN_PROGRESS",
+      "next_required_proof": "Actual local and cloud BYOK inference, model switch/privacy, secret handling and parallel model evidence"
+    },
+    "G06": {
+      "status": "IN_PROGRESS",
+      "next_required_proof": "LAYA live model-routing evidence and bound latency; offline tests passed"
+    },
+    "G07": {
+      "status": "IN_PROGRESS",
+      "next_required_proof": "Memory database tests through actual authenticated owner, restart, provenance and access denial"
+    },
+    "G08": {
+      "status": "IN_PROGRESS",
+      "next_required_proof": "Guardian integrated MCP and native connector/skill execution plus negative/plugin tests"
+    },
+    "G09": {
+      "status": "BLOCKED",
+      "next_required_proof": "Live Windows app UIA, browser, focus, effect verification and E-stop proof"
+    },
+    "G10": {
+      "status": "BLOCKED",
+      "next_required_proof": "Screen-video perception and live game control loop on real Windows target"
+    },
+    "G11": {
+      "status": "BLOCKED",
+      "next_required_proof": "Actual microphone, webcam, face, gesture, wake-word and Piper output tests"
+    },
+    "G12": {
+      "status": "IN_PROGRESS",
+      "next_required_proof": "NEXUS original Orb/UI offline tests passed; full real browser/UI/audio acceptance not demonstrated"
+    },
+    "G13": {
+      "status": "IN_PROGRESS",
+      "next_required_proof": "Durable schedules and secure multi-device pairing/revocation/restart evidence"
+    },
+    "G14": {
+      "status": "NOT_TESTED",
+      "next_required_proof": "REA bounded self-diagnosis/repair with sandbox, approval and rollback"
+    },
+    "G15": {
+      "status": "NOT_TESTED",
+      "next_required_proof": "Full red-team, threat model, adversarial fault injection/SSRF/secret leaks/TOCTOU"
+    },
+    "G16": {
+      "status": "BLOCKED",
+      "next_required_proof": "Real Windows clean packaging, fresh install, migration, performance and rollback"
+    },
+    "G17": {
+      "status": "BLOCKED",
+      "next_required_proof": "All required gate proofs plus independent owner acceptance"
+    }
+  },
+  "minecraft_live_progress": {
+    "joinedVerified": true,
+    "log_collection_verified": false,
+    "dragon_defeat_verified": false,
+    "last_known_mode": "stay",
+    "patch_live_acceptance": "NOT_TESTED"
+  }
+}

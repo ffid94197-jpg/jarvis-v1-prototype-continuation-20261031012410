@@ -1,0 +1,100 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+local-*
+.claude
+.z-ai-config
+*.log
+dev.log
+dev.out.log
+test
+prompt
+
+server.log
+# Skills directory
+/skills/
+# Locally encrypted model API keys and master key
+/.jarvis-private/
+
+# Local face/voice secrets, samples, and model binaries
+**/*.facevault
+windows-companion/perception/models/
+*.download
+
+# Managed third-party extensions and registry (owner-private)
+/data/jarvis-adoptions/
+
+# V1 local-development SQLite databases (do not ship owner sessions)
+/prisma/*.db
+/prisma/*.db-journal
+/prisma/*.db-shm
+/prisma/*.db-wal
+
+# Arena continuation exclusions
+.env
+.env.*
+**/.env
+**/.env.*
+.git/
+.next/
+node_modules/
+**/node_modules/
+.jarvis-private/
+.jarvis-recovery-backups/
+data/
+evidence/
+worlds/
+__pycache__/
+*.db
+*.sqlite*
+*.log
+*.key
+*.pem
+*.pfx
+*.p12
+*.enc
+*.bak
+*.backup-*
+*.orig
+*.old
+*.sse.txt
+worklog.md

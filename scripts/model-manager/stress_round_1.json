@@ -1,0 +1,31 @@
+{
+  "round": 1,
+  "seed": 20261028,
+  "decisionsPlanned": 1500,
+  "checks": {
+    "passed": 45,
+    "failed": 0,
+    "failures": []
+  },
+  "counts": {
+    "decisions": 1500,
+    "propertyPass": 1500,
+    "blocked": 0,
+    "layaRequests": 208,
+    "layaResponses": 206,
+    "layaAccepted": 201,
+    "fallbacks": 5,
+    "modelHTTP": 4,
+    "privacyCases": 14
+  },
+  "elapsedMs": 1164,
+  "source": "JARVIS LAYA Settings Router",
+  "environment": {
+    "os": "linux",
+    "node": "v22.16.0",
+    "realModelWeights": false,
+    "realCloudAPIs": false,
+    "realWindowsDesktop": false,
+    "realMinecraft": false
+  }
+}

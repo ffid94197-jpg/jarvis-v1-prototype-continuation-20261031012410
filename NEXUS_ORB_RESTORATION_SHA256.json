@@ -1,0 +1,121 @@
+{
+  "update": "NEXUS_ORB_HOME_RESTORATION_2026-10-28",
+  "base": "JARVIS_V1_NEXUS_CONSOLE_FIRST_UI_FULL_SOURCE_2026-10-28.zip",
+  "changes": [
+    {
+      "path": "NEXUS_ORB_HOME_RESTORATION_REPORT_2026-10-28.md",
+      "baselineSha256": null,
+      "updatedSha256": "eb2f177e967d70886961f9701236befc443eb30a46a80f2cb1e403501b00d41f"
+    },
+    {
+      "path": "NEXUS_ORB_RESTORATION_SHA256.json",
+      "baselineSha256": null,
+      "updatedSha256": "e7b8b3c70caa7a568f008acb5d4235c4c94c94f196f871ed68d5e44cb011118a"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/SUMMARY.json",
+      "baselineSha256": null,
+      "updatedSha256": "7f7331be714e1f233759746d21dbd58831091fc8e062f0b08249ec2df69bf152"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/laya-router.log",
+      "baselineSha256": null,
+      "updatedSha256": "526db35320f0789a4588cb8f5a07776f9bf8d20a91e1f38a389d03adcfd2c733"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/local-auth.log",
+      "baselineSha256": null,
+      "updatedSha256": "7af5b27733d0911c595a0a77fbe392ebb70f7ea3e87df8c500d3df5c2a6309f9"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/minecraft-bridge.log",
+      "baselineSha256": null,
+      "updatedSha256": "d372662a39c6ef0e54477958f938eae06049e8ea5b5adc38624833bc64f0f8a1"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/minecraft-late-game.log",
+      "baselineSha256": null,
+      "updatedSha256": "40c35edd10e12b776d14848730209b859e313f4664df0493c907779a9daa1c83"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/minecraft-progression.log",
+      "baselineSha256": null,
+      "updatedSha256": "058dd9043b94aadee4ce0fd875ac0877ec394aa34e8f0f5076bc64f235b59f88"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/model-manager.log",
+      "baselineSha256": null,
+      "updatedSha256": "2be3ebfb3333c701a6361ecce8379925b8a6b33def6d2548137a4f01b15b5a37"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/models-route.log",
+      "baselineSha256": null,
+      "updatedSha256": "da95fc58306127f55ad8e4906d27335c71eb20275068b9a0b5b1d5baa6018862"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/nexus-settings.log",
+      "baselineSha256": null,
+      "updatedSha256": "a22da6459b9937b532579ddebb44f6b02b3fdb0cb26927764b7848845098cccc"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/orb-navigation.log",
+      "baselineSha256": null,
+      "updatedSha256": "f9c2219a652bf79f1a10871b5b87f7078784a2a1f22865fd82e2708207390aac"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/provider-offline.log",
+      "baselineSha256": null,
+      "updatedSha256": "187db70714e93327b3aa577ef4e813e0f68c312915ba8d0d8790f87bf105bbdb"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/ui-model-stress.log",
+      "baselineSha256": null,
+      "updatedSha256": "f93f196459f99fe57014bfd75fec5cb4fa33950d353d6d9f89ff48ece6f957e5"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/windows-policy.log",
+      "baselineSha256": null,
+      "updatedSha256": "b336ca4ce5bf8aa95778d35f459b71fc701d0adff53051f80ad023aef64eb8b3"
+    },
+    {
+      "path": "package.json",
+      "baselineSha256": "9b4df5c4c49595bddc81ba555521ebf9e84f3f40a05bcd08cd20ca0f110fe860",
+      "updatedSha256": "badb9b11d886a2de6885dd6fbfaa7a48346966c165516dc833abe3774f84e645"
+    },
+    {
+      "path": "scripts/verify-nexus-orb-navigation.cjs",
+      "baselineSha256": null,
+      "updatedSha256": "3eb453b9a04191853c428f99fcef2bfdde384726ed9c07cba0bea12cdd0af1f1"
+    },
+    {
+      "path": "scripts/verify-nexus-settings.cjs",
+      "baselineSha256": "23e08d7cdf674569e15f14a3ccb016323dc5fe0fd3bdcd25a807b43e8bd07405",
+      "updatedSha256": "386ec6a258e90c13e431530b8af1ebc2fd400edfa3d59a0f9edb131f304d63bb"
+    },
+    {
+      "path": "scripts/verify-nexus-ui-stress.cjs",
+      "baselineSha256": "070e38c15830aa3458b4d0f8f3a9b045577d7f0366b8abff55efbcd23a6faf3d",
+      "updatedSha256": "ab57af9fd64f09a46fd74954f4ce0b9f2a73d92fd9928517b0b5b4dbc10a71aa"
+    },
+    {
+      "path": "src/app/globals.css",
+      "baselineSha256": "7f9b0a5b2ef9af02469477c423417e9b9aa521b275a1dbdfd2d29ce16e840fd1",
+      "updatedSha256": "7692e10af1f824f53c58738f8d826361ebee9c0666dcd469def4ed608e399cf0"
+    },
+    {
+      "path": "src/app/page.tsx",
+      "baselineSha256": "98634c7cf63024d0c1c4271c09fe60577a07f972fe489675e64fd9ca74cabefd",
+      "updatedSha256": "5739a4311c2620aaf956e66fbc95c99d6e48a662f6ee962822c1eb432d7e6071"
+    },
+    {
+      "path": "src/components/AssistantPanel.tsx",
+      "baselineSha256": "b7aacfba748ebaa9757c79078274ba35f3cbf26f0fb583cd10dec9ec49410d52",
+      "updatedSha256": "94c7a1941b512ef3e3746467e37145f2dd38cdfa80f837aa9bd66783c4c2869c"
+    },
+    {
+      "path": "src/components/JarvisOrb.tsx",
+      "baselineSha256": "17770d35b7d1c1534103630d6157dbbfa8a15eed81c31a57c54c039b8e49cf6a",
+      "updatedSha256": "bce894d0c3ca4e81317aacc293cb5ff294df19d3dd07f84400716cab32c61d23"
+    }
+  ]
+}

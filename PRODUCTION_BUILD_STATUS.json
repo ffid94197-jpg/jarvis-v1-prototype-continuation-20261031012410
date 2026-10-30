@@ -1,0 +1,9 @@
+﻿{
+    "schemaVersion":  1,
+    "stage":  "NEXT_STANDALONE_PRODUCTION_BUILD",
+    "status":  "PASS",
+    "startedUtc":  "2026-10-29T15:53:39.8056038Z",
+    "endedUtc":  "2026-10-29T15:55:15.6041366Z",
+    "detail":  "Compiled standalone Next application; BUILD_ID=GzvT6w_GcM8ybqOobfPuC. NOT security or full V1 acceptance.",
+    "scope":  "Windows Next standalone application compilation only; not JARVIS V1 release certification"
+}

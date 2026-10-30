@@ -1,0 +1,1215 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   JARVIS V1 — holographic orb console.
+   Styles ported from the original ULTRON source (app/globals.css)
+   and extended with: status readout, assistant console, dual-mode
+   and zero-overlap responsive HUD rules.
+   ═══════════════════════════════════════════════════════════════ */
+
+.jarvis-root {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+  font-family: "Courier New", monospace;
+}
+
+.orb-root {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+}
+
+.orb-root:active {
+  cursor: grabbing;
+}
+
+.orb-root canvas {
+  display: block;
+}
+
+/* ——— Film overlays ——— */
+.overlay-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 150px;
+  mix-blend-mode: screen;
+}
+
+.overlay-scanlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.15) 2px,
+    rgba(0, 0, 0, 0.15) 4px
+  );
+  opacity: 0.3;
+}
+
+.overlay-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.7) 100%
+  );
+}
+
+/* ——— HUD shared ——— */
+.hud {
+  position: fixed;
+  z-index: 20;
+  color: #ffaa30;
+  font-family: "Courier New", monospace;
+  user-select: none;
+}
+
+/* ——— TOP LEFT: identity ——— */
+.hud-title {
+  top: 24px;
+  left: 24px;
+  font-size: 15px;
+  font-weight: bold;
+  letter-spacing: 0.35em;
+  opacity: 0.9;
+  text-shadow: 0 0 10px rgba(255, 170, 48, 0.8);
+  pointer-events: none;
+  max-width: calc(100vw - 48px);
+}
+
+.hud-title::after {
+  content: "";
+  display: block;
+  margin-top: 6px;
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(to right, rgba(255, 170, 48, 0.8), transparent);
+}
+
+.hud-subtitle {
+  display: block;
+  margin-top: 8px;
+  font-size: 9px;
+  font-weight: normal;
+  letter-spacing: 0.22em;
+  opacity: 0.75;
+}
+
+/* ——— TOP RIGHT: live status readout ——— */
+.hud-status {
+  top: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 170, 48, 0.3);
+  border-radius: 4px;
+  background: rgba(10, 5, 0, 0.45);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+  max-width: calc(100vw - 48px);
+}
+
+.status-row {
+  display: flex;
+  gap: 10px;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  line-height: 1.4;
+  align-items: baseline;
+}
+
+.status-k {
+  opacity: 0.5;
+  font-size: 9px;
+}
+
+.status-v {
+  color: #ffcc66;
+  text-shadow: 0 0 6px rgba(255, 170, 48, 0.7);
+}
+
+.status-v--connecting {
+  color: #ffdd88;
+  animation: status-blink 0.7s steps(2, start) infinite;
+}
+
+.status-v--speaking {
+  color: #ffeeaa;
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes status-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes status-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ——— BOTTOM LEFT: hints ——— */
+.hud-hint {
+  bottom: 24px;
+  left: 24px;
+  font-size: 11px;
+  line-height: 1.7;
+  letter-spacing: 0.1em;
+  opacity: 0.55;
+  text-shadow: 0 0 8px rgba(255, 170, 48, 0.6);
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.hud-hint.hint-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hud-hint .key {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid rgba(255, 170, 48, 0.5);
+  border-radius: 3px;
+  margin-right: 4px;
+  font-size: 10px;
+}
+
+/* ——— BOTTOM RIGHT: camera + controls ——— */
+.hud-controls {
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.hud-error {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: #ff5533;
+  text-shadow: 0 0 8px rgba(255, 60, 30, 0.7);
+  max-width: 220px;
+  text-align: right;
+}
+
+.hud-row {
+  display: flex;
+  gap: 8px;
+}
+
+.hud-btn {
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
+  background: rgba(20, 10, 0, 0.55);
+  border: 1px solid rgba(255, 170, 48, 0.45);
+  border-radius: 4px;
+  color: #ffaa30;
+  font-family: "Courier New", monospace;
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  text-shadow: 0 0 6px rgba(255, 170, 48, 0.7);
+  box-shadow: 0 0 12px rgba(255, 140, 20, 0.12) inset;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.hud-btn--wide {
+  min-width: 160px;
+}
+
+.hud-btn:hover {
+  background: rgba(60, 30, 0, 0.7);
+  border-color: rgba(255, 200, 100, 0.9);
+  box-shadow:
+    0 0 14px rgba(255, 150, 30, 0.35),
+    0 0 12px rgba(255, 140, 20, 0.2) inset;
+}
+
+.hud-btn:active {
+  background: rgba(90, 45, 0, 0.8);
+}
+
+.hud-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.hud-btn[aria-pressed="true"] {
+  background: rgba(120, 60, 0, 0.6);
+  border-color: #ffcc66;
+  color: #ffcc66;
+}
+
+/* ——— Camera preview panel ——— */
+.camera-panel {
+  position: relative;
+  width: 208px;
+  height: 156px;
+  display: none;
+  border: 1px solid rgba(255, 170, 48, 0.45);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #0a0500;
+  box-shadow: 0 0 16px rgba(255, 140, 20, 0.15);
+}
+
+.camera-panel.visible {
+  display: block;
+}
+
+/* PHASE 10 (§13.2): Orb Mode contract — the preview is invisible in orb
+   mode but remains MOUNTED and playing so live gesture tracking survives
+   mode switches without re-enumerating the camera. */
+.camera-panel.camera-panel--orb {
+  display: block;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* PHASE 10 (§13.2): ORB MODE's single control — one small bottom switch. */
+.hud-switch {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 8px 18px;
+  background: rgba(20, 10, 0, 0.55);
+  border: 1px solid rgba(255, 170, 48, 0.45);
+  border-radius: 4px;
+  color: #ffaa30;
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hud-switch:hover {
+  background: rgba(60, 30, 0, 0.7);
+  border-color: rgba(255, 200, 100, 0.9);
+  box-shadow: 0 0 12px rgba(255, 170, 48, 0.35);
+}
+
+.camera-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* mirror so it behaves like a mirror */
+  filter: sepia(1) hue-rotate(-15deg) saturate(2.2) brightness(0.75)
+    contrast(1.15);
+  opacity: 0.85;
+}
+
+.camera-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.camera-status {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 3px 6px;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: #ffcc66;
+  background: rgba(10, 5, 0, 0.65);
+  text-shadow: 0 0 6px rgba(255, 170, 48, 0.8);
+}
+
+/* ═══════════════════════════════════════════════
+   ASSISTANT CONSOLE — dual-mode chat panel
+   ═══════════════════════════════════════════════ */
+.assist-panel {
+  position: fixed;
+  z-index: 30;
+  top: 96px;
+  bottom: 24px;
+  left: 24px;
+  width: min(420px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 170, 48, 0.4);
+  border-radius: 6px;
+  background: rgba(8, 4, 0, 0.82);
+  backdrop-filter: blur(6px);
+  box-shadow:
+    0 0 32px rgba(255, 140, 20, 0.18),
+    0 0 12px rgba(255, 140, 20, 0.12) inset;
+  overflow: hidden;
+}
+
+.assist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 170, 48, 0.25);
+  background: rgba(255, 170, 48, 0.05);
+}
+
+.assist-header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.assist-title {
+  color: #ffcc66;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.25em;
+  text-shadow: 0 0 8px rgba(255, 170, 48, 0.7);
+}
+
+.assist-subtitle {
+  color: #ffaa30;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  opacity: 0.55;
+}
+
+.assist-close {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 10, 0, 0.55);
+  border: 1px solid rgba(255, 170, 48, 0.45);
+  border-radius: 4px;
+  color: #ffaa30;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.assist-close:hover {
+  background: rgba(90, 45, 0, 0.8);
+  border-color: rgba(255, 200, 100, 0.9);
+}
+
+.assist-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.assist-dl {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 10, 0, 0.55);
+  border: 1px solid rgba(255, 170, 48, 0.45);
+  border-radius: 4px;
+  color: #ffaa30;
+  font-size: 14px;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.assist-dl:hover {
+  background: rgba(90, 45, 0, 0.8);
+  border-color: rgba(255, 200, 100, 0.9);
+  box-shadow: 0 0 10px rgba(255, 170, 48, 0.45);
+}
+
+.assist-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: none;
+}
+
+/* Custom scrollbar (long list handling) */
+.assist-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.assist-messages::-webkit-scrollbar-track {
+  background: rgba(255, 170, 48, 0.05);
+}
+
+.assist-messages::-webkit-scrollbar-thumb {
+  background: rgba(255, 170, 48, 0.3);
+  border-radius: 3px;
+}
+
+.assist-messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 170, 48, 0.55);
+}
+
+.assist-empty {
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 2px;
+}
+
+.assist-empty-title {
+  color: #ffcc66;
+  font-size: 15px;
+  letter-spacing: 0.3em;
+  text-shadow: 0 0 10px rgba(255, 170, 48, 0.8);
+}
+
+.assist-empty-line {
+  color: #ffaa30;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  line-height: 1.6;
+}
+
+.assist-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.assist-chip {
+  padding: 8px 12px;
+  background: rgba(20, 10, 0, 0.55);
+  border: 1px solid rgba(255, 170, 48, 0.4);
+  border-radius: 4px;
+  color: #ffaa30;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.assist-chip:hover {
+  background: rgba(60, 30, 0, 0.7);
+  border-color: rgba(255, 200, 100, 0.9);
+}
+
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 92%;
+}
+
+.msg--user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.msg--assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.msg-role {
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  opacity: 0.55;
+}
+
+.msg-body {
+  padding: 9px 12px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  letter-spacing: 0.02em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.msg--user .msg-body {
+  background: rgba(120, 60, 0, 0.35);
+  border: 1px solid rgba(255, 170, 48, 0.35);
+  color: #ffdca0;
+}
+
+.msg--assistant .msg-body {
+  background: rgba(255, 170, 48, 0.07);
+  border: 1px solid rgba(255, 170, 48, 0.22);
+  color: #ffbb55;
+}
+
+.msg--error .msg-body {
+  background: rgba(90, 10, 0, 0.3);
+  border-color: rgba(255, 80, 40, 0.45);
+  color: #ff8866;
+}
+
+/* Typing indicator while streaming */
+.msg-typing {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 11px 14px;
+}
+
+.msg-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffaa30;
+  box-shadow: 0 0 8px rgba(255, 170, 48, 0.8);
+  animation: typing-bounce 1s ease-in-out infinite;
+}
+
+.msg-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.msg-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.assist-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid rgba(255, 170, 48, 0.25);
+  background: rgba(255, 170, 48, 0.04);
+}
+
+.assist-input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  background: rgba(10, 5, 0, 0.65);
+  border: 1px solid rgba(255, 170, 48, 0.4);
+  border-radius: 4px;
+  color: #ffdca0;
+  font-family: "Courier New", monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.03em;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.assist-input::placeholder {
+  color: rgba(255, 170, 48, 0.4);
+}
+
+.assist-input:focus {
+  border-color: rgba(255, 200, 100, 0.9);
+  box-shadow: 0 0 12px rgba(255, 150, 30, 0.25);
+}
+
+.assist-send {
+  flex: none;
+  width: 72px;
+  height: 44px;
+  background: rgba(120, 60, 0, 0.6);
+  border: 1px solid #ffcc66;
+  border-radius: 4px;
+  color: #ffcc66;
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  text-shadow: 0 0 6px rgba(255, 170, 48, 0.7);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.assist-send:hover:not(:disabled) {
+  background: rgba(160, 80, 0, 0.7);
+}
+
+.assist-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ——— AGENT RUNTIME: task trace + phase + cancel ——— */
+.status-v--executing {
+  color: #ffdd88;
+  animation: status-exec 0.9s ease-in-out infinite;
+}
+
+@keyframes status-exec {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.msg-phase {
+  color: #ffeeaa;
+  animation: status-blink 0.9s steps(2, start) infinite;
+}
+
+.trace {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 2px 0 6px;
+  border-left: 2px solid rgba(255, 170, 48, 0.3);
+  padding-left: 10px;
+}
+
+.trace-line {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  font-size: 10.5px;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+  color: rgba(255, 200, 120, 0.85);
+}
+
+.trace-icon {
+  flex: none;
+  width: 12px;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.trace-body {
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.trace-tag {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid rgba(255, 200, 100, 0.5);
+  border-radius: 3px;
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  color: #ffd88f;
+}
+
+.trace-tag--fail {
+  border-color: rgba(255, 100, 60, 0.6);
+  color: #ff9070;
+}
+
+.trace-tool {
+  color: #ffcc66;
+  font-weight: bold;
+}
+
+.trace-args,
+.trace-result {
+  color: rgba(255, 210, 150, 0.7);
+}
+
+.trace--guardian_deny .trace-icon,
+.trace--guardian_deny .trace-deny,
+.trace--error .trace-icon,
+.trace--error .trace-deny {
+  color: #ff7755;
+}
+
+.trace--guardian_deny .trace-tag {
+  border-color: rgba(255, 100, 60, 0.7);
+  color: #ff8866;
+}
+
+.assist-cancel-btn {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(90, 10, 0, 0.55);
+  border: 1px solid rgba(255, 100, 60, 0.7);
+  border-radius: 4px;
+  color: #ff9070;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.assist-cancel-btn:hover {
+  background: rgba(140, 20, 0, 0.7);
+  border-color: #ffaa88;
+}
+
+/* RESUME affordance for durably paused tasks (44px touch-safe). */
+.assist-resume-btn {
+  margin-top: 10px;
+  min-height: 44px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(120, 80, 0, 0.35);
+  border: 1px solid rgba(255, 190, 80, 0.7);
+  border-radius: 4px;
+  color: #ffcc88;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.assist-resume-btn:hover {
+  background: rgba(160, 110, 0, 0.55);
+  border-color: #ffd9a0;
+  color: #ffe8c0;
+}
+
+/* ═══════════════════════════════════════════════
+   ZERO-OVERLAP RESPONSIVE RULES
+   HUD corners never collide at any tested viewport:
+   1920×1080 · 1366×768 · 768×1024 · 390×844
+   ═══════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .hud-title {
+    font-size: 13px;
+  }
+
+  .hud-subtitle {
+    display: none;
+  }
+
+  .assist-panel {
+    top: 88px;
+    bottom: 16px;
+    left: 16px;
+    width: calc(100vw - 32px);
+  }
+
+  /* Console open: park the control column so nothing overlaps. */
+  .assist-open .hud-controls {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(24px);
+  }
+}
+
+@media (max-width: 600px) {
+  .hud-hint {
+    display: none;
+  }
+
+  .hud-title {
+    top: 16px;
+    left: 16px;
+  }
+
+  .hud-status {
+    top: 16px;
+    right: 16px;
+    padding: 7px 9px;
+    gap: 2px;
+  }
+
+  .status-row {
+    font-size: 9px;
+  }
+
+  .hud-controls {
+    bottom: 16px;
+    right: 16px;
+  }
+
+  .camera-panel {
+    width: 160px;
+    height: 120px;
+  }
+}
+
+/* Owner sign-in in TEXT MODE only. Real authorization remains server-side. */
+.jarvis-auth-shade { position:fixed; inset:0; z-index:100; display:grid; place-items:center;
+  background:rgba(10,6,3,.86); backdrop-filter:blur(9px); padding:18px; }
+.jarvis-auth-card { width:min(100%,500px); padding:clamp(20px,4vw,40px);
+  background:#170e07; border:1px solid rgba(255,175,65,.53); border-radius:9px;
+  box-shadow:0 8px 70px #000b; color:#f0c783; font-family:ui-monospace,monospace; }
+.jarvis-auth-card h2 { font-size:15px; letter-spacing:.2em; margin:0 0 16px; }
+.jarvis-auth-card p, .jarvis-auth-card small { line-height:1.65; color:#d8ab70; }
+.jarvis-auth-card form { display:grid; gap:18px; margin:20px 0; }
+.jarvis-auth-card label { display:grid; gap:8px; font-size:12px; letter-spacing:.12em; }
+.jarvis-auth-card input { width:100%; padding:14px; min-height:46px; border-radius:5px;
+  background:#281607; color:#fff2d9; border:1px solid #91622c; font:inherit; }
+.jarvis-auth-card button { width:100%; min-height:46px; cursor:pointer;
+  background:#573109; color:#ffda96; border:1px solid #c38a39; border-radius:5px; }
+.jarvis-auth-card button:disabled { opacity:.6; cursor:progress; }
+.jarvis-auth-error { border:1px solid #ad4037; color:#ff9b8f; padding:12px;
+  background:#310f0c; border-radius:4px; line-height:1.5; }
+
+/* Operator model switch lives inside the assistant console, not a third NEXUS mode. */
+.assist-header-actions { gap: 5px; }
+.assist-models-toggle { width: auto; min-width: 72px; padding: 0 6px; font-size: 10px; white-space: nowrap; }
+
+/* NEXUS Settings must remain discoverable even when the Assistant Console is closed. */
+.nexus-settings-launcher {
+  position: fixed; top: 20px; right: 24px; z-index: 110;
+  border: 1px solid #b98637; border-radius: 9px;
+  background: rgba(21, 13, 8, .94); color: #ffd079;
+  padding: 11px 16px; font-weight: 700; letter-spacing: .09em;
+  cursor: pointer; box-shadow: 0 4px 22px rgba(0,0,0,.55);
+}
+.nexus-settings-launcher:hover, .nexus-settings-launcher:focus-visible {
+  outline: 2px solid #e2ab5a; outline-offset: 2px;
+}
+.nexus-settings-overlay {
+  position: fixed; inset: 0; z-index: 210;
+  background: rgba(0,0,0,.8); display: flex; justify-content: center;
+  align-items: center; padding: 20px;
+}
+.nexus-settings-dialog {
+  width: min(940px, 100%); max-height: min(88vh, 950px);
+  min-height: min(600px, 75vh); overflow: hidden;
+  border: 1px solid #b98637; border-radius: 12px;
+  background: #100b07; box-shadow: 0 12px 60px rgba(0,0,0,.8);
+}
+@media (max-width: 600px) {
+  .nexus-settings-launcher { top: 10px; right: 10px; padding: 8px 11px; font-size: 12px; }
+  .nexus-settings-overlay { padding: 8px; }
+  .nexus-settings-dialog { max-height: 96vh; min-height: 80vh; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NEXUS V1 · CONSOLE-FIRST UI / SCROLLABLE SETTINGS CONTROL CENTER
+   The chat is the only default visible workspace; all ancillary controls
+   live in the Settings dialog. Never hide the API key or save action.
+   ═══════════════════════════════════════════════════════════════════════ */
+.nexus-console-only { min-height: 100dvh; background: radial-gradient(ellipse at 50% -25%,#42260d 0%,#120d0a 46%,#070706 100%); }
+.nexus-console-only::before { content:""; position:fixed;inset:0;pointer-events:none;opacity:.24;
+  background-image:linear-gradient(rgba(202,139,58,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(202,139,58,.1) 1px,transparent 1px);
+  background-size:58px 58px; }
+.nexus-console-only .assist-panel {position:fixed;inset:18px;width:auto;height:auto;bottom:18px;left:18px;right:18px;top:18px;
+  max-width:1080px;margin:0 auto;z-index:40;background:rgba(12,10,9,.96);border:1px solid #8a652f;
+  border-radius:16px;box-shadow:0 25px 100px #000b,0 0 0 1px rgba(255,199,104,.05) inset;backdrop-filter:blur(20px);}
+.nexus-console-only .assist-header {padding:20px 26px;background:linear-gradient(110deg,#23180d,#10100e);gap:20px;}
+.nexus-console-only .assist-title {font-size:clamp(15px,1.4vw,21px);letter-spacing:.13em;color:#ffcf7c;}
+.nexus-console-title-detail {font-size:.65em;color:#b79b75;letter-spacing:.09em;font-weight:500;}
+.nexus-console-only .assist-subtitle {font-size:10px;letter-spacing:.09em;opacity:.8;}
+.nexus-chat-settings-button {display:inline-flex;align-items:center;justify-content:center;gap:9px;flex:none;
+  min-height:43px;padding:10px 16px;background:linear-gradient(160deg,#3e2912,#251a0e);
+  border:1px solid #ae7e38;border-radius:9px;color:#ffdb96;font-weight:700;letter-spacing:.065em;cursor:pointer;}
+.nexus-chat-settings-button:hover,.nexus-chat-settings-button:focus-visible {background:#624018;outline:2px solid #f3c57d;outline-offset:2px;}
+.nexus-console-only .assist-messages {padding:clamp(18px,4vw,40px);gap:18px;scrollbar-width:thin;scrollbar-color:#84602b transparent;}
+.nexus-console-only .assist-empty {max-width:580px;margin:auto;align-items:center;text-align:center;}
+.nexus-console-only .assist-empty-title {font-size:clamp(19px,2vw,31px);letter-spacing:.12em;}
+.nexus-console-only .assist-empty-line {font-size:13px;max-width:520px;line-height:1.9;letter-spacing:.02em;}
+.nexus-console-only .assist-quick {justify-content:center;}
+.nexus-console-only .msg {max-width:min(88%,760px);}
+.nexus-console-only .msg-body {font-size:14px;line-height:1.85;padding:14px 17px;border-radius:12px;}
+.nexus-console-only .assist-input-row {padding:20px 26px;background:rgba(23,18,14,.92);border-top:1px solid rgba(255,200,118,.17);}
+.nexus-console-only .assist-input {min-height:50px;min-width:0;border-radius:9px;font-size:14px;}
+.nexus-console-only .assist-send {border-radius:9px;min-width:88px;}
+/* Full-height settings workspace. Scroll belongs to content, not the hidden dialog wrapper. */
+.nexus-settings-overlay {z-index:210;position:fixed;inset:0;padding:clamp(8px,1.6vw,24px);align-items:stretch;justify-content:center;
+  overflow:hidden;overscroll-behavior:contain;background:rgba(4,3,3,.9);backdrop-filter:blur(12px);}
+.nexus-settings-dialog {display:flex;flex-direction:column;min-width:0;min-height:0;max-height:none;height:100%;
+  width:min(1260px,100%);overflow:hidden;border:1px solid #8c672e;border-radius:18px;
+  background:#100e0c;box-shadow:0 20px 100px #000e;}
+.nexus-settings-shell {height:100%;min-height:0;min-width:0;display:flex;flex-direction:column;color:#ead7b2;background:#100e0c;}
+.nexus-settings-topbar {display:flex;justify-content:space-between;align-items:center;gap:20px;padding:19px 25px;flex:none;
+  border-bottom:1px solid #453723;background:linear-gradient(100deg,#22190e,#100e0c);}
+.nexus-settings-brand {display:flex;gap:15px;align-items:center;min-width:0;}
+.nexus-settings-brand>div {display:grid;gap:4px;}
+.nexus-settings-brand strong {font-size:16px;letter-spacing:.13em;color:#f9ce89;}
+.nexus-settings-brand small {font-size:11px;color:#b5a28a;letter-spacing:.03em;}
+.nexus-settings-emblem {display:grid;place-items:center;width:44px;height:44px;border-radius:12px;
+  border:1px solid #8d632d;background:#38260f;font-size:22px;color:#ffd28c;}
+.nexus-settings-return {flex:none;padding:12px 16px;cursor:pointer;background:#372510;color:#ffdf9d;
+  border:1px solid #9a713d;border-radius:9px;font-weight:700;}
+.nexus-settings-return:hover,.nexus-settings-return:focus-visible {background:#60401c;outline:2px solid #e4bd7c;outline-offset:1px;}
+.nexus-settings-layout {display:grid;grid-template-columns:266px minmax(0,1fr);flex:1;min-height:0;min-width:0;}
+.nexus-settings-nav {display:flex;flex-direction:column;gap:5px;padding:22px 14px;overflow-y:auto;min-height:0;
+  scrollbar-width:thin;scrollbar-color:#725a36 #17120e;background:#17130f;border-right:1px solid #49371e;}
+.nexus-settings-nav-item {display:flex;align-items:center;gap:11px;text-align:left;min-height:45px;padding:10px 12px;
+  border:1px solid transparent;border-radius:9px;background:transparent;color:#c7b293;font-weight:600;font-size:12px;cursor:pointer;}
+.nexus-settings-nav-item span {font-size:17px;color:#a88653;width:20px;text-align:center;}
+.nexus-settings-nav-item:hover {background:#2b2015;color:#f7d79d;}
+.nexus-settings-nav-item[aria-current="page"] {background:#402b13;border-color:#9a7135;color:#ffdc93;}
+.nexus-settings-nav-item:focus-visible {outline:2px solid #ebc588;outline-offset:1px;}
+.nexus-settings-nav-note {font-size:11px;line-height:1.65;margin:24px 8px 0;color:#a99a84;}
+.nexus-settings-content {min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;
+  scrollbar-color:#93713e #14110d;padding:clamp(18px,2.2vw,32px);}
+.nexus-settings-content label {display:grid;gap:7px;font-size:12px;color:#edc98d;font-weight:600;}
+.nexus-settings-content label:has(input[type="checkbox"]) {display:flex;align-items:center;gap:9px;}
+.nexus-settings-content input:not([type="checkbox"]):not([type="range"]),.nexus-settings-content select,.nexus-settings-content textarea {
+  width:100%;min-width:0;min-height:42px;border-radius:8px;}
+.nexus-settings-content input:focus-visible,.nexus-settings-content select:focus-visible {outline:2px solid #eebc6d;outline-offset:2px;}
+.nexus-settings-content button:not(.nexus-settings-nav-item) {border-radius:7px;min-height:39px;}
+.nexus-settings-content h3 {font-size:16px;color:#f5d8a5;letter-spacing:.02em;margin:8px 0 14px;}
+.nexus-settings-page-head {margin-bottom:22px;padding-bottom:19px;border-bottom:1px solid #4b3926;}
+.nexus-settings-page-head h2 {font-size:clamp(20px,2vw,29px);margin:9px 0 9px;color:#ffe0a5;font-weight:700;letter-spacing:.015em;}
+.nexus-settings-page-head p {color:#b7a68e;font-size:13px;line-height:1.65;}
+.nexus-settings-eyebrow {font-size:10px;font-weight:700;letter-spacing:.13em;color:#d5aa6c;}
+.nexus-settings-status {border:1px solid #8c704a;background:#2f271d;padding:11px 14px;border-radius:8px;color:#f5d9ac;
+  overflow-wrap:anywhere;margin:10px 0 20px;}
+.nexus-models-layout {display:grid;grid-template-columns:minmax(0,1.3fr) minmax(220px,.8fr);gap:22px;align-items:start;}
+.nexus-model-editor,.nexus-saved-models,.nexus-settings-section {border:1px solid #59462c;border-radius:12px;padding:clamp(15px,2vw,24px);background:#1b1712;min-width:0;}
+.nexus-model-editor-head p,.nexus-saved-hint,.nexus-settings-section p {font-size:12px;color:#b5a38a;line-height:1.7;}
+.nexus-form-subtitle {font-size:14px!important;margin-top:24px!important;}
+.nexus-provider-form {display:grid;gap:15px;min-width:0;}
+.nexus-key-card {padding:17px;display:grid;gap:13px;border:1px solid #a87434;border-radius:10px;
+  background:linear-gradient(145deg,#38250f,#261c12);}
+.nexus-key-card label {font-size:13px;font-weight:700;color:#fbd592;}
+.nexus-key-card input {background:#120e0a!important;border-color:#c49654!important;}
+.nexus-key-card small {font-size:11px;line-height:1.6;color:#d3ba91;}
+.nexus-saved-models {overflow-wrap:anywhere;}
+.nexus-saved-models ul li {border-radius:9px;background:#211a13;}
+.nexus-settings-screen {width:100%;height:auto;margin:18px 0;border:1px solid #997340;border-radius:9px;}
+.nexus-settings-project-download {display:inline-flex;padding:12px 15px;border:1px solid #a17937;border-radius:8px;color:#ffdf9b;text-decoration:none;}
+@media(max-width:900px){.nexus-models-layout{grid-template-columns:minmax(0,1fr);}}
+@media(max-width:700px){
+  .nexus-console-only .assist-panel{inset:0;border-radius:0;border:0;}
+  .nexus-console-only .assist-header{padding:16px 14px;}
+  .nexus-console-only .assist-title{font-size:15px;}
+  .nexus-console-title-detail{display:none;}
+  .nexus-chat-settings-button{padding:9px 11px;font-size:11px;}
+  .nexus-console-only .assist-input-row{padding:12px;}
+  .nexus-settings-overlay{padding:0;}
+  .nexus-settings-dialog{border:0;border-radius:0;}
+  .nexus-settings-topbar{padding:12px 14px;}
+  .nexus-settings-brand strong{font-size:13px;letter-spacing:.04em;}
+  .nexus-settings-brand small{display:none;}
+  .nexus-settings-return{padding:10px;font-size:11px;}
+  .nexus-settings-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);}
+  .nexus-settings-nav{display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;white-space:nowrap;
+    min-height:0;padding:9px 11px;gap:6px;border-right:0;border-bottom:1px solid #49371e;}
+  .nexus-settings-nav-item{flex:none;min-height:39px;padding:8px 10px;font-size:11px;}
+  .nexus-settings-nav-note{display:none;}
+  .nexus-settings-content{padding:17px 13px;}
+}
+@media(prefers-reduced-motion:reduce){.nexus-settings-dialog,.nexus-chat-settings-button{transition:none!important;}}
+
+.nexus-settings-overlay--closed {display:none!important;pointer-events:none;}
+.nexus-settings-shell [hidden] {display:none!important;}
+
+.nexus-device-manager {margin-top:24px;border-top:1px solid #493b26;padding-top:17px;}
+.nexus-device-manager-header{display:flex;gap:14px;justify-content:space-between;align-items:center;flex-wrap:wrap;}
+.nexus-device-manager button {border:1px solid #94713e;background:#332213;color:#f9d499;padding:9px 12px;cursor:pointer;}
+.nexus-device-manager button:disabled {opacity:.45;cursor:not-allowed;}
+.nexus-device-list {display:grid;gap:10px;margin-top:15px;}
+.nexus-device-list article {display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:13px;background:#231a11;border:1px solid #624622;border-radius:9px;}
+.nexus-device-list article small {margin-right:auto;color:#c4b297;}
+
+.nexus-settings-content button:not(:disabled):hover {filter:brightness(1.17);}
+.nexus-settings-content button:focus-visible {outline:2px solid #f2c485;outline-offset:2px;}
+.nexus-settings-content button:disabled {opacity:.5;cursor:not-allowed;}
+.nexus-settings-content form select {white-space:normal;text-overflow:ellipsis;}
+
+/* ═══════════════════════════════════════════════════════════════
+   NEXUS V1 · OWNER-APPROVED NAVIGATION (orb → console → settings)
+   Restore the ORIGINAL Three.js JarvisOrb as the default landing screen.
+   Orb screen shows one centered CONSOLE button below the hologram.
+   Chat and Settings are nested screens; no settings trigger on orb.
+   ═══════════════════════════════════════════════════════════════ */
+.nexus-orb-home {background:#000;}
+.nexus-orb-home::before {display:none;}
+.nexus-orb-home .orb-root {z-index:0;}
+.nexus-orb-home .hud-switch {
+  position:fixed;left:50%;bottom:clamp(14px,4.2dvh,56px);transform:translateX(-50%);
+  min-width:clamp(140px,16vw,204px);min-height:44px;padding:10px 24px;
+  color:#ffd492;background:rgba(18,10,2,.85);border:1px solid rgba(238,169,73,.82);
+  border-radius:9px;font-size:clamp(11px,1.15vw,14px);font-weight:700;
+  text-align:center;letter-spacing:.20em;box-shadow:0 0 25px rgba(237,149,28,.17);
+}
+.nexus-orb-home .hud-switch:hover,.nexus-orb-home .hud-switch:focus-visible {
+  background:rgba(77,43,10,.85);border-color:#ffd28d;outline:2px solid #f2c37a;outline-offset:3px;
+}
+.nexus-console-view::before {display:block;}
+.nexus-chat-orb-button {
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;flex:none;
+  min-height:43px;padding:10px 15px;background:#191610;
+  border:1px solid #805e36;border-radius:9px;color:#efd0a4;
+  font-weight:700;letter-spacing:.065em;cursor:pointer;
+}
+.nexus-chat-orb-button:hover,.nexus-chat-orb-button:focus-visible {
+  background:#3d2918;border-color:#e2b46a;outline:2px solid #f3c57d;outline-offset:2px;
+}
+@media(max-width:700px){
+  .nexus-orb-home .hud-switch{bottom:clamp(18px,6dvh,50px);min-width:140px;}
+  .nexus-chat-orb-button,.nexus-chat-settings-button{min-height:40px;gap:5px;padding:8px 10px;font-size:11px;}
+  .nexus-console-only .assist-header-actions{gap:7px;}
+}

@@ -1,0 +1,2651 @@
+{
+  "schemaVersion": 1,
+  "candidateReleaseStatus": "NOT_COMPLETE",
+  "purpose": "Current isolated source integrity only; not proof of Windows V1 completion",
+  "hashFormat": "sha256 lowercase hex",
+  "excludedFiles": [
+    "CURRENT_SOURCE_MANIFEST_SHA256_20261029.json"
+  ],
+  "files": [
+    {
+      "path": ".env.longrun.example",
+      "bytes": 263,
+      "sha256": "e7a4c866b9f8a4c175375e9c211a897ae6759f9c0884fc4d6b4b8511952cee06"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 1000,
+      "sha256": "41fed5e77e7e384cf84f62721bbc96ff7cb175fd1e1b27dfab923267d5b3d412"
+    },
+    {
+      "path": "AGENTS.md",
+      "bytes": 5146,
+      "sha256": "7ba952b249d4b151b21f3f9590a8ce61925998b34e325bbfcece078d3e84e1c0"
+    },
+    {
+      "path": "AGENT_EXTENSION_SAMPLES.md",
+      "bytes": 946,
+      "sha256": "ce3b479e74df1276df1a7a891d728857eb14da524846b193942c4a5bec385b1b"
+    },
+    {
+      "path": "AGENT_TOOLS_CATALOG.md",
+      "bytes": 7693,
+      "sha256": "f260a99bdefaf831118c842e89acba1534144ca73051ea892402224849cfb382"
+    },
+    {
+      "path": "AGENT_TOOLS_SOURCE_SHA256.json",
+      "bytes": 17976,
+      "sha256": "32d9f642c595244e3c48e47519aa680c7ebf68d29898065985f485b75e3555d1"
+    },
+    {
+      "path": "AI_MODEL_MANAGER_GUIDE.md",
+      "bytes": 4685,
+      "sha256": "2049c43ee01c6a27292f440e07fb6c4289e752cb7526cad69ccab871495483b4"
+    },
+    {
+      "path": "AI_MODEL_MANAGER_RELEASE_VERDICT.md",
+      "bytes": 1133,
+      "sha256": "3883fc9ded98d6421ed4345aef28741a27ad0bd67523f2b646876f1760291d00"
+    },
+    {
+      "path": "APP_CONTROL_DELTA_AND_GATES.md",
+      "bytes": 3128,
+      "sha256": "eda5bf6360bb572363321a3e6411b82f9296cde1b1a362d7c6966c71e615fd14"
+    },
+    {
+      "path": "AUTONOMOUS_CAPABILITY_DISCOVERY_GUIDE.md",
+      "bytes": 3600,
+      "sha256": "e101847d8b6c47293ffb493ac4b202b219e6343084dade192133061f5a97cbdf"
+    },
+    {
+      "path": "AUTONOMOUS_WINDOWS_AGENT_CHANGELOG.md",
+      "bytes": 3573,
+      "sha256": "ea08cf81fd219b49c4407d6dd74c0203fce75c4e4785cbff9fb3bbbbc1eb4ef7"
+    },
+    {
+      "path": "AUTONOMY_SOURCE_MANIFEST_SHA256.json",
+      "bytes": 29875,
+      "sha256": "56f1f8590428150ffcefc424703f6d2b9b5a55ebf3931a580c18b9be57e6bebf"
+    },
+    {
+      "path": "AUTONOMY_VERIFICATION_REPORT.md",
+      "bytes": 2957,
+      "sha256": "86c65f579190737c4964cd1b40e7fb399e8cfe91288dbd5f40ae571be4091721"
+    },
+    {
+      "path": "BIOMETRIC_STRESS_SOURCE_SHA256_MANIFEST.json",
+      "bytes": 43120,
+      "sha256": "c60bb3f848db3e171fff55ad6282224ebc455728da7acf3182ad58fcb007b7d5"
+    },
+    {
+      "path": "CAPABILITY_DISCOVERY_RELEASE_VERDICT.md",
+      "bytes": 1102,
+      "sha256": "e3136d538da2b10629c6a6dcdf14b5cd9c41cebbcf20f962a264aa960688d87d"
+    },
+    {
+      "path": "CAPABILITY_DISCOVERY_SOURCE_SHA256.json",
+      "bytes": 46716,
+      "sha256": "f28f8512c0a133906813e64a1e4a07a0b1addd880a9a60a2ea2e22e6613a7bef"
+    },
+    {
+      "path": "Caddyfile",
+      "bytes": 493,
+      "sha256": "89b7a9c04929989fb5014e1b5032ecd58df9491a3e3d09d69d62d740f29b0a7b"
+    },
+    {
+      "path": "END_TO_END_ACCEPTANCE_STATUS.md",
+      "bytes": 1937,
+      "sha256": "9df077c2ffd4824ca45ad3c2ece68ee5c2534333e9f6b244b64ce98a1b0de0ba"
+    },
+    {
+      "path": "ENGINEERING_DELTA_AND_TEST_REPORT.md",
+      "bytes": 2633,
+      "sha256": "27c62a23a76edbc359b904d4e7594f36dcc9f960b8c9bb10b135ee2082bfe333"
+    },
+    {
+      "path": "EXPERIMENTAL_RELEASE_STATUS.md",
+      "bytes": 1534,
+      "sha256": "16309e896630a8a145fdb973ab048bf727eeb305a9fa8fd7507159697b33eb6a"
+    },
+    {
+      "path": "FACE_VOICE_SETUP_AND_LIMITS.md",
+      "bytes": 4579,
+      "sha256": "0d40784912c79a7ba0b2b3dce243ba77c9c7d9c22ba4ed7631688482fd9ec901"
+    },
+    {
+      "path": "FULL_DESKTOP_OPERATOR_GUIDE.md",
+      "bytes": 7980,
+      "sha256": "0e4990b2fcb6ae170432383d2e7e902b45f64e6b7346ae742d20af89006abf84"
+    },
+    {
+      "path": "GPT6_IMPLEMENTATION_CHECKPOINT_2026-10-27.md",
+      "bytes": 4228,
+      "sha256": "85e8f5d07c093bf304fb58110d91983ae249d93dd00e779dc9be9df28dc06652"
+    },
+    {
+      "path": "GPT6_SOURCE_SHA256_2026-10-27.json",
+      "bytes": 21212,
+      "sha256": "57429a8347f5d1dab554c74a7f2a2521b687bf40618a2c1b129a516ac3d263a5"
+    },
+    {
+      "path": "INSTALL_FACE_VOICE_MODELS.ps1",
+      "bytes": 2688,
+      "sha256": "1ca15b5822ecfa41858238bfc0281136d25ad27fa321d173cebd9a19dd880bf1"
+    },
+    {
+      "path": "INSTALL_JARVIS_PIPER_VOICE.ps1",
+      "bytes": 1950,
+      "sha256": "1fbd57dd42630dce86f2f97aae9b8db87a509a44625f7bd94982c84f8fb9cc36"
+    },
+    {
+      "path": "INSTALL_OWNER_SPEAKER_MODEL.ps1",
+      "bytes": 1795,
+      "sha256": "69d63096f7f8be7622ebffa2dd84f298fe02d2b2d3729ef9fc7973441e790b5f"
+    },
+    {
+      "path": "JARVIS_VOICE_OWNER_SETUP.md",
+      "bytes": 6290,
+      "sha256": "d93ba06d85a6c3e1ec1dad48372dadd4dbf413683d4e26ab9e551f4c5fe8128b"
+    },
+    {
+      "path": "LAYA_MASSIVE_STRESS_RELEASE.md",
+      "bytes": 5048,
+      "sha256": "2079e2b0f99e25a6b572573061f01857a0a55a49f673b6def3987e9f17244d73"
+    },
+    {
+      "path": "LAYA_OWNER_PRIORITY_RELEASE.md",
+      "bytes": 3501,
+      "sha256": "46484f9a08dfc74b801b7fd9a2c21638ec857701b5c965df5338c525e525725a"
+    },
+    {
+      "path": "LAYA_OWNER_PRIORITY_SHA256_MANIFEST.json",
+      "bytes": 39811,
+      "sha256": "03df9ac7ce1488252451ff5ed0d0a595370b47c3a08cf1ce35d0caf979a3bae4"
+    },
+    {
+      "path": "LAYA_OWNER_PRIORITY_VERDICT.md",
+      "bytes": 3379,
+      "sha256": "9e2c34c57d233246ce81c9ba5d83327092dc6097b8a7c5a009f5a48e3deb97de"
+    },
+    {
+      "path": "LAYA_SETTINGS_AND_ROUTING_GUIDE.md",
+      "bytes": 4543,
+      "sha256": "588d278f910a0c0c1d511c6153cd8d8cbb818167d88ee73fb96b6b8c4ac890a4"
+    },
+    {
+      "path": "LAYA_SETTINGS_SHA256.json",
+      "bytes": 37603,
+      "sha256": "485ca07bcea71de23f12f2645be98b12c32512db3fd1faba5879be890f93aa7e"
+    },
+    {
+      "path": "LAYA_VERIFICATION_REPORT.md",
+      "bytes": 2779,
+      "sha256": "0f1c73c2f749deea4dc112a9e482f73fb3d586f2f002a60f29b7fdd0930f88c0"
+    },
+    {
+      "path": "LIVE_WINDOWS_AUTONOMY_ACCEPTANCE.md",
+      "bytes": 3293,
+      "sha256": "6656fa015accd3710ed13b6f43f6d4957234d105cdf1d3bb427c9179e69f72de"
+    },
+    {
+      "path": "LONGRUN_INTEGRITY_SHA256.json",
+      "bytes": 41793,
+      "sha256": "70871a000fe2337087946c69b7ee7241d00c090b7a0e64da7de5e328236eee57"
+    },
+    {
+      "path": "LONGRUN_TASKS_AND_ROUTINES.md",
+      "bytes": 5414,
+      "sha256": "ce4d1d9003f36d60e8774d4ad6bc30cff195ba9b598ee66af214b8e2eb2627e8"
+    },
+    {
+      "path": "MCP_LIVE_STRESS_REPAIR_REPORT.md",
+      "bytes": 4240,
+      "sha256": "492e2e637077e96e99b68a527a4c9a246ae4d81c5da2d7519229c77f6b1745a3"
+    },
+    {
+      "path": "MCP_LIVE_STRESS_SHA256_MANIFEST.json",
+      "bytes": 45271,
+      "sha256": "c7dae219f0f94f1c4e9ef85c9172a187ae23086154f694bc3bf3e6df3a8f76b8"
+    },
+    {
+      "path": "MCP_SKILLS_RELEASE_VERDICT.md",
+      "bytes": 3328,
+      "sha256": "c20fa77760baaaf54915c22873c83ad6090fef88882cadba4592dd62e253efa7"
+    },
+    {
+      "path": "MCP_SKILLS_SHA256_MANIFEST.json",
+      "bytes": 44534,
+      "sha256": "248e8ff38b6eb9bfead11ac5a72cb4f5e306806e055bc8e2b0d5a5cc78391167"
+    },
+    {
+      "path": "MINECRAFT_AUTONOMOUS_GAMEPLAY_GUIDE.md",
+      "bytes": 7025,
+      "sha256": "6fb3de151c915ae1259631468f05eacb276e832548c920f468fd79ad2a37a9ee"
+    },
+    {
+      "path": "MINECRAFT_AUTONOMY_MANIFEST_SHA256.json",
+      "bytes": 46561,
+      "sha256": "687df2bcc72b6edbbe66f78834331a4b54bb6f974cf2a85ac6675cb90397b4ba"
+    },
+    {
+      "path": "MINECRAFT_DIAMOND_EXTENSION_REPORT.md",
+      "bytes": 1922,
+      "sha256": "86594c6e422d81c31541c276db12b29dd0b5d4eb4289e9a6cf4a2728df2c4844"
+    },
+    {
+      "path": "MINECRAFT_END_TO_END_ENGINEERING_VERDICT_2026-10-28.md",
+      "bytes": 5674,
+      "sha256": "c6d1bf8494c103acc5767742d7d511f587ddaff75a770967303f7701bdbf8274"
+    },
+    {
+      "path": "MINECRAFT_FRIEND_RELEASE_VERDICT.md",
+      "bytes": 1501,
+      "sha256": "92c822233d3c2f730fae8b46dd18837f13d0823709beff937bab754fb3491702"
+    },
+    {
+      "path": "MINECRAFT_FRIEND_UPGRADE.md",
+      "bytes": 4018,
+      "sha256": "343ce366ccc52819fcdc59adf1276cea2d0ba9dafeaec77fae07d412dfa84433"
+    },
+    {
+      "path": "MINECRAFT_GENERAL_PLAYER_CAPABILITIES_2026-10-28.md",
+      "bytes": 2318,
+      "sha256": "bd55cb03043eaaa02bb20b88be3bb766e442991ea238367f337cdf0973fd669d"
+    },
+    {
+      "path": "MINECRAFT_IRON_AGE_IMPLEMENTATION_REPORT.md",
+      "bytes": 2312,
+      "sha256": "068878999eaae574deb0eca642a27c7d3b2ebb8e70eed7f0f09788327ff27f9d"
+    },
+    {
+      "path": "MINECRAFT_MISSION_INTEGRATED_CHANGESET_SHA256.json",
+      "bytes": 2019,
+      "sha256": "66534cf68d7206ffbe6cd1ed4c514aa0dcf132a9ad017c3eb0ad60cd389958d6"
+    },
+    {
+      "path": "MINECRAFT_PROGRESSION_PATCH_REPORT_2026-10-28.md",
+      "bytes": 1896,
+      "sha256": "daac6592495ba485410009a2777b60ddb797364656e1e0f43e19e6706c86e3c9"
+    },
+    {
+      "path": "MINECRAFT_PROGRESSION_PATCH_SHA256.txt",
+      "bytes": 578,
+      "sha256": "a6de515610e6cff08fc76b84ee1f4f3a1dabb3b2bf2d95d4d80d678c6078cb53"
+    },
+    {
+      "path": "MODEL_MANAGER_SOURCE_SHA256.json",
+      "bytes": 27541,
+      "sha256": "3d1995eebb816c89f944ca56fa804642c20f1d53c0d4e6ab6da2dabda2fd3254"
+    },
+    {
+      "path": "NATIVE_RELEASE_VERDICT.md",
+      "bytes": 1968,
+      "sha256": "af560a5ab542aa4f7ef2352577ff05db8aaf7b1a64ee14353c77cbd0bcb13cbb"
+    },
+    {
+      "path": "NATIVE_SOURCE_MANIFEST_SHA256.json",
+      "bytes": 26418,
+      "sha256": "92eb1aff86689c75a46dcbead45bdbdd729ba87eb2b704e5afcfaf7f0e8bf533"
+    },
+    {
+      "path": "NATIVE_WINDOWS_AGENT_SETUP.md",
+      "bytes": 6175,
+      "sha256": "5cd2950c477457fd0abe36ac8f55b50977f919f3a0db5f4b94ecac31250bbdc3"
+    },
+    {
+      "path": "NEXUS_CONSOLE_UI_SHA256_2026-10-28.json",
+      "bytes": 805,
+      "sha256": "5bab3da1e054985289993560f70e830deb539de5c7a196134cce9426ecc25af3"
+    },
+    {
+      "path": "NEXUS_CONSOLE_UI_UPGRADE_REPORT_2026-10-28.md",
+      "bytes": 3850,
+      "sha256": "3e4c64249ab6202588759386e6b9468b3e6f2f95db0094668701f953fec7cbaf"
+    },
+    {
+      "path": "NEXUS_ORB_HOME_RESTORATION_REPORT_2026-10-28.md",
+      "bytes": 1268,
+      "sha256": "eb2f177e967d70886961f9701236befc443eb30a46a80f2cb1e403501b00d41f"
+    },
+    {
+      "path": "NEXUS_ORB_RESTORATION_SHA256.json",
+      "bytes": 4896,
+      "sha256": "cde1ca5890ea452c4ee46bfe49d509e19b5236dc45934a694f15d66d1fff137d"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/SUMMARY.json",
+      "bytes": 2617,
+      "sha256": "7f7331be714e1f233759746d21dbd58831091fc8e062f0b08249ec2df69bf152"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/laya-router.log",
+      "bytes": 1206,
+      "sha256": "526db35320f0789a4588cb8f5a07776f9bf8d20a91e1f38a389d03adcfd2c733"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/local-auth.log",
+      "bytes": 888,
+      "sha256": "7af5b27733d0911c595a0a77fbe392ebb70f7ea3e87df8c500d3df5c2a6309f9"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/minecraft-bridge.log",
+      "bytes": 80,
+      "sha256": "d372662a39c6ef0e54477958f938eae06049e8ea5b5adc38624833bc64f0f8a1"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/minecraft-late-game.log",
+      "bytes": 110,
+      "sha256": "40c35edd10e12b776d14848730209b859e313f4664df0493c907779a9daa1c83"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/minecraft-progression.log",
+      "bytes": 88,
+      "sha256": "058dd9043b94aadee4ce0fd875ac0877ec394aa34e8f0f5076bc64f235b59f88"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/model-manager.log",
+      "bytes": 1461,
+      "sha256": "2be3ebfb3333c701a6361ecce8379925b8a6b33def6d2548137a4f01b15b5a37"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/models-route.log",
+      "bytes": 711,
+      "sha256": "da95fc58306127f55ad8e4906d27335c71eb20275068b9a0b5b1d5baa6018862"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/nexus-settings.log",
+      "bytes": 1700,
+      "sha256": "a22da6459b9937b532579ddebb44f6b02b3fdb0cb26927764b7848845098cccc"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/orb-navigation.log",
+      "bytes": 568,
+      "sha256": "f9c2219a652bf79f1a10871b5b87f7078784a2a1f22865fd82e2708207390aac"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/provider-offline.log",
+      "bytes": 648,
+      "sha256": "187db70714e93327b3aa577ef4e813e0f68c312915ba8d0d8790f87bf105bbdb"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/ui-model-stress.log",
+      "bytes": 465,
+      "sha256": "f93f196459f99fe57014bfd75fec5cb4fa33950d353d6d9f89ff48ece6f957e5"
+    },
+    {
+      "path": "NEXUS_ORB_TEST_EVIDENCE/windows-policy.log",
+      "bytes": 2068,
+      "sha256": "b336ca4ce5bf8aa95778d35f459b71fc701d0adff53051f80ad023aef64eb8b3"
+    },
+    {
+      "path": "NEXUS_SETTINGS_AND_LOCAL_V1_DEVELOPMENT_2026-10-28.md",
+      "bytes": 4397,
+      "sha256": "e90826151935f9eb6f193feced3dd43e6bc14fbabb18c22c0499e40ee857f75e"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-autonomy-supervisor.log",
+      "bytes": 2657,
+      "sha256": "fd57cfea44b5977baeb388de9cc40d9290b46a4acb8f52de16419127d3dc6cbd"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-laya-router.log",
+      "bytes": 1198,
+      "sha256": "151cdf994e3f9b92099d334fb39df6d9cbc921c92fc19614d2be48c80ad72abc"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-laya-stress.log",
+      "bytes": 96,
+      "sha256": "87b4c481a24156e2c92b6f530709bad24d7df87e3f8485a474b71a5492412e38"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-local-dev-no-login.log",
+      "bytes": 880,
+      "sha256": "4c5a8efbc60a70fafc221ac1fc34518cce3370aa4f716500403e3be1731174b4"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-memory-contracts.log",
+      "bytes": 572,
+      "sha256": "5babd0fc0e5cc72320a9c02a2bcedb5b0eeb1bb034c2d402edd2fc02c6d58381"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-memory-route.log",
+      "bytes": 535,
+      "sha256": "9bc738ef55e30029686b8d683d005183d5fcbb4e7983f4e64e64c0764ce25d5b"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-minecraft-bridge-policy.log",
+      "bytes": 72,
+      "sha256": "10d7f7a3a37e31a1494e72b24b0e0691dee13baf82d6fafc6cbde673c9c8c74b"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-model-manager.log",
+      "bytes": 1453,
+      "sha256": "c5f01021dc5641b840e8781d0f9799970ebbc6b7b05e5fafda7429dad3df4e08"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-model-route.log",
+      "bytes": 703,
+      "sha256": "bbd49b05f1d9f2b6c5b49471d87546b7fb5d5e1514fd8109f0a2cfee0743c858"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-nexus-settings.log",
+      "bytes": 1642,
+      "sha256": "bf007592f0d7f405bbf35fe177561348d54da7b92ffe099e06569023be4c9ca3"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-nexus-ui-stress.log",
+      "bytes": 380,
+      "sha256": "fd8d1c0f854cb862c503a15a37c6302fa543ed8cd9e8a7e49ffc6f8ddfb6c647"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-owner-priority.log",
+      "bytes": 94,
+      "sha256": "e90201b9cfbd934565da8b42317c0c211c361cf799c468107f16a8be763bc4dd"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-provider-offline.log",
+      "bytes": 640,
+      "sha256": "66b693c707004b5d5edbf5d88db4324695f398d466b4a5fb49d93b3f61ed8c5d"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify-windows-policy.log",
+      "bytes": 2060,
+      "sha256": "01756f4ea284e78afb87f06c43c7a34028c66c8724a6309550afd3243fafc8bb"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify_agent_tools_offline.log",
+      "bytes": 1521,
+      "sha256": "4bd1a05054a69659dc948f8701bf35f8196d2167be9eddee26f233058d3273a9"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify_autonomy_native_offline.log",
+      "bytes": 717,
+      "sha256": "adc2cb719bf7dfa4985676783325e9fff21b891c2cc2481a97a73c6db96af076"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify_companion_offline.log",
+      "bytes": 873,
+      "sha256": "bfe0c77a308ecf53894b79de04bae6ff5867559d9e543585422876bdcee5fb65"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify_full_desktop_offline.log",
+      "bytes": 797,
+      "sha256": "d9604380a4f8a39940eecd3830bd0c0e84e9adad585b06c858f3196b625e5068"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify_late_game.log",
+      "bytes": 102,
+      "sha256": "a418f3cc666393d272fa03e529830aeb4e24cc57ed2041e1063439dedd73e5f6"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify_minecraft_gateway_offline.log",
+      "bytes": 67,
+      "sha256": "83caadbeed18203fd7f2240e3d06ac7de42847746cb9f2dade61c0e2fa003b06"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify_progression.log",
+      "bytes": 80,
+      "sha256": "d7d5e453245d6ec37275f6f2e6d7309c9896ef7eb2eca42af31acea4058e7b32"
+    },
+    {
+      "path": "NEXUS_UI_TEST_EVIDENCE/verify_survey_recovery.log",
+      "bytes": 25,
+      "sha256": "b4dae87966d7d8468f8fcdc399710be8247e7db48f7a3daca48eeb76c9556f95"
+    },
+    {
+      "path": "NOT_A_V1_RELEASE_README.md",
+      "bytes": 3589,
+      "sha256": "54d995498d8adc30e57e6c0e242a97fb6481189eba26da3d728a83787324abe7"
+    },
+    {
+      "path": "OVERALL_AGENT_STRESS_REPAIR_REPORT.md",
+      "bytes": 3920,
+      "sha256": "8587b96beebc8e4ef559648fd53c9afd9139a1f229b577de139620f9a94aeb41"
+    },
+    {
+      "path": "OVERALL_STRESS_SOURCE_SHA256.json",
+      "bytes": 45774,
+      "sha256": "d76cbc72731d9d1b97ff260ad1a01496c533d50160197bae493c22d7e00ed9de"
+    },
+    {
+      "path": "OVERALL_TEST_SUITE_MANIFEST.json",
+      "bytes": 4224,
+      "sha256": "f32b7c028a990c83a0672bd75492b11f24b24083dae050d53a35484b80090f5a"
+    },
+    {
+      "path": "OWNER_BIOMETRIC_STRESS_AND_REPAIR.md",
+      "bytes": 3193,
+      "sha256": "9e18719dbb05fa47ff3163f566f7eb9392e8076efc391dffac112c3d8b90586e"
+    },
+    {
+      "path": "PATHFINDER_PATCH_MANIFEST_SHA256.json",
+      "bytes": 789,
+      "sha256": "376ca4631194042064d80566189acc6d91cafb8e03c7098651903a3bb7be0caf"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4569,
+      "sha256": "c218e479579303abc8086e53aa78a5d12bbcb46d29daa5017757d13f9f7dcbdd"
+    },
+    {
+      "path": "RUN_AUTONOMY_ACCEPTANCE.ps1",
+      "bytes": 1689,
+      "sha256": "b3cbb1997d9e061a336060745ef96b3559126b77901f8c1aca20b9265706cb19"
+    },
+    {
+      "path": "RUN_BIOMETRIC_ADVERSARIAL.ps1",
+      "bytes": 808,
+      "sha256": "aadbf6f1dba3bedf53ba4ce5a521fb5a14ae5390b15d5f4d8fd560862d42eec7"
+    },
+    {
+      "path": "RUN_CAPABILITY_STRESS.ps1",
+      "bytes": 733,
+      "sha256": "18a19eac1582088346834dac78402330ef1b0a1d130608ec2af8ec439fb30a3a"
+    },
+    {
+      "path": "RUN_FACE_VOICE_ACCEPTANCE.ps1",
+      "bytes": 1095,
+      "sha256": "72b7b2fabf344a233464cc5d7cae918d364b971bdf3b0889d808d160211a6f19"
+    },
+    {
+      "path": "RUN_LAYA_ACCEPTANCE.ps1",
+      "bytes": 786,
+      "sha256": "84005fa787e015090678b8f5bf64bd4c01d23c91f793fc2f975ad67ef16309ec"
+    },
+    {
+      "path": "RUN_LAYA_MASSIVE_TEST.ps1",
+      "bytes": 939,
+      "sha256": "70d392e10b3f46371229d3ecae834963fd840a6ff63dda228c6f39992a69f992"
+    },
+    {
+      "path": "RUN_LAYA_OWNER_MASSIVE_TEST.ps1",
+      "bytes": 1153,
+      "sha256": "65d4659267e31ccb3812aaac6591e914671d3cc3eef6e674847f35c8862a0ead"
+    },
+    {
+      "path": "RUN_LONGRUN_ACCEPTANCE.ps1",
+      "bytes": 813,
+      "sha256": "2a457ae0233a60b77c803ab47f00628fafd31310560f1782ac5a9f9e0b8ab2b1"
+    },
+    {
+      "path": "RUN_MCP_LIVE_STRESS.ps1",
+      "bytes": 1756,
+      "sha256": "85e02bcbde10f97fb73e89a1492920464cdbecdb2a05be1deab657d23fe926d6"
+    },
+    {
+      "path": "RUN_MCP_SKILLS_STRESS.ps1",
+      "bytes": 460,
+      "sha256": "e1ae02e20280072f86cb058b2c7a5c72537bdf9c84eccf920b548e11114eb275"
+    },
+    {
+      "path": "RUN_MINECRAFT_AUTONOMY_STRESS.ps1",
+      "bytes": 1416,
+      "sha256": "f4c991af5910b8258913528bb699004be516a295e644dfa60315451f22640618"
+    },
+    {
+      "path": "RUN_ON_WINDOWS.md",
+      "bytes": 2528,
+      "sha256": "13032b30808320ab7a05cc55059e22a45d8ff7d11a7633893fef52b964ce75bf"
+    },
+    {
+      "path": "RUN_OVERALL_AGENT_TESTS.ps1",
+      "bytes": 1870,
+      "sha256": "e38e65134ca880967d88c8f958b57842ba4ae9b5f6c0986e83ad467cccfc8b49"
+    },
+    {
+      "path": "SETUP_WINDOWS_DESKTOP.ps1",
+      "bytes": 2111,
+      "sha256": "15baffdfd81602007888199a54d0c60dfa448ed7182c78cb32f2389f91ec362f"
+    },
+    {
+      "path": "SOURCE_SHA256_MANIFEST.json",
+      "bytes": 30787,
+      "sha256": "bab33520ccbc879a17ab8a4e8e4725265867bfd7d547fe4cd747d4965d5b4644"
+    },
+    {
+      "path": "START_JARVIS_WINDOWS.cmd",
+      "bytes": 188,
+      "sha256": "a3f952e6b6c075c4ccc4257e0cb71d87ed7c566e2fad55591e16ae41e80c1dba"
+    },
+    {
+      "path": "UNIVERSAL_MCP_SKILLS_TOOLS_GUIDE.md",
+      "bytes": 5166,
+      "sha256": "49b3d679d61fa88acf3eda1285b5d2df4c34ac2687e3c9789240a111a65a5f43"
+    },
+    {
+      "path": "V1_DELTA_STATUS_2026-10-29.md",
+      "bytes": 4024,
+      "sha256": "c24ba6a0349a0e25318b480d56de931a2c5aaf3f793268469cc07bc8f0dcedff"
+    },
+    {
+      "path": "V1_FULL_RELEASE_GATES_2026-10-29.md",
+      "bytes": 3043,
+      "sha256": "8c3e3f520dab2c2998972a2fb04c0599641800e6967cc391b035183e7d894b7a"
+    },
+    {
+      "path": "V1_RELEASE_GATE_LEDGER_RECOVERY_CANDIDATE.json",
+      "bytes": 3380,
+      "sha256": "5f7b8b91fd156df0e29929b248993b26801164f67c0b3a9ac9c0c6fbc83f6fad"
+    },
+    {
+      "path": "V1_RELEASE_STATUS.md",
+      "bytes": 1687,
+      "sha256": "f851fe51285587daa009815b51513a8e72c07aff653a2dc23bc1b676b5b60df8"
+    },
+    {
+      "path": "V1_REPAIR_CHANGED_SHA256_2026-10-29.json",
+      "bytes": 2372,
+      "sha256": "69332b88277fc734c5a0596d38e146120201fcc16c0eaa2b80f9f9a10a1fb09c"
+    },
+    {
+      "path": "V1_REPAIR_STATUS_2026-10-29.md",
+      "bytes": 3076,
+      "sha256": "98800cf82bc37798ec63f1ce13ed0ad8de4a983e8563679ad78e28af0829e5c9"
+    },
+    {
+      "path": "VALIDATE_NATIVE_WINDOWS.ps1",
+      "bytes": 805,
+      "sha256": "4943e13762f09f805bca4f5ae2a8aec2e761a609aca6d0812b0f967625d978b1"
+    },
+    {
+      "path": "VOICE_OWNER_CHANGE_MANIFEST.json",
+      "bytes": 1589,
+      "sha256": "7f51dea4edec9334545d0a77c3c0dbfb4cb3e56031d3a76f06ecbd958bf77dc9"
+    },
+    {
+      "path": "WINDOWS_APP_CONTROL.md",
+      "bytes": 2763,
+      "sha256": "a6f400170c25ae2f93cfad3e782e97cfb8faa4acf08a496415c0e4572471152e"
+    },
+    {
+      "path": "WINDOWS_COMPANION_SHA256_MANIFEST.json",
+      "bytes": 36000,
+      "sha256": "bbddb73084d38167a760582dcf9413988cf30f693d773b42c3ecbaae9eeee89f"
+    },
+    {
+      "path": "WINDOWS_DESKTOP_CAPABILITIES_AND_LIMITS.md",
+      "bytes": 7258,
+      "sha256": "2144da21e41ee04f295a36079a71f55c96be9f6571fbe74f27407bb3f890bcbb"
+    },
+    {
+      "path": "WINDOWS_DESKTOP_COMPANION.env.example",
+      "bytes": 1280,
+      "sha256": "ca9d88ce32b94c32ef82881848e38a27b7a1c670e41ec0585412bafe12b76b0e"
+    },
+    {
+      "path": "bun.lock",
+      "bytes": 329847,
+      "sha256": "2bc4631e38bb7864dc7dbac9644304973d3cd8b4d35e0e15f909d3fbc87d4b5b"
+    },
+    {
+      "path": "components.json",
+      "bytes": 430,
+      "sha256": "b8be06c49cf44d97a973a6f7ad38a6bc78ab04f78a2614d407738de9aa900983"
+    },
+    {
+      "path": "deliverables/INTEGRATION_AND_ROLLBACK_GUIDE.md",
+      "bytes": 3083,
+      "sha256": "790c821583dbf92f1bf419142b843d3622f25cf6c2950cb30c10238a305c1d65"
+    },
+    {
+      "path": "deliverables/JARVIS_V1_RELEASE_VERDICT.md",
+      "bytes": 3292,
+      "sha256": "2de96649118b5b69b2843464fb64344e86b99d561d4d67505003c2929d405032"
+    },
+    {
+      "path": "deliverables/JARVIS_V1_TRACK_B_HANDOFF.md",
+      "bytes": 3019,
+      "sha256": "554eb4aad9558892220e59bfe7a81e52cc634e07c7c098809e1c945bbb328064"
+    },
+    {
+      "path": "deliverables/PATCHSET_AND_SOURCE_MANIFEST.json",
+      "bytes": 3010,
+      "sha256": "601b43cda1901ba906dfe295ccc5b88c4eeb827b3cc12138206e3a506bc41196"
+    },
+    {
+      "path": "deliverables/WINDOWS_BUILD_AND_INSTALL_GUIDE.md",
+      "bytes": 3006,
+      "sha256": "86c0ab391284bccd97538cdb3ea558f81287b66f269a8668c55f525264fef865"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "bytes": 1632,
+      "sha256": "bd7adc9b35e2c723198ad87eb8166f3eae98517456773bf660343c04616a0f26"
+    },
+    {
+      "path": "evidence/00_BASELINE_REPORT.md",
+      "bytes": 6655,
+      "sha256": "b8bbb1fa7b812b0c61c82d51aff32a5659e482b2ca7aff044db45cf4595a8a90"
+    },
+    {
+      "path": "evidence/00_ENVIRONMENT_REPORT.md",
+      "bytes": 3292,
+      "sha256": "15f85655eafd075b6c7b7eecdef1044e345bbbd4b80b6c9fcb5cad36d936e65d"
+    },
+    {
+      "path": "evidence/00_SOURCE_MANIFEST.json",
+      "bytes": 2760,
+      "sha256": "6b7bf633187201bf2ad5cf5c280723deda3b5eb7ce6406f1da30ad9898352daf"
+    },
+    {
+      "path": "evidence/AGENT_EXECUTION_E2E_RESULTS.md",
+      "bytes": 13284,
+      "sha256": "60f2098c14693f5f123060563fa65e3edd0f28c8b93a370cd8207404e3afc2fb"
+    },
+    {
+      "path": "evidence/AGENT_RUNTIME_PATCH_MANIFEST.md",
+      "bytes": 8849,
+      "sha256": "840b9977a8bc649b954e7bb99669354198398e3454f5dc5a97cfd700e3e5c548"
+    },
+    {
+      "path": "evidence/AGENT_RUNTIME_PROGRESS.md",
+      "bytes": 5433,
+      "sha256": "69a8ab135acca8f81ffbeb7474ac3b13be0b74ef3d8b11c288819159a90db422"
+    },
+    {
+      "path": "evidence/AGENT_RUNTIME_REPAIR_PLAN.md",
+      "bytes": 4855,
+      "sha256": "c01c4bbb38b14a2b0c6eb0d66f1d423e45687127959bd8c24be734313929b1d1"
+    },
+    {
+      "path": "evidence/AGENT_RUNTIME_ROOT_CAUSE.md",
+      "bytes": 6245,
+      "sha256": "d6c2f5738317e0aed9326dd0b9880c6043b6404900a546ad96978aac204ad8df"
+    },
+    {
+      "path": "evidence/AUTHORIZATION_TESTS.md",
+      "bytes": 4268,
+      "sha256": "73ca649bfd1a7842bcbbf93463ea73ce6841109f0189843c7d5908e3ec6e3b18"
+    },
+    {
+      "path": "evidence/AUTH_PROBE_phase1_raw.txt",
+      "bytes": 2798,
+      "sha256": "e3b338936ef53c71fe2be83c4911c6946f08478fd51e70ca33fe714acf109252"
+    },
+    {
+      "path": "evidence/AUTH_PROBE_phase2_raw.txt",
+      "bytes": 942,
+      "sha256": "e0094a5e08fcb05d52b1f29f19177598fe710803183fe1a19cdd9d1f89293a37"
+    },
+    {
+      "path": "evidence/COMPLETION_VERIFICATION_TESTS.md",
+      "bytes": 4443,
+      "sha256": "f6e0a76520de5d87ee2638d7c1490c1085af55282c4c4a00e07a3f69485970f5"
+    },
+    {
+      "path": "evidence/DEFECT_REPRODUCTION_BEFORE_REPAIR.txt",
+      "bytes": 2867,
+      "sha256": "9b55f215c0df3010ceb5c145a1dc4fce0c2fd425c86bb39d623e4f3ca59d2b15"
+    },
+    {
+      "path": "evidence/DURABLE_EFFECT_TESTS.md",
+      "bytes": 6289,
+      "sha256": "201524b923daeea0cfc0ce8952b4b4c753179ad089ed13a255ebc17da826505c"
+    },
+    {
+      "path": "evidence/DURABLE_suite_raw.txt",
+      "bytes": 24210,
+      "sha256": "99ffbc8c779db1bdecfa2454166422b2b7365077ea1c69395349f4926a2b216a"
+    },
+    {
+      "path": "evidence/FULL_DETERMINISTIC_GATE_RAW.txt",
+      "bytes": 5293,
+      "sha256": "4c79318e0f1daa9077364a7eb78c36c42a4633a3853d2d50e604d92b92f68cae"
+    },
+    {
+      "path": "evidence/FULL_REGRESSION_REPORT.md",
+      "bytes": 3143,
+      "sha256": "3b579bf9cfaf1840e38c7bfbf23728bc9a07ce6e542fa57bf06561ffb9ddd59f"
+    },
+    {
+      "path": "evidence/GATE_ATOMIC-UNIT_raw.txt",
+      "bytes": 12302,
+      "sha256": "33a4cc1ec4f2c7bd26c8742260afcf083b507d77dd2da2cff4da59fd09509096"
+    },
+    {
+      "path": "evidence/GATE_AUTH-UNIT_raw.txt",
+      "bytes": 2833,
+      "sha256": "3e7551af185a6998f426ce71bbcd93960f1c8807c5f6fd0bcee68ced49954d2f"
+    },
+    {
+      "path": "evidence/GATE_CAN02_raw.txt",
+      "bytes": 1783,
+      "sha256": "6a0fabb96798db6003fffc06d578f60f5ee4b1c41219507f714a5b847138a8da"
+    },
+    {
+      "path": "evidence/GATE_DURABLE-UNIT_raw.txt",
+      "bytes": 5431,
+      "sha256": "060f472c00ddeb4d003e01edc2952de414c6ebd3eb34254e69f0ac0b107c0494"
+    },
+    {
+      "path": "evidence/GATE_GUARDIAN_raw.txt",
+      "bytes": 5606,
+      "sha256": "8d4cbe17e30ba4165e72803ace2fbdd0b08bd67a515e7587651c4332964ae02d"
+    },
+    {
+      "path": "evidence/GATE_LINT_raw.txt",
+      "bytes": 11,
+      "sha256": "050c69da23536758722729aeda55a8d0fb9d557495ef6d33d70873a3b64a71c1"
+    },
+    {
+      "path": "evidence/GATE_TSC_raw.txt",
+      "bytes": 775,
+      "sha256": "04e4f7b1d4f763857756b2a2d19815e6e13bc9db0d60d81990e55f171851bdc1"
+    },
+    {
+      "path": "evidence/GATE_VERIFIER-UNIT_raw.txt",
+      "bytes": 3672,
+      "sha256": "2894584604d8cffc60e2e3aa3c9d6aadc89efa206272c0dc7110ad9783bba55e"
+    },
+    {
+      "path": "evidence/GUARDIAN_ACTION_SECURITY_RESULTS.md",
+      "bytes": 8181,
+      "sha256": "3fb36727ef55695d933a7afb10c02dc1bca7ac1be0dd007c5c5e922cf4161bff"
+    },
+    {
+      "path": "evidence/GUARDIAN_NEGATIVE_TESTS.md",
+      "bytes": 3219,
+      "sha256": "488e4ddfff96870e5125973734a9215fbb461543f5d63d4009d0c0577a7dc960"
+    },
+    {
+      "path": "evidence/MEMORY_WORLD_MODEL_TESTS.md",
+      "bytes": 907,
+      "sha256": "57a653548b48008268be19242348a4edc5b01484ec8aacf4b30d552910948be4"
+    },
+    {
+      "path": "evidence/MODEL_ROUTING_TESTS.md",
+      "bytes": 1288,
+      "sha256": "e1102ae54ee6677e6de5fefb322d9a744029a2a8848ced7e5497f9ff582bd748"
+    },
+    {
+      "path": "evidence/MULTIMODAL_TESTS.md",
+      "bytes": 1621,
+      "sha256": "edffaca26af77bdc9200ba5b86b8550181726596756f181c24f0da5bb0dfa2fe"
+    },
+    {
+      "path": "evidence/NEXUS_VISUAL_AND_RUNTIME_TESTS.md",
+      "bytes": 3379,
+      "sha256": "8885d7685fb33e9e574562efc8f93d793bd05f45d2704fe750fb246c548dd6fd"
+    },
+    {
+      "path": "evidence/REQUIREMENTS_TRACEABILITY.csv",
+      "bytes": 3775,
+      "sha256": "bd3287e3894f983c5859e1c9d61af3a2e2b9bd1e624e261b7ed9185c96ee60ea"
+    },
+    {
+      "path": "evidence/RESUME_GUARD_TEST_resume.sse.txt",
+      "bytes": 4453,
+      "sha256": "38fff035539090b36b403398b71bc70fcbf611007834664d4272a180bb8f84cd"
+    },
+    {
+      "path": "evidence/RESUME_UI_CHECK_resume.sse.txt",
+      "bytes": 5336,
+      "sha256": "bfbad0f99ff329e98e89af298fd3a9fe9bca166976723afc7874dd3d3466ecbf"
+    },
+    {
+      "path": "evidence/STAGE_LEDGER.json",
+      "bytes": 11723,
+      "sha256": "184cd4c4f2b95cbc3bb9569e748f942029eb6a1cc91a15bbdb4c46a973d249c5"
+    },
+    {
+      "path": "evidence/TEST10_download_affordance.png",
+      "bytes": 1936632,
+      "sha256": "c1410c7c57579b4287601a7f8661f9b4112628ce8370b35526008a52601272c0"
+    },
+    {
+      "path": "evidence/TEST1_real_file_execution.sse.txt",
+      "bytes": 2900,
+      "sha256": "621bdbfae45598814a6064d70e843b22ec3036df26ed2d6dfff4b31876b55299"
+    },
+    {
+      "path": "evidence/TEST1b_session3_positive.sse.txt",
+      "bytes": 3395,
+      "sha256": "a0a0a11e13f487a362557b5ba5923d6a39acff53e1844a7dc4e08ce6fab3987e"
+    },
+    {
+      "path": "evidence/TEST1c_settlement_digest.sse.txt",
+      "bytes": 4523,
+      "sha256": "b8cfa26aec1fc062e0843fda9973c2b13a853d29388ef3c6452e66e5b0b8390d"
+    },
+    {
+      "path": "evidence/TEST2_multistep.sse.txt",
+      "bytes": 5255,
+      "sha256": "73e62525613444f38f9f776a117d9e9b79b4c72a1b299da0f6735aa94fa104f4"
+    },
+    {
+      "path": "evidence/TEST4_recovery.sse.txt",
+      "bytes": 3597,
+      "sha256": "9d5ac5a8c161e23321e238e2342b0b06addef90380e3a53f575219ad48574419"
+    },
+    {
+      "path": "evidence/TEST5_guardian_denial.sse.txt",
+      "bytes": 1036,
+      "sha256": "9b07855708dd8962c02fa5251e9f01e1962c87d57cd132109b53263921892911"
+    },
+    {
+      "path": "evidence/TEST5b_command_args_escape.sse.txt",
+      "bytes": 1359,
+      "sha256": "1d1596e8bcac42cbb133452f1a9bd4277c5020cf689b84bf25a1c59bcff8821c"
+    },
+    {
+      "path": "evidence/TEST6_cancellation.sse.txt",
+      "bytes": 3891,
+      "sha256": "acefdd3d9bb76a27a1f206446b25da0929a55fb5c08443bc8b1945fa755cd9bf"
+    },
+    {
+      "path": "evidence/TEST7_phase1_pause.sse.txt",
+      "bytes": 975,
+      "sha256": "1312cd2765e4150f57518e6225e1ed2480385893f75d42aff186b6c20b52511c"
+    },
+    {
+      "path": "evidence/TEST7_phase2_resume.sse.txt",
+      "bytes": 3676,
+      "sha256": "e341fd42d3630e4fdd036bfde0c5b043b63c93bb04853d934940a09af0ce4dde"
+    },
+    {
+      "path": "evidence/TEST8_nexus_e2e_screenshot.png",
+      "bytes": 1946143,
+      "sha256": "3965f3005886e94c3a7377b8eb425ae114258afde2679f07554ca07f7f5670b0"
+    },
+    {
+      "path": "evidence/TEST9_ui_pause_resume_button.png",
+      "bytes": 2087936,
+      "sha256": "bfba02c471debfb39dc67b60a6b9e931146346f95e3224d8c129f09f4a26e247"
+    },
+    {
+      "path": "evidence/TEST9_ui_resume_completed.png",
+      "bytes": 2142985,
+      "sha256": "4c0e8d32df43d8f8edc36c070cf44d53f409f1b32831df24de5bd5eead53b9d9"
+    },
+    {
+      "path": "evidence/TEST9b_mobile_console.png",
+      "bytes": 258759,
+      "sha256": "4ec18a8c7f8edf97833e96a85f267936cd28169944d13dcc846f758fefc7f56e"
+    },
+    {
+      "path": "evidence/TEST_injection_resistance.sse.txt",
+      "bytes": 1766,
+      "sha256": "7a884f7aae5c93639a849b1ab8a29ca0c5fd2d0508ae1c9fa333ed04b8a7640a"
+    },
+    {
+      "path": "evidence/UI01_orb_contract.png",
+      "bytes": 757044,
+      "sha256": "070526ba8c961e9a6b3111424b3a5d66c54a61da06f8496b9d0784bd7ada4628"
+    },
+    {
+      "path": "evidence/UI10_text_mode_controls.png",
+      "bytes": 752390,
+      "sha256": "83fe09c283622e615bf98525568a213d25f613c018e7e1e6dea9a1d7c1492b58"
+    },
+    {
+      "path": "evidence/VERIFY_GATE_LEDGER.txt",
+      "bytes": 1462,
+      "sha256": "3d11ba0029d4a27d7cdf738cc375fc46340a3504a89e1bec889990aaa5f8cd91"
+    },
+    {
+      "path": "evidence/VER_PROBE_live34_raw.txt",
+      "bytes": 276,
+      "sha256": "a8ff3df557481cd6d9dfde3b812e044121cc4efa1234e2cfb47ec65635e4cb3f"
+    },
+    {
+      "path": "evidence/VER_PROBE_live5_raw.txt",
+      "bytes": 186,
+      "sha256": "b0c630306cc929d0a9a030aaf040c37ae52808a387095d6349cc18676bd63c4a"
+    },
+    {
+      "path": "evidence/VER_PROBE_live_raw.txt",
+      "bytes": 525,
+      "sha256": "98e6a5c0deb1e8550a94ea2eba0c3835897852901485d08c72772dc2c7761839"
+    },
+    {
+      "path": "evidence/WINDOWS_NATIVE_SECURITY.md",
+      "bytes": 2726,
+      "sha256": "194d69a16bdd5419559488353a1488732dd7c3d4e0b5acf76c984a92b88db6e5"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/ADJACENT_TEST_RESULTS.json",
+      "bytes": 1860,
+      "sha256": "dce1562c171e7b36a8919a7d3c952d7374f879b28f0cf093f56d8c2751891f6a"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/CORE-GAME-ACTION-GATE.log",
+      "bytes": 1082,
+      "sha256": "9d9a2df7941fdd8dd4ebf5fa07547476978044a086dda5c9902383676690a9e9"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/CORE-OUTCOME-HONESTY.log",
+      "bytes": 1110,
+      "sha256": "0f54ece0c0fe418a098156a3d6e9aae9dabcd95e4554fdd48168ee4def7b6881"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/MINECRAFT-EFFECT-IDENTITY.log",
+      "bytes": 1214,
+      "sha256": "25608515e44fef0a1a2c2b9c46f05299a644a0d6208d5c88e8d7ab873f204676"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/MINECRAFT-FRIEND-FIXTURE.log",
+      "bytes": 1352,
+      "sha256": "666348fc856a08dd8ac7dc46b44155c0a62e22bac9a040575f15c8e97a231ee1"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/MINECRAFT-OWNER-IDENTITY.log",
+      "bytes": 408,
+      "sha256": "4fd4234d2a7b7927aeb9ef8a9241600efce5096e66de6507825f56a092d5a47a"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/MINECRAFT-PATHFINDER-FIXTURE.log",
+      "bytes": 851,
+      "sha256": "3f87e9ceda22f987becea99c400103d72e30ce5cd223c99fcf73c46835da30f3"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/V1_RELEASE_ASSESSMENT.json",
+      "bytes": 5999,
+      "sha256": "dd7637535975e4d11c6d6ef19bf5b68ce2fa5ffa72e1b0b92db5d4815c538657"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/scripts_gpt6-auth-contract-probe.cjs.log",
+      "bytes": 477,
+      "sha256": "8e312d4c865937f05457fbe1c67e053e49d5a6ef5654a6bebe70ab4c950357f4"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/scripts_model-manager_verify-model-route.cjs.log",
+      "bytes": 704,
+      "sha256": "accc37ccd10400daab50c4bb4dbc6797ac08c06809a0bbc9de0236dae50750ba"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/scripts_model-manager_verify-privacy-policy.cjs.log",
+      "bytes": 626,
+      "sha256": "0cd509ae2d76f5cd4f59b1776418039a3d2be1627b4329fa5b580749c00bd754"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/scripts_verify-agent-tool-wiring.cjs.log",
+      "bytes": 3101,
+      "sha256": "7ac5781ae1c69cf7c5c9ca37f5a86e5f59943352b4e6df7b3a9e6d3eedd29553"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/scripts_verify-local-dev-bootstrap.mjs.log",
+      "bytes": 551,
+      "sha256": "90cdb4c7ff307666d35c07fc864f662b89d03ebf7bf4d025d86cb2907ce6411a"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/scripts_verify-memory-contracts.cjs.log",
+      "bytes": 573,
+      "sha256": "8be95f6d4096ffdd99d83fcba8defd706c535e6de78559251ea05fad8b06a3e1"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/scripts_verify-minecraft-bridge-policy.cjs.log",
+      "bytes": 73,
+      "sha256": "fc138c1feabbcf9d524fda9e226b83606d7ae34bd3618df66d74a6957469dbf7"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/scripts_verify-nexus-settings.cjs.log",
+      "bytes": 1693,
+      "sha256": "b67f4e154daf49378ca88f3244e53ff0a020e6d66d71d7f95d20f020791333ad"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/windows-companion_minecraft-bot_verify_autonomy_session.cjs.log",
+      "bytes": 68,
+      "sha256": "4eeebe290a2682259529a902bc2e97de4d8ed217c792a3decfa6bb74e20e0393"
+    },
+    {
+      "path": "evidence/current_v1_release_assessment/windows-companion_minecraft-bot_verify_late_skills.cjs.log",
+      "bytes": 56,
+      "sha256": "8021e1f03cc98db8c43285c48ab3fdf563174f1e5e54f5a6d2747b1a77a1cd8a"
+    },
+    {
+      "path": "evidence/current_verification/VERIFY_GATE_LEDGER.txt",
+      "bytes": 490,
+      "sha256": "ae48943e52a58155e20010f9ebe81868a29a8e7b543dadfcf4172a80cce99e64"
+    },
+    {
+      "path": "evidence/laya/RESULTS.tsv",
+      "bytes": 2454,
+      "sha256": "dd98852c76c3247c8fca65131f1b5e3f40ea89ac20da620accf7a158bc11bc37"
+    },
+    {
+      "path": "evidence/laya/round1_verify-agent-tool-wiring.log",
+      "bytes": 3100,
+      "sha256": "e83c160e6ae1fb545387fdbf8c27a294cc0b5063fbd0e632a6153485a0479c02"
+    },
+    {
+      "path": "evidence/laya/round1_verify-autonomy-supervisor.log",
+      "bytes": 2657,
+      "sha256": "fd57cfea44b5977baeb388de9cc40d9290b46a4acb8f52de16419127d3dc6cbd"
+    },
+    {
+      "path": "evidence/laya/round1_verify-full-desktop-policy.log",
+      "bytes": 2086,
+      "sha256": "3965d432f0fef1d4590e5f0ba4f3865105c1b7bf6b8097b772f11bafe27c2fdf"
+    },
+    {
+      "path": "evidence/laya/round1_verify-laya-router.log",
+      "bytes": 1198,
+      "sha256": "151cdf994e3f9b92099d334fb39df6d9cbc921c92fc19614d2be48c80ad72abc"
+    },
+    {
+      "path": "evidence/laya/round1_verify-laya-stress.log",
+      "bytes": 96,
+      "sha256": "47dd721024bee82c15f20415473ae817ebbf05f97fceeee56fdeca5ba20724ea"
+    },
+    {
+      "path": "evidence/laya/round1_verify-local-fallback.log",
+      "bytes": 318,
+      "sha256": "159ee9df06f8ea3dc57589d7be7833f498d3d771b7043c65e32f7326aae903ad"
+    },
+    {
+      "path": "evidence/laya/round1_verify-memory-contracts.log",
+      "bytes": 572,
+      "sha256": "5babd0fc0e5cc72320a9c02a2bcedb5b0eeb1bb034c2d402edd2fc02c6d58381"
+    },
+    {
+      "path": "evidence/laya/round1_verify-memory-route.log",
+      "bytes": 535,
+      "sha256": "9bc738ef55e30029686b8d683d005183d5fcbb4e7983f4e64e64c0764ce25d5b"
+    },
+    {
+      "path": "evidence/laya/round1_verify-model-manager.log",
+      "bytes": 1453,
+      "sha256": "c5f01021dc5641b840e8781d0f9799970ebbc6b7b05e5fafda7429dad3df4e08"
+    },
+    {
+      "path": "evidence/laya/round1_verify-model-route.log",
+      "bytes": 703,
+      "sha256": "bbd49b05f1d9f2b6c5b49471d87546b7fb5d5e1514fd8109f0a2cfee0743c858"
+    },
+    {
+      "path": "evidence/laya/round1_verify-native-tool-wiring.log",
+      "bytes": 1348,
+      "sha256": "2896209578a955ef2b25b37992cfa6e2f9412262f8cf7b14df3af68899e97edc"
+    },
+    {
+      "path": "evidence/laya/round1_verify-owner-priority.log",
+      "bytes": 94,
+      "sha256": "e90201b9cfbd934565da8b42317c0c211c361cf799c468107f16a8be763bc4dd"
+    },
+    {
+      "path": "evidence/laya/round1_verify-path-containment.log",
+      "bytes": 226,
+      "sha256": "7b570f5f06a9b4dc559c1e789fc07f02ff5c8cd8996a6f68d5fa4b346623b7d8"
+    },
+    {
+      "path": "evidence/laya/round1_verify-provider-offline.log",
+      "bytes": 640,
+      "sha256": "66b693c707004b5d5edbf5d88db4324695f398d466b4a5fb49d93b3f61ed8c5d"
+    },
+    {
+      "path": "evidence/laya/round1_verify-windows-intent.log",
+      "bytes": 852,
+      "sha256": "31489f4dacc06f30ca6c6489440c2a235a2026018359fb6f9e97344d9574d0e9"
+    },
+    {
+      "path": "evidence/laya/round1_verify-windows-policy.log",
+      "bytes": 2060,
+      "sha256": "01756f4ea284e78afb87f06c43c7a34028c66c8724a6309550afd3243fafc8bb"
+    },
+    {
+      "path": "evidence/laya/round1_verify_agent_tools_offline.log",
+      "bytes": 1521,
+      "sha256": "4bd1a05054a69659dc948f8701bf35f8196d2167be9eddee26f233058d3273a9"
+    },
+    {
+      "path": "evidence/laya/round1_verify_app_catalog_offline.log",
+      "bytes": 612,
+      "sha256": "972a43652b9d41ab52935445197974c1ff5aa20f9546bee4cb9024bbe5dd91ec"
+    },
+    {
+      "path": "evidence/laya/round1_verify_app_launch_offline.log",
+      "bytes": 379,
+      "sha256": "55d95ec6b0c8456a3d164df5bcf738a57ad230349b93d36c818cf3cd4e5510f7"
+    },
+    {
+      "path": "evidence/laya/round1_verify_autonomy_native_offline.log",
+      "bytes": 717,
+      "sha256": "adc2cb719bf7dfa4985676783325e9fff21b891c2cc2481a97a73c6db96af076"
+    },
+    {
+      "path": "evidence/laya/round1_verify_companion_offline.log",
+      "bytes": 873,
+      "sha256": "bfe0c77a308ecf53894b79de04bae6ff5867559d9e543585422876bdcee5fb65"
+    },
+    {
+      "path": "evidence/laya/round1_verify_desktop_action_fixture.log",
+      "bytes": 876,
+      "sha256": "e7e39e8d9ea64731ae970052db4ed316cf51ee049831c2235586055ed9147542"
+    },
+    {
+      "path": "evidence/laya/round1_verify_full_desktop_offline.log",
+      "bytes": 797,
+      "sha256": "d9604380a4f8a39940eecd3830bd0c0e84e9adad585b06c858f3196b625e5068"
+    },
+    {
+      "path": "evidence/laya/round1_verify_native_uia_offline.log",
+      "bytes": 796,
+      "sha256": "38f1f61bacc6841832c82e99b3d31e1276bf09656953f1ccf37d728006434e99"
+    },
+    {
+      "path": "evidence/laya/round2_verify-agent-tool-wiring.log",
+      "bytes": 3100,
+      "sha256": "e83c160e6ae1fb545387fdbf8c27a294cc0b5063fbd0e632a6153485a0479c02"
+    },
+    {
+      "path": "evidence/laya/round2_verify-autonomy-supervisor.log",
+      "bytes": 2657,
+      "sha256": "fd57cfea44b5977baeb388de9cc40d9290b46a4acb8f52de16419127d3dc6cbd"
+    },
+    {
+      "path": "evidence/laya/round2_verify-full-desktop-policy.log",
+      "bytes": 2086,
+      "sha256": "3965d432f0fef1d4590e5f0ba4f3865105c1b7bf6b8097b772f11bafe27c2fdf"
+    },
+    {
+      "path": "evidence/laya/round2_verify-laya-router.log",
+      "bytes": 1198,
+      "sha256": "151cdf994e3f9b92099d334fb39df6d9cbc921c92fc19614d2be48c80ad72abc"
+    },
+    {
+      "path": "evidence/laya/round2_verify-laya-stress.log",
+      "bytes": 96,
+      "sha256": "47355f558b707b922eff16a3585f9b725ac35194b72356f000be66a2581da2a4"
+    },
+    {
+      "path": "evidence/laya/round2_verify-local-fallback.log",
+      "bytes": 318,
+      "sha256": "159ee9df06f8ea3dc57589d7be7833f498d3d771b7043c65e32f7326aae903ad"
+    },
+    {
+      "path": "evidence/laya/round2_verify-memory-contracts.log",
+      "bytes": 572,
+      "sha256": "5babd0fc0e5cc72320a9c02a2bcedb5b0eeb1bb034c2d402edd2fc02c6d58381"
+    },
+    {
+      "path": "evidence/laya/round2_verify-memory-route.log",
+      "bytes": 535,
+      "sha256": "9bc738ef55e30029686b8d683d005183d5fcbb4e7983f4e64e64c0764ce25d5b"
+    },
+    {
+      "path": "evidence/laya/round2_verify-model-manager.log",
+      "bytes": 1453,
+      "sha256": "c5f01021dc5641b840e8781d0f9799970ebbc6b7b05e5fafda7429dad3df4e08"
+    },
+    {
+      "path": "evidence/laya/round2_verify-model-route.log",
+      "bytes": 703,
+      "sha256": "bbd49b05f1d9f2b6c5b49471d87546b7fb5d5e1514fd8109f0a2cfee0743c858"
+    },
+    {
+      "path": "evidence/laya/round2_verify-native-tool-wiring.log",
+      "bytes": 1348,
+      "sha256": "2896209578a955ef2b25b37992cfa6e2f9412262f8cf7b14df3af68899e97edc"
+    },
+    {
+      "path": "evidence/laya/round2_verify-owner-priority.log",
+      "bytes": 94,
+      "sha256": "e90201b9cfbd934565da8b42317c0c211c361cf799c468107f16a8be763bc4dd"
+    },
+    {
+      "path": "evidence/laya/round2_verify-path-containment.log",
+      "bytes": 226,
+      "sha256": "7b570f5f06a9b4dc559c1e789fc07f02ff5c8cd8996a6f68d5fa4b346623b7d8"
+    },
+    {
+      "path": "evidence/laya/round2_verify-provider-offline.log",
+      "bytes": 640,
+      "sha256": "66b693c707004b5d5edbf5d88db4324695f398d466b4a5fb49d93b3f61ed8c5d"
+    },
+    {
+      "path": "evidence/laya/round2_verify-windows-intent.log",
+      "bytes": 852,
+      "sha256": "31489f4dacc06f30ca6c6489440c2a235a2026018359fb6f9e97344d9574d0e9"
+    },
+    {
+      "path": "evidence/laya/round2_verify-windows-policy.log",
+      "bytes": 2060,
+      "sha256": "01756f4ea284e78afb87f06c43c7a34028c66c8724a6309550afd3243fafc8bb"
+    },
+    {
+      "path": "evidence/laya/round2_verify_agent_tools_offline.log",
+      "bytes": 1521,
+      "sha256": "4bd1a05054a69659dc948f8701bf35f8196d2167be9eddee26f233058d3273a9"
+    },
+    {
+      "path": "evidence/laya/round2_verify_app_catalog_offline.log",
+      "bytes": 612,
+      "sha256": "972a43652b9d41ab52935445197974c1ff5aa20f9546bee4cb9024bbe5dd91ec"
+    },
+    {
+      "path": "evidence/laya/round2_verify_app_launch_offline.log",
+      "bytes": 379,
+      "sha256": "55d95ec6b0c8456a3d164df5bcf738a57ad230349b93d36c818cf3cd4e5510f7"
+    },
+    {
+      "path": "evidence/laya/round2_verify_autonomy_native_offline.log",
+      "bytes": 717,
+      "sha256": "adc2cb719bf7dfa4985676783325e9fff21b891c2cc2481a97a73c6db96af076"
+    },
+    {
+      "path": "evidence/laya/round2_verify_companion_offline.log",
+      "bytes": 873,
+      "sha256": "bfe0c77a308ecf53894b79de04bae6ff5867559d9e543585422876bdcee5fb65"
+    },
+    {
+      "path": "evidence/laya/round2_verify_desktop_action_fixture.log",
+      "bytes": 876,
+      "sha256": "e7e39e8d9ea64731ae970052db4ed316cf51ee049831c2235586055ed9147542"
+    },
+    {
+      "path": "evidence/laya/round2_verify_full_desktop_offline.log",
+      "bytes": 797,
+      "sha256": "d9604380a4f8a39940eecd3830bd0c0e84e9adad585b06c858f3196b625e5068"
+    },
+    {
+      "path": "evidence/laya/round2_verify_native_uia_offline.log",
+      "bytes": 796,
+      "sha256": "38f1f61bacc6841832c82e99b3d31e1276bf09656953f1ccf37d728006434e99"
+    },
+    {
+      "path": "evidence/laya/round3_verify-agent-tool-wiring.log",
+      "bytes": 3100,
+      "sha256": "e83c160e6ae1fb545387fdbf8c27a294cc0b5063fbd0e632a6153485a0479c02"
+    },
+    {
+      "path": "evidence/laya/round3_verify-autonomy-supervisor.log",
+      "bytes": 2657,
+      "sha256": "fd57cfea44b5977baeb388de9cc40d9290b46a4acb8f52de16419127d3dc6cbd"
+    },
+    {
+      "path": "evidence/laya/round3_verify-full-desktop-policy.log",
+      "bytes": 2086,
+      "sha256": "3965d432f0fef1d4590e5f0ba4f3865105c1b7bf6b8097b772f11bafe27c2fdf"
+    },
+    {
+      "path": "evidence/laya/round3_verify-laya-router.log",
+      "bytes": 1198,
+      "sha256": "151cdf994e3f9b92099d334fb39df6d9cbc921c92fc19614d2be48c80ad72abc"
+    },
+    {
+      "path": "evidence/laya/round3_verify-laya-stress.log",
+      "bytes": 96,
+      "sha256": "32bdc96f4505d7b19269c098a545c2c6d8ce6e19d5a5a719a28f26bc07f54eb7"
+    },
+    {
+      "path": "evidence/laya/round3_verify-local-fallback.log",
+      "bytes": 318,
+      "sha256": "159ee9df06f8ea3dc57589d7be7833f498d3d771b7043c65e32f7326aae903ad"
+    },
+    {
+      "path": "evidence/laya/round3_verify-memory-contracts.log",
+      "bytes": 572,
+      "sha256": "5babd0fc0e5cc72320a9c02a2bcedb5b0eeb1bb034c2d402edd2fc02c6d58381"
+    },
+    {
+      "path": "evidence/laya/round3_verify-memory-route.log",
+      "bytes": 535,
+      "sha256": "9bc738ef55e30029686b8d683d005183d5fcbb4e7983f4e64e64c0764ce25d5b"
+    },
+    {
+      "path": "evidence/laya/round3_verify-model-manager.log",
+      "bytes": 1453,
+      "sha256": "c5f01021dc5641b840e8781d0f9799970ebbc6b7b05e5fafda7429dad3df4e08"
+    },
+    {
+      "path": "evidence/laya/round3_verify-model-route.log",
+      "bytes": 703,
+      "sha256": "bbd49b05f1d9f2b6c5b49471d87546b7fb5d5e1514fd8109f0a2cfee0743c858"
+    },
+    {
+      "path": "evidence/laya/round3_verify-native-tool-wiring.log",
+      "bytes": 1348,
+      "sha256": "2896209578a955ef2b25b37992cfa6e2f9412262f8cf7b14df3af68899e97edc"
+    },
+    {
+      "path": "evidence/laya/round3_verify-owner-priority.log",
+      "bytes": 94,
+      "sha256": "e90201b9cfbd934565da8b42317c0c211c361cf799c468107f16a8be763bc4dd"
+    },
+    {
+      "path": "evidence/laya/round3_verify-path-containment.log",
+      "bytes": 226,
+      "sha256": "7b570f5f06a9b4dc559c1e789fc07f02ff5c8cd8996a6f68d5fa4b346623b7d8"
+    },
+    {
+      "path": "evidence/laya/round3_verify-provider-offline.log",
+      "bytes": 640,
+      "sha256": "66b693c707004b5d5edbf5d88db4324695f398d466b4a5fb49d93b3f61ed8c5d"
+    },
+    {
+      "path": "evidence/laya/round3_verify-windows-intent.log",
+      "bytes": 852,
+      "sha256": "31489f4dacc06f30ca6c6489440c2a235a2026018359fb6f9e97344d9574d0e9"
+    },
+    {
+      "path": "evidence/laya/round3_verify-windows-policy.log",
+      "bytes": 2060,
+      "sha256": "01756f4ea284e78afb87f06c43c7a34028c66c8724a6309550afd3243fafc8bb"
+    },
+    {
+      "path": "evidence/laya/round3_verify_agent_tools_offline.log",
+      "bytes": 1521,
+      "sha256": "4bd1a05054a69659dc948f8701bf35f8196d2167be9eddee26f233058d3273a9"
+    },
+    {
+      "path": "evidence/laya/round3_verify_app_catalog_offline.log",
+      "bytes": 612,
+      "sha256": "972a43652b9d41ab52935445197974c1ff5aa20f9546bee4cb9024bbe5dd91ec"
+    },
+    {
+      "path": "evidence/laya/round3_verify_app_launch_offline.log",
+      "bytes": 379,
+      "sha256": "55d95ec6b0c8456a3d164df5bcf738a57ad230349b93d36c818cf3cd4e5510f7"
+    },
+    {
+      "path": "evidence/laya/round3_verify_autonomy_native_offline.log",
+      "bytes": 717,
+      "sha256": "adc2cb719bf7dfa4985676783325e9fff21b891c2cc2481a97a73c6db96af076"
+    },
+    {
+      "path": "evidence/laya/round3_verify_companion_offline.log",
+      "bytes": 873,
+      "sha256": "bfe0c77a308ecf53894b79de04bae6ff5867559d9e543585422876bdcee5fb65"
+    },
+    {
+      "path": "evidence/laya/round3_verify_desktop_action_fixture.log",
+      "bytes": 876,
+      "sha256": "e7e39e8d9ea64731ae970052db4ed316cf51ee049831c2235586055ed9147542"
+    },
+    {
+      "path": "evidence/laya/round3_verify_full_desktop_offline.log",
+      "bytes": 797,
+      "sha256": "d9604380a4f8a39940eecd3830bd0c0e84e9adad585b06c858f3196b625e5068"
+    },
+    {
+      "path": "evidence/laya/round3_verify_native_uia_offline.log",
+      "bytes": 796,
+      "sha256": "38f1f61bacc6841832c82e99b3d31e1276bf09656953f1ccf37d728006434e99"
+    },
+    {
+      "path": "evidence/minecraft_mission/integration_test_results.txt",
+      "bytes": 6024,
+      "sha256": "407101255610cf8e55f900d43baafb3eec3223cd96bde4a802ccdb75f62479be"
+    },
+    {
+      "path": "examples/websocket/frontend.tsx",
+      "bytes": 6310,
+      "sha256": "2b186756c26cc54f57e07e6cee9797e99196b1e5e77744bb6e63538f9eaf89ea"
+    },
+    {
+      "path": "examples/websocket/server.ts",
+      "bytes": 3536,
+      "sha256": "50881b769ec938afe8fc3e33aea31788e54e2ef6d5615ef1c5c33c6eb3f4c73a"
+    },
+    {
+      "path": "next.config.ts",
+      "bytes": 183,
+      "sha256": "c0a0a56c4e5056dcf3e35180219aba8d79f37007e45d9f4aae80ee06e22419f4"
+    },
+    {
+      "path": "package.json",
+      "bytes": 6312,
+      "sha256": "6338de140e08de95fcf1966fbe9bb44e7d5145f1a7d0470b292f4239f731bb87"
+    },
+    {
+      "path": "postcss.config.mjs",
+      "bytes": 81,
+      "sha256": "141ef24ca27a99d08962210fdf20212d3435fdcfa21b46cd88b44d22f751dfae"
+    },
+    {
+      "path": "prisma/schema.prisma",
+      "bytes": 8770,
+      "sha256": "4d1d235a76fd584693be3b03532995b865bff27a20e6fa46907164ea9107dcb8"
+    },
+    {
+      "path": "public/logo.svg",
+      "bytes": 1065,
+      "sha256": "8506450e8ef647695d218c4b3245ef573f9c6473783f372eef87fdba9bd47eac"
+    },
+    {
+      "path": "public/robots.txt",
+      "bytes": 160,
+      "sha256": "a3d27b3ca5ce32341fa9f96f01169b521b1657c05d1860c45d1e53a6258e9e8b"
+    },
+    {
+      "path": "scripts/adoption/safe_extract.py",
+      "bytes": 2463,
+      "sha256": "2b983d657855ec54b038fde3e4987447d146fc35a8a46c2f31ad4f7619b7d887"
+    },
+    {
+      "path": "scripts/adoption/stress-archives.py",
+      "bytes": 3075,
+      "sha256": "a70a1be4064394018e2c82a64ef0d58aed40814c43bf92238ae374fae2fab6b5"
+    },
+    {
+      "path": "scripts/adoption/stress-live.mjs",
+      "bytes": 8163,
+      "sha256": "b217c39a24546bec1bc013dad5066eb531d3c2182d91ee302a856286ec555af1"
+    },
+    {
+      "path": "scripts/adoption/stress-security.mjs",
+      "bytes": 5566,
+      "sha256": "f0669ac57a53a062ee77d917748394f78ba580a153a397dcd66e70acc7ef5c0c"
+    },
+    {
+      "path": "scripts/adoption/verify-adoption.mjs",
+      "bytes": 6050,
+      "sha256": "170eb5d0c6a720d72a1100b2fd47937ba3570991a7d83230bbf114f9e46e899f"
+    },
+    {
+      "path": "scripts/atomic-probe.ts",
+      "bytes": 14711,
+      "sha256": "be5c60ac119f3fabb89ec23f032d9afd4844268c4d4f9d94a999fb0b47a29bed"
+    },
+    {
+      "path": "scripts/auth-probe.ts",
+      "bytes": 13336,
+      "sha256": "7c2e1daee134f2a26ad6b08feeae99c33bd5cae9a79f7c2f1afe0a7b8bfdf731"
+    },
+    {
+      "path": "scripts/capability/verify_direct_intent.cjs",
+      "bytes": 1564,
+      "sha256": "74dafd91cc3c39e2a12433ce6d3b7a290564ebdb736eb218e664d50f32fe2f94"
+    },
+    {
+      "path": "scripts/capability/verify_discovery.py",
+      "bytes": 6919,
+      "sha256": "01b399bc9aa4d27c2da52a8b31fd9b36caf7df61d9b2d591681327e113fc89b8"
+    },
+    {
+      "path": "scripts/capability/verify_wiring.cjs",
+      "bytes": 2257,
+      "sha256": "bd16b76f31af5be8ce1f549631d9672105f37b560f1b1d154a9adcaaf39cf4d3"
+    },
+    {
+      "path": "scripts/copy-standalone.mjs",
+      "bytes": 1245,
+      "sha256": "964d6f80cd01130386140c4dc73752e7ad742cefd4f828820c78e0e1908e6586"
+    },
+    {
+      "path": "scripts/duplicate-guard-live.ts",
+      "bytes": 2668,
+      "sha256": "eea8095121fc68e686bb50ed0a6f2b603670bc7856311d96755e5a4c01f26a22"
+    },
+    {
+      "path": "scripts/durable-probe.ts",
+      "bytes": 12826,
+      "sha256": "46fec10a72d23ff477be301644ca13263e7f635dec84eac6f9f0d41303d9cb03"
+    },
+    {
+      "path": "scripts/durable-suite.sh",
+      "bytes": 2446,
+      "sha256": "285d98e0d1802ad72c6ee03f1c2fe02c7c56a3a0c51fd6caf6ad2170b71b5511"
+    },
+    {
+      "path": "scripts/generate-owner-config.mjs",
+      "bytes": 2786,
+      "sha256": "418d17cf73fb7ae838daea8e6ec30a13a5047907795ab9b1a8cd1470e7562cf0"
+    },
+    {
+      "path": "scripts/gpt6-auth-contract-probe.cjs",
+      "bytes": 4899,
+      "sha256": "a009bce5eb750b37113a258bb614d67a47f3bc14309a1667a81bb31548f60ec2"
+    },
+    {
+      "path": "scripts/gpt6-offline-security-probe.mjs",
+      "bytes": 4036,
+      "sha256": "08b68533080bde28c5c83978c9a93c047f058bd769ec6615bf229b9d962c7e66"
+    },
+    {
+      "path": "scripts/gpt6-ollama-fixture-probe.mjs",
+      "bytes": 3265,
+      "sha256": "91ef6e81c7f4dca197a9c4d66a0b0b0a6de7f02bd411c483a82eafc6fbdc1af2"
+    },
+    {
+      "path": "scripts/guardian-probe.ts",
+      "bytes": 3828,
+      "sha256": "9feba76ec380207322bfd709d0eee9e1a03233add956503fbf850f4569c4408d"
+    },
+    {
+      "path": "scripts/journal-extraction-probe.ts",
+      "bytes": 3429,
+      "sha256": "b5720d904c116735c36a5c342f0525d314da5756f270457a40a2ede99eedbda0"
+    },
+    {
+      "path": "scripts/local-dev-bootstrap.mjs",
+      "bytes": 2568,
+      "sha256": "0b68737171842c435959b05b9be4c3fbc8c3f8e979cec6808528c9e5d84f8285"
+    },
+    {
+      "path": "scripts/longrun/verify-longrun.mjs",
+      "bytes": 5403,
+      "sha256": "8d894aa4d4a5b55a9180e5d4ea10bf0905012437ff9d4b903565800b035e9488"
+    },
+    {
+      "path": "scripts/longrun/worker.ts",
+      "bytes": 11147,
+      "sha256": "c7ca9ef826a7b8bc70dedc4092be4cfdcde271e3ec281917d04375ccfc350a22"
+    },
+    {
+      "path": "scripts/model-manager/mock-model-test-server.cjs",
+      "bytes": 3591,
+      "sha256": "c15f6aa4caa71707bd44b1ae3712d45478e519a0143e51037c3064a658c08020"
+    },
+    {
+      "path": "scripts/model-manager/run-laya-regression.sh",
+      "bytes": 956,
+      "sha256": "2778f239d552ce860f782aafd9c5e60ceccc3f8f308af2228091ab377e8d5478"
+    },
+    {
+      "path": "scripts/model-manager/stress_round_1.json",
+      "bytes": 613,
+      "sha256": "8d01843f799a77af22bf39763399693e6770b72c4efaa799b6e06af8a566f374"
+    },
+    {
+      "path": "scripts/model-manager/verify-laya-router.cjs",
+      "bytes": 7950,
+      "sha256": "148f5fe82e61c3f7a7ec81b95d35fd3ac2e5373e6d3c9154d390105a8c514c41"
+    },
+    {
+      "path": "scripts/model-manager/verify-laya-stress.cjs",
+      "bytes": 17522,
+      "sha256": "8e3d017dc5ee6a2af4a00a2236ea4b2b7f4280868d6e0ee2ea1892fb2495077b"
+    },
+    {
+      "path": "scripts/model-manager/verify-model-manager.cjs",
+      "bytes": 10163,
+      "sha256": "44b6f161ade39173631a397676538e4a2d8e425168a57ac40234c3be977105f7"
+    },
+    {
+      "path": "scripts/model-manager/verify-model-route.cjs",
+      "bytes": 5910,
+      "sha256": "3e1a3b75b9982988c91cf4b3ad7c97c86d761351c029967886ce5cb71cfb0993"
+    },
+    {
+      "path": "scripts/model-manager/verify-owner-priority.cjs",
+      "bytes": 11709,
+      "sha256": "a9341b6ece63acc4f9e9a6cc9830414397d1b70d86c4356ec06fa6aab1bc3f9b"
+    },
+    {
+      "path": "scripts/model-manager/verify-privacy-policy.cjs",
+      "bytes": 3776,
+      "sha256": "7f98b48a2d57842cd9da171d713363d2a252a0ea5316d64762717edbf1d0e70f"
+    },
+    {
+      "path": "scripts/origin-probe.ts",
+      "bytes": 2637,
+      "sha256": "9271c61a6f2817209358cd53fc8cfd4838277749070a53083c15889729c2f22d"
+    },
+    {
+      "path": "scripts/overall/verify-overall-workflows.mjs",
+      "bytes": 3594,
+      "sha256": "2bf8f6ad498f7bb5863d98c216a79d3fe02410479a3c6182e45aa4719253ac65"
+    },
+    {
+      "path": "scripts/perception/samples/README.md",
+      "bytes": 928,
+      "sha256": "a955786e4747a877697bba4f6f5d3c7f9cb597f3f4b9f532ae022a64d9c01cf3"
+    },
+    {
+      "path": "scripts/perception/samples/chelsea_cat_sample.jpg",
+      "bytes": 35042,
+      "sha256": "2c0357a57121a80b7145db42b093f743c9a0405e33f9e48fd102319a6ce3af89"
+    },
+    {
+      "path": "scripts/perception/samples/gradio_test_audio.wav",
+      "bytes": 47148,
+      "sha256": "2d99921f99c5029251e2372a70aba0b0f08a6edd4a2dce5f6efc27c0eef18b15"
+    },
+    {
+      "path": "scripts/perception/samples/nasa_astronaut_public_domain.jpg",
+      "bytes": 74962,
+      "sha256": "370adb9cb9dd03ca911ea316fb227495e01095398bc1f71188a3995209b9c81a"
+    },
+    {
+      "path": "scripts/perception/verify_biometric_adversarial.py",
+      "bytes": 12859,
+      "sha256": "c2edd50b762769ac2a4c6da13661b1f032bd9bfb558a9c5836440b3f473d1657"
+    },
+    {
+      "path": "scripts/perception/verify_face_voice.py",
+      "bytes": 8112,
+      "sha256": "bf56fe48c1b17642fc9220b81df838d0398263b86aaa5ab7641e4067626aac4f"
+    },
+    {
+      "path": "scripts/perception/verify_owner_wake_tts.py",
+      "bytes": 5900,
+      "sha256": "20c544d07297926706edcf5d9376444766b2249eafbdaaf3fbaa2239db76edf2"
+    },
+    {
+      "path": "scripts/start-local-no-login.mjs",
+      "bytes": 1217,
+      "sha256": "db3a655403a07a50c24768ff0e06507c617a1d7c172fe55bd198eaa85a4b5235"
+    },
+    {
+      "path": "scripts/start-windows-agent.mjs",
+      "bytes": 3795,
+      "sha256": "27117fa5170055eb9b0db085a9f62806295d57bc632c36dfeeba1e1bd5426a22"
+    },
+    {
+      "path": "scripts/verify-agent-tool-wiring.cjs",
+      "bytes": 3007,
+      "sha256": "71454305d9f07d154f49d79216baf3dda9c0eba60a61ea4a68a3e1d03ee281f6"
+    },
+    {
+      "path": "scripts/verify-autonomy-supervisor.cjs",
+      "bytes": 8386,
+      "sha256": "b243bf5c84fef3d93236ddd7bfdd35e573c22775822c7ce51f7e7f402c353cdc"
+    },
+    {
+      "path": "scripts/verify-core-goal-action-gate.cjs",
+      "bytes": 1665,
+      "sha256": "1a8eb671a18505346fcb267bd77675c53ae91d46ff17066ea033262d1e041a45"
+    },
+    {
+      "path": "scripts/verify-full-desktop-policy.cjs",
+      "bytes": 3861,
+      "sha256": "3830d63bff04b8eadbddc4de18934a86e800462f05f8e4cc9808fab180db840d"
+    },
+    {
+      "path": "scripts/verify-local-dev-bootstrap.mjs",
+      "bytes": 3577,
+      "sha256": "9b5e255847941b493155181bfa7eaa7fda2fc8c99a351ee0a05121b76bb996a6"
+    },
+    {
+      "path": "scripts/verify-local-dev-no-login.cjs",
+      "bytes": 6725,
+      "sha256": "52321de1f690eb2afce495b0af35bd890a608215d046db45add535ea4d2ab625"
+    },
+    {
+      "path": "scripts/verify-local-fallback.cjs",
+      "bytes": 3070,
+      "sha256": "b701460bacd2f9b4204877909caab562182da8c0a5340adffaf86824a9477b5c"
+    },
+    {
+      "path": "scripts/verify-memory-contracts.cjs",
+      "bytes": 3020,
+      "sha256": "0a3dc23a57f6ef3d8b54ec28ac56aa9bae27f2b05925e12c7179fb1ca4e7746c"
+    },
+    {
+      "path": "scripts/verify-memory-route.cjs",
+      "bytes": 5747,
+      "sha256": "623f1db4296800ef45fe64f2ba6f12bd1baefee26ac8db5420c1e9e4dc2cfe72"
+    },
+    {
+      "path": "scripts/verify-minecraft-bridge-policy.cjs",
+      "bytes": 2586,
+      "sha256": "a048aa5e8525206ed952f24a81eb2683fbd88d3be4a03b91623d3e6223c50fbb"
+    },
+    {
+      "path": "scripts/verify-minecraft-effect-identity.cjs",
+      "bytes": 2858,
+      "sha256": "880c8315e00bdd38b8a09a9c1844e334a390a6a84a39a67534a20348b9491eff"
+    },
+    {
+      "path": "scripts/verify-native-tool-wiring.cjs",
+      "bytes": 2659,
+      "sha256": "ce30c7295a68c2158164f0de0d109c40b7f19cc7d48d22cb7d6db320479e0538"
+    },
+    {
+      "path": "scripts/verify-nexus-orb-navigation.cjs",
+      "bytes": 2373,
+      "sha256": "3eb453b9a04191853c428f99fcef2bfdde384726ed9c07cba0bea12cdd0af1f1"
+    },
+    {
+      "path": "scripts/verify-nexus-settings.cjs",
+      "bytes": 6691,
+      "sha256": "ab51815e8b1c46c8a42fff062e94645d6d3d8359ad1d23ecd37b0873ee2cbc42"
+    },
+    {
+      "path": "scripts/verify-nexus-ui-stress.cjs",
+      "bytes": 3401,
+      "sha256": "ab57af9fd64f09a46fd74954f4ce0b9f2a73d92fd9928517b0b5b4dbc10a71aa"
+    },
+    {
+      "path": "scripts/verify-path-containment.cjs",
+      "bytes": 2235,
+      "sha256": "73af5a335f187f2a48c32b06f15eb351a1d00798e9a70e930c499358325402fd"
+    },
+    {
+      "path": "scripts/verify-probe.ts",
+      "bytes": 9600,
+      "sha256": "cd893063f987015a2b7aaed466831942f7d0fd2d71fc508923c44a7bc6a7ca49"
+    },
+    {
+      "path": "scripts/verify-provider-offline.cjs",
+      "bytes": 4237,
+      "sha256": "49681ddba514570540db4ca577b511ac780d7642d7aef43bf56ce33d1e2b77dd"
+    },
+    {
+      "path": "scripts/verify-task-outcome-honesty.cjs",
+      "bytes": 5240,
+      "sha256": "04a2d47dbba78d976a362d1874584a9935e58cca22ae271ba200cec787294e64"
+    },
+    {
+      "path": "scripts/verify-track-b.sh",
+      "bytes": 2533,
+      "sha256": "a7e592565797f3011ae06e0510b0f9916686bbadab30be616701fca732f73a1a"
+    },
+    {
+      "path": "scripts/verify-v1-gates.mjs",
+      "bytes": 4657,
+      "sha256": "b6ce6c4420c40d8c1be98ea19ff920a4a79fdadf7d9c1dfc9fc97dbb19178580"
+    },
+    {
+      "path": "scripts/verify-windows-intent.cjs",
+      "bytes": 1847,
+      "sha256": "568b3a95c48a9aaa960c1af0fad894fcbcd31e000f35dee60cc43932251c3fb7"
+    },
+    {
+      "path": "scripts/verify-windows-policy.cjs",
+      "bytes": 6871,
+      "sha256": "64c4a30eddacaff7bc839b85af897bc13c2b990903bb3fb56d5c383a7142ec72"
+    },
+    {
+      "path": "src/app/api/jarvis/auth/bootstrap/route.ts",
+      "bytes": 885,
+      "sha256": "860cfc48c9b284ccc9469227b8176743e016ccb0488639f8a80bb516776000bb"
+    },
+    {
+      "path": "src/app/api/jarvis/auth/devices/route.ts",
+      "bytes": 2974,
+      "sha256": "1875a6b02a1d5686e818cb92683cff7b17b2636333af9fb716f860f1877cab86"
+    },
+    {
+      "path": "src/app/api/jarvis/auth/login/route.ts",
+      "bytes": 887,
+      "sha256": "a2b633d3a3f5d071c7fda094b906812cf5535bd7447272fa653884b6e123b616"
+    },
+    {
+      "path": "src/app/api/jarvis/auth/logout/route.ts",
+      "bytes": 627,
+      "sha256": "9bb4aa7bd093e1f76d5462812c67663f3bed0d2760d6ec41d540b8fde349ab3a"
+    },
+    {
+      "path": "src/app/api/jarvis/auth/pair/route.ts",
+      "bytes": 1022,
+      "sha256": "707ed0cc42cf89db27dcffee77269e9e8fc978795c81e57a92c3d3d5205962ac"
+    },
+    {
+      "path": "src/app/api/jarvis/auth/session/route.ts",
+      "bytes": 1841,
+      "sha256": "7136fcec5d62efbe02fb97e9e7d2e0e81b26a938e5042050536247b958e75529"
+    },
+    {
+      "path": "src/app/api/jarvis/integrations/route.ts",
+      "bytes": 2398,
+      "sha256": "a395fd0178e06690b8e4e5fed4dcae15da4c568ac51cfab0ce251e7e76753085"
+    },
+    {
+      "path": "src/app/api/jarvis/memory/route.ts",
+      "bytes": 5577,
+      "sha256": "b0709d1fb5b2367d3a62dd4b067cf6dbaaab5d6c6f880cf4bb3a7dfcc3bb4ac9"
+    },
+    {
+      "path": "src/app/api/jarvis/models/route.ts",
+      "bytes": 5323,
+      "sha256": "dc33fe9c54355e96a051f10af97c76b5be2970fdf3f3ee4eae537a3e98db583b"
+    },
+    {
+      "path": "src/app/api/jarvis/perception/route.ts",
+      "bytes": 3362,
+      "sha256": "0dac5be7af2c5c79b6ef94ea814be9fae9d6f5bdf31be776c77aed2422caab24"
+    },
+    {
+      "path": "src/app/api/jarvis/routines/route.ts",
+      "bytes": 4519,
+      "sha256": "8aaa9049cb6cb297c1f69443a45998864b7d588478dee706ff02bd04ab2c537c"
+    },
+    {
+      "path": "src/app/api/jarvis/task/cancel/route.ts",
+      "bytes": 3351,
+      "sha256": "f1cc479292769a9d2d6a7cfd464e8bb2d23b88c76a74a70d08b77a0144084b72"
+    },
+    {
+      "path": "src/app/api/jarvis/task/route.ts",
+      "bytes": 5853,
+      "sha256": "50f19f110af3cd305d8095b409b5a63c2e88aed1805afaa66de4944bea2a6f57"
+    },
+    {
+      "path": "src/app/api/jarvis/task/status/route.ts",
+      "bytes": 1958,
+      "sha256": "3ff94294f834bb862db98d031791f575b68d9b04ca967a88ead63e87585110b9"
+    },
+    {
+      "path": "src/app/api/jarvis/tts/route.ts",
+      "bytes": 3040,
+      "sha256": "319cd65350862c54516e65e374f53465d0be78b8292b28ed4cc741fea5b7a8a5"
+    },
+    {
+      "path": "src/app/api/jarvis/windows/live/route.ts",
+      "bytes": 746,
+      "sha256": "baa95ce884f8217a25efc8cb4e39ace0adba0a96c305e198fc43276342d61695"
+    },
+    {
+      "path": "src/app/api/route.ts",
+      "bytes": 134,
+      "sha256": "bb3323e70b608cf916b285f8942d8efabb02166f84f9e5a8aa6fe9e417344bce"
+    },
+    {
+      "path": "src/app/globals.css",
+      "bytes": 38328,
+      "sha256": "7692e10af1f824f53c58738f8d826361ebee9c0666dcd469def4ed608e399cf0"
+    },
+    {
+      "path": "src/app/layout.tsx",
+      "bytes": 1116,
+      "sha256": "fb38f88bf66643fc08bb0d158fb0f5f2ac5a8c0fad9cd1a2b2580578cc6faa9a"
+    },
+    {
+      "path": "src/app/page.tsx",
+      "bytes": 16297,
+      "sha256": "5739a4311c2620aaf956e66fbc95c99d6e48a662f6ee962822c1eb432d7e6071"
+    },
+    {
+      "path": "src/components/AssistantPanel.tsx",
+      "bytes": 9765,
+      "sha256": "94c7a1941b512ef3e3746467e37145f2dd38cdfa80f837aa9bd66783c4c2869c"
+    },
+    {
+      "path": "src/components/DeviceManager.tsx",
+      "bytes": 2608,
+      "sha256": "6867bebfe20e8cb541d6f79ad995b9c5cf40213792d4e96050fa0f9d53a5b00c"
+    },
+    {
+      "path": "src/components/IntegrationsPanel.tsx",
+      "bytes": 5722,
+      "sha256": "72dafd53f9f5d0e9b0fee1bc56aaaf0e7263c3dff7d64ee2bcf27fe379119cdc"
+    },
+    {
+      "path": "src/components/JarvisOrb.tsx",
+      "bytes": 9828,
+      "sha256": "bce894d0c3ca4e81317aacc293cb5ff294df19d3dd07f84400716cab32c61d23"
+    },
+    {
+      "path": "src/components/MemoryManager.tsx",
+      "bytes": 5953,
+      "sha256": "07d3d080de932ee4005a2eb1ffa39a5347848a099899bd1a6738338738035c67"
+    },
+    {
+      "path": "src/components/ModelManager.tsx",
+      "bytes": 25688,
+      "sha256": "109c6d96eb613be8be3e4a127c37b41b84d68191ec75da2d2069e7da10e156b5"
+    },
+    {
+      "path": "src/components/OwnerVoice.tsx",
+      "bytes": 10494,
+      "sha256": "c246c473de1c58652040482b903902a42fa2f003a128c26bac42cf7e2e2ee3f6"
+    },
+    {
+      "path": "src/components/PerceptionPanel.tsx",
+      "bytes": 9606,
+      "sha256": "4f9399bc9d08f66688893b22fa10a209a192ef6bc9b672eedb0d1764aa537e91"
+    },
+    {
+      "path": "src/components/RoutineManager.tsx",
+      "bytes": 6539,
+      "sha256": "427ea573790bdadd91e938b9fa2e6f8e9b805610137ef199f932824b528fe11b"
+    },
+    {
+      "path": "src/components/ui/accordion.tsx",
+      "bytes": 2053,
+      "sha256": "7251e973cc6896411e3348c1e9cd10bb359934b0e766055c9a3439b07b775edc"
+    },
+    {
+      "path": "src/components/ui/alert-dialog.tsx",
+      "bytes": 3864,
+      "sha256": "59967c334f56dd44100e49b1fc18db428e7f15f5a28b9c2c4f9a3b7dcb4db4b7"
+    },
+    {
+      "path": "src/components/ui/alert.tsx",
+      "bytes": 1614,
+      "sha256": "49d8311589b810b106aada8ef7b13f70b2b1f68cfce4e1458b7f31a191f420e9"
+    },
+    {
+      "path": "src/components/ui/aspect-ratio.tsx",
+      "bytes": 280,
+      "sha256": "6a75117416aa89200cf31e8d61643b428e812f479caea857c80004b26d893e79"
+    },
+    {
+      "path": "src/components/ui/avatar.tsx",
+      "bytes": 1097,
+      "sha256": "e8672934f1c315f36cdae39380454ba8c2da62aca420dfb827d96693091419c4"
+    },
+    {
+      "path": "src/components/ui/badge.tsx",
+      "bytes": 1631,
+      "sha256": "f41c11fc13e9a1f1b849349cb51b137ddd27de0a17c5339675c789d58f556cc4"
+    },
+    {
+      "path": "src/components/ui/breadcrumb.tsx",
+      "bytes": 2357,
+      "sha256": "22f3f4c13ed1085c4131379bfccc6fb173a474f861636bc2736506820153aa08"
+    },
+    {
+      "path": "src/components/ui/button.tsx",
+      "bytes": 2123,
+      "sha256": "82403231e33fd3d45b111e5e819df194cdfa7cef9a726770185724a60bd20932"
+    },
+    {
+      "path": "src/components/ui/calendar.tsx",
+      "bytes": 7660,
+      "sha256": "fe832b1ba33bd42a41cd2b66c7e156f5f421af87f8ceb799eea5db48bab6d294"
+    },
+    {
+      "path": "src/components/ui/card.tsx",
+      "bytes": 1989,
+      "sha256": "78cdb63dff3ec7ef074ada630ff20a5d8004768b6cbe24ed134a8bfba12bafbb"
+    },
+    {
+      "path": "src/components/ui/carousel.tsx",
+      "bytes": 5556,
+      "sha256": "b7ea0dda3903d972c186f739e23da61f547bc83b5a0bf13b16856577846d5fc3"
+    },
+    {
+      "path": "src/components/ui/chart.tsx",
+      "bytes": 9781,
+      "sha256": "670849399b33fecf7e46aa222c52f6a7c294faac079f5227f8c01c594822fd5d"
+    },
+    {
+      "path": "src/components/ui/checkbox.tsx",
+      "bytes": 1226,
+      "sha256": "4c395ef15549e46068eb3b32a2a10fb5bfdb01f6834a3c0231a218a529015c83"
+    },
+    {
+      "path": "src/components/ui/collapsible.tsx",
+      "bytes": 800,
+      "sha256": "c2c74dc3e99482d00a57de673b56920860c2ff4b330373d783843f505dc11dae"
+    },
+    {
+      "path": "src/components/ui/command.tsx",
+      "bytes": 4818,
+      "sha256": "4fb4f8f95dfbe884ae598661b80e541d62eacdfe2101beab58819ab58b96c2ea"
+    },
+    {
+      "path": "src/components/ui/context-menu.tsx",
+      "bytes": 8222,
+      "sha256": "6573f8ed4232ae9801a3098a5cd4549b43a1e0ac1fd2c495e552a862d81fba22"
+    },
+    {
+      "path": "src/components/ui/dialog.tsx",
+      "bytes": 3982,
+      "sha256": "491a87bfae8f28773624d353bf56b9288d0852413e814d508e0d086dc7b06edb"
+    },
+    {
+      "path": "src/components/ui/drawer.tsx",
+      "bytes": 4255,
+      "sha256": "0c9464ed4f95207ff6ec0b8f433f550388ea0fe57fecd36bbe100b084ee46a3e"
+    },
+    {
+      "path": "src/components/ui/dropdown-menu.tsx",
+      "bytes": 8284,
+      "sha256": "9b346378821ba06f9501e4571fd7678cd8819d6833f833daff72bec699565c06"
+    },
+    {
+      "path": "src/components/ui/form.tsx",
+      "bytes": 3759,
+      "sha256": "b41b4b10f5e11b2acc1accb7b027eba0581b5cdd549d3ccef92e30d1f4efcf54"
+    },
+    {
+      "path": "src/components/ui/hover-card.tsx",
+      "bytes": 1532,
+      "sha256": "031f6a309d87c8e42a2282fccc277dde75e373de8c93dad881582c9dc13e05d0"
+    },
+    {
+      "path": "src/components/ui/input-otp.tsx",
+      "bytes": 2254,
+      "sha256": "35d561c352fde4e34fc3481839649728300c01cfadac62aa84c375d6d812f4de"
+    },
+    {
+      "path": "src/components/ui/input.tsx",
+      "bytes": 967,
+      "sha256": "6628e8fde207857b9ba08910d386eeea8213d7d745b4e0ae8b95332b52730db9"
+    },
+    {
+      "path": "src/components/ui/label.tsx",
+      "bytes": 611,
+      "sha256": "9ec42c8a57e82311118b794318409ee02b2cebfa49ba6cce8457cff6448cd471"
+    },
+    {
+      "path": "src/components/ui/menubar.tsx",
+      "bytes": 8394,
+      "sha256": "d3c5b6060323b78aef1b32650e22d3d951d1b125404f76ffb967ed80446a3ddd"
+    },
+    {
+      "path": "src/components/ui/navigation-menu.tsx",
+      "bytes": 6664,
+      "sha256": "d71f57fe0f365541fbf5d00196b0b78a461d8c4f38d35293e5754680d93b9245"
+    },
+    {
+      "path": "src/components/ui/pagination.tsx",
+      "bytes": 2712,
+      "sha256": "53ffa0474d07dbfe1fb67f043a0ad7e7d24feecf950e65da8b929a90179c6ad4"
+    },
+    {
+      "path": "src/components/ui/popover.tsx",
+      "bytes": 1635,
+      "sha256": "29a217781737bbf5c430859b3de46097a44ada81c4143c2d05543d2167de0ee1"
+    },
+    {
+      "path": "src/components/ui/progress.tsx",
+      "bytes": 740,
+      "sha256": "e7a89220fb49e18d6613956781cfd5eb38d5da36379e93f5fc90ccec127dc871"
+    },
+    {
+      "path": "src/components/ui/radio-group.tsx",
+      "bytes": 1466,
+      "sha256": "b12ca5cef859dd75b274337234bae66e413b0f97845243254a1dedcb2d7a7237"
+    },
+    {
+      "path": "src/components/ui/resizable.tsx",
+      "bytes": 2028,
+      "sha256": "41043c0f3dec3a41e163fcfbba4ed8138eeafcedd1aa40c007c3e195f34d37df"
+    },
+    {
+      "path": "src/components/ui/scroll-area.tsx",
+      "bytes": 1645,
+      "sha256": "1c5d0b242d0513848f4bfa9b57ba7f438d9b1120617029941bfaa137196ecead"
+    },
+    {
+      "path": "src/components/ui/select.tsx",
+      "bytes": 6253,
+      "sha256": "8795c9fac7c48d565ff6c47cbf4cca8bfefe25d8cb3d7e7aeba36855739a76ab"
+    },
+    {
+      "path": "src/components/ui/separator.tsx",
+      "bytes": 699,
+      "sha256": "e9dddbd8dbbc0eccd683306481b0f0bbc8e2b60ea97817416ebb9fe7fbbbdca8"
+    },
+    {
+      "path": "src/components/ui/sheet.tsx",
+      "bytes": 4090,
+      "sha256": "3d6a560c635fd91094e43191ecf73b124ccb2537e6060f85d5d31fcf68150e74"
+    },
+    {
+      "path": "src/components/ui/sidebar.tsx",
+      "bytes": 21633,
+      "sha256": "73561977bb06800b7d7700d844e4219b8dc4d14ac732c7a448e807005286d9f7"
+    },
+    {
+      "path": "src/components/ui/skeleton.tsx",
+      "bytes": 276,
+      "sha256": "f2aea81d8baf2b621945382aabac150e3db40f20d19ac1abea7aff805f1dc33c"
+    },
+    {
+      "path": "src/components/ui/slider.tsx",
+      "bytes": 2001,
+      "sha256": "55140ef92c201c82d530dede076603611fbfb2cdc899e4d8459b58f6cbb2b235"
+    },
+    {
+      "path": "src/components/ui/sonner.tsx",
+      "bytes": 564,
+      "sha256": "958d33cd8a85293728acad21c1f3881da56b805bc11a3ec862d6aa355c152d90"
+    },
+    {
+      "path": "src/components/ui/switch.tsx",
+      "bytes": 1177,
+      "sha256": "17f2390d98e8ce4d9e90155eac1918266914d6a9ada7c276b5d1c917cef0e969"
+    },
+    {
+      "path": "src/components/ui/table.tsx",
+      "bytes": 2448,
+      "sha256": "7b8c7a952cf49e78aafe5f628c3bd90f7e01bd5602eb5d3650bef5727a8186d7"
+    },
+    {
+      "path": "src/components/ui/tabs.tsx",
+      "bytes": 1969,
+      "sha256": "e8469e599381cf021ce751c27cca3d8cb06440a45665ca9c2ef2efb0acef1fd9"
+    },
+    {
+      "path": "src/components/ui/textarea.tsx",
+      "bytes": 759,
+      "sha256": "de4e9fb0fd8e8ed10ea2e475ffe202a922ffe77e3f3edb2c517b0781447ad1b4"
+    },
+    {
+      "path": "src/components/ui/toast.tsx",
+      "bytes": 4829,
+      "sha256": "45d3d86ddb0b098a2bbbdca8458369d4a1fb046f77d9e106b690727ff6658afd"
+    },
+    {
+      "path": "src/components/ui/toaster.tsx",
+      "bytes": 785,
+      "sha256": "e4957974d6393d08f8237e6660a522e4f314610c6743b21c28f256efdb7fff7c"
+    },
+    {
+      "path": "src/components/ui/toggle-group.tsx",
+      "bytes": 1925,
+      "sha256": "09eebce0dcbac76f860d4b6df5261c4f385f5ba233f88a0cd8dde91b1772abeb"
+    },
+    {
+      "path": "src/components/ui/toggle.tsx",
+      "bytes": 1570,
+      "sha256": "b201563ea8cdef3680a3d9bf272cfc5918a5ab6e1079d7ff8d6273df7fce2849"
+    },
+    {
+      "path": "src/components/ui/tooltip.tsx",
+      "bytes": 1891,
+      "sha256": "8d8a3645f547334b759341daf94a20b12a8ba17e8de4ad6e4e1c64b38842c1e3"
+    },
+    {
+      "path": "src/hooks/use-mobile.ts",
+      "bytes": 565,
+      "sha256": "ad0936f84f1df79d3697bfbff9c18f8ad58431c1cbaf2359c6a853b0fcc9f28b"
+    },
+    {
+      "path": "src/hooks/use-toast.ts",
+      "bytes": 3917,
+      "sha256": "12f8fcd1101acdd4a1cf6952d85aa8997d2a53aa9956d3cb77a85d441e54b1a9"
+    },
+    {
+      "path": "src/lib/agent/adoption/mcp.d.mts",
+      "bytes": 200,
+      "sha256": "3c513ceaf2e061061345c7cb565d8e55b13b2eefe5476825851f33e7ddc3e334"
+    },
+    {
+      "path": "src/lib/agent/adoption/mcp.mjs",
+      "bytes": 11291,
+      "sha256": "a05d8bcf9807d22d92d3f2da3ad57d3aa1944576f04c02ac2ac639e78fee158d"
+    },
+    {
+      "path": "src/lib/agent/adoption/registry.d.mts",
+      "bytes": 842,
+      "sha256": "cdfa0f67abf544004e5b55f1050098ff25f3edacf80b5fe1f28d132e08bdb787"
+    },
+    {
+      "path": "src/lib/agent/adoption/registry.mjs",
+      "bytes": 12907,
+      "sha256": "169bd9b622804b6c6b2156911d8a8f208d04ef3762a84eaeef34e03be934ef3a"
+    },
+    {
+      "path": "src/lib/agent/auth/origin.ts",
+      "bytes": 2183,
+      "sha256": "4f267ea8421a6ea859ae4d32374d48651bef27e713535845bf4041d646d2c6b4"
+    },
+    {
+      "path": "src/lib/agent/auth/session.ts",
+      "bytes": 14765,
+      "sha256": "139cfc396653752abff2953e19594b6b0f1b61f39af5ce1ca41704db4ef180de"
+    },
+    {
+      "path": "src/lib/agent/core/autonomyGate.ts",
+      "bytes": 5553,
+      "sha256": "7d7cefc8690437825bd15aaf95e4afb859ac30242ef4186b3ad782419a2ee68a"
+    },
+    {
+      "path": "src/lib/agent/core/cancelRegistry.ts",
+      "bytes": 1458,
+      "sha256": "1f687ae1e6705cb3782e95a912549411909efddec82cc5aee7c7556b3e0336ab"
+    },
+    {
+      "path": "src/lib/agent/core/capabilityIntent.ts",
+      "bytes": 858,
+      "sha256": "dfeeb435bc8d64dffa6c00c663e3a91edc74e34f66292cedf87ad361f00723a7"
+    },
+    {
+      "path": "src/lib/agent/core/compatProvider.ts",
+      "bytes": 6429,
+      "sha256": "f8ed4a6160e78fc477c81c6fb0c2dcf673c5ffe20f3eb860283335a36946159f"
+    },
+    {
+      "path": "src/lib/agent/core/effects.ts",
+      "bytes": 11996,
+      "sha256": "cbf19dff8893771cba1626ec63a352d338e5cdedd5ee9f5766761538129f80d8"
+    },
+    {
+      "path": "src/lib/agent/core/faults.ts",
+      "bytes": 1106,
+      "sha256": "5bed62dc1d6b8e80bddf1ffbc13264b6c54f1748cad8e0a0ffec1966ae7176d4"
+    },
+    {
+      "path": "src/lib/agent/core/laya.ts",
+      "bytes": 1619,
+      "sha256": "baceb663cbf37f215458b9a8706ba1dd39ca72d61d9373bbb7475b46aec3978e"
+    },
+    {
+      "path": "src/lib/agent/core/localFallback.ts",
+      "bytes": 1432,
+      "sha256": "7eb3c7faa7733a5fcbef5ad1bc109e1df83a5c731306aec553c6ab2fc0baedc4"
+    },
+    {
+      "path": "src/lib/agent/core/loop.ts",
+      "bytes": 41160,
+      "sha256": "c179e5fa03de2ad3462fbea64db093de862744bc146ac47662c0474f271c8e05"
+    },
+    {
+      "path": "src/lib/agent/core/modelErrors.ts",
+      "bytes": 2637,
+      "sha256": "816318748011d56ea9d99ee5d5a1701cc0f67507b433dc691a26112b5d9ae48a"
+    },
+    {
+      "path": "src/lib/agent/core/modelProvider.ts",
+      "bytes": 8440,
+      "sha256": "7b6d5c8e90e8b6e3e087a2df5dd42a74b833c93e4e72e0548150f4b0611b8a51"
+    },
+    {
+      "path": "src/lib/agent/core/observation.ts",
+      "bytes": 1857,
+      "sha256": "1c3c9761612ace0deea8c836e83ecf3dc6b8bbf3826d73a0742c416ec509f8f6"
+    },
+    {
+      "path": "src/lib/agent/core/prompts.ts",
+      "bytes": 18611,
+      "sha256": "2c4c354371ac96f2192eadb13be3a79761a49157329ee911a3e7925e0adc94f7"
+    },
+    {
+      "path": "src/lib/agent/core/taskState.ts",
+      "bytes": 5385,
+      "sha256": "31eac2cc5b40ceba2a13c96e925220c390ec05d98eeb04d728c9add7324b836a"
+    },
+    {
+      "path": "src/lib/agent/core/verifier.ts",
+      "bytes": 11335,
+      "sha256": "f08bca8b14f0bbcb4854241e643b94d67fc30f50b411d795dfab3633a7cc3491"
+    },
+    {
+      "path": "src/lib/agent/core/windowsIntent.ts",
+      "bytes": 2321,
+      "sha256": "30b2c5b8b9f687afb9e80454e41fccbb3f3a273bd1223b1574e8990079a919f0"
+    },
+    {
+      "path": "src/lib/agent/guardian/guardian.ts",
+      "bytes": 9512,
+      "sha256": "92bba6fff43feea98b10f86eca21dd9a529cab5e71361a109d57e989ce16c26b"
+    },
+    {
+      "path": "src/lib/agent/guardian/policy.ts",
+      "bytes": 8545,
+      "sha256": "1692c0ad6564f9915d43dddb1847cd92fc2b91cfb87b24c66065af6c34ffb4d4"
+    },
+    {
+      "path": "src/lib/agent/longrun/planner.d.mts",
+      "bytes": 1070,
+      "sha256": "0b1326cef9aaca2864ecf853487d0c8af0bc3199be29110f0ea6ccb937cde225"
+    },
+    {
+      "path": "src/lib/agent/longrun/planner.mjs",
+      "bytes": 7594,
+      "sha256": "a75a9bed7570e67b3260f220fa453b1bffc9bfda84adbb50231044c549ce8ce5"
+    },
+    {
+      "path": "src/lib/agent/memory/contracts.ts",
+      "bytes": 3820,
+      "sha256": "ae5a02d226f72671ad54b2563ff0b3040f67c314e665ac7bb43e200dabf766d2"
+    },
+    {
+      "path": "src/lib/agent/models/bridge.ts",
+      "bytes": 5312,
+      "sha256": "52a12f8ad5ebf569e1181401415c114766192df005d5db5e5db0d71d23053495"
+    },
+    {
+      "path": "src/lib/agent/models/contracts.ts",
+      "bytes": 7637,
+      "sha256": "a9933dc17a6d6efe177f7f92283d5bb7b8bb6f3f951eed0d3c53ad8f7865eeff"
+    },
+    {
+      "path": "src/lib/agent/models/layaRouter.ts",
+      "bytes": 14609,
+      "sha256": "e4d7681d8e0fd5c1262ad6ead218a4894327d263e6a49f4afab02bb41f035aec"
+    },
+    {
+      "path": "src/lib/agent/models/vault.ts",
+      "bytes": 6440,
+      "sha256": "1c2b53aa475251066e39884bdd50a70afb57763d10cff566def5bd5b8492b415"
+    },
+    {
+      "path": "src/lib/agent/tools/executor.ts",
+      "bytes": 13022,
+      "sha256": "d0848301c14effb700ba10aa5f2e9729fd5742bca7480613d059f394fb411f5b"
+    },
+    {
+      "path": "src/lib/agent/windows/bridge.ts",
+      "bytes": 7002,
+      "sha256": "b923b130e473a4f23170fa7d5d568f89c40b78b95c84466265bc8f300f9e8d6e"
+    },
+    {
+      "path": "src/lib/agent/windows/policy.ts",
+      "bytes": 21227,
+      "sha256": "4973b3915ca129edaff261b9f12e8a3aadef18362b10dc0adf4903e83b1442f6"
+    },
+    {
+      "path": "src/lib/db.ts",
+      "bytes": 362,
+      "sha256": "cd0a682cc6e0188612e918d9dfb54e963c73064684bda947d5319afb533d4f0e"
+    },
+    {
+      "path": "src/lib/handTracker.ts",
+      "bytes": 8452,
+      "sha256": "84c5c41c9899e702f7a24134134989ccb01b5661c7826d718886debd7baac8cb"
+    },
+    {
+      "path": "src/lib/orbScene.ts",
+      "bytes": 32514,
+      "sha256": "c82794f95b58683255bec8c2cbaa31d3e6a96a9001f760a73c876cc86983b9d9"
+    },
+    {
+      "path": "src/lib/utils.ts",
+      "bytes": 166,
+      "sha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d"
+    },
+    {
+      "path": "tailwind.config.ts",
+      "bytes": 1696,
+      "sha256": "ade682235e52f45b1c1dfc020f0bdb9f27b94fcff60afaa3272fae22fe5c0c54"
+    },
+    {
+      "path": "tests/database-runtime-build.sh",
+      "bytes": 2191,
+      "sha256": "fb6a5409625ec93fbb05d2ba0398052a8a6b35d8b1849e4fdc73e49893491a6f"
+    },
+    {
+      "path": "tests/python-runtime-build.sh",
+      "bytes": 1843,
+      "sha256": "359c95983423a5bd6afbecd551d24fe83c6bc6ba39f8497ff5c9130e2787dac1"
+    },
+    {
+      "path": "tests/python-runtime-container.sh",
+      "bytes": 837,
+      "sha256": "2f7f632cb111425bfdc430f25c032f9a79d72d9fc87376be5c7ea7253431972f"
+    },
+    {
+      "path": "tsconfig.json",
+      "bytes": 760,
+      "sha256": "40bf8e487a8b619d1faf804b94b187858493418bac6644f8ae2e7733a48ee74a"
+    },
+    {
+      "path": "windows-companion/__pycache__/app_support.cpython-313.pyc",
+      "bytes": 6929,
+      "sha256": "7629e96237e921d0bf224d501808a6f3d979b668990a0074c9746bc5b4c569a5"
+    },
+    {
+      "path": "windows-companion/__pycache__/capability_discovery.cpython-313.pyc",
+      "bytes": 16584,
+      "sha256": "9e0b0c8c6ecc609bb3bf15cb99420b7aa71ebe2ebc941a2d7fda6cd34fd51714"
+    },
+    {
+      "path": "windows-companion/__pycache__/desktop_control.cpython-313.pyc",
+      "bytes": 26288,
+      "sha256": "d0fc0dfae8a2de07509ecc987e4d8b2786c7bf89e34002901870ae95a9888a4c"
+    },
+    {
+      "path": "windows-companion/__pycache__/native_uia.cpython-313.pyc",
+      "bytes": 16292,
+      "sha256": "cf87291d74556ae9e617df7092470b5655c796a55072f596031e553464a2b28e"
+    },
+    {
+      "path": "windows-companion/app_support.py",
+      "bytes": 4467,
+      "sha256": "0600de0a5c0f73556859e40988c8130be9edf23da0f78c07ee8ea71b31c1a279"
+    },
+    {
+      "path": "windows-companion/approved_apps.json",
+      "bytes": 3,
+      "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+    },
+    {
+      "path": "windows-companion/capability_discovery.py",
+      "bytes": 12455,
+      "sha256": "3a9d6d5ab1ed991529bebbcd433cdc70c6e5042411085e5b7f2ee917e801beba"
+    },
+    {
+      "path": "windows-companion/companion.py",
+      "bytes": 45019,
+      "sha256": "f0b0b1f7073000a8f62cba12ec061d7531f906de316cbd80eb3b8414d02dd786"
+    },
+    {
+      "path": "windows-companion/desktop_control.py",
+      "bytes": 15282,
+      "sha256": "df0adcef78dcd032e3e35d66e09d03f3610eb3d3f106d8ee8dfc23bf30da0e77"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/autonomy_engine.cjs",
+      "bytes": 17568,
+      "sha256": "03f4fae0e6632ee2fedd1004d51c7cbb9c3f255e3a183041c607bebeffae44ad"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/bot.cjs",
+      "bytes": 36967,
+      "sha256": "bc2f3440dfc6bb84a59924d93b87a97ff27e312dea1eb93a48414c4a249a9980"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/friend_protocol.cjs",
+      "bytes": 3459,
+      "sha256": "6c408b6e655c0da9f0a0872e62760e7d44327b86e4f3353ccaf71687e62afad9"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/late_game.cjs",
+      "bytes": 8503,
+      "sha256": "314449664ab9b86cc323923bae57f01db598afc252708820b46b1d8911184741"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/late_skills.cjs",
+      "bytes": 31521,
+      "sha256": "16fc825cea8673d7795e108ca08b59ff1db2ab66c40cdc254ec70e0835d43890"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/package.json",
+      "bytes": 203,
+      "sha256": "f57beea76c9393f70d22ba8ea2ace6b35c82017ea6963de3c08a11f2a2284e48"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/verify_autonomous_gameplay.cjs",
+      "bytes": 5889,
+      "sha256": "8562a6a427b41c7afcb2434c8453bde7beabcc3ce713a9970a0ecced035fca4b"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/verify_autonomy_session.cjs",
+      "bytes": 7067,
+      "sha256": "bd78d2efce8d3c44a6f25b237e4137cadfeb9a03cf12954fbfec2cc33d13298c"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/verify_friend_offline.cjs",
+      "bytes": 5667,
+      "sha256": "46af140bc03b0bafaf8808a908c19ab6e5eef33e623c63bc0f8896f65063af10"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/verify_general_primitives.cjs",
+      "bytes": 1119,
+      "sha256": "cf37b9908ca7894103b62ab56accab2ce43f52cf68a31ffa3be5658581dcae1c"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/verify_late_game.cjs",
+      "bytes": 8234,
+      "sha256": "048cfba4da01cdfe62389391eea8fb6ee49ec7bca4d71fae5bd9d87858ae14a0"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/verify_late_skills.cjs",
+      "bytes": 5075,
+      "sha256": "5a0ec01f891e63bae12d804870e368ef3fa9d5133f5ed6e8b495d90bcd37c5c2"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/verify_owner_identity_offline.cjs",
+      "bytes": 2381,
+      "sha256": "0900d1bf5fc3ad7fa6d50206f7096ed49cde3b6d129945464e35f78f79490aa2"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/verify_pathfinder_regression_offline.cjs",
+      "bytes": 5625,
+      "sha256": "102be4ae901d5f6d043f904139f76424df60eef19a72de49876d3885ae05fa8e"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/verify_progression.cjs",
+      "bytes": 2431,
+      "sha256": "bfe66a5ec0918711ebd84e63d9a5c4f1f2112e7c05ecf0ffc5e85bf2622de7f2"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/verify_survey_recovery.cjs",
+      "bytes": 1010,
+      "sha256": "7c24927bdbf7606e04cfd6f8254ca078dba44ce137e80a832ab4b99a6249f983"
+    },
+    {
+      "path": "windows-companion/native_uia.py",
+      "bytes": 11678,
+      "sha256": "66c1d6c9efcf09273256b5ab02dc17d15477d05356698376d5afab9c327673e7"
+    },
+    {
+      "path": "windows-companion/perception/__pycache__/biometric_cli.cpython-313.pyc",
+      "bytes": 29117,
+      "sha256": "2c2f41a5fd354523dc18837e58827628656430b2f23cd1200ce9639cb24aad16"
+    },
+    {
+      "path": "windows-companion/perception/biometric_cli.py",
+      "bytes": 17511,
+      "sha256": "f5f4bf824a4f974eeb45bccfefda423dbdb7189b6e16a6e996fa9553f1909fd1"
+    },
+    {
+      "path": "windows-companion/perception/piper_speak.py",
+      "bytes": 1982,
+      "sha256": "1ec83ab08aa2d3190b6d2ea53e021fe40e2a1db55ad19133c16273ba72389009"
+    },
+    {
+      "path": "windows-companion/requirements.txt",
+      "bytes": 305,
+      "sha256": "2a9e52dfa7cc044a865b4e434daf5df9644f6d0f718f3f8f3feb51c5675ec6be"
+    },
+    {
+      "path": "windows-companion/verify_agent_tools_offline.py",
+      "bytes": 7435,
+      "sha256": "1ab8f308408ba9822cc059880eaf253a15f713829a0e8327e32b6129517466e7"
+    },
+    {
+      "path": "windows-companion/verify_app_catalog_offline.py",
+      "bytes": 2179,
+      "sha256": "c4924253fdfc230e6ceacbd7ce7b8504cb7c03ada466040bd4a39de6da5a71a1"
+    },
+    {
+      "path": "windows-companion/verify_app_launch_offline.py",
+      "bytes": 2486,
+      "sha256": "860a1a951c1c98ca3b76cd1c7e8a0ee9302199932fad18644c3f8e5ee8a44511"
+    },
+    {
+      "path": "windows-companion/verify_autonomy_native_offline.py",
+      "bytes": 3430,
+      "sha256": "3b8fd91cb7a54a182ca7f9d8eb5d2b023b779a18ff3ed8c1f1b048ed758346cd"
+    },
+    {
+      "path": "windows-companion/verify_companion_offline.py",
+      "bytes": 2303,
+      "sha256": "52325ed0ea83c33935f69c355f7b247a5366c470802483498295ea5a06f16810"
+    },
+    {
+      "path": "windows-companion/verify_desktop_action_fixture.py",
+      "bytes": 3597,
+      "sha256": "9d58932bc5868c6cd20f9fe41571df3be335be78f095c227fd5c71275e4d2bb4"
+    },
+    {
+      "path": "windows-companion/verify_full_desktop_offline.py",
+      "bytes": 2923,
+      "sha256": "81af7200ed8d87389586fe05d35d7f2ceafcdf771a1e244b3df80cadece2222a"
+    },
+    {
+      "path": "windows-companion/verify_minecraft_gateway_offline.py",
+      "bytes": 2381,
+      "sha256": "c746c294df611cc146fee3ca737d9a740e2b85b20aa83b5f9df2f32ae24e76f2"
+    },
+    {
+      "path": "windows-companion/verify_native_uia_offline.py",
+      "bytes": 4162,
+      "sha256": "872d2e34d0b2b5e5a94342aadb101a9d8dd01a4d53b1633a2b59deb4bb2277f7"
+    },
+    {
+      "path": "worklog.md",
+      "bytes": 26894,
+      "sha256": "3e4140a7c5e77687efe158b0dcabaed73c16ade6d979ee3cae1e7e7d8bb6be11"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "windows-companion/minecraft-bot/autonomy_engine.cjs": "1aaf7c85297405489c0fbd49520679f8e5d60d232a0a269cab64ad03099a8dad",
+  "windows-companion/minecraft-bot/bot.cjs": "07c1831cec99ee3dc5684fc1e0dd0607fefaca8e8803c37b30258d8a626c42cb",
+  "windows-companion/minecraft-bot/friend_protocol.cjs": "6c408b6e655c0da9f0a0872e62760e7d44327b86e4f3353ccaf71687e62afad9",
+  "windows-companion/minecraft-bot/late_game.cjs": "314449664ab9b86cc323923bae57f01db598afc252708820b46b1d8911184741",
+  "windows-companion/minecraft-bot/late_skills.cjs": "a2124bff2671705e67ecf0a3d016cef45c5af5670af6e0449a4a616a7e9e5d1e",
+  "windows-companion/minecraft-bot/verify_late_game.cjs": "6321c1b0d9aab7cb90a4f1b5c38c673ff583a66fa7d161377a0d3cd1be17070c",
+  "windows-companion/minecraft-bot/verify_late_skills.cjs": "5fec5daa75191350146f5c3a44ac43b7f1d0601d00e628e1a79fc7de27b62328",
+  "windows-companion/minecraft-bot/verify_progression.cjs": "bfe66a5ec0918711ebd84e63d9a5c4f1f2112e7c05ecf0ffc5e85bf2622de7f2",
+  "windows-companion/companion.py": "f0b0b1f7073000a8f62cba12ec061d7531f906de316cbd80eb3b8414d02dd786",
+  "windows-companion/verify_minecraft_gateway_offline.py": "c746c294df611cc146fee3ca737d9a740e2b85b20aa83b5f9df2f32ae24e76f2",
+  "src/lib/agent/windows/policy.ts": "4973b3915ca129edaff261b9f12e8a3aadef18362b10dc0adf4903e83b1442f6",
+  "src/lib/agent/core/prompts.ts": "2c4c354371ac96f2192eadb13be3a79761a49157329ee911a3e7925e0adc94f7",
+  "scripts/verify-minecraft-bridge-policy.cjs": "a048aa5e8525206ed952f24a81eb2683fbd88d3be4a03b91623d3e6223c50fbb",
+  "RUN_MINECRAFT_AUTONOMY_STRESS.ps1": "f4c991af5910b8258913528bb699004be516a295e644dfa60315451f22640618",
+  "MINECRAFT_AUTONOMOUS_GAMEPLAY_GUIDE.md": "6fb3de151c915ae1259631468f05eacb276e832548c920f468fd79ad2a37a9ee",
+  "MINECRAFT_END_TO_END_ENGINEERING_VERDICT_2026-10-28.md": "c6d1bf8494c103acc5767742d7d511f587ddaff75a770967303f7701bdbf8274",
+  "evidence/minecraft_mission/integration_test_results.txt": "407101255610cf8e55f900d43baafb3eec3223cd96bde4a802ccdb75f62479be"
+}

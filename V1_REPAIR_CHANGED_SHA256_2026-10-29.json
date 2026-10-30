@@ -1,0 +1,55 @@
+{
+  "sourceBaseline": "JARVIS_V1_GPT6_ENGINEERING_RECOVERY_SOURCE_CANDIDATE_2026-10-28.zip",
+  "changedFilesSha256": [
+    {
+      "path": "package.json",
+      "beforeSha256": "badb9b11d886a2de6885dd6fbfaa7a48346966c165516dc833abe3774f84e645",
+      "afterSha256": "870b42dd14b090655ba3b76f2f8cddf5322251284347d1506183ee2e0cff8b98"
+    },
+    {
+      "path": "scripts/local-dev-bootstrap.mjs",
+      "beforeSha256": null,
+      "afterSha256": "0b68737171842c435959b05b9be4c3fbc8c3f8e979cec6808528c9e5d84f8285"
+    },
+    {
+      "path": "scripts/verify-local-dev-bootstrap.mjs",
+      "beforeSha256": null,
+      "afterSha256": "9b5e255847941b493155181bfa7eaa7fda2fc8c99a351ee0a05121b76bb996a6"
+    },
+    {
+      "path": "scripts/start-local-no-login.mjs",
+      "beforeSha256": "72829d12bf3a272c6f7f9d8e14abb8744f746f78de5167ec3a0d076028cf3e94",
+      "afterSha256": "db3a655403a07a50c24768ff0e06507c617a1d7c172fe55bd198eaa85a4b5235"
+    },
+    {
+      "path": "scripts/start-windows-agent.mjs",
+      "beforeSha256": "dedaebd6d056b4034623805a387817673243ce12cc2c97afd12e68b9834a1caf",
+      "afterSha256": "27117fa5170055eb9b0db085a9f62806295d57bc632c36dfeeba1e1bd5426a22"
+    },
+    {
+      "path": "src/lib/agent/models/layaRouter.ts",
+      "beforeSha256": "2f2fc1d851d6e782a78f052511fd73045de0393f22335e3a1f3ba2ab397966e0",
+      "afterSha256": "e4d7681d8e0fd5c1262ad6ead218a4894327d263e6a49f4afab02bb41f035aec"
+    },
+    {
+      "path": "scripts/model-manager/verify-privacy-policy.cjs",
+      "beforeSha256": null,
+      "afterSha256": "7f98b48a2d57842cd9da171d713363d2a252a0ea5316d64762717edbf1d0e70f"
+    },
+    {
+      "path": "scripts/model-manager/verify-owner-priority.cjs",
+      "beforeSha256": "1e4c7844e1c4771c8ae6518ec95309691c6b20e5e19e7a41cd69d6bf4cc94421",
+      "afterSha256": "a9341b6ece63acc4f9e9a6cc9830414397d1b70d86c4356ec06fa6aab1bc3f9b"
+    },
+    {
+      "path": "scripts/verify-nexus-settings.cjs",
+      "beforeSha256": "386ec6a258e90c13e431530b8af1ebc2fd400edfa3d59a0f9edb131f304d63bb",
+      "afterSha256": "ab51815e8b1c46c8a42fff062e94645d6d3d8359ad1d23ecd37b0873ee2cbc42"
+    },
+    {
+      "path": "windows-companion/minecraft-bot/bot.cjs",
+      "beforeSha256": "fcc9824333e19367eb822e66b788f71794345c26f31b5cf55071005f7002647a",
+      "afterSha256": "55dd3978cf4f5e1b63689971015f1210b5306c16e52f803a418339b065fa3126"
+    }
+  ]
+}

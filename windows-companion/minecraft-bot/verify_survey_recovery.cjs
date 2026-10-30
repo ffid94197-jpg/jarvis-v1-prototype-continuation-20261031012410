@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {decide,createController}=require('./autonomy_engine.cjs');
+const world={joined:true,health:20,hunger:20,threats:[],workbenchNearby:false,inventory:{stonePickaxe:1,stoneSword:1,ironPickaxe:1,rawIron:0,ironIngot:0,diamonds:0,diamondPickaxe:0,diamondSword:0,diamondHelmet:0,diamondChestplate:0,diamondLeggings:0,diamondBoots:0}};
+assert.equal(decide('dragon_run',world,{}).kind,'mine_diamond');
+assert.equal(decide('dragon_run',world,{mine_diamond:2}).kind,'survey_ore');
+const ctl=createController({maxSteps:30,maxSeconds:600});ctl.start('dragon_run',300);
+let a=ctl.next(world);assert.equal(a.kind,'mine_diamond');ctl.record(a,{ok:false,verified:false});
+a=ctl.next(world);ctl.record(a,{ok:false,verified:false});
+a=ctl.next(world);assert.equal(a.kind,'survey_ore');ctl.record(a,{ok:true,verified:true});
+a=ctl.next(world);assert.equal(a.kind,'mine_diamond');
+assert.equal(ctl.status().status,'running');
+console.log('ORE SURVEY RECOVERY PASS');

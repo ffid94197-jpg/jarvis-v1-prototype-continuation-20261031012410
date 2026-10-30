@@ -1,0 +1,75 @@
+{
+  "generatedAt": "2026-10-26T04:40:29.592Z",
+  "baseline": "f850af3",
+  "phaseCommits": [
+    "4e29124 Phase 01",
+    "7bd6ce5 Phase 02",
+    "31ed926 Phase 03+04",
+    "(Phase 05/10/docs in final commit)"
+  ],
+  "patchedFiles": {
+    "src/lib/agent/auth/session.ts": {
+      "sha256": "99329e74cf4ccce7897acb15e227ecb9d51b9b0718900751b51bb72d29c985ed"
+    },
+    "src/lib/agent/core/taskState.ts": {
+      "sha256": "31eac2cc5b40ceba2a13c96e925220c390ec05d98eeb04d728c9add7324b836a"
+    },
+    "src/lib/agent/core/effects.ts": {
+      "sha256": "d399fa0c9740e1ffe3e9a3a1f97f37614131d62db18b2820d2cc74c80bec2e52"
+    },
+    "src/lib/agent/core/verifier.ts": {
+      "sha256": "a7d72db89bb0c7c02930f33e390982a63224e9ba8adaa8521f3d8f03ffe123d5"
+    },
+    "src/lib/agent/core/faults.ts": {
+      "sha256": "5bed62dc1d6b8e80bddf1ffbc13264b6c54f1748cad8e0a0ffec1966ae7176d4"
+    },
+    "src/lib/agent/core/loop.ts": {
+      "sha256": "cb6d4ed40b76e94621cb20026619ee5f7b8ef85a0f45adb00f77d66ce7b59c70"
+    },
+    "src/lib/agent/core/cancelRegistry.ts": {
+      "sha256": "1f687ae1e6705cb3782e95a912549411909efddec82cc5aee7c7556b3e0336ab"
+    },
+    "src/lib/agent/guardian/guardian.ts": {
+      "sha256": "20eff80c3bad725269050b2e0e111942d2071e34711e7b4ee3f1258464dbcb22"
+    },
+    "src/lib/agent/guardian/policy.ts": {
+      "sha256": "95b7c87b4e87b4b15eedefcd80d1716c34ade654ef0428a3312a628908343f8b"
+    },
+    "src/lib/agent/tools/executor.ts": {
+      "sha256": "7435419879858765599bb11c69c255e5c86b7d20f7e948f76658cf70860bb8a5"
+    },
+    "src/app/api/jarvis/task/route.ts": {
+      "sha256": "34ff29e54831d5e2420c290a9e0e26cb78f501a15a1ebbec8a566f1dcb39f6fe"
+    },
+    "src/app/api/jarvis/task/cancel/route.ts": {
+      "sha256": "628257a94fc0ac4bb5bed48dcfd62b60dfbf7f02d7b4d13801c4a8a78f2cb6d6"
+    },
+    "src/app/api/jarvis/task/status/route.ts": {
+      "sha256": "3ff94294f834bb862db98d031791f575b68d9b04ca967a88ead63e87585110b9"
+    },
+    "src/app/api/jarvis/auth/bootstrap/route.ts": {
+      "sha256": "8cf3f778a72473368df89dac2c3b34698e5b48205c8be737e629132f79a31a70"
+    },
+    "src/app/api/jarvis/auth/session/route.ts": {
+      "sha256": "bcdbda19bfd7c9e6c1f0dd6c02b7cb963ccd7ab8c4d581a0ccc260fc75813c84"
+    },
+    "src/app/api/jarvis/auth/pair/route.ts": {
+      "sha256": "6cadc350bfc7fd80732906e5644f4c03b181cef8cd145641acedb0f8e45164d4"
+    },
+    "src/app/api/jarvis/auth/devices/route.ts": {
+      "sha256": "3b69e4b29669a99be07ca1206cc27059ebdc86d72dc0ff66f68369aedd8ae118"
+    },
+    "src/components/JarvisOrb.tsx": {
+      "sha256": "17770d35b7d1c1534103630d6157dbbfa8a15eed81c31a57c54c039b8e49cf6a"
+    },
+    "src/components/AssistantPanel.tsx": {
+      "sha256": "bc3433591d76bbe4d1134c5e685178183959bf6a32a11628e3043cb095163e43"
+    },
+    "src/app/page.tsx": {
+      "sha256": "5f846f93ac573cc516f8558f5adc7f34774262466a153e5f4d92d23ac642b3e4"
+    },
+    "prisma/schema.prisma": {
+      "sha256": "409d674852916c19a5db69e67f09a34e35f29b8412cf894a0f4b2a8ac7e7ded1"
+    }
+  }
+}

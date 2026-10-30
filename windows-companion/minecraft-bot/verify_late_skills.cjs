@@ -1,0 +1,82 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {createLateSkills}=require('./late_skills.cjs');
+class Vec3 {constructor(x,y,z){Object.assign(this,{x,y,z});} offset(x,y,z){return new Vec3(this.x+x,this.y+y,this.z+z);} plus(p){return this.offset(p.x,p.y,p.z);} minus(p){return new Vec3(this.x-p.x,this.y-p.y,this.z-p.z);} clone(){return new Vec3(this.x,this.y,this.z);} distanceTo(p){return Math.hypot(this.x-p.x,this.y-p.y,this.z-p.z);}}
+let ok=0;function check(b,msg){assert.ok(b,msg);ok++;}
+const gear=['netherite_helmet','netherite_chestplate','netherite_leggings','netherite_boots','netherite_sword'];
+const inventory=[];const slots={};let held;
+for(const name of gear)inventory.push({name,count:1});
+const positions={head:5,torso:6,legs:7,feet:8};
+const bot={game:{dimension:'minecraft:overworld'},health:20,food:20,entity:{position:new Vec3(0,64,0)},entities:{},registry:{},
+ inventory:{slots,items:()=>inventory},
+ getEquipmentDestSlot:k=>positions[k],
+ equip:async(it,slot)=>{if(slot==='hand')held=it;else {slots[positions[slot]]=it;inventory.splice(inventory.indexOf(it),1);}},
+ findBlock:()=>null,findBlocks:()=>[],nearestEntity:()=>null,
+ get heldItem(){return held;},
+};
+const ctx=createLateSkills({bot,navigate:async()=>{},craftNamed:async()=>{},getEpoch:()=>1,getOwner:()=>'',digest:()=>({inventory:{raw:{}}}),Vec3});
+(async()=>{
+ const result=await ctx.run({kind:'equip_netherite'},1);
+ check(result.ok && result.verified,'Armor equip verified');
+ check(result.proof==='netherite_equipped','Equipment proof issued only on verified item slots');
+ check(gear.slice(0,4).every((name,k)=>slots[5+k].name===name),'Four armor slots populated');
+ check(held.name==='netherite_sword','Netherite sword held');
+ bot.inventory.items=()=>[];
+ const bad=await ctx.run({kind:'equip_netherite'},1);
+ check(!bad.ok && bad.proof===undefined,'No fake equipment proof when sword missing');
+ // Smithing must fail closed before clicking slots when server window layout is unknown.
+ let moves=0;
+ bot.inventory.items=()=>[{name:'netherite_upgrade_smithing_template',count:1},{name:'diamond_sword',count:1},{name:'netherite_ingot',count:1}];
+ bot.findBlock=({matching})=>{const b={name:'smithing_table',position:new Vec3(0,64,1)};return matching(b)?b:null;};
+ bot.openBlock=async()=>({type:'minecraft:chest',inventoryStart:9,slots:new Array(45).fill(null)});
+ bot.moveSlotItem=async()=>{moves++};bot.closeWindow=async()=>{};
+ const wrong=await ctx.run({kind:'smith_netherite',item:'netherite_sword',base:'diamond_sword'},1);
+ check(!wrong.ok && moves===0,'Wrong GUI refuses inventory moves');
+ const incorrect=await ctx.run({kind:'smith_netherite',item:'netherite_sword',base:'netherite_sword'},1);
+ check(!incorrect.ok && moves===0,'Illegal smithing material never clicked');
+ let ui;const i=[{name:'netherite_upgrade_smithing_template',count:1},{name:'diamond_sword',count:1},{name:'netherite_ingot',count:1}];
+ bot.inventory.items=()=>i;
+ bot.openBlock=async()=>{ui={type:'minecraft:smithing',inventoryStart:4,slots:new Array(40).fill(null)};ui.slots[4]=i[0];ui.slots[5]=i[1];ui.slots[6]=i[2];return ui;};
+ bot.moveSlotItem=async(src,dst)=>{
+   ui.slots[dst]=ui.slots[src];ui.slots[src]=null;
+   if(ui.slots[0]&&ui.slots[1]&&ui.slots[2])ui.slots[3]={name:'netherite_sword',count:1};
+ };
+ bot.clickWindow=async(slot)=>{if(slot===3){i.push({name:'netherite_sword',count:1});ui.slots[3]=null;}else ui.slots[slot]=null;};
+ const crafted=await ctx.run({kind:'smith_netherite',item:'netherite_sword',base:'diamond_sword'},1);
+ check(crafted.ok && crafted.verified,'Smithing UI path validated with simulated window states');
+ check(i.some(x=>x.name==='netherite_sword'),'Smithing output verified in inventory');
+ bot.openBlock=async()=>({type:'minecraft:smithing',inventoryStart:4,slots:Array.from({length:40},(_,idx)=>idx===0?{name:'stolen',count:1}:null)});
+ moves=0;
+ const occupied=await ctx.run({kind:'smith_netherite',item:'netherite_sword',base:'diamond_sword'},1);
+ check(!occupied.ok && moves===0,'Occupied smithing slots refuse cross-player item mutation');
+ // An End portal requires all frames. Confirm partial frame inserts as
+ // verified incremental progress, not a fake portal completion or a failure.
+ let filled=false,insertClicks=0;
+ const pos=new Vec3(1,64,0);
+ bot.game.dimension='minecraft:overworld';
+ bot.inventory.items=()=>[{name:'ender_eye',count:2}];
+ const frame={name:'end_portal_frame',position:pos,getProperties:()=>({eye:filled})};
+ bot.findBlocks=()=>[pos];
+ bot.blockAt=()=>frame;
+ bot.findBlock=({matching})=>matching(frame)?frame:null;
+ bot.equip=async()=>{};
+ bot.activateBlock=async()=>{filled=true;insertClicks++;};
+ const partial=await ctx.run({kind:'activate_end_portal'},1);
+ check(partial.ok && partial.verified && !partial.proof,'Partial frame insertion is genuine progress, not portal victory');
+ check(insertClicks===1,'One actual frame activation was attempted');
+ const noMore=await ctx.run({kind:'activate_end_portal'},1);
+ check(!noMore.ok && insertClicks===1,'Already-filled frame never consumes another eye');
+ // Dragon victory is a composite server-event and End-dimension portal proof.
+ ctx.session.dragonSeen=true;ctx.session.dragonDied=true;
+ bot.findBlock=({matching})=>{const b={name:'end_portal',position:new Vec3(0,64,1)};return matching(b)?b:null;};
+ const wrongDimension=await ctx.run({kind:'verify_dragon'},1);
+ check(!wrongDimension.ok && !wrongDimension.proof,'An Overworld portal cannot prove Dragon victory');
+ bot.game.dimension='minecraft:the_end';ctx.session.dragonDied=false;
+ const noDeath=await ctx.run({kind:'verify_dragon'},1);
+ check(!noDeath.ok && !noDeath.proof,'End portal without witnessed death is insufficient');
+ ctx.session.dragonDied=true;
+ const victory=await ctx.run({kind:'verify_dragon'},1);
+ check(victory.ok && victory.verified && victory.proof==='dragon_victory',
+  'Combined End portal and witnessed dragon death emits distinct proof');
+ console.log(`LATE_SKILLS_MOCK ${ok}/${ok} PASS (no live Minecraft server)`);
+})().catch(e=>{console.error(e);process.exitCode=1;});

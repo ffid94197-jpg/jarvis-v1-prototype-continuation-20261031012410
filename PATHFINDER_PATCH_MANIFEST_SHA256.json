@@ -1,0 +1,10 @@
+{
+  "release_status": "DEVELOPMENT PATCH ONLY - JARVIS V1 NOT COMPLETE",
+  "source_archive": "JARVIS_V1_NEXUS_ORB_HOME_RESTORED_FULL_SOURCE_2026-10-28.zip",
+  "source_archive_sha256": "3D6C053C975E70A91086B3AE1EF40146058BEEBA15BAC660095A0D9392D5AA53",
+  "original_bot_sha256": "07C1831CEC99EE3DC5684FC1E0DD0607FEFACA8E8803C37B30258D8A626C42CB",
+  "modified_bot_sha256": "FCC9824333E19367EB822E66B788F71794345C26F31B5CF55071005F7002647A",
+  "new_test_sha256": "102BE4AE901D5F6D043F904139F76424DF60EEF19A72DE49876D3885AE05FA8E",
+  "required_live_acceptance": "Run on real Minecraft Java LAN: actual block dug and at least one log in bot inventory; no fabricated victory.",
+  "source_limited_to": "archived NEXUS orb-home full source; latest Windows dirty worktree not directly accessible"
+}

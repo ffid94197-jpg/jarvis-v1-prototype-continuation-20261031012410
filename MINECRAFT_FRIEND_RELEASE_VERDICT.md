@@ -1,0 +1,7 @@
+# Experimental Minecraft Friend — evidence and release verdict
+
+- **Source capability added:** independent Mineflayer LAN bot with `follow`, `come`, `stay`, `guard`, `collect_wood`, `inventory`, `status`, `say`, `look`, `jump`, bounded `move` and `stop`; verified-owner in-game text commands; tool-routing additions in Guardian and Windows companion.
+- **Separate user game window:** `windows_minecraft_input` for bounded movement, jump, sneak, attack, use and inventory inputs when an actual Minecraft foreground window is observed and explicit opt-in is configured. Returns `inGameEffectVerified=false` because attempted injection does not guarantee game action.
+- **Verification:** 34/34 simulated bot-session assertions, 56/56 Windows policy, 16/16 intent, 56/56 agent wiring, 21/21 sidecar policy, 41/41 browser, 17/17 catalog, 8/8 launch fixture, 37/37 full-desktop wiring, 25/25 full-desktop policy, 19/19 mocked Windows input. Total **330/330 focused offline assertions**. 100 TypeScript/TSX source files parsed, Python files compiled, and bot syntax checked.
+- **Not verified:** Complete TypeScript project compilation with installed dependencies; Windows production build; actual game launch; version compatibility; real Mineflayer spawn in your LAN world; in-game follow/combat/gathering; Gemini-driven open-ended gameplay; multi-player login/account support.
+- **Release verdict:** NOT COMPLETE. This is an experimental development improvement, not independently verified V1 completion.

@@ -327,9 +327,11 @@ Also pending on Windows, separately: run `BUILD_JARVIS_PRODUCTION.ps1` and
 | `62f183c` | Repair four verification harnesses broken by source drift |
 | `a48019b` | Restore the missing Windows release scripts and make the gate reproducible |
 | `a6a8b5c` | Unblock the lint gate without hiding any finding |
-| _(this document)_ | Evidence and checkpoint |
+| `309e825` | Document the repair evidence, gate delta and continuation checkpoint |
 
-Pull request: see `JARVIS_V1_CONTINUATION_CHECKPOINT_2026-10-30.md`.
+**Pull request #1:** https://github.com/kolarume774-design/jarvis-v1-prototype-continuation-20261031012410/pull/1
+from `arena/aa15eff2-jarvis-v1-prototype-continuati` into `main` — open,
+unmerged, awaiting owner review.
 
 ---
 

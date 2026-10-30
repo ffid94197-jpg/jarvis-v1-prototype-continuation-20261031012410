@@ -167,7 +167,17 @@ was not extended, and the new build driver explicitly forces it off. The separat
 
 ## 7. Pull request
 
-See the pull request opened from
-`arena/aa15eff2-jarvis-v1-prototype-continuati` into `main`. It has not been
-merged, and nothing here should be merged into the owner's live Windows
-installation without the live acceptance in §4 and the owner's own review.
+**PR #1** — https://github.com/kolarume774-design/jarvis-v1-prototype-continuation-20261031012410/pull/1
+from `arena/aa15eff2-jarvis-v1-prototype-continuati` into `main`.
+
+Status: **open, unmerged, awaiting owner review.** Nothing here should be merged
+into the owner's live Windows installation or the `D:\jarvis_pc_work` production
+checkout without the live acceptance in §4 and the owner's own review. The
+`BUILD_JARVIS_PRODUCTION.ps1`, `INSTALL_JARVIS_V1.ps1` and `INSTALL_JARVIS_V1.cmd`
+artifacts in this PR are **PENDING LIVE WINDOWS ACCEPTANCE** and have never been
+executed on any machine.
+
+Commits: `945cf96` (pathfinder lifecycle), `62f183c` (harness repairs),
+`a48019b` (Windows release scripts), `a6a8b5c` (lint gate), `309e825`
+(evidence and checkpoint documents), plus the follow-up commit recording this
+PR link.

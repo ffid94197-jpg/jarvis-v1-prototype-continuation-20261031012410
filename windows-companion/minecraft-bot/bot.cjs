@@ -18,6 +18,11 @@ const {confirmedMove}=require('./movement_proof.cjs');
 const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_navigation.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
+const {stopPathfinder,clearStaleStop}=require('./pathfinder_lifecycle.cjs');
+// mineflayer-pathfinder needs up to thinkTimeout (5000ms default) just to
+// decide a route. A per-leg navigation budget below that expires while A* is
+// still computing, so every stance leg gets at least this much wall clock.
+const STANCE_NAV_TIMEOUT_MS = 12000;
 const port = Number(process.env.JARVIS_MINECRAFT_LAN_PORT);
 const leader = process.env.JARVIS_MINECRAFT_PLAYER || '';
 const BOT_USERNAME = 'JarvisBuddy';
@@ -51,9 +56,18 @@ function stopInput(){
   if(moveTimer){clearTimeout(moveTimer);moveTimer=undefined;}
   for(const key of ['forward','back','left','right','jump'])bot.setControlState(key,false);
 }
+// A stance leg must outlive pathfinder's own A* think budget plus walking time.
+function stanceNavTimeoutMs(){
+  const think=Number(bot?.pathfinder?.thinkTimeout)||5000;
+  return Math.max(STANCE_NAV_TIMEOUT_MS,think+7000);
+}
 function halt(){
-  ++actionEpoch;bot.pathfinder.setGoal(null);
-  if(typeof bot.pathfinder.stop==='function')bot.pathfinder.stop();
+  ++actionEpoch;
+  // Order matters. mineflayer-pathfinder's stop() only ARMS a sticky latch
+  // that the next setGoal() consumes; calling setGoal(null) first and stop()
+  // second left the latch armed, which killed the NEXT goto() before the bot
+  // moved. stopPathfinder() arms then consumes, so no sticky state survives.
+  stopPathfinder(bot);
   stopInput();
 }
 function ownerEntity(){ return resolveOwnerEntity(bot, leader); }
@@ -185,6 +199,10 @@ function guardTick(){
 async function navigate(p,range,epoch,limitMs=12000){
   let timer,expired=false;
   const destination=`${Math.floor(p.x)},${Math.floor(p.y)},${Math.floor(p.z)}`;
+  // Clear any latch a previous cancellation or timeout left armed. Otherwise
+  // goto() below would reject instantly with 'Path was stopped' and the bot
+  // would never take its first step toward this destination.
+  clearStaleStop(bot);
   try{
     await Promise.race([
       bot.pathfinder.goto(new goals.GoalNear(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z),range)),
@@ -193,7 +211,9 @@ async function navigate(p,range,epoch,limitMs=12000){
         // Queue the meaningful error BEFORE stopping Pathfinder. Otherwise the
         // generic 'Path was stopped' rejection can win the race.
         reject(Error(`Navigation timeout after ${limitMs}ms to ${destination}`));
-        if(typeof bot.pathfinder.stop==='function')bot.pathfinder.stop();
+        // Arm AND consume: a bare stop() here leaves the latch armed and
+        // silently poisons every subsequent stance retry in the same action.
+        stopPathfinder(bot);
       },limitMs);})
     ]);
   }catch(err){
@@ -566,11 +586,16 @@ async function action(q){
             try{
               // GoalNear(...,0) targets the exact foot block; GoalNear(...,1)
               // could stop on an unreachable ledge next to the stance.
-              if(stance.route!=='already_there')await navigate(new Vec3(stance.x,stance.y,stance.z),0,jobEpoch,4500);
+              // The budget must exceed pathfinder's own A* thinkTimeout, or
+              // this leg expires while the route is still being computed.
+              if(stance.route!=='already_there'){
+                const reached=await navigate(new Vec3(stance.x,stance.y,stance.z),0,jobEpoch,stanceNavTimeoutMs());
+                if(!reached)throw Error(`Navigation ended outside stance ${stance.x},${stance.y},${stance.z}`);
+              }
               if(!alive())throw Error('Dig cancelled');
               const current=bot.entity.position;
               if(Math.floor(current.x)!==stance.x || Math.floor(current.y)!==stance.y || Math.floor(current.z)!==stance.z)
-                throw Error('Arrival at verified mining stance not confirmed');
+                throw Error(`Arrival at verified mining stance not confirmed (stood at ${Math.floor(current.x)},${Math.floor(current.y)},${Math.floor(current.z)} wanted ${stance.x},${stance.y},${stance.z})`);
               const targetCenter=target.offset(.5,.5,.5);
               const eye=current.offset(0,1.62,0);
               if(eye.distanceTo(targetCenter)>4.4)throw Error('Mining target still outside observed reach');

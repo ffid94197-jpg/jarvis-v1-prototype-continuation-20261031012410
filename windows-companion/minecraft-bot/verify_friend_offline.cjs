@@ -74,7 +74,18 @@ async function send(command,extra={}){
   check((await send('status')).status.includes('reached last observed owner position'),'come later reports outcome');
   check((await send('collect_wood')).status.includes('STARTED'),'gather acknowledges started only');
   await pump();
-  check((await send('status')).status.includes('no log blocks'),'gather reports failed/no blocks honestly');
+  // The source now reports the bounded-survey outcome ("No loaded safe survey
+  // waypoint or visible tree; refusing blind movement") rather than the older
+  // bare "no log blocks" text. Assert the honesty CONTRACT, which is stronger
+  // than matching one historical literal: a failed gather must state a real
+  // reason, must not claim verified/partial wood, and must not invent logs.
+  const gather=(await send('status')).status;
+  check(/refusing blind movement|No loaded safe survey waypoint|no log blocks/.test(gather),
+    'gather reports failed/no blocks honestly');
+  check(!/Wood collection verified|Partial wood gathering/.test(gather),
+    'failed gather never claims verified or partial wood');
+  check((await send('inventory')).status.includes('oak_log:2'),
+    'failed gather leaves the inventory unchanged (no fictional logs)');
   check((await send('guard')).status.includes('60s'),'guard is time bounded');
   check(attacks.length===0,'no player attack in normal flow');
   check(!(await send('say',{text:'hello\nworld'})).ok,'chat control bytes rejected at bot');

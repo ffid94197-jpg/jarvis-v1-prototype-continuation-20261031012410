@@ -43,6 +43,12 @@ const checks=[
  ['MINECRAFT-OWNER-IDENTITY',['windows-companion/minecraft-bot/verify_owner_identity_offline.cjs']],
  ['MINECRAFT-FRIEND-FIXTURE',['windows-companion/minecraft-bot/verify_friend_offline.cjs']],
  ['MINECRAFT-PATHFINDER-FIXTURE',['windows-companion/minecraft-bot/verify_pathfinder_regression_offline.cjs']],
+ // High-fidelity replica of the mineflayer-pathfinder 2.4.5 cancellation state
+ // machine, driving the REAL lib/goto.js and lib/goals.js. Guards the sticky
+ // stopPathing latch defect that killed the first navigation of every manual
+ // action and blocked the one-cobblestone live milestone.
+ ['MINECRAFT-PATHFINDER-LIFECYCLE',['windows-companion/minecraft-bot/verify_pathfinder_lifecycle_offline.cjs']],
+ ['MINECRAFT-MCP-BRIDGE-E2E',['windows-companion/minecraft-bot/verify_mine_ai_mcp_live_bridge.cjs']],
 ];
 const offline=[];
 for(const [id,args] of checks){

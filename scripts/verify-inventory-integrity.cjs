@@ -99,7 +99,7 @@ const policy={
   return {ok:true,abs,rel:input};
  },
  async assertWithinRoot(abs){
-  try {const real=await fs.promises.realpath(abs);const rel=path.relative(tmp,real);return rel && !rel.startsWith("..") && !path.isAbsolute(rel)?{ok:true}:{ok:false};}
+  try {const rel=path.relative(tmp,abs);if(!rel || rel.startsWith("..") || path.isAbsolute(rel))return {ok:false};if(fs.lstatSync(abs).isSymbolicLink())return {ok:false};return {ok:true};}
   catch{return {ok:false};}
  }
 };

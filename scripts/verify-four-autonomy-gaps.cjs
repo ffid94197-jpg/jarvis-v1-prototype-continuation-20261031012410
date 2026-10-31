@@ -55,7 +55,7 @@ const valid=lateGamePlan(state({wornNetherite:true}),{milestones:{dragonKilled:t
 ck(valid.kind==='complete','synthetic complete ONLY when full evidence is injected');
 const sample={joined:true,dimension:'minecraft:overworld',position:{x:0,y:64,z:0},vitals:{health:20,food:20},inventory:{stacks:ARMOR.map(name=>({name,count:1,location:'main'}))},endFight:{dragons:[],crystals:[]},nearby:{players:[]}};
 ck(observedWorld(sample).wornNetherite===false,'carried armor is not equipped');
-const smith=planAction({kind:'smith_netherite',item:'netherite_helmet'},{inventory:{raw:{}}});
+const smith=planAction({kind:'smith_netherite',item:'netherite_helmet'},sample);
 ck(typeof smith.blocked==='string' && /no verified smithing/i.test(smith.blocked),'Minecraft MCP full-progression smithing blocker detected');
 const result={environment:'GitHub Actions Windows runner (when run by the workflow)',source:'JARVIS real planning contract + Minecraft simulated world planner',assertions:checks,seed,results:{
  unfamiliarPromptRouting:'PASS: deterministic actionable and planning gates (not live model-generated plans)',

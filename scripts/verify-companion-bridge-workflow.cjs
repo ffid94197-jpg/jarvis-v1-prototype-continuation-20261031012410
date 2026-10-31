@@ -30,6 +30,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { pathToFileURL } = require('node:url');
 const ts = require('typescript');
 
 const root = path.resolve(__dirname, '..');
@@ -240,7 +241,7 @@ function loadGuardian({ platform = 'win32', env = GOOD_ENV }) {
     `verdict=${stopDecision.verdict} reason=${String(stopDecision.reason).slice(0, 70)}`);
 
   // The startup preflight must catch a half-configured Minecraft setup at launch.
-  const preflight = await import(path.join(root, 'scripts/windows-startup-preflight.mjs'));
+  const preflight = await import(pathToFileURL(path.join(root, 'scripts/windows-startup-preflight.mjs')).href);
   const PREFLIGHT_BASE = {
     NODE_ENV: 'development', JARVIS_LOCAL_DEV_NO_LOGIN: '1', JARVIS_LOCAL_DEV_BIND: '127.0.0.1',
     JARVIS_PUBLIC_ORIGIN: 'http://127.0.0.1:3000',

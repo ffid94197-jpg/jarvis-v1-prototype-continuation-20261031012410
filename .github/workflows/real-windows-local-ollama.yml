@@ -1,7 +1,7 @@
-name: JARVIS full Windows runtime + real offline Ollama agent task
+name: JARVIS real Windows live task after root-cause fixes
 on:
   push:
-    branches: [validation/windows-local-ollama-real-task-20261031]
+    branches: [fix/live-windows-autonomy-root-causes-20261101]
 permissions:
   contents: read
 jobs:

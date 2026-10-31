@@ -58,7 +58,8 @@ import { arbitrateCompletion } from "./verifier";
 import { classifyRequestIntent, isModelDisclosureQuestion } from "./requestIntent";
 import { AutonomyGate, REPEATABLE_INPUT_TOOLS, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
-import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan } from "./goalPlanner";
+import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan, type GoalWatchdogLimits } from "./goalPlanner";
+import { AUTONOMY_PROFILES, deriveStepBudget, type AutonomyProfile } from "./autonomyPolicy";
 
 export type TaskStatus = TaskState;
 
@@ -102,6 +103,15 @@ export interface RunTaskOptions {
   pendingGuiVerification?: number;
   emit: (ev: TaskEvent) => void;
   isCancelled: () => boolean;
+  /**
+   * PART 2 — the owner's autonomy tier, resolved durably by the task route from
+   * the server-derived principal. Optional: callers that do not supply one get
+   * the most restrictive `normal` profile, which reproduces the pre-tier
+   * behaviour exactly. This carries NO permission — Guardian still authorizes
+   * every tool call — it only sets how long the run may continue and how many
+   * in-scope replans are allowed.
+   */
+  autonomy?: AutonomyProfile;
 }
 
 // ——— hard safety bounds ———
@@ -317,6 +327,12 @@ async function settleAndReport(
 
 export async function runTask(opts: RunTaskOptions): Promise<void> {
   const { taskId, objective, budget, emit, isCancelled } = opts;
+  // PART 2 — owner autonomy tier. When the caller supplies none, the most
+  // restrictive profile applies, which reproduces the pre-tier behaviour
+  // exactly (12-step default, 2 in-scope replans). This is NOT an
+  // authorization: Guardian still decides every individual tool call.
+  const ownerAutonomy: AutonomyProfile = opts.autonomy ?? AUTONOMY_PROFILES.normal;
+  const autonomyLimits: GoalWatchdogLimits = { replanBudget: ownerAutonomy.replanBudget };
   await ensureWorkspace();
 
   let stepsUsed = opts.stepsUsedOffset;
@@ -453,7 +469,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // effects. Resume always loads the last durable plan; it never quietly
   // asks a different model to invent a new plan after a crash.
   let goalPlan: GoalPlan | null = null;
-  let goalWatchdog = new GoalProgressWatchdog();
+  let goalWatchdog = new GoalProgressWatchdog(undefined, autonomyLimits);
   if (process.env.JARVIS_GOAL_PLANNER_ENABLED === "1" && !minecraftMission && requiresGoalPlan(objective)) {
     let planningStage = "PLAN_DB_LOOKUP_FAILED";
     try {
@@ -501,7 +517,9 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       });
       if (savedWatchdog) {
         planningStage = "SAVED_WATCHDOG_INVALID";
-        goalWatchdog = new GoalProgressWatchdog(JSON.parse(savedWatchdog.note ?? ""));
+        // The resumed run keeps the CURRENT owner tier: a durable checkpoint
+        // records progress, not a stale authorization envelope.
+        goalWatchdog = new GoalProgressWatchdog(JSON.parse(savedWatchdog.note ?? ""), autonomyLimits);
       } else if (opts.replay !== undefined && opts.stepsUsedOffset > 0) {
         throw new Error("Missing durable watchdog checkpoint on resumed goal task; manual reconciliation required.");
       }
@@ -521,7 +539,14 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     }
   }
 
-  const effectiveBudget = Math.min(budget, MAX_STEPS_HARD);
+  // The ceiling is now tier-aware. Clamping to the legacy constant alone would
+  // have silently neutralized a `full` autonomy budget of 48 back down to 24
+  // whenever the experimental desktop flag was unset — the setting would have
+  // been decorative. MAX_STEPS_HARD is kept as a FLOOR via Math.max so the
+  // legacy environment behaviour is never reduced, while deriveStepBudget keeps
+  // the absolute MAX_STEPS_HARD_CEILING as the cap.
+  const autonomyCeiling = deriveStepBudget({ requested: budget, profile: ownerAutonomy }).ceiling;
+  const effectiveBudget = Math.min(budget, Math.max(MAX_STEPS_HARD, autonomyCeiling));
   if (minecraftMission && effectiveBudget < 2) {
     await settleAndReport(taskId, "failed", stepsUsed,
       "Minecraft one-command mission requires two authorized tool steps (join and start). Increase the task step budget before trying again.",

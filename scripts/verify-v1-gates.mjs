@@ -49,6 +49,13 @@ const checks=[
  // plain local-dev launcher supplied the session contract but not the companion
  // agent flag and token. Proves the repair without lowering any gate.
  ['COMPANION-LAUNCHER-AUTHORIZATION',['scripts/verify-companion-launcher-authorization.mjs']],
+ // Owner autonomy tiers (Part 2). Proves the tier is genuinely consumed by the
+ // task route, the Core loop and GoalProgressWatchdog (not a decorative toggle),
+ // that the default tier is byte-for-byte non-regressive, and that the profile
+ // can carry NO permission: absolute ceilings hold, the anti-spin repeat limit
+ // is identical at every tier, and a memory row not stamped OWNER_EXPLICIT is
+ // ignored so untrusted text cannot raise JARVIS's own autonomy.
+ ['AUTONOMY-TIERS',['scripts/verify-autonomy-tiers.cjs']],
  ['MINECRAFT-EFFECT-IDENTITY',['scripts/verify-minecraft-effect-identity.cjs']],
  ['MINECRAFT-OWNER-IDENTITY',['windows-companion/minecraft-bot/verify_owner_identity_offline.cjs']],
  ['MINECRAFT-FRIEND-FIXTURE',['windows-companion/minecraft-bot/verify_friend_offline.cjs']],

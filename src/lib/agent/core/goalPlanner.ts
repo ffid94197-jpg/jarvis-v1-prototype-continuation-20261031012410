@@ -111,18 +111,46 @@ function privateFingerprint(s: string): string {
   // A hashed fingerprint, never raw tool arguments/error text.
   return createHash('sha256').update(s).digest('hex');
 }
+/**
+ * Absolute DURABILITY bound on persisted in-scope replans. This must stay at
+ * least as large as the most permissive autonomy tier so that a tier downgrade
+ * can never make a legitimately persisted checkpoint unloadable — durability
+ * bounds and policy bounds are different things.
+ */
+export const GOAL_WATCHDOG_MAX_REVISIONS = 4;
+/**
+ * Default in-scope replan budget. This is the pre-tier behaviour (a hardcoded
+ * `revisions >= 2`), kept as the default so constructing a watchdog without an
+ * owner profile changes nothing.
+ */
+export const DEFAULT_GOAL_REPLAN_BUDGET = 2;
+export type GoalWatchdogLimits = { replanBudget?: number };
+
 export class GoalProgressWatchdog {
   private lastFailureKey='';
   private failures=0;
   private revisions=0;
   private pendingReplan=false;
-  constructor(saved?: unknown) {
+  /**
+   * How many times the Core may replan within scope before declaring the
+   * objective blocked. Supplied by the owner autonomy tier (Part 2); clamped to
+   * GOAL_WATCHDOG_MAX_REVISIONS so no setting can exceed the absolute bound.
+   * Raising it does NOT authorize anything — every replanned action is still
+   * individually authorized by Guardian.
+   */
+  private readonly maxRevisions: number;
+  constructor(saved?: unknown, limits?: GoalWatchdogLimits) {
+    const requested = typeof limits?.replanBudget === 'number' && Number.isFinite(limits.replanBudget)
+      ? Math.trunc(limits.replanBudget) : DEFAULT_GOAL_REPLAN_BUDGET;
+    this.maxRevisions = Number.isFinite(requested)
+      ? Math.max(0, Math.min(GOAL_WATCHDOG_MAX_REVISIONS, requested))
+      : DEFAULT_GOAL_REPLAN_BUDGET;
     if (saved === undefined) return;
     if (!isObj(saved) || saved.schemaVersion!==1 ||
         typeof saved.lastFailureHash!=='string' ||
         !/^(?:[0-9a-f]{64})?$/.test(saved.lastFailureHash) ||
         !Number.isInteger(saved.failures) || (saved.failures as number)<0 || (saved.failures as number)>2 ||
-        !Number.isInteger(saved.revisions) || (saved.revisions as number)<0 || (saved.revisions as number)>2 ||
+        !Number.isInteger(saved.revisions) || (saved.revisions as number)<0 || (saved.revisions as number)>GOAL_WATCHDOG_MAX_REVISIONS ||
         typeof saved.pendingReplan!=='boolean') {
       throw new Error('Invalid durable autonomous watchdog state');
     }
@@ -131,6 +159,8 @@ export class GoalProgressWatchdog {
     this.revisions=saved.revisions as number;
     this.pendingReplan=saved.pendingReplan;
   }
+  /** The replan budget actually in force, for honest NEXUS reporting. */
+  get replanBudget(){return this.maxRevisions;}
   snapshot():GoalWatchdogSnapshot {
     return {schemaVersion:1,lastFailureHash:this.lastFailureKey,failures:this.failures,revisions:this.revisions,pendingReplan:this.pendingReplan};
   }
@@ -141,9 +171,11 @@ export class GoalProgressWatchdog {
     const key=privateFingerprint(tool+'|'+JSON.stringify(args)+'|'+String(receipt.error??'').slice(0,160));
     this.failures=key===this.lastFailureKey?this.failures+1:1;
     this.lastFailureKey=key;
+    // Identical-failure threshold is a fixed safety property (mirrors
+    // REPEAT_LIMIT_ALL_TIERS) and is deliberately NOT tier-tunable.
     if (this.failures < 3) return 'continue';
     this.failures=0;
-    if (this.revisions>=2) return 'blocked';
+    if (this.revisions>=this.maxRevisions) return 'blocked';
     this.revisions++;
     this.pendingReplan=true;
     return 'replan';

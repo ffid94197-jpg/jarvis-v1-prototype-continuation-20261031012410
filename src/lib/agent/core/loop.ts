@@ -56,7 +56,8 @@ import {
 } from "./effects";
 import { arbitrateCompletion } from "./verifier";
 import { classifyRequestIntent, isModelDisclosureQuestion } from "./requestIntent";
-import { needsPriorTaskContext, priorTaskContext } from "./priorTaskContext";
+import { needsPriorTaskContext, priorTaskContext, selectPriorTask } from "./priorTaskContext";
+import { parseInventorySource, validateInventoryDraft } from "./inventoryIntegrity";
 import { AutonomyGate, REPEATABLE_INPUT_TOOLS, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
 import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan, type GoalWatchdogLimits } from "./goalPlanner";
@@ -341,6 +342,8 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let denials = 0;
   let parseRetries = 0;
   let actionNudges = 0;
+  let inventoryDraftCorrections = 0;
+  let inventorySource = parseInventorySource(objective);
   let effectsHappened = false; // at least one real effect attempted this run
   let effectJournalDegraded = false; // an effect settlement write failed
   let markedExecuting = false; // DB row moved planning→executing (fidelity)
@@ -380,10 +383,16 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       const recent = await db.agentTask.findMany({
         where: { ownerId: opts.ownerId, id: { not: taskId } },
         orderBy: { createdAt: "desc" },
-        take: 8,
+        take: 20,
         select: { id: true, objective: true, createdAt: true },
       });
       sourceNote = priorTaskContext(objective, recent);
+      const original=selectPriorTask(objective,recent);
+      // Only untruncated original source rows may authorize an inventory proof.
+      // A prior model report or another owner's data never becomes truth.
+      if(!inventorySource && original && original.objective.length <= 3000) {
+        inventorySource=parseInventorySource(original.objective);
+      }
     } catch {
       sourceNote = priorTaskContext(objective, []);
     }
@@ -783,7 +792,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       // completion predicates against actual disk state + the durable
       // effect table, and derives the terminal verdict from that — never
       // from model prose.
-      const arbitration = await arbitrateCompletion({ taskId, objective, toolAssisted: true });
+      const arbitration = await arbitrateCompletion({ taskId, objective, toolAssisted: true, inventorySource });
       const groundedVerdict = requiresExternalActionEvidence(objective) && arbitration.verdict === "conversational"
         ? "partial" : arbitration.verdict;
       const digestSections: string[] = [];
@@ -867,6 +876,29 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     const args = decision.args ?? {};
     const argsJson = JSON.stringify(args).slice(0, 2000);
     seq++;
+
+    // Data-fidelity rejection BEFORE Guardian admission and filesystem write.
+    // This is NOT an authorization grant, and does not weaken Guardian:
+    // a correctly drafted effect still needs normal audit and admission.
+    const inventoryMismatch = tool === "write_file"
+      ? validateInventoryDraft(args.path, args.content, inventorySource) : null;
+    if (inventoryMismatch) {
+      inventoryDraftCorrections++;
+      stepsUsed++;
+      await persistStep(taskId,seq,"error",{tool,note:inventoryMismatch.slice(0,500)});
+      emit({type:"step",step:{seq,kind:"error",tool,note:inventoryMismatch.slice(0,350),ok:false}});
+      if (inventoryDraftCorrections >= 2 || stepsUsed - opts.stepsUsedOffset >= effectiveBudget) {
+        await settleAndReport(taskId, "partial", stepsUsed,
+          "Inventory draft rejected by deterministic source-fidelity check after bounded attempts. No incorrect inventory file was written by the rejected steps. " + inventoryMismatch,
+          emit,{effectsHappened});
+        return;
+      }
+      messages.push({role:"assistant",content:raw});
+      messages.push({role:"user",content:
+        "CORE SOURCE VALIDATION FAILED BEFORE WRITE: " + inventoryMismatch +
+        " Correct the values using the original owner request only. Do not change the source, guess numbers, retry an identical draft, or claim verification. Emit one corrected tool action."});
+      continue;
+    }
     // Durable effect id once the admission gate grants this effectful call.
     let admittedEffectId: string | null = null;
     // Skip-path flag: duplicate/reconciliation guards consumed this step.

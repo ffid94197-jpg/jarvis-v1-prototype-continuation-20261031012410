@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { buildReplayFromJournal, runTask } from "@/lib/agent/core/loop";
 import { ensureWorkspace } from "@/lib/agent/guardian/policy";
+import { prepareTaskObjective } from "@/lib/agent/core/taskInputGate";
 import {
   cancelFlags,
   clearCancel,
@@ -96,7 +97,12 @@ export async function POST(req: NextRequest) {
     if (typeof body.objective !== "string" || body.objective.trim().length === 0) {
       return Response.json({ error: "objective is required." }, { status: 400 });
     }
-    objective = body.objective.trim().slice(0, 2000);
+    const inputCheck=prepareTaskObjective(body.objective);
+    console.info("[TASK_INPUT] "+(inputCheck.ok?"ACCEPTED":inputCheck.code)+
+      " chars="+body.objective.length+" parsedRows="+inputCheck.inventoryRows);
+    if(!inputCheck.ok)
+      return Response.json({error:inputCheck.message,code:inputCheck.code},{status:inputCheck.status});
+    objective=inputCheck.objective;
     budget = deriveStepBudget({ requested: body.stepBudget, profile: autonomy.profile }).budget;
     try {
       const created = await db.agentTask.create({

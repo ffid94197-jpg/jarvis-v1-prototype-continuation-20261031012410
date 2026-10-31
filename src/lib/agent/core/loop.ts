@@ -119,7 +119,7 @@ export interface RunTaskOptions {
 // ——— hard safety bounds ———
 const MAX_STEPS_HARD = process.env.JARVIS_EXPERIMENTAL_DESKTOP_CONTROL === "1" ? 48 : 24;
 const MAX_DENIALS = 3;
-const MAX_PARSE_RETRIES = 2;
+const MAX_PARSE_RETRIES = 3;
 const OBSERVATION_CAP = 4600;
 /** Bounded provider-route retry. A transient network blip while constructing the
  * bridge used to discard the entire objective; that is a provider fault, not a
@@ -217,33 +217,32 @@ interface PlanAction {
   answer?: string;
 }
 
-export function parsePlannerDecision(raw: string): PlanAction | null {
-  let s = raw.trim();
-  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) s = fence[1].trim();
-  const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) return null;
-  const candidate = s.slice(start, end + 1);
-  try {
-    const parsed = JSON.parse(candidate) as Record<string, unknown>;
-    if (parsed.action === "tool" && typeof parsed.tool === "string") {
-      return {
-        action: "tool",
-        tool: parsed.tool,
-        args:
-          parsed.args && typeof parsed.args === "object"
-            ? (parsed.args as Record<string, unknown>)
-            : {},
-      };
-    }
-    if (parsed.action === "final" && typeof parsed.answer === "string") {
-      return { action: "final", answer: parsed.answer };
-    }
-    return null;
-  } catch {
-    return null;
-  }
+export function parsePlannerDecision(raw:string):PlanAction|null{
+ if(typeof raw!=="string"||raw.length>12000)return null;
+ let s=raw.trim();
+ const fenced=s.match(/^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/i);
+ if(fenced)s=fenced[1].trim();
+ const a=s.indexOf("{");if(a<0)return null;
+ let depth=0,quoted=false,esc=false,b=-1;
+ for(let i=a;i<s.length;i++){
+  const c=s[i];
+  if(quoted){if(esc)esc=false;else if(c==="\\")esc=true;else if(c==='"')quoted=false;}
+  else{if(c==='"')quoted=true;else if(c==="{")depth++;else if(c==="}"){
+    depth--;if(depth===0){b=i;break;}if(depth<0)return null;
+  }}
+ }
+ if(b<0||quoted||depth!==0||/[{}]/.test(s.slice(b+1)))return null;
+ try{
+  const v:unknown=JSON.parse(s.slice(a,b+1));
+  if(!v||typeof v!=="object"||Array.isArray(v))return null;
+  const p=v as Record<string,unknown>;
+  if(p.action==="tool"&&typeof p.tool==="string"&&p.tool.trim()
+     &&p.args!==null&&typeof p.args==="object"&&!Array.isArray(p.args))
+    return {action:"tool",tool:p.tool,args:p.args as Record<string,unknown>};
+  if(p.action==="final"&&typeof p.answer==="string"&&p.answer.trim())
+    return {action:"final",answer:p.answer};
+  return null;
+ }catch{return null;}
 }
 
 // ——— journal + settlement helpers ———
@@ -344,6 +343,9 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let actionNudges = 0;
   let inventoryDraftCorrections = 0;
   let inventorySource = parseInventorySource(objective);
+  const inventoryDeliverables=/\b(?:inventory|stock)\b/i.test(objective)
+    &&/\b(?:csv|spreadsheet)\b/i.test(objective)
+    &&/\b(?:report|summary)\b/i.test(objective);
   let effectsHappened = false; // at least one real effect attempted this run
   let effectJournalDegraded = false; // an effect settlement write failed
   let markedExecuting = false; // DB row moved planning→executing (fidelity)
@@ -398,6 +400,16 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     }
     // Do not persist raw historical objectives as a second data store.
     messages.splice(3, 0, { role: "assistant", content: sourceNote });
+  }
+
+  if(inventoryDeliverables){
+    console.info("[INVENTORY_SOURCE] "+(inventorySource?"SOURCE_READY":"SOURCE_UNAVAILABLE")+
+      " chars="+objective.length+" parsedRows="+(inventorySource?.rows.length??0));
+    messages.splice(3,0,{role:"assistant",content:
+      "INVENTORY CONTRACT: Use original owner quantities and prices exactly. " +
+      "CSV header product,quantity,unit_price_inr,total_value_inr. " +
+      "Report must include all product line totals and original grand total/units. " +
+      "Do not claim verified unless Core independently confirms both files."});
   }
 
   const emitStatus = (phase: string) =>
@@ -649,22 +661,15 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     if (!decision) {
       parseRetries++;
       if (parseRetries > MAX_PARSE_RETRIES) {
-        await persistStep(taskId, seq + 1, "error", { note: "planner emitted non-JSON output 3 times" });
-        await settleAndReport(
-          taskId,
-          "failed",
-          stepsUsed,
-          "Planning core repeatedly emitted invalid JSON. Task aborted without fabricating results.",
-          emit,
-          { effectsHappened },
-        );
+        await persistStep(taskId,seq+1,"error",{note:"planner invalid JSON after bounded retries"});
+        await settleAndReport(taskId,effectsHappened?"partial":"failed",stepsUsed,
+          "Planner emitted invalid JSON repeatedly. Completion was not verified.",
+          emit,{effectsHappened});
         return;
       }
-      messages.push({ role: "assistant", content: raw });
-      messages.push({
-        role: "user",
-        content: "INVALID FORMAT. Reply with exactly ONE JSON object: {\"action\":\"tool\",\"tool\":...,\"args\":{...}} or {\"action\":\"final\",\"answer\":...}. No other text.",
-      });
+      // Never echo the malformed model output back as conversational authority.
+      messages.push({role:"user",content:
+        'INVALID FORMAT. Reply with one JSON object only: {"action":"tool","tool":"create_folder","args":{"path":"name"}} or {"action":"final","answer":"text"}. No prose or additional JSON.'});
       continue;
     }
     parseRetries = 0;
@@ -880,8 +885,10 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     // Data-fidelity rejection BEFORE Guardian admission and filesystem write.
     // This is NOT an authorization grant, and does not weaken Guardian:
     // a correctly drafted effect still needs normal audit and admission.
-    const inventoryMismatch = tool === "write_file"
-      ? validateInventoryDraft(args.path, args.content, inventorySource) : null;
+    const inventoryMismatch=tool==="write_file"&&inventoryDeliverables&&!inventorySource
+      ? "INVENTORY_SOURCE_UNAVAILABLE: cannot write unverifiable inventory"
+      : tool==="write_file"
+        ? validateInventoryDraft(args.path,args.content,inventorySource) : null;
     if (inventoryMismatch) {
       inventoryDraftCorrections++;
       stepsUsed++;

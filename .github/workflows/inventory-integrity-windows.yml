@@ -1,7 +1,7 @@
 name: JARVIS inventory integrity targeted Windows acceptance
 on:
   push:
-    branches: [fix/inventory-integrity-20261031]
+    branches: [fix/inventory-integrity-20261031, validation/inventory-consolidation-20261031]
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,6 +18,11 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --no-audit --no-fund
+      - name: Consolidated Windows inventory and planner simulation
+        run: |
+          if ((node -p "process.platform") -ne "win32") { throw "Native Windows required" }
+          node scripts/verify-inventory-consolidation-windows.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Consolidated simulation FAILED" }
       - name: Inventory source, write guard and real-temp-file verifier regressions
         run: |
           if ((node -p "process.platform") -ne "win32") { throw "Native Windows required" }

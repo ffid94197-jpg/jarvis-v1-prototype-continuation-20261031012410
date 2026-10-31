@@ -347,13 +347,19 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
     };
   }
 
-  // Specialize ONLY when the owner supplied structured inventory source rows.
-  // This must not certify unrelated file, desktop or Minecraft goals.
-  if(toolAssisted && input.inventorySource) {
+  const inventoryDeliverables=/\b(?:inventory|stock)\b/i.test(objective)
+    && /\b(?:csv|spreadsheet)\b/i.test(objective)
+    && /\b(?:report|summary)\b/i.test(objective);
+  if(toolAssisted&&inventoryDeliverables&&!input.inventorySource)
+    return {verdict:"partial",predicates:[],
+      predicateLines:["INVENTORY_SOURCE_UNAVAILABLE: folder-only proof cannot certify inventory"]};
+  if(toolAssisted&&input.inventorySource)
     return verifyInventoryArtifacts(input.inventorySource,effects,failedEffects);
-  }
-
-  const predicates = extractPredicates(objective);
+  const predicates=extractPredicates(objective);
+  if(toolAssisted&&/\b(?:files?|csv|spreadsheet)\b/i.test(objective)
+     &&predicates.length>0&&predicates.every(p=>p.kind==="folder"))
+    return {verdict:"partial",predicates:[],
+      predicateLines:["Requested file artifacts have no independent proof"]};
 
   // Pure conversation: no predicates, no effects.
   if (predicates.length === 0) {

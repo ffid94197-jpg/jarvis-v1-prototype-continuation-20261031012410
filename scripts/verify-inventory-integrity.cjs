@@ -99,7 +99,7 @@ const policy={
   return {ok:true,abs,rel:input};
  },
  async assertWithinRoot(abs){
-  try {const real=await fs.promises.realpath(abs);return real.startsWith(tmp+path.sep)?{ok:true}:{ok:false};}
+  try {const real=await fs.promises.realpath(abs);const rel=path.relative(tmp,real);return rel && !rel.startsWith("..") && !path.isAbsolute(rel)?{ok:true}:{ok:false};}
   catch{return {ok:false};}
  }
 };
@@ -117,6 +117,7 @@ async function asyncCases(){
  try{
   fs.writeFileSync(cPath,csv);fs.writeFileSync(rPath,report);
   setEffects();let a=await v.arbitrateCompletion({taskId:"t",objective:original,toolAssisted:true,inventorySource:source});
+  if(a.verdict!=="verified")console.error("Initial arbitration evidence:",JSON.stringify(a.predicateLines));
   assert.equal(a.verdict,"verified");count++;console.log("PASS disk CSV+report exact input: VERIFIED");
   fs.writeFileSync(cPath,oldCsv);
   a=await v.arbitrateCompletion({taskId:"t",objective:original,toolAssisted:true,inventorySource:source});

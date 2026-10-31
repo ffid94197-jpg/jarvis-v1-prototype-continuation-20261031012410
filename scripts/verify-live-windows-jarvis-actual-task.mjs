@@ -147,21 +147,27 @@ async function waitReady(url,timeoutMs){
  const end=Date.now()+timeoutMs;
  while(Date.now()<end){
   try{const r=await fetch(url,{signal:AbortSignal.timeout(2500)});
-   if(r.status!==502&&r.status!==503)return {ready:true,status:r.status};}
+   if(r.status!==502&&r.status!==503)return {ready:true,status:r.status,sessionCookie:r.headers.get("set-cookie")?.split(";")[0]||null};}
   catch{}
   await pause(1800);
  }
  return {ready:false};
 }
-async function streamLiveTask(prompt,abortSignal){
+async function streamLiveTask(prompt,abortSignal,sessionCookie){
  const response=await fetch("http://127.0.0.1:3000/api/jarvis/task",{
-  method:"POST",headers:{"Content-Type":"application/json","Origin":"http://127.0.0.1:3000"},
+  method:"POST",headers:{"Content-Type":"application/json","Origin":"http://127.0.0.1:3000","Cookie":sessionCookie},
   body:JSON.stringify({objective:prompt,stepBudget:24}),
   signal:abortSignal
  });
  result.taskApiCalled=true;
  result.taskHttpStatus=response.status;
- if(!response.ok){result.notes.push("Task API rejected HTTP "+response.status);return;}
+ if(!response.ok){
+   let detail="";
+   try{const j=await response.json();detail=String(j?.code||j?.error||"").slice(0,180);}catch{}
+   result.notes.push("Task API rejected HTTP "+response.status+" "+detail);
+   console.log("REAL_TASK_API_REJECTED status="+response.status+" reason="+detail);
+   return;
+ }
  const reader=response.body?.getReader();if(!reader)throw Error("No SSE task stream");
  const decoder=new TextDecoder();let buffer="";
  const ingest=segment=>{
@@ -228,17 +234,20 @@ async function run(){
  try{
   const app=await waitReady("http://127.0.0.1:3000/api/jarvis/auth/session",180000);
   result.nexusReady=app.ready;result.authStatus=app.status;
+  const sessionCookie=app.sessionCookie;
+  result.localOwnerSessionIssued=typeof sessionCookie==="string"&&sessionCookie.startsWith("jarvis_session=");
+  if(!result.localOwnerSessionIssued)throw Error("Local authenticated session cookie not issued; refusing unauthenticated task POST.");
   const companion=await waitReady("http://127.0.0.1:20189/health",3000);
   result.windowsCompanionListening=companion.ready;
   console.log("ACTUAL_WIN_RUNTIME nexus="+app.ready+" companion="+companion.ready+" authHTTP="+app.status);
   if(!app.ready)throw Error("NEXUS never became ready. Actual full Windows runtime startup failed.");
   // Do not pretend a hosted runner can emulate an interactive owner desktop.
   result.notes.push("GitHub Windows hosted runner uses a service session, not the user's Lenovo LOQ interactive desktop.");
-  await streamLiveTask(prompt,abort.signal);
+  await streamLiveTask(prompt,abort.signal,sessionCookie);
   const produced=await collectFiles(workspace);
   result.artifacts=produced.slice(0,800);
   result.siteVerification=await verifySite(produced);
-  console.log("REAL_TASK_OBSERVED final="+(result.sseFinal?.status||"none")+
+  console.log("REAL_TASK_OBSERVED http="+(result.taskHttpStatus??"none")+" final="+(result.sseFinal?.status||"none")+
     " events="+result.taskEvents+" tools="+result.toolAttempts.length+
     " files="+result.siteVerification.realFiles);
   result.completed=Boolean(result.sseFinal?.status==="completed"&&result.siteVerification.productionSiteVerified);

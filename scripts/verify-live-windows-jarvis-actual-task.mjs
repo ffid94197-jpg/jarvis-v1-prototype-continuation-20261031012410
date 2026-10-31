@@ -91,6 +91,24 @@ async function probeProvider(){
  }
  throw Error("No authorized working GitHub Models inference provider: "+result.providerStatus);
 }
+async function probeLocalOllama(){
+ const model=process.env.JARVIS_OLLAMA_MODEL||"qwen2.5-coder:1.5b";
+ const res=await fetch("http://127.0.0.1:11434/api/chat",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({model,messages:[{role:"user",content:"Reply READY"}],stream:false,options:{num_predict:24}}),
+   signal:AbortSignal.timeout(120000)
+ });
+ result.providerStatus=res.status;
+ if(!res.ok)throw Error("Ollama local inference HTTP "+res.status);
+ const j=await res.json();
+ const answer=j?.message?.content;
+ if(typeof answer!=="string"||!answer.trim())throw Error("Local Ollama returned no model-generated response");
+ result.realModelCalled=true;result.modelId=model;result.modelProbeResponseSha256=sha(answer);
+ result.notes.push("Real Windows local Ollama model inference returned "+answer.length+" characters.");
+ console.log("REAL_LOCAL_MODEL_PASS model="+model+" responseChars="+answer.length);
+ return model;
+}
 async function collectFiles(dir,relativePrefix="",depth=0){
  if(depth>9)return [];
  let names;try{names=await fs.readdir(dir,{withFileTypes:true});}catch{return [];}
@@ -177,9 +195,12 @@ async function run(){
  if(process.platform!=="win32")throw Error("Not a genuine Windows runner.");
  await fs.mkdir(evidence,{recursive:true});
  const prompt=await fetchExactPrompt();
- const model=await probeProvider();
+ const useLocalModel=process.env.JARVIS_LIVE_LOCAL_MODEL==="1";
+ const model=useLocalModel?await probeLocalOllama():await probeProvider();
  const env={...process.env,
-  JARVIS_MODEL_BACKEND:"openai-compatible",
+  JARVIS_MODEL_BACKEND:useLocalModel?"ollama":"openai-compatible",
+  JARVIS_OLLAMA_MODEL:useLocalModel?model:"",
+  JARVIS_OLLAMA_BASE_URL:"http://127.0.0.1:11434",
   JARVIS_COMPAT_BASE_URL:"https://models.github.ai/inference",
   JARVIS_COMPAT_MODEL:model,
   JARVIS_COMPAT_API_KEY:process.env.GITHUB_TOKEN,
@@ -203,7 +224,7 @@ async function run(){
  child.stdout.on("data",d=>{output=safeExcerpt(output+d.toString("utf8"));});
  child.stderr.on("data",d=>{output=safeExcerpt(output+d.toString("utf8"));});
  const abort=new AbortController();
- const timeout=setTimeout(()=>abort.abort(),13*60*1000);
+ const timeout=setTimeout(()=>abort.abort(),20*60*1000);
  try{
   const app=await waitReady("http://127.0.0.1:3000/api/jarvis/auth/session",180000);
   result.nexusReady=app.ready;result.authStatus=app.status;

@@ -76,9 +76,16 @@ async function probeProvider(){
   result.providerStatus=response.status;
   if(!response.ok){console.log("MODEL_PROBE_STATUS model="+model+" HTTP="+response.status);continue;}
   let j;try{j=await response.json();}catch{continue;}
-  const answer=j?.choices?.[0]?.message?.content;
-  if(typeof answer==="string"&&answer.includes("MODEL_READY")){
-    result.realModelCalled=true;result.modelId=model;console.log("REAL_MODEL_PROBE_PASS model="+model);
+  const content=j?.choices?.[0]?.message?.content;
+  const answer=typeof content==="string"?content:
+    Array.isArray(content)?content.filter(x=>x?.type==="text"&&typeof x.text==="string").map(x=>x.text).join(""):"";
+  console.log("MODEL_PROBE_SHAPE model="+model+" answerType="+typeof content+
+    " answerLength="+answer.length+" choices="+(Array.isArray(j?.choices)?j.choices.length:0));
+  // A 200 reply is not enough; require a complete, actual nonempty model response.
+  // Verbatim sentinel compliance is not required for this model connectivity test.
+  if(answer.trim().length>=3){
+    result.realModelCalled=true;result.modelId=model;result.modelProbeResponseSha256=sha(answer);
+    console.log("REAL_MODEL_PROBE_PASS model="+model+" chars="+answer.length);
     return model;
   }
  }

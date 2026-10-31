@@ -72,6 +72,19 @@ const checks=[
  // factual discussion of third-party models. Disclosure is preserved, not
  // suppressed. Includes 4,000 seeded adversarial sentences in both directions.
  ['JARVIS-IDENTITY-DISCLOSURE',['scripts/verify-jarvis-identity-disclosure.cjs']],
+ // FIX 3: Core must perform REAL actions for actionable objectives. Drives
+ // runTask behaviourally against the REAL completion verifier and a REAL
+ // temporary filesystem (not source contracts), covering the owner-observed
+ // dead end where a premature completion proposal ended the task instead of
+ // triggering bounded replanning. Proves the create-file / read-back /
+ // verify-contents / report-success acceptance path, that a wrong result is NOT
+ // reported as success, recovery from a transient tool failure, and that a
+ // Guardian denial never executes and is bounded.
+ ['CORE-ACTIONABLE-EXECUTION',['scripts/verify-core-actionable-execution.cjs']],
+ // Repaired and newly wired: this functional Core-interaction harness had rotted
+ // silently because it threw on any unmocked specifier and was never registered
+ // in package.json, so no battery caught it.
+ ['GOAL-LOOP-INTEGRATION',['scripts/verify-goal-loop-integration-offline.cjs']],
  ['MINECRAFT-EFFECT-IDENTITY',['scripts/verify-minecraft-effect-identity.cjs']],
  ['MINECRAFT-OWNER-IDENTITY',['windows-companion/minecraft-bot/verify_owner_identity_offline.cjs']],
  ['MINECRAFT-FRIEND-FIXTURE',['windows-companion/minecraft-bot/verify_friend_offline.cjs']],

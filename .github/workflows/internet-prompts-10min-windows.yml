@@ -1,0 +1,44 @@
+name: JARVIS 10-minute internet-prompt Windows stress (offline)
+on:
+  push:
+    branches: [validation/internet-prompts-10min-20261031]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  internet-prompt-stress:
+    runs-on: windows-latest
+    timeout-minutes: 22
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+      - name: Existing Core and Guardian offline baseline
+        run: |
+          node scripts/verify-inventory-consolidation-windows.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Inventory core baseline failed" }
+          node scripts/verify-goal-loop-integration-offline.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Goal-loop baseline failed" }
+          node scripts/verify-path-containment.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Guardian baseline failed" }
+      - name: Continuously sample original online prompts for ten full minutes
+        run: |
+          if ((node -p "process.platform") -ne "win32") { throw "Native Windows required" }
+          node scripts/verify-internet-prompts-stress-windows.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Internet-prompt stress test failed" }
+      - name: Upload prompt hashes, corpus fingerprint and stress evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: internet-prompt-stress-windows
+          path: stress-evidence/internet-prompts-10min.json
+          if-no-files-found: warn
+          retention-days: 14

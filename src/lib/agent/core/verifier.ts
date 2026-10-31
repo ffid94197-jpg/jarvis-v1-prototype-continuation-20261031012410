@@ -75,6 +75,14 @@ function objectiveFolderName(m: RegExpMatchArray): string | null {
   const bare = m[3];
   const value = quoted ?? bare;
   if (!value) return null;
+  const explicit = /\b(?:named|called)\s+/i.test(m[0] ?? "") || quoted !== undefined;
+  if (!explicit) {
+    const before = (m.input ?? "").slice(Math.max(0,(m.index ?? 0)-90),m.index ?? 0);
+    // Do not treat prose such as "folder structure" or "directory layout"
+    // as literal output-directory names. An unquoted target requires a
+    // direct create/make imperative; quoted and named paths are explicit.
+    if (!/\b(?:create|make|add|set up)\s+(?:(?:a|the|new)\s+)?$/i.test(before)) return null;
+  }
   if (quoted === undefined) {
     // Punctuation that terminates an unquoted sentence is not a path.
     // Quoted paths retain their exact contents, including embedded dots.
@@ -355,6 +363,14 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
       predicateLines:["INVENTORY_SOURCE_UNAVAILABLE: folder-only proof cannot certify inventory"]};
   if(toolAssisted&&input.inventorySource)
     return verifyInventoryArtifacts(input.inventorySource,effects,failedEffects);
+  // A file/folder receipt cannot establish a working production application.
+  // Require an independent build + running frontend/backend/database proof,
+  // which current filesystem predicates cannot supply. Fail closed.
+  const softwareDelivery = /\b(?:production.ready|full.stack|end.to.end|complete application|production application)\b/i.test(objective)
+    && /\b(?:website|web\s*(?:site|app|application)|frontend|backend|react|vite|showroom)\b/i.test(objective);
+  if (toolAssisted && softwareDelivery)
+    return {verdict:"partial",predicates:[],
+      predicateLines:["SOFTWARE_ACCEPTANCE_UNVERIFIED: a working application needs independent build, running frontend/backend and database checks."]};
   const predicates=extractPredicates(objective);
   if(toolAssisted&&/\b(?:files?|csv|spreadsheet)\b/i.test(objective)
      &&predicates.length>0&&predicates.every(p=>p.kind==="folder"))

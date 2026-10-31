@@ -39,6 +39,16 @@ const codeHash=createHash('sha256').update(readFileSync(join(root,'src','lib','a
 const checks=[
  ['CORE-OUTCOME-HONESTY',['scripts/verify-task-outcome-honesty.cjs']],
  ['CORE-GAME-ACTION-GATE',['scripts/verify-core-goal-action-gate.cjs']],
+ // Conversational vs actionable separation, operator-facing JARVIS identity, and
+ // Windows companion gate diagnosability. Guards the fabricated-success class
+ // where an actionable objective settled `completed` after zero tool calls.
+ ['CORE-CONVERSATIONAL-SEPARATION',['scripts/verify-core-conversational-separation.cjs']],
+ // One launcher authorization context must satisfy BOTH the startup preflight
+ // and the runtime companion gate. Guards the observed defect where an
+ // owner-authorized minecraft_companion_join was denied three times because the
+ // plain local-dev launcher supplied the session contract but not the companion
+ // agent flag and token. Proves the repair without lowering any gate.
+ ['COMPANION-LAUNCHER-AUTHORIZATION',['scripts/verify-companion-launcher-authorization.mjs']],
  ['MINECRAFT-EFFECT-IDENTITY',['scripts/verify-minecraft-effect-identity.cjs']],
  ['MINECRAFT-OWNER-IDENTITY',['windows-companion/minecraft-bot/verify_owner_identity_offline.cjs']],
  ['MINECRAFT-FRIEND-FIXTURE',['windows-companion/minecraft-bot/verify_friend_offline.cjs']],

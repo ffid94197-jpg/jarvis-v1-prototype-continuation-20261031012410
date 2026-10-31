@@ -116,6 +116,7 @@ export function normalizeCompatibleMessages(messages: ModelMessage[]): Array<{ro
 export function createCompatibleBridge(
   settings: CompatibleSettings = getCompatibleSettings(),
   request: typeof fetch = fetch,
+  identityHint?: { provider?: string; local?: boolean },
 ): ModelBridge {
   // A single repeat is permitted only for a *read-only model completion* whose
   // prior HTTP response was valid but omitted text. No tools are sent here.
@@ -146,7 +147,20 @@ export function createCompatibleBridge(
         "REQUEST_TIMEOUT" : "REQUEST_TRANSPORT");
     }
   };
+  // Honest provenance: JARVIS knows the configured endpoint and model id, not
+  // the vendor's marketing name, so the provider label is derived from the host
+  // unless the caller (an owner model profile) supplied its own label. The
+  // credential is never included.
+  const compatHost = (() => { try { return new URL(settings.url).host; } catch { return "unknown"; } })();
+  const bridgeIdentity = {
+    backend: "openai-compatible",
+    provider: identityHint?.provider?.trim() || `OpenAI-compatible endpoint (${compatHost})`,
+    modelId: settings.model,
+    local: identityHint?.local === true,
+    host: compatHost,
+  };
   return {
+    identity: bridgeIdentity,
     async complete(messages) {
       const readOnce = async (emptyRecovery: boolean) => {
       const r = await send(messages, false, emptyRecovery);

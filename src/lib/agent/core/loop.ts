@@ -23,7 +23,7 @@
  *   (grounded report through the explicit state machine)
  */
 
-import { createModelBridge, type ModelBridge } from "./modelProvider";
+import { createModelBridge, modelIdentityContext, type ModelBridge } from "./modelProvider";
 import { adviseTask } from "./laya";
 import { directWindowsLaunch } from "./windowsIntent";
 import { directMinecraftMission, minecraftMissionFromObjective } from "./minecraftIntent";
@@ -37,6 +37,7 @@ import { executeTool, type ToolResult } from "../tools/executor";
 import {
   FINAL_REPORT_INSTRUCTION,
   PLANNER_SYSTEM_PROMPT,
+  enforceJarvisIdentity,
   plannerUserPrompt,
   sanitizeFinalReport,
 } from "./prompts";
@@ -54,6 +55,7 @@ import {
   settleEffect,
 } from "./effects";
 import { arbitrateCompletion } from "./verifier";
+import { classifyRequestIntent, isModelDisclosureQuestion } from "./requestIntent";
 import { AutonomyGate, REPEATABLE_INPUT_TOOLS, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
 import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan } from "./goalPlanner";
@@ -107,6 +109,64 @@ const MAX_STEPS_HARD = process.env.JARVIS_EXPERIMENTAL_DESKTOP_CONTROL === "1" ?
 const MAX_DENIALS = 3;
 const MAX_PARSE_RETRIES = 2;
 const OBSERVATION_CAP = 4600;
+/** Bounded provider-route retry. A transient network blip while constructing the
+ * bridge used to discard the entire objective; that is a provider fault, not a
+ * reason to abandon authorized work. The bound is small and the backoff real, so
+ * this cannot become an uncontrolled retry loop. */
+const MODEL_ROUTE_ATTEMPTS = 3;
+const MODEL_ROUTE_BACKOFF_MS = [600, 1800];
+/** How many times the Core sends an actionable objective back to the planner
+ * after it proposed completion with zero verified execution. Recovery instead
+ * of immediate termination, but bounded so a model that refuses to act cannot
+ * spin forever or burn the operator's provider quota. */
+const MAX_ACTION_NUDGES = 2;
+
+/**
+ * The corrective message used when the planner tries to finish actionable work
+ * it never performed. It states the rejection, the classification reason, and
+ * the three honest options — including naming a missing capability instead of
+ * inventing an action.
+ */
+function actionRequiredNudge(reason: string): string {
+  return `REJECTED COMPLETION — NO VERIFIED EXECUTION.
+You proposed a final answer for an ACTIONABLE objective after ZERO verified tool calls. JARVIS reports completion only from independently verified evidence, so the proposal was rejected.
+Classification: ${reason}.
+Choose the next ONE real step now:
+- If any tool in the catalog can perform part of this, emit {"action":"tool","tool":"<name>","args":{...}} and actually call it.
+- If you lack information, call a read-only tool first (list_dir, read_file, windows_discover_apps, windows_find_capability) instead of answering from assumption.
+- If NO available tool can perform this, finalize again and say so explicitly, naming the missing capability or the Guardian denial. Never describe an action you did not take.
+Do not repeat the same final answer unchanged.`;
+}
+
+/**
+ * Construct the advisory bridge, retrying only genuinely transient faults.
+ *
+ * Permanent faults are rethrown immediately and reported honestly: a bad
+ * credential (MODEL_AUTH_FAILED) will not fix itself, a misconfigured backend
+ * must be surfaced, and a privacy-boundary refusal (MODEL_PRIVACY_ROUTE_BLOCKED)
+ * must NEVER be retried into a different backend — that would defeat the LAYA
+ * local-only invariant.
+ */
+async function createModelBridgeWithRetry(
+  ownerId: string | undefined,
+  pinnedId: string,
+): Promise<ModelBridge> {
+  for (let attempt = 0; attempt < MODEL_ROUTE_ATTEMPTS; attempt++) {
+    try {
+      return await createModelBridge(ownerId, pinnedId);
+    } catch (err) {
+      const failure = classifyModelFailure(err);
+      const lastAttempt = attempt === MODEL_ROUTE_ATTEMPTS - 1;
+      if (!failure.retryable || lastAttempt) throw err;
+      const backoff = MODEL_ROUTE_BACKOFF_MS[attempt] ?? 1800;
+      console.warn(`[model-route] transient ${failure.code}; retrying in ${backoff}ms (attempt ${attempt + 1}/${MODEL_ROUTE_ATTEMPTS - 1})`);
+      await new Promise((resolve) => setTimeout(resolve, backoff));
+    }
+  }
+  // Unreachable: the loop either returns or throws. Kept explicit so the
+  // function cannot silently resolve to an undefined bridge.
+  throw new Error("MODEL_UNAVAILABLE: provider route could not be established.");
+}
 
 interface Msg {
   role: "user" | "assistant";
@@ -263,6 +323,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let seq = stepsUsed;
   let denials = 0;
   let parseRetries = 0;
+  let actionNudges = 0;
   let effectsHappened = false; // at least one real effect attempted this run
   let effectJournalDegraded = false; // an effect settlement write failed
   let markedExecuting = false; // DB row moved planning→executing (fidelity)
@@ -357,7 +418,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         taskId, seq: -1, kind: "model_pin", note: pinnedId,
       } });
     }
-    model = await createModelBridge(opts.ownerId, pinnedId);
+    model = await createModelBridgeWithRetry(opts.ownerId, pinnedId);
   } catch (err) {
     const failure = classifyModelFailure(err);
     const providerStatus = (err as {status?: unknown} | null)?.status;
@@ -369,6 +430,23 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     await settleAndReport(taskId, "failed", stepsUsed,
       `${failure.code}: ${failure.publicMessage}`, emit, { effectsHappened: false });
     return;
+  }
+
+  // ——— CORE-OWNED IDENTITY + HONEST PROVIDER DISCLOSURE ———
+  // Injected only AFTER the bridge exists, so this reports the real resolved
+  // provider and never a guess. Product identity belongs to JARVIS Core; the
+  // adapter merely reports which intelligence it supplied. Without this the
+  // model had nothing telling it to speak as JARVIS and no way to answer
+  // "which model are you using?" accurately — so a greeting came back as the
+  // base model's own vendor self-description.
+  messages.splice(1, 0, { role: "assistant", content: modelIdentityContext(model?.identity) });
+  // A disclosure question must be answered accurately, so the identity guard is
+  // suppressed for it; everywhere else the guard stays active.
+  const modelDisclosureRequested = isModelDisclosureQuestion(objective);
+  if (model?.identity) {
+    // Durable record of the provider that actually served this task. Metadata
+    // only — never an API key or a credentialed endpoint.
+    await persistStep(taskId, seq + 1, "model_identity", { note: JSON.stringify(model.identity) });
   }
 
   // Optional long-horizon advisory planning. Persist before any actual tool
@@ -550,9 +628,52 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         return;
       }
       if (stepsUsed === opts.stepsUsedOffset && !opts.replay) {
+        // ——— POSITIVE CONVERSATIONAL SEPARATION ———
+        // The legacy guard below is a DENYLIST of actionable phrasings, so any
+        // imperative it did not enumerate ("turn on bluetooth", "mute the
+        // speakers", "connect to the LAN world", "lock the workstation") fell
+        // through to arbitration, which — with no predicates and no effects —
+        // returned `conversational` and settled the task as COMPLETED with zero
+        // tool calls. That is a fabricated success.
+        // classifyRequestIntent() inverts the burden of proof: conversational
+        // only when positively recognized, actionable otherwise. It cannot
+        // authorize anything; it can only move a verdict away from `completed`.
+        const intent = classifyRequestIntent(objective);
+        const legacyActionable =
+          desktopObjectiveRequiresActions(objective) || requiresExternalActionEvidence(objective);
+        // ——— RECOVERY BEFORE TERMINATION ———
+        // The rejection itself is correct: an actionable objective with zero
+        // verified execution must never settle as completed. But ending the task
+        // on the first recoverable planning mistake is not what an autonomous
+        // agent should do, and it is what produced the observed
+        // "Actionable task requires REAL actions" dead end. Send the planner
+        // back to choose a real action instead. Bounded by MAX_ACTION_NUDGES so
+        // a model that refuses to act cannot spin or burn provider quota.
+        if ((legacyActionable || intent.kind === "actionable") && actionNudges < MAX_ACTION_NUDGES) {
+          actionNudges++;
+          messages.push({ role: "assistant", content: raw });
+          messages.push({ role: "user", content: actionRequiredNudge(intent.reason) });
+          await persistStep(taskId, seq + 1, "replan", {
+            note: `completion proposal rejected: actionable objective with zero verified tool calls (nudge ${actionNudges}/${MAX_ACTION_NUDGES}); ${intent.reason}`,
+          });
+          emitStatus("replanning");
+          continue;
+        }
         if (desktopObjectiveRequiresActions(objective) || requiresExternalActionEvidence(objective)) {
           const text = "Actionable task requires REAL actions and independently checked evidence. The planner attempted to finish without independently verifying the requested external work. No tool action has been verified.";
           await persistStep(taskId, seq + 1, "error", {note: text});
+          await settleAndReport(taskId, "failed", stepsUsed, text, emit, {effectsHappened:false});
+          return;
+        }
+        if (intent.kind === "actionable") {
+          const text =
+            `Actionable request settled WITHOUT execution: classified actionable (${intent.reason}), ` +
+            `but the planner attempted to finish with ZERO verified tool calls. ` +
+            `Nothing was dispatched, observed or independently verified, so no completion claim is authorized. ` +
+            `If no available tool can perform this request, the honest outcome is BLOCKED, not completed.` +
+            `\n\nJARVIS (unverified response, recorded as such): ${answer}`;
+          emit({ type: "delta", text });
+          await persistStep(taskId, seq + 1, "error", {note: text.slice(0, 2000)});
           await settleAndReport(taskId, "failed", stepsUsed, text, emit, {effectsHappened:false});
           return;
         }
@@ -570,9 +691,21 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
           return;
         }
         // Pure conversation — no tools, no predicates, no effects.
-        emit({ type: "delta", text: answer });
-        await persistStep(taskId, seq + 1, "final", { note: "conversational answer (no tools required)" });
-        await settleAndReport(taskId, "completed", stepsUsed, answer, emit, { effectsHappened: false });
+        // JARVIS is the operator-facing identity regardless of which model the
+        // routing layer selected, so a leaked base-model self-identification
+        // ("I am GLM") is corrected deterministically rather than trusted.
+        // Suppressed for an explicit model-disclosure question, where naming the
+        // real provider is the CORRECT answer and must not be rewritten.
+        const identity = modelDisclosureRequested
+          ? { text: answer, corrected: false, detected: null }
+          : enforceJarvisIdentity(answer);
+        emit({ type: "delta", text: identity.text });
+        await persistStep(taskId, seq + 1, "final", {
+          note: identity.corrected
+            ? `conversational answer (no tools required); base-model self-identification corrected to JARVIS (detected: ${identity.detected})`
+            : "conversational answer (no tools required)",
+        });
+        await settleAndReport(taskId, "completed", stepsUsed, identity.text, emit, { effectsHappened: false });
         return;
       }
 
@@ -589,6 +722,15 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         full = answer; // fall back to the planner's own final answer (still evidence-bound)
       }
       full = sanitizeFinalReport(full, answer);
+      // Same identity guard as the conversational path: the report is produced
+      // by whichever model routing selected, but the operator-facing identity
+      // is always JARVIS. Deterministic, so a non-compliant model cannot leak
+      // its vendor identity in a grounded report either. Suppressed when the
+      // operator explicitly asked which provider is in use.
+      const reportIdentity = modelDisclosureRequested
+        ? { text: full, corrected: false, detected: null }
+        : enforceJarvisIdentity(full);
+      full = reportIdentity.text;
 
       // ——— PHASE 03: AUTHORITATIVE COMPLETION ARBITRATION (§6.3) ———
       // The model's `final` is a PROPOSAL. The Core independently checks
@@ -599,6 +741,11 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       const groundedVerdict = requiresExternalActionEvidence(objective) && arbitration.verdict === "conversational"
         ? "partial" : arbitration.verdict;
       const digestSections: string[] = [];
+      if (reportIdentity.corrected) {
+        digestSections.push(
+          `── IDENTITY CORRECTION ──\nThe drafted report asserted a base-model identity (${reportIdentity.detected}); it was corrected to JARVIS. The underlying model is an implementation detail, never the operator-facing identity.`,
+        );
+      }
       if (settlementLines.length > 0) {
         digestSections.push(
           `── EXECUTOR RECEIPTS (not independent proof that the task goal completed) ──\n${settlementLines

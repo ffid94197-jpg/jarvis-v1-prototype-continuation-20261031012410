@@ -10,9 +10,62 @@ export interface ModelMessage {
   role: "user" | "assistant";
   content: string;
 }
+
+/**
+ * Advisory-provider provenance.
+ *
+ * JARVIS Core owns the product identity; a provider adapter supplies
+ * intelligence and reports WHICH intelligence it supplied. Before this existed
+ * the bridge exposed only complete()/report(), so neither the Core nor the
+ * operator could learn which provider was actually serving a task. That is why
+ * a greeting was answered by the base model's own self-description ("I am GLM —
+ * developed by Zhipu AI"): nothing told the model it was speaking as JARVIS,
+ * and nothing let JARVIS disclose its real provider accurately when asked.
+ *
+ * These fields are metadata, never authority. They cannot authorize a tool,
+ * alter routing, or prove a result. They must never contain an API key.
+ */
+export interface ModelIdentity {
+  /** Adapter kind: "zai" | "ollama" | "openai-compatible" | "profile". */
+  backend: string;
+  /** Human-readable provider label, e.g. "Z.ai", "Ollama (local)", profile label. */
+  provider: string;
+  /** Actual configured model id, or an explicit "not specified" — never invented. */
+  modelId: string;
+  /** True when the endpoint is loopback-only. */
+  local: boolean;
+  /** Endpoint host, for operator diagnostics. Never includes credentials. */
+  host?: string;
+}
+
 export interface ModelBridge {
   complete(messages: ModelMessage[]): Promise<string>;
   report(messages: ModelMessage[], onDelta: (delta: string) => void): Promise<string>;
+  /**
+   * Which advisory provider is CURRENTLY serving. Declared as a getter-capable
+   * optional property so a failover wrapper can report the backend it actually
+   * switched to, instead of the one it started with.
+   */
+  readonly identity?: ModelIdentity;
+}
+
+/**
+ * Render the honest disclosure line the Core injects into the planner context.
+ * Deterministic and secret-free: it never emits an API key, and it says so
+ * explicitly when a model id was not configured rather than guessing one.
+ */
+export function modelIdentityContext(identity?: ModelIdentity): string {
+  if (!identity) {
+    return "CURRENT ADVISORY PROVIDER: unavailable (no bridge identity was reported). If asked which model is in use, say that JARVIS could not confirm the active provider rather than naming one.";
+  }
+  const parts = [
+    `backend=${identity.backend}`,
+    `provider="${identity.provider}"`,
+    `model="${identity.modelId}"`,
+    `scope=${identity.local ? "local loopback" : "cloud"}`,
+  ];
+  if (identity.host) parts.push(`host=${identity.host}`);
+  return `CURRENT ADVISORY PROVIDER (accurate disclosure metadata — this is NOT your identity): ${parts.join(" ")}`;
 }
 
 import { modelRequestDeadlineMs } from "./modelDeadline";
@@ -57,6 +110,13 @@ function createOllamaBridge(): ModelBridge {
     ...(json ? { format: "json" } : {}),
   });
   return {
+    identity: {
+      backend: "ollama",
+      provider: "Ollama (local loopback)",
+      modelId: settings.model,
+      local: true,
+      host: new URL(settings.url).host,
+    },
     async complete(messages) {
       const response = await fetch(settings.url, {
         method: "POST",
@@ -121,6 +181,15 @@ async function createZaiBridge(): Promise<ModelBridge> {
   const { default: ZAI } = await import("z-ai-web-dev-sdk");
   const client = await ZAI.create();
   return {
+    // The Z.ai SDK selects the concrete model itself; this call passes no model
+    // id, so the honest disclosure is that it was not specified by JARVIS.
+    // Never invent a version number here.
+    identity: {
+      backend: "zai",
+      provider: "Z.ai",
+      modelId: process.env.JARVIS_ZAI_MODEL?.trim() || "not specified (selected by the Z.ai SDK)",
+      local: false,
+    },
     async complete(messages) {
       const r = await client.chat.completions.create({
         messages: messages.map(m => ({role: m.role, content: m.content})),

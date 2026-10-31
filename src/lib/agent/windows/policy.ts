@@ -59,12 +59,42 @@ function operatorApps(): string[] {
 }
 const appApproved = (name: unknown): name is string => typeof name === "string" &&
   (BUILTIN_APPS.includes(name) || operatorApps().includes(name));
-export function validateDesktopTool(tool: string, args: Record<string, unknown>): {ok: true; prepared: DesktopPrepared} | {ok:false; reason:string} {
-  if (process.platform !== "win32" || process.env.JARVIS_WINDOWS_AGENT_ENABLED !== "1" ||
-      process.env.JARVIS_LOCAL_DEV_NO_LOGIN !== "1" || process.env.JARVIS_LOCAL_DEV_BIND !== "127.0.0.1" ||
-      (process.env.JARVIS_WINDOWS_COMPANION_TOKEN || "").length < 32) {
-    return {ok:false,reason:"Windows companion requires the isolated loopback development launcher."};
+/**
+ * Windows companion preconditions, reported individually.
+ *
+ * All five conditions are still REQUIRED and the gate still fails closed — this
+ * only replaces one undifferentiated message with the specific missing
+ * precondition. Previously every failure said "Windows companion requires the
+ * isolated loopback development launcher", so an operator who WAS running that
+ * launcher but was missing (say) a companion token or a Minecraft LAN flag was
+ * told to use the launcher they were already using, and the denial was
+ * undiagnosable. That is how an authorized minecraft_companion_join ended up
+ * looking like a policy rejection.
+ *
+ * A reason string is persisted to the durable audit log, so it must never
+ * contain the token value or any other secret — only the name of what is missing.
+ */
+function companionGateFailure(): string | null {
+  if (process.platform !== "win32") {
+    return `Windows companion requires a Windows host; detected ${process.platform}. The isolated loopback development launcher is Windows-only.`;
   }
+  if (process.env.JARVIS_WINDOWS_AGENT_ENABLED !== "1") {
+    return "Windows companion is not enabled (JARVIS_WINDOWS_AGENT_ENABLED != 1). Start it with the isolated loopback development launcher — npm run dev:windows — which also spawns the private local companion.";
+  }
+  if (process.env.JARVIS_LOCAL_DEV_NO_LOGIN !== "1") {
+    return "Windows companion requires the isolated loopback development launcher (JARVIS_LOCAL_DEV_NO_LOGIN != 1). It is deliberately unavailable through the authenticated or production launch path.";
+  }
+  if (process.env.JARVIS_LOCAL_DEV_BIND !== "127.0.0.1") {
+    return `Windows companion requires a loopback-only bind (JARVIS_LOCAL_DEV_BIND=${process.env.JARVIS_LOCAL_DEV_BIND || "unset"}, expected 127.0.0.1); refusing because this console is not isolated to this PC.`;
+  }
+  if ((process.env.JARVIS_WINDOWS_COMPANION_TOKEN || "").length < 32) {
+    return "Windows companion requires a companion token of at least 32 characters (JARVIS_WINDOWS_COMPANION_TOKEN missing or too short). npm run dev:windows generates one automatically; a plain npm run dev does not.";
+  }
+  return null;
+}
+export function validateDesktopTool(tool: string, args: Record<string, unknown>): {ok: true; prepared: DesktopPrepared} | {ok:false; reason:string} {
+  const gateFailure = companionGateFailure();
+  if (gateFailure) return {ok:false,reason:gateFailure};
   if (tool === "windows_open_url") {
     if (typeof args.url !== "string" || args.url.length > 2048) return {ok:false,reason:"Provide a bounded HTTPS URL."};
     try {
@@ -289,7 +319,12 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     return {ok:true,prepared};
   }
   if (tool === "minecraft_companion_join" || tool === "minecraft_companion_stop") {
-    if (process.env.JARVIS_MINECRAFT_LAN_ENABLED !== "1") return {ok:false,reason:"Minecraft LAN companion not enabled by operator."};
+    if (process.env.JARVIS_MINECRAFT_LAN_ENABLED !== "1") {
+      // Name every variable the launcher preflight also requires, so a
+      // half-configured Minecraft setup is diagnosable from the denial instead
+      // of surfacing later as an obscure companion error.
+      return {ok:false,reason:"Minecraft LAN companion not enabled by operator. Set JARVIS_MINECRAFT_LAN_ENABLED=1 together with JARVIS_MINECRAFT_LAN_HOST (127.0.0.1 or localhost), JARVIS_MINECRAFT_LAN_PORT (1024-65535) and JARVIS_MINECRAFT_PLAYER (the human Java player, not JarvisBuddy) in .env, then restart npm run dev:windows. The Java world must already be open to LAN."};
+    }
     return {ok:true,prepared:{operation:tool === "minecraft_companion_join" ? "minecraft_join" : "minecraft_stop"}};
   }
   return {ok:false,reason:"Unknown Windows desktop tool."};

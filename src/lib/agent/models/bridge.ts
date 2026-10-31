@@ -39,10 +39,27 @@ function startRequest(url: string, key: string, body: unknown, headers: Record<s
     body:JSON.stringify(body),
   });
 }
+/**
+ * Owner-profile provenance. The profile LABEL is the operator's own name for the
+ * provider, so it is the accurate disclosure value; the API key is never
+ * included. `location` already distinguishes loopback from cloud.
+ */
+function profileIdentity(p: ModelProfile, backend: string) {
+  let host: string | undefined;
+  try { host = new URL(p.baseUrl).host; } catch { host = undefined; }
+  return {
+    backend,
+    provider: p.label || `Model profile ${p.id}`,
+    modelId: p.model || "not specified in the owner model profile",
+    local: p.location === "local",
+    host,
+  };
+}
 function createLocalOllama(p: ModelProfile): ModelBridge {
   const url = modelRequestUrl(p);
   const payload = (messages: ModelMessage[], stream: boolean) => ({model:p.model,messages,stream});
   return {
+    identity: profileIdentity(p, "ollama"),
     async complete(messages) {
       const response = await startRequest(url,p.apiKey,payload(messages,false));
       const data = await readBounded(response) as {message?:{content?:unknown};error?:unknown};
@@ -95,10 +112,14 @@ function createAnthropic(p: ModelProfile): ModelBridge {
   };
   // The bridge supports report by delivering one verified complete result.
   // It does not pretend to offer token-by-token Anthropic streaming.
-  return { complete, async report(messages,onDelta){ const t=await complete(messages); onDelta(t); return t; } };
+  return { identity: profileIdentity(p, "anthropic"), complete, async report(messages,onDelta){ const t=await complete(messages); onDelta(t); return t; } };
 }
 export function createProfileBridge(profile: ModelProfile): ModelBridge {
   if (profile.protocol === "ollama") return createLocalOllama(profile);
   if (profile.protocol === "anthropic") return createAnthropic(profile);
-  return createCompatibleBridge({url:modelRequestUrl(profile),model:profile.model,key:profile.apiKey});
+  return createCompatibleBridge(
+    {url:modelRequestUrl(profile),model:profile.model,key:profile.apiKey},
+    fetch,
+    { provider: profile.label, local: profile.location === "local" },
+  );
 }

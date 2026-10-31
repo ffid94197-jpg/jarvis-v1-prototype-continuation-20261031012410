@@ -85,11 +85,37 @@ CONSTRAINTS:
 - Never claim a launched process means a visible app/window was verified; always report actual receipt. Minecraft LAN must already be open; Minecraft companion autonomous mode is experimental, uses real observed gameplay, and has NOT passed full live survival/dragon victory. Do not invent progression.
 - The live screen feed is local by default. Screen frames may only be sent to the configured cloud vision provider if the operator explicitly enables that privacy-sensitive feature.`;
 
+/**
+ * Operator-facing identity contract.
+ *
+ * The planning core is served by whichever model the LAYA routing layer
+ * selected for this task. That model is an implementation detail. Without this
+ * contract a conversational objective ("hello", "who are you?") is answered
+ * straight from the base model's own self-description, so the operator was
+ * greeted with the vendor's assistant name instead of JARVIS. The zero-step
+ * conversational path emits the planner's answer directly and never passes
+ * through FINAL_REPORT_INSTRUCTION, which is the only other place a voice was
+ * specified — so the identity had to be pinned here, at turn one.
+ *
+ * enforceJarvisIdentity() below is the deterministic backstop: a model that
+ * ignores this instruction still cannot leak a vendor identity to the operator.
+ */
+export const JARVIS_IDENTITY_CONTRACT = `IDENTITY (applies to every answer you produce, including the "answer" field of a final action):
+- You are JARVIS. That is your ONLY operator-facing identity, in every reply, including greetings and small talk.
+- Your intelligence is supplied by a configurable advisory model. That model is a component you USE; it is not who you ARE. Never adopt its name as your own.
+- Never introduce yourself as GLM, ChatGLM, Zhipu, Z.ai, ChatGPT, GPT, OpenAI, Claude, Anthropic, Gemini, Google, Grok, xAI, Llama, Meta, Qwen, Kimi, Moonshot, DeepSeek, Mistral, Copilot, Perplexity or any other assistant, and never reuse another product's persona or canned disclaimer as your own.
+- If asked who or what you are, answer as JARVIS: the operator's autonomous assistant runtime on this machine. Then describe what you can actually do, grounded in the real tool catalog below.
+- ACCURATE DISCLOSURE IS REQUIRED, NOT FORBIDDEN: if the operator asks which model, provider, backend or version is actually in use, answer truthfully from the CURRENT ADVISORY PROVIDER line supplied below. Do not guess, do not refuse, and do not name a provider that is not listed there. If that line says the provider is unavailable or "not specified", say exactly that.
+- Identity and disclosure are different answers. "Who are you?" → JARVIS. "Which model are you using?" → the real provider and model id from the metadata below.
+- Never claim capabilities you do not have, and never invent a model name, subscription tier or provider access to sound more capable.`;
+
 export const PLANNER_SYSTEM_PROMPT = `You are the PLANNING CORE of JARVIS, an autonomous agent runtime connected to a REAL executor.
 
 Your only job each turn: emit exactly ONE JSON object choosing the next action.
 {"action":"tool","tool":"<tool name>","args":{...}}  — execute the next real step
 {"action":"final","answer":"<concise report>"}       — when the objective is achieved, or is provably impossible/denied
+
+${JARVIS_IDENTITY_CONTRACT}
 
 OPERATING RULES:
 1. You are an EXECUTOR, not an advisor. If the operator requests work that the tools can perform, USE THE TOOLS. Never reply with "you can run..." instructions, and never describe hypothetical command output.
@@ -135,6 +161,135 @@ export function sanitizeFinalReport(text: string, fallback: string): string {
     }
   }
   return s || fallback.trim();
+}
+
+/**
+ * Vendor / base-model names that must never be presented as JARVIS's own
+ * identity. Deliberately broad: an over-inclusive list only risks rewriting a
+ * sentence that did not need it, whereas an under-inclusive one leaks a vendor
+ * identity straight to the operator.
+ */
+const BASE_MODEL_IDENTITIES = [
+  "chatglm", "glm", "zhipu", "z-ai", "zhipu ai", "chatgpt", "gpt-4", "gpt-5", "gpt", "open ai", "openai",
+  "claude", "anthropic", "sonnet", "opus", "haiku", "gemini", "grok", "x ai", "xai", "x.ai",
+  "llama", "meta ai", "qwen", "qianwen", "tongyi", "kimi", "moonshot", "deepseek", "mistral",
+  "copilot", "perplexity", "cohere", "command r", "ernie", "wenxin", "doubao", "baichuan",
+  "minimax", "abab", "stepfun", "hunyuan", "sensechat", "spark", "iflytek", "yi",
+];
+
+function escapeForRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Longest-first so "zhipu ai" is preferred over "zhipu" and no partial vendor
+ * name wins the alternation. */
+const VENDORS = [...BASE_MODEL_IDENTITIES]
+  .sort((a, b) => b.length - a.length)
+  .map(escapeForRegex)
+  .join("|");
+
+/**
+ * Only self-referential frames are matched, and every gap between the frame and
+ * the vendor name is tightly constrained. A permissive gap such as
+ * "[^.!?]{0,80}" would bridge unrelated clauses and corrupt legitimate text —
+ * "I am not sure but the GLM model is fast" must NOT become
+ * "I am not sure but the JARVIS model is fast". So gaps admit only articles and
+ * identity nouns, and never cross a comma, semicolon or sentence end.
+ */
+const FILLER =
+  "(?:\\s+(?:an?|the|just|really|actually|simply|merely|only|basically|your|my|our|this|that|friendly|helpful|advanced|new|virtual|digital|ai|llm|language\\s+model|assistant|chatbot|bot|model|called|named|known\\s+as))*\\s*";
+const SHORT_GAP = "[^.!?,;\\n]{0,20}?";
+
+/** "I am GLM", "I'm ChatGPT", "you are talking to Claude", "I was built by …" */
+const SELF_ID_RE = new RegExp(
+  `\\b(i\\s+am|i'?m|i\\u2019m|this\\s+is|you\\s*(?:are|'?re)\\s+(?:speaking|talking|chatting)\\s+(?:to|with)|the\\s+assistant\\s+(?:you\\s*(?:are|'?re)\\s+)?(?:speaking|talking)\\s+to|i\\s+was\\s+(?:built|created|developed|made|trained|designed))\\b(${FILLER})\\b(${VENDORS})\\b(?:\\-\\d[\\w\\-]*(?:\\.\\d+)*)?`,
+  "gi",
+);
+/** "my name is GLM", "I go by Claude", "call me ChatGPT" */
+const NAME_RE = new RegExp(
+  `\\b(my\\s+name\\s+is|i\\s+go\\s+by|call\\s+me|the\\s+name\\s+is)\\b(${FILLER})\\b(${VENDORS})\\b(?:\\-\\d[\\w\\-]*(?:\\.\\d+)*)?`,
+  "gi",
+);
+/** "GLM is my underlying model" — but NOT "GLM is my favourite model family",
+ * which is a factual statement about a third party and must survive. */
+const POSSESSIVE_RE = new RegExp(
+  `\\b(${VENDORS})\\b(\\s*(?:is|are)\\s+(?:my|our))(\\s+(?:underlying|base|actual|real)?\\s*(?:model|llm|language\\s+model|assistant|ai|engine|brain|identity|name))\\b`,
+  "gi",
+);
+/** "created by Zhipu", "powered by OpenAI".
+ * Provider attribution is only a self-identification when the sentence is ABOUT
+ * this assistant. JARVIS manages and discusses models as a first-class feature
+ * (LAYA routing, ModelManager), so a factual sentence such as "GLM is a family
+ * of models developed by Zhipu AI" MUST survive untouched. Attribution is
+ * therefore rewritten only when a first/second-person self-reference precedes it
+ * in the same clause, or when the claim opens a sentence and stands alone. */
+const PROVIDER_VERB =
+  "(?:developed|created|built|made|powered|trained|maintained|owned|operated|produced|provided)";
+const DEVELOPED_BY_SELF_RE = new RegExp(
+  `\\b(i|we|me|my|this\\s+assistant|you\\s*(?:are|'?re)\\s+(?:speaking|talking)\\s+to)\\b([^.!?,;\\n]{0,40}?)\\b${PROVIDER_VERB}\\s+by\\b(${SHORT_GAP})\\b(${VENDORS})\\b`,
+  "gi",
+);
+const DEVELOPED_BY_INITIAL_RE = new RegExp(
+  `(?:^|(?<=[.!?\\n])\\s*)${PROVIDER_VERB}\\s+by\\b(${SHORT_GAP})\\b(${VENDORS})\\b`,
+  "gi",
+);
+
+export interface IdentityEnforcement {
+  /** Operator-safe text. Identical to the input when nothing was corrected. */
+  text: string;
+  corrected: boolean;
+  /** The first leaked identity, lowercased, for the audit trail. Never a secret. */
+  detected: string | null;
+}
+
+/**
+ * Deterministic operator-facing identity guard.
+ *
+ * The model is instructed to identify as JARVIS, but an instruction is not a
+ * control. This function enforces it: a base-model SELF-identification is
+ * rewritten to JARVIS before the text can reach the operator, and the
+ * correction is reported so the caller can record it in the durable step
+ * journal instead of silently rewriting history.
+ *
+ * Scope is deliberately narrow — it fires only on self-identification. A
+ * factual answer ABOUT a third-party model ("GLM is a model family from Zhipu
+ * AI") contains none of these self-referential frames and is left untouched,
+ * so the guard cannot degrade legitimate capability or model-management
+ * conversation.
+ */
+export function enforceJarvisIdentity(text: string): IdentityEnforcement {
+  if (typeof text !== "string" || text.trim().length === 0) {
+    return { text: typeof text === "string" ? text : "", corrected: false, detected: null };
+  }
+  const detected: string[] = [];
+  const note = (vendor: string) => {
+    detected.push(vendor.toLowerCase().trim());
+  };
+
+  let out = text;
+  out = out.replace(SELF_ID_RE, (_m, lead: string, mid: string, vendor: string) => {
+    note(vendor);
+    return `${lead}${mid}JARVIS`;
+  });
+  out = out.replace(NAME_RE, (_m, lead: string, mid: string, vendor: string) => {
+    note(vendor);
+    return `${lead}${mid}JARVIS`;
+  });
+  out = out.replace(POSSESSIVE_RE, (_m, vendor: string, copula: string, noun: string) => {
+    note(vendor);
+    return `JARVIS${copula}${noun}`;
+  });
+  out = out.replace(DEVELOPED_BY_SELF_RE, (_m, lead: string, mid: string, _gap: string, vendor: string) => {
+    note(vendor);
+    return `${lead}${mid}built as JARVIS for this installation`;
+  });
+  out = out.replace(DEVELOPED_BY_INITIAL_RE, (_m, _gap: string, vendor: string) => {
+    note(vendor);
+    return "Built as JARVIS for this installation";
+  });
+
+  const corrected = detected.length > 0 && out !== text;
+  return { text: corrected ? out : text, corrected, detected: corrected ? detected[0] : null };
 }
 
 export const RESUME_PREFIX = `PROGRESS SO FAR (from the durable task journal — these steps were ALREADY executed in a previous run; do not redo them unless verification shows they are absent):\n`;

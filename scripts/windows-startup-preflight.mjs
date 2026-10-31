@@ -16,6 +16,28 @@ export function validateLocalWindowsEnvironment(env) {
       env.DATABASE_URL !== 'file:./jarvis-local-minecraft-test.db') {
     throw new Error('Development Windows launcher requires exact isolated localhost configuration');
   }
+  // The runtime companion gate (src/lib/agent/windows/policy.ts) also requires
+  // these two. Asserting them here means a misconfiguration fails at STARTUP
+  // with an actionable message instead of mid-task as a Guardian denial that
+  // reads like a policy rejection. Neither check relaxes anything: both were
+  // already enforced at tool-call time.
+  if (env.JARVIS_WINDOWS_AGENT_ENABLED !== '1') {
+    throw new Error('Windows launcher requires JARVIS_WINDOWS_AGENT_ENABLED=1 before spawning the companion');
+  }
+  if (typeof env.JARVIS_WINDOWS_COMPANION_TOKEN !== 'string' ||
+      env.JARVIS_WINDOWS_COMPANION_TOKEN.length < 32) {
+    throw new Error('Windows launcher requires a companion token of at least 32 characters (JARVIS_WINDOWS_COMPANION_TOKEN)');
+  }
+  const minecraftVariables = ['JARVIS_MINECRAFT_LAN_PORT','JARVIS_MINECRAFT_LAN_HOST','JARVIS_MINECRAFT_PLAYER'];
+  const configuredMinecraft = minecraftVariables.filter((key) => env[key] !== undefined && env[key] !== '');
+  if (env.JARVIS_MINECRAFT_LAN_ENABLED !== '1' && configuredMinecraft.length > 0) {
+    // The classic trap: the operator configured the LAN world but never flipped
+    // the enable flag, so minecraft_companion_join was denied at runtime while
+    // the launcher had started "successfully".
+    throw new Error(
+      `Minecraft is half-configured: ${configuredMinecraft.join(', ')} set but JARVIS_MINECRAFT_LAN_ENABLED is not '1'. ` +
+      `Set JARVIS_MINECRAFT_LAN_ENABLED=1 to authorize the companion join, or remove those variables.`);
+  }
   if (env.JARVIS_MINECRAFT_LAN_ENABLED === '1') {
     const port=String(env.JARVIS_MINECRAFT_LAN_PORT ?? '');
     const owner=String(env.JARVIS_MINECRAFT_PLAYER ?? '');

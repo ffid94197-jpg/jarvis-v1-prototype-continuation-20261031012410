@@ -73,6 +73,7 @@ jobs:
         env:
           JARVIS_LIVE_LOCAL_MODEL: '1'
           JARVIS_OLLAMA_MODEL: qwen2.5-coder:1.5b
+          JARVIS_MODEL_REQUEST_TIMEOUT_MS: '120000'
           NODE_ENV: development
         run: |
           node scripts/verify-live-windows-jarvis-actual-task.mjs

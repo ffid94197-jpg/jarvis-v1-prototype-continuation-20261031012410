@@ -24,6 +24,13 @@ for(const [name,prompt] of [["flattened",single],["multiline",multi]]){
   assert.equal(gate.ok,true);assert.equal(gate.inventoryRows,6);
  });
 }
+test("flattened last row without each before next instruction",()=>{
+ const changed=single.replace("₹150 each Create", "₹150 Create");
+ const s=inventory.parseInventorySource(changed);
+ assert.equal(s?.rows.length,6);assert.equal(s.totalPaise,261100);
+});
+test("unrecognized text after amount refused",()=>assert.equal(
+ inventory.parseInventorySource(single.replace("₹150 each Create","₹150 each INVALID Create")),null));
 test("negative inline price refused",()=>assert.equal(inventory.parseInventorySource(single.replace("₹68 each","-₹68 each")),null));
 test("unknown price suffix refused",()=>assert.equal(inventory.parseInventorySource(single.replace("₹68 each","₹68X each")),null));
 test("missing row refused",()=>assert.equal(inventory.parseInventorySource(prefix+data.slice(0,5).map(x=>"- "+x).join(" ")+suffix),null));

@@ -349,7 +349,7 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
 
   const inventoryDeliverables=/\b(?:inventory|stock)\b/i.test(objective)
     && /\b(?:csv|spreadsheet)\b/i.test(objective)
-    && /\b(?:report|summary)\b/i.test(objective);
+    && /(?:\b(?:report|summary)\b|[_-](?:report|summary)\.(?:txt|md)\b)/i.test(objective);
   if(toolAssisted&&inventoryDeliverables&&!input.inventorySource)
     return {verdict:"partial",predicates:[],
       predicateLines:["INVENTORY_SOURCE_UNAVAILABLE: folder-only proof cannot certify inventory"]};

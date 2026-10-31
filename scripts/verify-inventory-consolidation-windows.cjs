@@ -35,6 +35,10 @@ test("negative inline price refused",()=>assert.equal(inventory.parseInventorySo
 test("unknown price suffix refused",()=>assert.equal(inventory.parseInventorySource(single.replace("₹68 each","₹68X each")),null));
 test("missing row refused",()=>assert.equal(inventory.parseInventorySource(prefix+data.slice(0,5).map(x=>"- "+x).join(" ")+suffix),null));
 test("duplicate row refused",()=>assert.equal(inventory.parseInventorySource(prefix+data.slice(0,5).concat(data[0]).map(x=>"- "+x).join(" ")+suffix),null));
+test("source-free task with only filename report reference rejected",()=>{
+ const r=api.prepareTaskObjective("Original inventory data: Create inventory_data.csv and inventory_report.txt.");
+ assert.equal(r.status,422);
+});
 test("source-free task rejected at API boundary",()=>assert.equal(api.prepareTaskObjective(prefix+"Please create inventory_data.csv and inventory_report.txt.").status,422));
 test("source >2000 chars preserved",()=>{
  const objective="Untrusted context.\n".repeat(130)+multi;assert.ok(objective.length>2000);

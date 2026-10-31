@@ -13,7 +13,7 @@ export function prepareTaskObjective(input:unknown):PreparedObjective{
  const inventoryRows=source?.rows.length??0;
  const deliverables=/\b(?:inventory|stock)\b/i.test(objective)
   &&/\b(?:csv|spreadsheet)\b/i.test(objective)
-  &&/\b(?:report|summary)\b/i.test(objective);
+  &&/(?:\b(?:report|summary)\b|[_-](?:report|summary)\.(?:txt|md)\b)/i.test(objective);
  const original=/\boriginal\s+(?:inventory|product)\s+(?:data|list)\b/i.test(objective);
  if(deliverables&&original&&!source)
   return {ok:false,status:422,code:"INVENTORY_SOURCE_UNAVAILABLE",

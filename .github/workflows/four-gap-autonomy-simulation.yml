@@ -1,0 +1,113 @@
+name: JARVIS four-gap native Windows simulation (isolated)
+on:
+  push:
+    branches: [test/four-gap-autonomy-20261031]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unfamiliar-planning:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Prove native Windows
+        run: |
+          if ((node -p "process.platform") -ne "win32") { throw "Requires Windows runner" }
+          npx tsc --noEmit --incremental false
+          if ($LASTEXITCODE -ne 0) { throw "Typescript failure" }
+      - name: Previously untested prompt variations and false-victory checks
+        run: |
+          node scripts/verify-four-autonomy-gaps.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Four-gap modelled scenario failure" }
+      - name: Real planner and real Core goal-loop offline contracts
+        run: |
+          foreach ($script in @('scripts/verify-goal-planner-offline.cjs','scripts/verify-goal-loop-integration-offline.cjs','scripts/verify-autonomy-reliability.cjs')) {
+            node $script
+            if ($LASTEXITCODE -ne 0) { throw "FAILED $script" }
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: four-gap-planning-evidence
+          path: four-gap-autonomy-results.json
+          if-no-files-found: warn
+  app-discovery-and-control:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Simulated installed-app inventory and capability selection
+        run: |
+          npm.cmd run test:capability-discovery
+          if ($LASTEXITCODE -ne 0) { throw "Capability discovery failed" }
+          python -c "import sys;sys.path.insert(0,'windows-companion');import capability_discovery as d; a=d.inventory();print('REAL_WINDOWS_DISCOVERED_APP_RECORDS',len(a)); assert isinstance(a,list)"
+          if ($LASTEXITCODE -ne 0) { throw "Native installed-app discovery failed" }
+      - name: Companion app launch and native UI mock
+        run: |
+          foreach ($script in @('windows-companion/verify_app_catalog_offline.py','windows-companion/verify_app_launch_offline.py','windows-companion/verify_native_uia_offline.py','windows-companion/verify_desktop_action_fixture.py','windows-companion/verify_autonomy_native_offline.py')) {
+            python $script
+            if ($LASTEXITCODE -ne 0) { throw "FAILED $script" }
+          }
+          node scripts/verify-native-tool-wiring.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Native tool wiring failed" }
+  provider-decisions:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Actual provider adapter with fake HTTP responses - not live LLM
+        run: |
+          foreach ($script in @('scripts/verify-provider-offline.cjs','scripts/verify-model-error-status-precedence.cjs','scripts/verify-jarvis-identity-disclosure.cjs','scripts/model-manager/verify-model-route.cjs','scripts/model-manager/verify-laya-router.cjs')) {
+            node $script
+            if ($LASTEXITCODE -ne 0) { throw "FAILED $script" }
+          }
+  minecraft-modelled-play:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
+      - name: All offline Minecraft progression and mission suites
+        run: |
+          $tests = Get-ChildItem 'windows-companion/minecraft-bot/verify_*.cjs' | Sort-Object Name
+          Write-Output "Minecraft offline suites: $($tests.Count)"
+          foreach ($test in $tests) {
+            node $test.FullName
+            if ($LASTEXITCODE -ne 0) { throw "FAILED $($test.Name)" }
+          }
+          node scripts/verify-minecraft-effect-identity.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Effect-identity failed" }
+          node scripts/verify-minecraft-bridge-policy.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Bridge policy failed" }

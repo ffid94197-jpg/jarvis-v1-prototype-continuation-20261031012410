@@ -98,6 +98,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - run: npm ci --no-audit --no-fund
       - run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
       - name: All offline Minecraft progression and mission suites
         run: |

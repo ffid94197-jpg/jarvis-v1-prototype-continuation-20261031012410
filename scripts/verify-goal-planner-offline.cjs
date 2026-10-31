@@ -86,5 +86,5 @@ check('durable watchdog checkpoint preserved',()=>assert.ok(loop.includes('kind:
 check('durable plan loaded on resume',()=>assert.ok(loop.includes('Missing persisted long-horizon goal plan on resume.')));
 check('guardian execution path retained',()=>assert.ok(loop.includes('authorizeToolCall({ taskId, ownerId: opts.ownerId }')));
 check('effect admission path retained',()=>assert.ok(loop.includes('await admitEffect(taskId, planRevision')));
-check('real completion arbitration retained',()=>assert.ok(loop.includes('await arbitrateCompletion({ taskId, objective, toolAssisted: true })')));
+check('real completion arbitration retained',()=>assert.match(loop,/await arbitrateCompletion\(\{\s*taskId,\s*objective,\s*toolAssisted:\s*true(?:,\s*inventorySource)?\s*\}\)/));
 console.log(`GOAL_PLANNER_OFFLINE ${count}/${count} PASS (source + pure unit tests; NOT Windows/live-game proof)`);

@@ -107,6 +107,7 @@ import { modelRequestDeadlineMs } from "./modelDeadline";
 export function resolveOllamaSettings(env: NodeJS.ProcessEnv = process.env): {
   url: string;
   model: string;
+  numCtx?: number;
 } {
   const raw = env.JARVIS_OLLAMA_BASE_URL || "http://127.0.0.1:11434";
   let url: URL;
@@ -120,7 +121,19 @@ export function resolveOllamaSettings(env: NodeJS.ProcessEnv = process.env): {
   if (!model || model.length > 128 || !/^[\w.:-]+$/.test(model)) {
     throw new Error("Configure JARVIS_OLLAMA_MODEL to an installed local model ID.");
   }
-  return { url: new URL("/api/chat", url).toString(), model };
+  // A large JARVIS planner catalog plus a long user objective can exceed
+  // Ollama's server default context. Operator must opt in to a bounded
+  // context allocation appropriate for local RAM/VRAM; never silently
+  // truncate instructions or force high RAM usage on existing installations.
+  const rawCtx=env.JARVIS_OLLAMA_NUM_CTX;
+  let numCtx:number|undefined;
+  if(rawCtx!==undefined && rawCtx!==""){
+    if(!/^\d{4,5}$/.test(rawCtx))throw new Error("Invalid JARVIS_OLLAMA_NUM_CTX.");
+    numCtx=Number(rawCtx);
+    if(!Number.isInteger(numCtx)||numCtx<4096||numCtx>32768)
+      throw new Error("JARVIS_OLLAMA_NUM_CTX must be between 4096 and 32768.");
+  }
+  return { url: new URL("/api/chat", url).toString(), model, numCtx };
 }
 
 interface OllamaChatResponse {
@@ -143,6 +156,7 @@ function createOllamaBridge(): ModelBridge {
     model: settings.model,
     messages: normalizeSystemInstructions(messages),
     stream,
+    ...(settings.numCtx ? { options: { num_ctx: settings.numCtx } } : {}),
     ...(json ? { format: "json" } : {}),
   });
   return {

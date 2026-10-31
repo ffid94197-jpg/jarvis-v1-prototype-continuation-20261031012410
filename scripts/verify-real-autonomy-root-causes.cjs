@@ -17,6 +17,7 @@ const v=load("src/lib/agent/core/verifier.ts",{"fs/promises":require("node:fs/pr
 const g=load("src/lib/agent/core/goalPlanner.ts");
 const loop=fs.readFileSync(path.join(root,"src/lib/agent/core/loop.ts"),"utf8");
 const prompts=fs.readFileSync(path.join(root,"src/lib/agent/core/prompts.ts"),"utf8");
+const provider=fs.readFileSync(path.join(root,"src/lib/agent/core/modelProvider.ts"),"utf8");
 const checks=[
  ["generic folder structure is NOT a path",()=>assert.equal(v.extractPredicates("Build a production-ready React website. Include a clean folder structure and backend.").length,0)],
  ["explicit named folder accepted",()=>assert.ok(v.extractPredicates("Create a folder named inventory_v5_live_test").some(p=>p.relPath==="inventory_v5_live_test"))],
@@ -30,6 +31,11 @@ const checks=[
  ["long actionable work needs real proof",()=>assert.equal(g.requiresExternalActionEvidence("Build an application "+("b".repeat(6000))),true)],
  ["invalid JSON repair does NOT seed folder named name",()=>assert.doesNotMatch(loop,/INVALID FORMAT\. Reply[^\n]+create_folder/)],
  ["catalog forbids sample paths as actual tasks",()=>assert.match(prompts,/Never copy placeholder paths/)],
+ ["Ollama explicitly supports bounded extended context",()=>{
+   assert.match(provider,/JARVIS_OLLAMA_NUM_CTX/);
+   assert.match(provider,/num_ctx: settings.numCtx/);
+   assert.match(provider,/numCtx>32768/);
+ }],
  ["full-stack app cannot pass from a folder",async()=>{
   const result=await v.arbitrateCompletion({taskId:"unused",toolAssisted:true,objective:"Build a production-ready React showroom website including frontend, backend and database."});
   assert.equal(result.verdict,"partial");assert.match(result.predicateLines.join(" "),/SOFTWARE_ACCEPTANCE_UNVERIFIED/);

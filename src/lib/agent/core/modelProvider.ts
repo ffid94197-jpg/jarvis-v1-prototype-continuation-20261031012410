@@ -148,6 +148,18 @@ function checkHttpStatus(response: Response) {
   throw err;
 }
 
+/** Local-only operator timeout extension for slow CPU inference. Cloud
+ * deadlines remain unchanged and this opt-in never authorizes tool effects.
+ */
+export function ollamaRequestDeadlineMs(env:NodeJS.ProcessEnv=process.env):number {
+  const configured=env.JARVIS_OLLAMA_REQUEST_TIMEOUT_MS;
+  if(configured===undefined || configured==="")return modelRequestDeadlineMs(env);
+  if(!/^\d{5,6}$/.test(configured))throw new Error("Invalid JARVIS_OLLAMA_REQUEST_TIMEOUT_MS.");
+  const n=Number(configured);
+  if(!Number.isSafeInteger(n)||n<30000||n>600000)
+    throw new Error("JARVIS_OLLAMA_REQUEST_TIMEOUT_MS must be 30000–600000.");
+  return n;
+}
 function createOllamaBridge(): ModelBridge {
   const settings = resolveOllamaSettings();
   // Ollama's /api/chat honours role:"system", so the identity contract must be
@@ -172,7 +184,7 @@ function createOllamaBridge(): ModelBridge {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: body(messages, false, true),
-        signal: AbortSignal.timeout(modelRequestDeadlineMs()),
+        signal: AbortSignal.timeout(ollamaRequestDeadlineMs()),
       });
       checkHttpStatus(response);
       const result = await response.json() as OllamaChatResponse;
@@ -186,7 +198,7 @@ function createOllamaBridge(): ModelBridge {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: body(messages, true, false),
-        signal: AbortSignal.timeout(modelRequestDeadlineMs()),
+        signal: AbortSignal.timeout(ollamaRequestDeadlineMs()),
       });
       checkHttpStatus(response);
       if (!response.body) throw new Error("Local model streaming response had no body.");

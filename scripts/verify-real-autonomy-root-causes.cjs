@@ -31,6 +31,11 @@ const checks=[
  ["long actionable work needs real proof",()=>assert.equal(g.requiresExternalActionEvidence("Build an application "+("b".repeat(6000))),true)],
  ["invalid JSON repair does NOT seed folder named name",()=>assert.doesNotMatch(loop,/INVALID FORMAT\. Reply[^\n]+create_folder/)],
  ["catalog forbids sample paths as actual tasks",()=>assert.match(prompts,/Never copy placeholder paths/)],
+ ["local inference timeout opt-in bounded independently of cloud",()=>{
+   assert.match(provider,/export function ollamaRequestDeadlineMs/);
+   assert.match(provider,/n>600000/);
+   assert.equal((provider.match(/signal: AbortSignal.timeout\(ollamaRequestDeadlineMs\(\)\)/g)||[]).length,2);
+ }],
  ["Ollama explicitly supports bounded extended context",()=>{
    assert.match(provider,/JARVIS_OLLAMA_NUM_CTX/);
    assert.match(provider,/num_ctx: settings.numCtx/);

@@ -85,6 +85,7 @@ jobs:
           JARVIS_OLLAMA_MODEL: qwen2.5-coder:3b
           JARVIS_OLLAMA_NUM_CTX: '16384'
           JARVIS_MODEL_REQUEST_TIMEOUT_MS: '120000'
+          JARVIS_OLLAMA_REQUEST_TIMEOUT_MS: '420000'
           NODE_ENV: development
         run: |
           node scripts/verify-live-windows-jarvis-actual-task.mjs

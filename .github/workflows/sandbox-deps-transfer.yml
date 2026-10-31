@@ -1,0 +1,38 @@
+name: JARVIS Linux runtime deps for isolated sandbox
+on:
+  push:
+    branches: [test/sandbox-source-transfer-20261031]
+    paths:
+      - .github/workflows/sandbox-deps-transfer.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Linux dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Bundle exact installed dependencies only
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Dependencies installed: $(find node_modules -mindepth 1 -maxdepth 1 | wc -l)"
+          du -sh node_modules
+          tar -czf /tmp/jarvis-node-deps-20261031.tgz node_modules
+          echo "TARBALL_BYTES=$(stat -c '%s' /tmp/jarvis-node-deps-20261031.tgz)"
+          sha256sum /tmp/jarvis-node-deps-20261031.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-linux-dependencies-sandbox-20261031
+          path: /tmp/jarvis-node-deps-20261031.tgz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1

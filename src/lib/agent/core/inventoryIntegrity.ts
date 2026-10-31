@@ -53,12 +53,17 @@ export function parseInventorySource(text:string):InventorySource|null{
  // NEXUS sometimes flattens bullets into one physical line.
  const normalized=text.replace(/\*\*/g,"").replace(
   /(?:^|[ \t])[-*]\s+(?=[A-Za-z][A-Za-z0-9 _-]{0,44}\s*:\s*[-+]?\d{1,5}\b)/g,"\n- ");
- const pattern=/^\s*(?:[-*]\s*|\d{1,2}[.)]\s*)?([A-Za-z][A-Za-z0-9 _-]{0,44}?)(?::\s*|\s+)([1-9]\d{0,4})\s*(?:units?|pcs?|pieces?)?\s*(?:[x×*]|at|@)\s*(?:₹|\$|INR\s*|Rs\.?\s*)?(\d{1,3}(?:,\d{3})*|\d{1,8})(?:\.(\d{1,2}))?\s*(?:each|per\s+unit)?\s*$/i;
+ const pattern=/^\s*(?:[-*]\s*|\d{1,2}[.)]\s*)?([A-Za-z][A-Za-z0-9 _-]{0,44}?)(?::\s*|\s+)([1-9]\d{0,4})\s*(?:units?|pcs?|pieces?)?\s*(?:[x×*]|at|@)\s*(?:₹|\$|INR\s*|Rs\.?\s*)?(\d{1,3}(?:,\d{3})*|\d{1,8})(?:\.(\d{1,2}))?\s*(?:each|per\s+unit)?(?=\s|$)/i;
  const candidate=/^\s*(?:[-*]\s*|\d{1,2}[.)]\s*)?[A-Za-z][A-Za-z0-9 _-]{0,44}\s*:\s*[-+]?\d{1,5}\s*(?:units?|pcs?|pieces?)?\s*(?:[x×*]|at|@)/i;
  const rows:InventoryRow[]=[];let matches=0;
  for(const raw of normalized.split(/\r?\n/)){
   const line=raw.trim();if(!candidate.test(line))continue;matches++;
   const m=line.match(pattern);if(!m)return null;
+  // NEXUS can append the next task instruction after the last bullet.
+  // Refuse any unrecognized suffix rather than silently accepting a bad price.
+  const tail=line.slice(m[0].length).trim().replace(/^[.!?;]\s*/,"");
+  if(tail&&!/^(?:create|inside|read|calculate|independently|only|do|execute|verify|finally)\b/i.test(tail))
+    return null;
   const quantity=Number(m[2]),unitPaise=money(m[3]+(m[4]?"."+m[4]:""));
   if(!Number.isSafeInteger(quantity)||quantity<=0||unitPaise===null)return null;
   rows.push({product:m[1].trim(),quantity,unitPaise,totalPaise:quantity*unitPaise});

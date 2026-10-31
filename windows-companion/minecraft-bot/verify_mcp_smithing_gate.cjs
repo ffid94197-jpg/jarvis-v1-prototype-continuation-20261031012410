@@ -21,10 +21,10 @@ check('no advertised smithing capability stays blocked',()=>{
  assert.match(planAction(req,start).blocked,/does not advertise/i);
 });
 check('wrong diamond base cannot be substituted',()=>{
- assert.match(planAction({...req,base:'diamond_sword'},start,advertised).blocked,/invalid or mismatched/);
+ assert.match(planAction({...req,base:'diamond_sword'},start,advertised).blocked,/invalid or mismatched/i);
 });
 check('unknown requested output cannot be smith-ed',()=>{
- assert.match(planAction({...req,item:'netherite_shovel'},start,advertised).blocked,/invalid/);
+ assert.match(planAction({...req,item:'netherite_shovel'},start,advertised).blocked,/invalid/i);
 });
 check('missing material refuses dispatch before external side effect',()=>{
  assert.match(planAction(req,state({diamond_helmet:1,netherite_upgrade_smithing_template:1}),advertised).blocked,/Missing server-observed/);

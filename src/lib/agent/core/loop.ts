@@ -669,7 +669,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       }
       // Never echo the malformed model output back as conversational authority.
       messages.push({role:"user",content:
-        'INVALID FORMAT. Reply with one JSON object only: {"action":"tool","tool":"create_folder","args":{"path":"name"}} or {"action":"final","answer":"text"}. No prose or additional JSON.'});
+        'INVALID FORMAT. Return exactly ONE JSON object with action "tool" or "final" and the required schema. Choose a real tool and arguments grounded in the ORIGINAL objective; never copy examples or invent placeholder names. If the available tools cannot accomplish the task, return a final answer explaining that limitation, never claiming completion. No prose outside JSON.'});
       continue;
     }
     parseRetries = 0;

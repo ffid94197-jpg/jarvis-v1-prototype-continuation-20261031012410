@@ -85,6 +85,14 @@ const checks=[
  // silently because it threw on any unmocked specifier and was never registered
  // in package.json, so no battery caught it.
  ['GOAL-LOOP-INTEGRATION',['scripts/verify-goal-loop-integration-offline.cjs']],
+ // FIX 4: the Windows companion / Minecraft authorization workflow. Drives the
+ // REAL Guardian gate for the exact tool the owner saw denied
+ // (minecraft_companion_join) on a simulated win32 realm, proves every missing or
+ // unsafe precondition is diagnosed by NAME, that the single supported workflow
+ // reaches NEXUS + Core + companion + Minecraft bridge, and that the bridge
+ // receives no secrets. Also pins the newly enforced host/port/player
+ // constraints and their agreement with the startup preflight.
+ ['COMPANION-BRIDGE-WORKFLOW',['scripts/verify-companion-bridge-workflow.cjs']],
  ['MINECRAFT-EFFECT-IDENTITY',['scripts/verify-minecraft-effect-identity.cjs']],
  ['MINECRAFT-OWNER-IDENTITY',['windows-companion/minecraft-bot/verify_owner_identity_offline.cjs']],
  ['MINECRAFT-FRIEND-FIXTURE',['windows-companion/minecraft-bot/verify_friend_offline.cjs']],

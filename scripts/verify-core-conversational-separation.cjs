@@ -314,6 +314,9 @@ const fullEnv = {
   JARVIS_LOCAL_DEV_BIND: '127.0.0.1',
   JARVIS_WINDOWS_COMPANION_TOKEN: 'a'.repeat(64),
   JARVIS_MINECRAFT_LAN_ENABLED: '1',
+  JARVIS_MINECRAFT_LAN_HOST: '127.0.0.1',
+  JARVIS_MINECRAFT_LAN_PORT: '25565',
+  JARVIS_MINECRAFT_PLAYER: 'OwnerPlayer',
 };
 ok(gateWith(fullEnv)('minecraft_companion_join', {}).ok === true,
   'authorized minecraft_companion_join is permitted through the isolated loopback launcher');

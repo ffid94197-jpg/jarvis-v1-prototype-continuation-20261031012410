@@ -20,6 +20,8 @@ function make(env,platform='win32',root=process.cwd()){
 const base={JARVIS_WINDOWS_AGENT_ENABLED:'1',JARVIS_LOCAL_DEV_NO_LOGIN:'1',
   JARVIS_LOCAL_DEV_BIND:'127.0.0.1',JARVIS_WINDOWS_COMPANION_TOKEN:'a'.repeat(64),
   JARVIS_SCREEN_WATCH_ENABLED:'1',JARVIS_MINECRAFT_LAN_ENABLED:'1',
+  JARVIS_MINECRAFT_LAN_HOST:'127.0.0.1',JARVIS_MINECRAFT_LAN_PORT:'25565',
+  JARVIS_MINECRAFT_PLAYER:'OwnerPlayer',
   JARVIS_TLAUNCHER_PATH:'C:\\Games\\TLauncher.exe',
   JARVIS_BROWSER_AGENT_ENABLED:'1',JARVIS_WINDOWS_UI_CONTROL_ENABLED:'1'};
 const decide = make(base);
@@ -63,6 +65,30 @@ assert(!make({...base,JARVIS_WINDOWS_COMPANION_TOKEN:'a'})('windows_open_url',{u
 assert(!make(base,'linux')('windows_open_url',{url:'https://youtube.com'}).ok,'Linux denied');
 assert(!make({...base,JARVIS_MINECRAFT_LAN_ENABLED:'0'})('minecraft_companion_join',{}).ok,'Minecraft opt-out enforced');
 assert(decide('minecraft_companion_join',{}).ok,'local Minecraft opt-in permitted');
+// The runtime gate must not be weaker than the launcher preflight: it validates
+// host, port and player itself, so a server started without the preflight cannot
+// authorize a join to a remote host or an arbitrary port.
+for (const host of ['192.168.1.50','mc.example.com','0.0.0.0','::1']) {
+  assert(!make({...base,JARVIS_MINECRAFT_LAN_HOST:host})('minecraft_companion_join',{}).ok,
+    'non-loopback Minecraft host denied: '+host);
+}
+assert(make({...base,JARVIS_MINECRAFT_LAN_HOST:'localhost'})('minecraft_companion_join',{}).ok,
+  'localhost is an accepted loopback spelling');
+for (const port of ['','25565abc','80','1023','65536','-1','99999999999999999999']) {
+  assert(!make({...base,JARVIS_MINECRAFT_LAN_PORT:port})('minecraft_companion_join',{}).ok,
+    'invalid Minecraft LAN port denied: '+JSON.stringify(port));
+}
+assert(make({...base,JARVIS_MINECRAFT_LAN_PORT:'1024'})('minecraft_companion_join',{}).ok,'port lower bound accepted');
+assert(make({...base,JARVIS_MINECRAFT_LAN_PORT:'65535'})('minecraft_companion_join',{}).ok,'port upper bound accepted');
+for (const player of ['','JarvisBuddy','jarvisbuddy','JARVISBUDDY','  JarvisBuddy  ','a name with spaces','x'.repeat(17),'Owner;rm']) {
+  assert(!make({...base,JARVIS_MINECRAFT_PLAYER:player})('minecraft_companion_join',{}).ok,
+    'invalid or impersonating Minecraft player denied: '+JSON.stringify(player));
+}
+// Halting a running companion must stay possible even with a broken config.
+assert(make({...base,JARVIS_MINECRAFT_LAN_PORT:'nonsense'})('minecraft_companion_stop',{}).ok,
+  'minecraft_companion_stop stays available with an invalid connection config');
+assert(make({...base,JARVIS_MINECRAFT_LAN_HOST:'10.0.0.9'})('minecraft_companion_stop',{}).ok,
+  'minecraft_companion_stop stays available with a non-loopback host');
 assert(!decide('windows_delete_all_files',{}).ok,'unknown tool denied');
 
 assert(decide('windows_browser_search',{query:'MrBeast oldest video'}).ok,'bounded web search accepted');

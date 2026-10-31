@@ -31,6 +31,15 @@ const checks=[
  ["long actionable work needs real proof",()=>assert.equal(g.requiresExternalActionEvidence("Build an application "+("b".repeat(6000))),true)],
  ["invalid JSON repair does NOT seed folder named name",()=>assert.doesNotMatch(loop,/INVALID FORMAT\. Reply[^\n]+create_folder/)],
  ["catalog forbids sample paths as actual tasks",()=>assert.match(prompts,/Never copy placeholder paths/)],
+ ["focused software planner remains opt-in and Guardian-gated",()=>{
+   assert.match(prompts,/JARVIS_CODING_FOCUSED_PLANNER/);
+   assert.match(prompts,/a required capability/);
+   assert.match(loop,/plannerSystemForObjective\(objective\)/);
+ }],
+ ["small initial local inference context scales with task size",()=>{
+   assert.match(provider,/Math\.ceil\(textChars\/2\)\+1024/);
+   assert.match(provider,/Math\.min\(settings\.numCtx, needed\)/);
+ }],
  ["local inference timeout opt-in bounded independently of cloud",()=>{
    assert.match(provider,/export function ollamaRequestDeadlineMs/);
    assert.match(provider,/n>600000/);

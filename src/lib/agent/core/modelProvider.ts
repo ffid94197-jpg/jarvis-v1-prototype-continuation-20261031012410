@@ -164,13 +164,19 @@ function createOllamaBridge(): ModelBridge {
   const settings = resolveOllamaSettings();
   // Ollama's /api/chat honours role:"system", so the identity contract must be
   // delivered there rather than as a prior assistant turn.
-  const body = (messages: ModelMessage[], stream: boolean, json: boolean) => JSON.stringify({
-    model: settings.model,
-    messages: normalizeSystemInstructions(messages),
-    stream,
-    ...(settings.numCtx ? { options: { num_ctx: settings.numCtx } } : {}),
-    ...(json ? { format: "json" } : {}),
-  });
+  const body = (messages: ModelMessage[], stream: boolean, json: boolean) => {
+    const normalized = normalizeSystemInstructions(messages);
+    // Avoid allocating an enormous KV cache for the tiny, initial milestone
+    // request. Increase context for later tool steps only when content needs it.
+    const textChars = normalized.reduce((n,m)=>n+m.content.length,0);
+    const needed = Math.max(4096,2 ** Math.ceil(Math.log2(Math.ceil(textChars/2)+1024)));
+    const numCtx = settings.numCtx ? Math.min(settings.numCtx, needed) : undefined;
+    return JSON.stringify({
+      model: settings.model, messages: normalized, stream,
+      ...(numCtx ? { options: { num_ctx: numCtx } } : {}),
+      ...(json ? { format: "json" } : {}),
+    });
+  };
   return {
     identity: {
       backend: "ollama",

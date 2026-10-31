@@ -1,0 +1,36 @@
+name: Export original 10-min internet test prompts as TXT
+on:
+  push:
+    branches: [artifact/internet-prompts-txt-20261031]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export-prompt-text:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Retrieve the ORIGINAL 10-minute run evidence artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 41222234176 --name internet-prompt-stress-windows --dir sample-evidence
+          if ($LASTEXITCODE -ne 0) { throw 'Original test artifact could not be downloaded' }
+      - name: Verify original dataset fingerprint and export TXT files
+        run: |
+          node scripts/export-internet-prompts-txt.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Original prompt export failed integrity checks' }
+      - name: Upload requested TXT files
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-test-prompts-txt
+          path: prompt-export/*.txt
+          if-no-files-found: error
+          retention-days: 30

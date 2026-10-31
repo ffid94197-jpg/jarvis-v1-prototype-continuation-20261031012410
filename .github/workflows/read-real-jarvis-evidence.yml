@@ -1,0 +1,36 @@
+name: Inspect genuine JARVIS Windows execution evidence
+on:
+  push:
+    branches: [analysis/jarvis-real-windows-evidence-20261031]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  examine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact real agent run, not a synthetic trace
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 41230393594 --name jarvis-real-windows-local-model-task --dir evidence
+      - name: Independently inspect saved real task receipts and filesystem outcomes
+        run: |
+          node - <<'JS'
+          const fs=require("node:fs");
+          const s=JSON.parse(fs.readFileSync("evidence/live-windows-result.json","utf8"));
+          const cleaned={
+           sourceHash:s.originalPromptSha256,model:s.modelId,
+           actualModel:s.realModelCalled,authenticated:s.localOwnerSessionIssued,
+           started:s.nexusReady,companion:s.windowsCompanionListening,
+           taskHttp:s.taskHttpStatus,final:s.sseFinal,
+           taskEvents:s.taskEvents,tools:s.toolAttempts,
+           artifacts:s.artifacts,
+           siteVerification:s.siteVerification,
+           errors:s.sseErrors,notes:s.notes,failure:s.failure
+          };
+          if(!s.realModelCalled||!s.localOwnerSessionIssued||s.taskHttpStatus!==200)
+            throw Error("Claimed successful live execution lacks decisive evidence");
+          console.log("REAL_JARVIS_WIN_EVIDENCE="+JSON.stringify(cleaned));
+          JS

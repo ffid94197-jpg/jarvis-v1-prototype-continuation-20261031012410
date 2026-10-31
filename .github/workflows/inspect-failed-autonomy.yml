@@ -1,0 +1,31 @@
+name: Inspect exact failed Windows JARVIS task evidence
+on:
+  push:
+    branches: [analysis/windows-autonomy-failure-inspection-20261101]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  receipts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download original real test evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 41232604255 --name jarvis-real-windows-local-model-task --dir evidence
+      - name: Print verified failure diagnostics
+        run: |
+          node - <<'JS'
+          const fs=require("fs");
+          const x=JSON.parse(fs.readFileSync("evidence/live-windows-result.json","utf8"));
+          console.log("AUTONOMY_TEST_DIAG "+JSON.stringify({
+            model:x.modelId,realModel:x.realModelCalled,
+            ready:x.nexusReady,companion:x.windowsCompanionListening,
+            auth:x.localOwnerSessionIssued,http:x.taskHttpStatus,
+            final:x.sseFinal,events:x.taskEvents,
+            tools:x.toolAttempts,errors:x.sseErrors,
+            files:x.artifacts,notes:x.notes,reason:x.failure
+          }));
+          JS

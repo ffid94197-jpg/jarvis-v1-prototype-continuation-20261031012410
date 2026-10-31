@@ -888,7 +888,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     const inventoryMismatch=tool==="write_file"&&inventoryDeliverables&&!inventorySource
       ? "INVENTORY_SOURCE_UNAVAILABLE: cannot write unverifiable inventory"
       : tool==="write_file"
-        ? validateInventoryDraft(args.path,args.content,inventorySource) : null;
+        ? validateInventoryDraft(args.path, args.content, inventorySource) : null;
     if (inventoryMismatch) {
       inventoryDraftCorrections++;
       stepsUsed++;

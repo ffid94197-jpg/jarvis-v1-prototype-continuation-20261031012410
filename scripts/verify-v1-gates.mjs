@@ -93,6 +93,13 @@ const checks=[
  // receives no secrets. Also pins the newly enforced host/port/player
  // constraints and their agreement with the startup preflight.
  ['COMPANION-BRIDGE-WORKFLOW',['scripts/verify-companion-bridge-workflow.cjs']],
+ // FIX 5: autonomy reliability under real fault conditions. Drives runTask with
+ // the REAL modelErrors classifier so FIX 1's decisions are exercised end to end:
+ // a transient provider timeout is retried, a credential failure is attempted
+ // exactly once and never echoed, a rate limit is retried, budget exhaustion
+ // pauses durably and RESUMES from the persisted offset, and cancellation stops
+ // execution without ever emitting a completed final event.
+ ['AUTONOMY-RELIABILITY',['scripts/verify-autonomy-reliability.cjs']],
  ['MINECRAFT-EFFECT-IDENTITY',['scripts/verify-minecraft-effect-identity.cjs']],
  ['MINECRAFT-OWNER-IDENTITY',['windows-companion/minecraft-bot/verify_owner_identity_offline.cjs']],
  ['MINECRAFT-FRIEND-FIXTURE',['windows-companion/minecraft-bot/verify_friend_offline.cjs']],

@@ -10,6 +10,7 @@ Module._resolveFilename=function(n,parent,...r){if(n.startsWith('@/lib/agent/'))
 Module._load=function(n,parent,...r){if(n==='@/lib/agent/auth/session')return {getAuthContext:async()=>principal};return oldLoad.call(this,n,parent,...r);};
 process.env.JARVIS_PUBLIC_ORIGIN='http://127.0.0.1:3000';
 const route=require(path.join(root,'src/app/api/jarvis/models/route.ts'));
+const previousCwd=process.cwd();
 const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'jarvis-model-route-'));process.chdir(tmp);
 let count=0;async function check(label,fn){await fn();count++;console.log('PASS '+label);}
 function req(method,data,origin='http://127.0.0.1:3000'){
@@ -36,4 +37,23 @@ await check('POST delete removes profile',async()=>{const r=await route.POST(req
 await check('POST test does not accept an arbitrary direct URL',async()=>{assert.equal((await route.POST(req('POST',{action:'test',id:'missing',baseUrl:'http://127.0.0.1:1234'}))).status,404);});
 console.log('MODEL_ROUTE:',count+'/'+count,'PASS');
 }
-run().then(()=>fs.rmSync(tmp,{force:true,recursive:true})).catch(e=>{console.error(e.stack);process.exitCode=1;});
+// Windows does not allow removing a directory that is the current working directory.
+ // Restore cwd before closing the fixture, even when an assertion throws.
+async function main(){
+ let failure=null;
+ try{await run();}
+ catch(e){failure=e;}
+ finally{
+  try{
+   process.chdir(previousCwd);
+   Module._resolveFilename=oldResolve;
+   Module._load=oldLoad;
+   fs.rmSync(tmp,{force:true,recursive:true,maxRetries:8,retryDelay:125});
+  }catch(e){
+   if(failure)console.error('Fixture cleanup also failed:',e.stack||e);
+   else failure=e;
+  }
+ }
+ if(failure)throw failure;
+}
+main().catch(e=>{console.error(e.stack||e);process.exitCode=1;});

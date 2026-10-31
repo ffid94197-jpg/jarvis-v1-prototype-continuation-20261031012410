@@ -29,7 +29,7 @@ import { classifyModelFailure, type ModelErrorCode } from "./modelErrors";
  *   MODEL_AUTH_FAILED          — credentials are wrong; the owner must fix them
  *   MODEL_PRIVACY_ROUTE_BLOCKED— a privacy boundary refusal must stay a refusal
  */
-const FAILOVER_CODES: ReadonlySet<ModelErrorCode> = new Set([
+export const FAILOVER_CODES: ReadonlySet<ModelErrorCode> = new Set([
   "MODEL_RATE_LIMITED",
   "MODEL_TIMEOUT",
   "MODEL_NETWORK_ERROR",
@@ -38,7 +38,12 @@ const FAILOVER_CODES: ReadonlySet<ModelErrorCode> = new Set([
 
 export function isFailoverCandidate(err: unknown): boolean {
   const failure = classifyModelFailure(err);
-  return FAILOVER_CODES.has(failure.code) || failure.retryable;
+  // The exclusion list is AUTHORITATIVE. It used to read
+  // `FAILOVER_CODES.has(code) || failure.retryable`, which is identical today but
+  // would let any future retryable code fail over by accident — silently
+  // defeating the deliberate MODEL_AUTH_FAILED / MODEL_PRIVACY_ROUTE_BLOCKED
+  // exclusions documented above. Membership alone is the policy.
+  return FAILOVER_CODES.has(failure.code);
 }
 
 export interface FailoverBridge extends ModelBridge {

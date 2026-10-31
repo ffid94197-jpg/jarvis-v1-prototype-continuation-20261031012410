@@ -56,6 +56,13 @@ const checks=[
  // is identical at every tier, and a memory row not stamped OWNER_EXPLICIT is
  // ignored so untrusted text cannot raise JARVIS's own autonomy.
  ['AUTONOMY-TIERS',['scripts/verify-autonomy-tiers.cjs']],
+ // FIX 1: an authoritative numeric HTTP status must outrank provider message
+ // text. Guards the misclassification where 401 + "quota exceeded" became
+ // MODEL_RATE_LIMITED — which is retryable and a failover candidate, so a
+ // credential fault caused retries, backend switching and a "try again later"
+ // report instead of "fix your API key". Includes the six independent
+ // reproduction cases and 20,000 seeded adversarial iterations.
+ ['MODEL-ERROR-STATUS-PRECEDENCE',['scripts/verify-model-error-status-precedence.cjs']],
  ['MINECRAFT-EFFECT-IDENTITY',['scripts/verify-minecraft-effect-identity.cjs']],
  ['MINECRAFT-OWNER-IDENTITY',['windows-companion/minecraft-bot/verify_owner_identity_offline.cjs']],
  ['MINECRAFT-FRIEND-FIXTURE',['windows-companion/minecraft-bot/verify_friend_offline.cjs']],

@@ -40,6 +40,7 @@
     "test:core-conversational-separation": "node scripts/verify-core-conversational-separation.cjs",
     "test:companion-launcher-authorization": "node scripts/verify-companion-launcher-authorization.mjs",
     "test:autonomy-tiers": "node scripts/verify-autonomy-tiers.cjs",
+    "test:model-error-status-precedence": "node scripts/verify-model-error-status-precedence.cjs",
     "test:minecraft-effect-identity": "node scripts/verify-minecraft-effect-identity.cjs",
     "test:minecraft-owner": "node windows-companion/minecraft-bot/verify_owner_identity_offline.cjs",
     "test:minecraft-pathfinder-lifecycle": "node windows-companion/minecraft-bot/verify_pathfinder_lifecycle_offline.cjs && node windows-companion/minecraft-bot/verify_pathfinder_regression_offline.cjs",

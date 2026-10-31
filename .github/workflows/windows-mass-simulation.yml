@@ -1,0 +1,62 @@
+name: JARVIS Windows mass simulation (isolated)
+on:
+  push:
+    branches: [test/windows-mass-sim-20261031]
+    paths:
+      - scripts/verify-windows-mass-simulation.cjs
+      - .github/workflows/windows-mass-simulation.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mass-sim:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact repository dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Prove native Windows host
+        run: |
+          Write-Output "Platform: $([System.Environment]::OSVersion)"
+          node -p "process.platform"
+          if ((node -p "process.platform") -ne "win32") { throw "Not running native Windows" }
+      - name: TypeScript check without tracked incremental cache
+        run: |
+          if (Test-Path tsconfig.tsbuildinfo) { Remove-Item tsconfig.tsbuildinfo }
+          npx tsc --noEmit --incremental false
+      - name: Fixed regression suites on Windows
+        run: |
+          npm run test:model-error-status-precedence
+          npm run test:jarvis-identity-disclosure
+          npm run test:core-actionable-execution
+          npm run test:core-conversational-separation
+          npm run test:goal-loop-integration
+          npm run test:autonomy-reliability
+          npm run test:autonomy-tiers
+          npm run test:windows-policy
+          npm run test:companion-bridge-workflow
+          npm run test:windows-startup-preflight
+          npm run test:companion-launcher-authorization
+          npm run test:minecraft-pathfinder-lifecycle
+          npm run test:minecraft-bridge-e2e
+      - name: Massive seeded Windows-like simulation
+        env:
+          JARVIS_SIM_ROUNDS: '40000'
+          JARVIS_SIM_OUTPUT: windows-mass-simulation-results.json
+        run: |
+          node scripts/verify-windows-mass-simulation.cjs
+      - name: Upload evidence even if tests failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-windows-mass-simulation
+          path: windows-mass-simulation-results.json
+          if-no-files-found: warn

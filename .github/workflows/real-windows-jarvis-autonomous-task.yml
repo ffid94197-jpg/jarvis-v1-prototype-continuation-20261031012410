@@ -1,0 +1,59 @@
+name: JARVIS genuine Windows runtime + real internet autonomous task
+on:
+  push:
+    branches: [validation/full-windows-live-agent-20261031]
+permissions:
+  contents: read
+  models: read
+jobs:
+  real-jarvis-windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install full application dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+      - name: Full Prisma generator and production build
+        env:
+          DATABASE_URL: file:./jarvis-ci-build-only.db
+          NODE_ENV: production
+          JARVIS_LOCAL_DEV_NO_LOGIN: '0'
+        run: |
+          npm run db:generate
+          if ($LASTEXITCODE -ne 0) { throw 'Prisma client generation failed' }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw 'Actual Windows full build failed' }
+          npm run typecheck
+          if ($LASTEXITCODE -ne 0) { throw 'TypeScript failed' }
+      - name: Install Windows companion dependencies
+        run: |
+          python -m pip install -r windows-companion/requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Windows companion dependencies unavailable' }
+      - name: Execute actual JARVIS Windows runtime with real provider and original external prompt
+        timeout-minutes: 22
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NODE_ENV: development
+        run: |
+          node scripts/verify-live-windows-jarvis-actual-task.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Real JARVIS autonomous task did not meet verification' }
+      - name: Preserve real task execution receipts and artifact hashes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-jarvis-windows-execution-evidence
+          path: |
+            live-windows-evidence/**
+          if-no-files-found: warn
+          retention-days: 14

@@ -13,15 +13,19 @@ export function needsPriorTaskContext(objective: string): boolean {
 export function selectPriorTask(objective: string, tasks: PriorTaskSnapshot[]): PriorTaskSnapshot | null {
  if(!needsPriorTaskContext(objective) || !Array.isArray(tasks)) return null;
  const topics = new Set((objective.toLowerCase().match(TOPIC) || []).map(x=>x.toLowerCase()));
- for(const t of tasks.slice(0,8)){
-  if(!t || typeof t.id!=="string" || typeof t.objective!=="string" || !t.objective.trim())continue;
-  // An explicit topic requires an actual overlap: do NOT substitute a random
-  // earlier objective just because it is chronologically nearby.
+ const matches=tasks.slice(0,20).filter(t=>{
+  if(!t || typeof t.id!=="string" || typeof t.objective!=="string" || !t.objective.trim())return false;
   const prev=(t.objective.toLowerCase().match(TOPIC)||[]).map(x=>x.toLowerCase());
-  if(topics.size && !prev.some(x=>topics.has(x)))continue;
-  return t;
+  return !topics.size || prev.some(x=>topics.has(x));
+ });
+ if(/\binventory\b/i.test(objective)){
+   // Prefer the actual owner-supplied price/quantity specification over newer
+   // "audit my previous analysis" requests that contain NO original rows.
+   const rowForm=/\b\d{1,5}\s*(?:units?\s*)?(?:at|[x×])\s*[₹$]?\s*\d+/gi;
+   const source=matches.find(t=>(t.objective.match(rowForm)||[]).length>=2);
+   if(source)return source;
  }
- return null;
+ return matches.find(t=>!needsPriorTaskContext(t.objective))??null;
 }
 export function priorTaskContext(objective:string,tasks:PriorTaskSnapshot[]): string {
  const match=selectPriorTask(objective,tasks);

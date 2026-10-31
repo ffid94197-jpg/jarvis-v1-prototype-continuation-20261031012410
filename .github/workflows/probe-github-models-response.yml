@@ -1,0 +1,20 @@
+name: Safe GitHub Models response-shape diagnostic
+on:
+  push:
+    branches: [validation/full-windows-live-agent-20261031]
+permissions:
+  contents: read
+  models: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probe real inference response status and schema (no payload leakage)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/probe-github-models-response.mjs

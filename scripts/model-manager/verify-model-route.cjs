@@ -49,6 +49,8 @@ async function main(){
    Module._resolveFilename=oldResolve;
    Module._load=oldLoad;
    fs.rmSync(tmp,{force:true,recursive:true,maxRetries:8,retryDelay:125});
+   if(fs.existsSync(tmp))throw Error('Model routing fixture directory not cleaned');
+   console.log('MODEL_ROUTE_FIXTURE_CLEANUP PASS');
   }catch(e){
    if(failure)console.error('Fixture cleanup also failed:',e.stack||e);
    else failure=e;

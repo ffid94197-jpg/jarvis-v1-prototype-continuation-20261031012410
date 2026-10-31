@@ -23,7 +23,7 @@ function money(raw: string): number | null {
   return Number.isSafeInteger(n) ? n : null;
 }
 function key(s: string): string { return s.trim().toLowerCase().replace(/\s+/g, " "); }
-const INPUT_ROW = /(?:^|[,;\n])\s*[-*•]?\s*([A-Za-z][A-Za-z0-9 _-]{0,44}?)\s*:?\s*(\d{1,5})\s*(?:units?\s*)?(?:[x×*]\s*|at\s*|@\s*)[₹$]?\s*(\d{1,3}(?:,\d{3})*|\d{1,8})(?:\.(\d{1,2}))?(?=\s*(?:each\b|[,;\r\n]|$))/gim;
+const INPUT_ROW = /(?:^|[,;\n])\s*[-*•]?\s*(?:inventory\s*:\s*)?([A-Za-z][A-Za-z0-9 _-]{0,44}?)\s*:?\s*(\d{1,5})\s*(?:units?\s*)?(?:[x×*]\s*|at\s*|@\s*)[₹$]?\s*(\d{1,3}(?:,\d{3})*|\d{1,8})(?:\.(\d{1,2}))?(?=\s*(?:each\b|[,;\r\n]|$|[.!?]\s*$))/gim;
 const MAX_ROWS = 40;
 
 export function parseInventorySource(text: string): InventorySource | null {

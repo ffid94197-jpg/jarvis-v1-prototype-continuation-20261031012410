@@ -76,6 +76,11 @@ function objectiveFolderName(m: RegExpMatchArray): string | null {
   const value = quoted ?? bare;
   if (!value) return null;
   if (quoted === undefined) {
+    // A generic noun following "folder" is NOT an explicitly named artifact.
+    // "folder structure", "folder named inventory" and "folder inventory"
+    // have materially different semantics. Reject descriptive nouns, but
+    // retain the previously supported concise explicit names.
+    if (/^(?:structure|layout|hierarchy|organization|organisation|contents|permissions|access|names|naming|tree|path|paths|system|management|configuration|design|format|structure\.)$/i.test(bare ?? "")) return null;
     // Punctuation that terminates an unquoted sentence is not a path.
     // Quoted paths retain their exact contents, including embedded dots.
     const trimmed = value.replace(/[.,;:!?]+$/, "");

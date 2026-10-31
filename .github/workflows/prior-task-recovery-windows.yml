@@ -1,0 +1,35 @@
+name: JARVIS prior-task recovery targeted Windows tests
+on:
+  push:
+    branches: [fix/prior-task-recovery-20261031]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recovery:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - name: Windows source-context recovery regression
+        run: |
+          if ((node -p "process.platform") -ne "win32") { throw "Needs native Windows" }
+          node scripts/verify-prior-task-recovery.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Recovery regression failed" }
+      - name: TypeScript compilation
+        run: |
+          npx tsc --noEmit --incremental false
+          if ($LASTEXITCODE -ne 0) { throw "TypeScript compilation failed" }
+      - name: Existing isolated Core loop and Guardian boundaries
+        run: |
+          node scripts/verify-goal-loop-integration-offline.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Core loop integration failed" }
+          node scripts/verify-path-containment.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Guardian containment failed" }

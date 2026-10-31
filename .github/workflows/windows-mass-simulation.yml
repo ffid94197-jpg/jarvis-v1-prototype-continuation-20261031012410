@@ -4,6 +4,7 @@ on:
     branches: [test/windows-mass-sim-20261031]
     paths:
       - scripts/verify-windows-mass-simulation.cjs
+      - src/lib/agent/core/requestIntent.ts
       - .github/workflows/windows-mass-simulation.yml
   workflow_dispatch:
 permissions:

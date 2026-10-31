@@ -56,6 +56,7 @@ import {
 } from "./effects";
 import { arbitrateCompletion } from "./verifier";
 import { classifyRequestIntent, isModelDisclosureQuestion } from "./requestIntent";
+import { needsPriorTaskContext, priorTaskContext } from "./priorTaskContext";
 import { AutonomyGate, REPEATABLE_INPUT_TOOLS, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
 import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan, type GoalWatchdogLimits } from "./goalPlanner";
@@ -369,6 +370,26 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     { role: "assistant", content: `LAYA advisory (not permission): ${JSON.stringify(adviseTask(objective))}. Core and Guardian remain authoritative.` },
     { role: "user", content: plannerUserPrompt(objective, opts.replay) },
   ];
+
+  // Owner explicitly referred to a prior request: read ONLY prior objectives
+  // belonging to the same authenticated principal. This is historical task
+  // data, never model authority, command authorization, or completion proof.
+  if (!opts.replay && needsPriorTaskContext(objective)) {
+    let sourceNote: string;
+    try {
+      const recent = await db.agentTask.findMany({
+        where: { ownerId: opts.ownerId, id: { not: taskId } },
+        orderBy: { createdAt: "desc" },
+        take: 8,
+        select: { id: true, objective: true, createdAt: true },
+      });
+      sourceNote = priorTaskContext(objective, recent);
+    } catch {
+      sourceNote = priorTaskContext(objective, []);
+    }
+    // Do not persist raw historical objectives as a second data store.
+    messages.splice(3, 0, { role: "assistant", content: sourceNote });
+  }
 
   const emitStatus = (phase: string) =>
     emit({ type: "status", phase, taskId, stepsUsed });

@@ -4,7 +4,7 @@
  * authorize tools. Core/Guardian remain responsible for every effect.
  * WARNING: egress filtering must also be enforced by the deployment network.
  */
-import type { ModelBridge, ModelMessage } from "./modelProvider";
+import { normalizeSystemInstructions, type ModelBridge, type ModelMessage } from "./modelProvider";
 
 import { modelRequestDeadlineMs } from "./modelDeadline";
 const MAX_JSON_BYTES = 1024 * 1024;
@@ -102,16 +102,10 @@ function contentFromChoice(body: unknown): string {
  * to a system message, leaving the user and actual dialogue history intact.
  * Do not change later assistant replies; never put user text into system.
  */
-export function normalizeCompatibleMessages(messages: ModelMessage[]): Array<{role: "system" | "user" | "assistant";content: string}> {
-  const firstUser = messages.findIndex(m => m.role === "user");
-  if (firstUser < 0) throw new Error("Model request missing user message.");
-  const prefix = messages.slice(0, firstUser);
-  if (prefix.some(m => m.role !== "assistant")) throw new Error("Unexpected model instruction roles.");
-  const rest = messages.slice(firstUser).map(m => ({role:m.role,content:m.content}));
-  if (!prefix.length) return rest;
-  const instructions = prefix.map(m => m.content).filter(Boolean).join("\n\n");
-  return instructions ? [{role:"system",content:instructions},...rest] : rest;
-}
+// The normalizer now lives in modelProvider.ts, next to the ModelMessage type it
+// operates on, because every backend needs it — not only OpenAI-compatible ones.
+// One implementation, so the adapters cannot drift apart on identity delivery.
+export { normalizeSystemInstructions } from "./modelProvider";
 
 export function createCompatibleBridge(
   settings: CompatibleSettings = getCompatibleSettings(),
@@ -126,7 +120,7 @@ export function createCompatibleBridge(
       /^gemini-3\./.test(settings.model); } catch { return false; }
   })();
   const payload = (messages: ModelMessage[], stream: boolean, emptyRecovery = false) => JSON.stringify({
-    model: settings.model, messages: normalizeCompatibleMessages(messages), stream,
+    model: settings.model, messages: normalizeSystemInstructions(messages), stream,
     ...(emptyRecovery && isGemini3 ? { reasoning_effort: "low" } : {}),
   });
   const send = async (messages: ModelMessage[], stream: boolean, emptyRecovery = false) => {

@@ -201,8 +201,16 @@ const FILLER =
 const SHORT_GAP = "[^.!?,;\\n]{0,20}?";
 
 /** "I am GLM", "I'm ChatGPT", "you are talking to Claude", "I was built by …" */
+/**
+ * Every frame that makes a sentence a SELF-identification rather than a
+ * statement about a third party. Shared by the individual and compound rules so
+ * the two cannot drift apart.
+ */
+const SELF_ID_FRAMES =
+  "(?:i\\s+am|i'?m|i\\u2019m|this\\s+is|you\\s*(?:are|'?re)\\s+(?:speaking|talking|chatting)\\s+(?:to|with)|the\\s+assistant\\s+(?:you\\s*(?:are|'?re)\\s+)?(?:speaking|talking)\\s+to|i\\s+was\\s+(?:built|created|developed|made|trained|designed)|my\\s+name\\s+is|i\\s+go\\s+by|call\\s+me)";
+
 const SELF_ID_RE = new RegExp(
-  `\\b(i\\s+am|i'?m|i\\u2019m|this\\s+is|you\\s*(?:are|'?re)\\s+(?:speaking|talking|chatting)\\s+(?:to|with)|the\\s+assistant\\s+(?:you\\s*(?:are|'?re)\\s+)?(?:speaking|talking)\\s+to|i\\s+was\\s+(?:built|created|developed|made|trained|designed))\\b(${FILLER})\\b(${VENDORS})\\b(?:\\-\\d[\\w\\-]*(?:\\.\\d+)*)?`,
+  `\\b(${SELF_ID_FRAMES})\\b(${FILLER})\\b(${VENDORS})\\b(?:\\-\\d[\\w\\-]*(?:\\.\\d+)*)?`,
   "gi",
 );
 /** "my name is GLM", "I go by Claude", "call me ChatGPT" */
@@ -225,12 +233,132 @@ const POSSESSIVE_RE = new RegExp(
  * in the same clause, or when the claim opens a sentence and stands alone. */
 const PROVIDER_VERB =
   "(?:developed|created|built|made|powered|trained|maintained|owned|operated|produced|provided)";
+/**
+ * Company names that legitimately appear in an ATTRIBUTION slot ("created by
+ * Google", "developed by Meta") but are not model product names.
+ *
+ * These are used ONLY for the attribution slot of the compound self-id pattern
+ * below, never for the bare sentence-initial attribution pattern. "Developed by
+ * Meta, Llama is an open-weights family" is a legitimate factual sentence about
+ * a third party and must survive; the compound pattern cannot match it because
+ * the compound pattern requires an explicit "I am <model>" frame first.
+ */
+const ATTRIBUTION_COMPANIES = [
+  "google deepmind", "deepmind", "google", "meta", "microsoft", "amazon",
+  "amazon web services", "aws", "ibm", "nvidia", "baidu", "alibaba", "tencent",
+  "bytedance", "01.ai", "meta ai",
+];
+const ATTRIBUTION_VENDORS = [...BASE_MODEL_IDENTITIES, ...ATTRIBUTION_COMPANIES]
+  .sort((a, b) => b.length - a.length)
+  .map(escapeForRegex)
+  .join("|");
+
+/**
+ * The lead must be an actual SELF-IDENTIFICATION frame, not merely a
+ * first-person pronoun. The earlier version accepted a bare `i|we|me|my`, so
+ * "I think GLM was developed by Zhipu AI" — a factual statement ABOUT a third
+ * party, which the docblock above promises to leave untouched — was corrupted
+ * into "I think GLM was built as JARVIS for this installation". Requiring
+ * "I am / I'm / we are / I was built / my name is / this assistant / you are
+ * talking to" keeps the guard on self-identification only.
+ */
+const SELF_LEAD =
+  "(?:i\\s+am|i'?m|i\\u2019m|we\\s+are|we'?re|i\\s+was\\s+(?:built|created|developed|made|trained|designed)|this\\s+assistant|my\\s+name\\s+is|you\\s*(?:are|'?re)\\s+(?:speaking|talking)\\s+to)";
 const DEVELOPED_BY_SELF_RE = new RegExp(
-  `\\b(i|we|me|my|this\\s+assistant|you\\s*(?:are|'?re)\\s+(?:speaking|talking)\\s+to)\\b([^.!?,;\\n]{0,40}?)\\b${PROVIDER_VERB}\\s+by\\b(${SHORT_GAP})\\b(${VENDORS})\\b`,
+  `\\b(${SELF_LEAD})\\b([^.!?,;\\n]{0,40}?)\\b${PROVIDER_VERB}\\s+by\\b(${SHORT_GAP})\\b(${ATTRIBUTION_VENDORS})\\b`,
   "gi",
 );
+/**
+ * Passive self-attribution: "I was created by Zhipu AI", "I am powered by
+ * OpenAI", "we were trained by Anthropic".
+ *
+ * Here the provider verb IS the predicate, so SELF_LEAD (which ends in a verb
+ * for the "I was built/created/…" form) cannot also supply it — the two would
+ * consume each other. This needs its own rule. Requiring the copula plus a
+ * provider verb plus a vendor name keeps it off ordinary prose: "I was told by
+ * a colleague" and "I was inspired by Claude's design" match nothing, because
+ * "told" and "inspired" are not provider verbs.
+ */
+const PASSIVE_SELF_RE = new RegExp(
+  `\\b(i\\s+was|we\\s+were|i\\s+am|this\\s+assistant\\s+was)\\s+${PROVIDER_VERB}\\s+by\\b(${SHORT_GAP})\\b(${ATTRIBUTION_VENDORS})\\b`,
+  "gi",
+);
+/**
+ * A bare sentence-initial attribution is a self-identification ONLY when it
+ * stands alone: "Created by OpenAI." requires the vendor name to be followed
+ * immediately by sentence end. Without that lookahead this rule corrupted
+ * legitimate prose — "Developed by Mistral AI, ChatGPT is an open-weights
+ * family" became "Built as JARVIS for this installation AI, ChatGPT is ...",
+ * both a false positive AND a mangled vendor name, because the longest-first
+ * alternation matched "Mistral" and stranded the " AI".
+ */
 const DEVELOPED_BY_INITIAL_RE = new RegExp(
-  `(?:^|(?<=[.!?\\n])\\s*)${PROVIDER_VERB}\\s+by\\b(${SHORT_GAP})\\b(${VENDORS})\\b`,
+  `(?:^|(?<=[.!?\\n])\\s*)${PROVIDER_VERB}\\s+by\\b(${SHORT_GAP})\\b(${VENDORS})\\b(?:\\-\\d[\\w\\-]*(?:\\.\\d+)*)?(?=[.!?;:\\n]|$)`,
+  "gi",
+);
+
+
+/**
+ * Compound self-identification: "I am GLM, a large language model developed by
+ * Zhipu AI."
+ *
+ * ROOT CAUSE THIS FIXES. The gap in DEVELOPED_BY_SELF_RE excludes commas, so it
+ * cannot span the appositive clause that separates "I am X" from "developed by
+ * Y". Worse, SELF_ID_RE runs first and rewrites the vendor token that would have
+ * anchored the attribution match — so the two rules actively defeated each other
+ * and the sentence came out as "I am JARVIS, a large language model developed by
+ * Zhipu AI": the product name was fixed while the vendor attribution survived.
+ * The owner-visible leak "Hello! I am GLM — a large language model developed by
+ * Zhipu AI" is one instance of this class; the comma variant is far more common
+ * and leaked identically.
+ *
+ * Matching the whole compound span at once, BEFORE the individual rules consume
+ * the anchor, removes both halves. Commas and semicolons are permitted inside
+ * the span (that is the whole point) but sentence terminators are not, and the
+ * span is length-capped, so it cannot bridge into a separate unrelated clause.
+ * A first-person self-identification frame is mandatory, which is what keeps
+ * "I think, GLM was developed by Zhipu AI" — a factual statement about a third
+ * party — untouched.
+ */
+/**
+ * The attribution may be a provider verb ("developed by", "trained by") OR a
+ * bare identity noun plus preposition ("a model by Anthropic", "an assistant
+ * from OpenAI"). Both are self-identification; only the verb form was matched
+ * before, which is why "I am Sonnet, a model by Anthropic" leaked.
+ */
+const ATTRIBUTION_PHRASE =
+  `(?:${PROVIDER_VERB}\\s+by|(?:model|llm|language\\s+model|assistant|ai|engine|product|creation)\\s+(?:by|from))`;
+const SELF_ID_ATTRIBUTION_RE = new RegExp(
+  `\\b(${SELF_ID_FRAMES})\\b(${FILLER})\\b(${VENDORS})\\b([^.!?\\n]{0,80}?)\\b${ATTRIBUTION_PHRASE}\\b(${SHORT_GAP})\\b(${ATTRIBUTION_VENDORS})\\b`,
+  "gi",
+);
+
+/**
+ * Bare vendor greeting: "GLM here!", "Claude at your service."
+ *
+ * Requires the vendor name to open a sentence AND the greeting word to be
+ * followed by punctuation or end-of-string, so "GPT here is the summary you
+ * asked for" — ordinary prose that merely starts with a model name — is not
+ * touched.
+ */
+const VENDOR_GREETING_RE = new RegExp(
+  `(?:^|(?<=[.!?\\n])\\s*)\\b(${VENDORS})\\b(\\s+(?:here|speaking|online|ready|listening|at\\s+your\\s+service|reporting\\s+for\\s+duty))(?=[.!?,;:\\n]|$)`,
+  "gi",
+);
+
+/**
+ * Unprompted backend self-identification: "I am running on GLM-5.3".
+ *
+ * This is accurate information in the wrong place. When the operator explicitly
+ * asks which model is in use, loop.ts suppresses this guard entirely and the
+ * real provider metadata is disclosed — that is the correct answer. When they
+ * merely said "hi", volunteering the backend is a product-identity leak and is
+ * rewritten to JARVIS. Rewriting here cannot create a false statement, because
+ * it removes a claim rather than substituting a different vendor.
+ */
+const BACKEND_VERB = "(?:running|run|operating|served|hosted|based|deployed|inferred)";
+const BACKEND_SELF_RE = new RegExp(
+  `\\b(i\\s+am|i'?m|i\\u2019m|this\\s+is|this\\s+assistant)\\b(?:\\s+(?:currently|presently|actually|really|just|simply|now))?\\s+${BACKEND_VERB}\\s+(?:on|by|from|off|via|using|with)\\b(${SHORT_GAP})\\b(${ATTRIBUTION_VENDORS})\\b(?:\\-\\d[\\w\\-]*(?:\\.\\d+)*)?`,
   "gi",
 );
 
@@ -267,6 +395,21 @@ export function enforceJarvisIdentity(text: string): IdentityEnforcement {
   };
 
   let out = text;
+  // The compound pattern MUST run first: SELF_ID_RE rewrites the vendor token
+  // that anchors the attribution half, so running it later would leave
+  // "developed by Zhipu AI" stranded behind an already-corrected "I am JARVIS".
+  out = out.replace(SELF_ID_ATTRIBUTION_RE, (_m, lead: string, mid: string, vendor: string) => {
+    note(vendor);
+    return `${lead}${mid}JARVIS`;
+  });
+  out = out.replace(VENDOR_GREETING_RE, (_m, vendor: string, greeting: string) => {
+    note(vendor);
+    return `JARVIS${greeting}`;
+  });
+  out = out.replace(BACKEND_SELF_RE, (_m, lead: string, _gap: string, vendor: string) => {
+    note(vendor);
+    return `${lead} JARVIS`;
+  });
   out = out.replace(SELF_ID_RE, (_m, lead: string, mid: string, vendor: string) => {
     note(vendor);
     return `${lead}${mid}JARVIS`;
@@ -278,6 +421,10 @@ export function enforceJarvisIdentity(text: string): IdentityEnforcement {
   out = out.replace(POSSESSIVE_RE, (_m, vendor: string, copula: string, noun: string) => {
     note(vendor);
     return `JARVIS${copula}${noun}`;
+  });
+  out = out.replace(PASSIVE_SELF_RE, (_m, lead: string, _gap: string, vendor: string) => {
+    note(vendor);
+    return `${lead} built as JARVIS for this installation`;
   });
   out = out.replace(DEVELOPED_BY_SELF_RE, (_m, lead: string, mid: string, _gap: string, vendor: string) => {
     note(vendor);

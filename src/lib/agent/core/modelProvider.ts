@@ -50,6 +50,40 @@ export interface ModelBridge {
 }
 
 /**
+ * Fold JARVIS's leading instruction messages into ONE real `system` message.
+ *
+ * ROOT CAUSE THIS FIXES (FIX 2). JARVIS Core encodes the planner contract, the
+ * extension catalogue, the LAYA advisory and the JARVIS identity contract as
+ * `role: "assistant"` messages, because the internal `ModelMessage` type only
+ * allows "user" | "assistant". The OpenAI-compatible adapter already converted
+ * that preface into a proper `system` message and the Anthropic adapter already
+ * hoisted it into the top-level `system` field — but the Z.ai SDK bridge (the
+ * DEFAULT backend, `JARVIS_MODEL_BACKEND=zai`) and the local Ollama bridge
+ * passed the roles straight through. Those providers therefore received the
+ * JARVIS identity contract as PRIOR ASSISTANT OUTPUT rather than as a system
+ * instruction, which is precisely why the base model felt free to answer a
+ * greeting with "I am GLM — a large language model developed by Zhipu AI": on
+ * the default path the instruction carried no system authority at all.
+ *
+ * Safety rules, unchanged from the original compatible-adapter implementation:
+ * only the assistant-only preface BEFORE the first user message is folded; later
+ * assistant turns are real dialogue history and are left alone; user text is
+ * never moved into system; a request with no user message is rejected.
+ */
+export function normalizeSystemInstructions(
+  messages: ModelMessage[],
+): Array<{ role: "system" | "user" | "assistant"; content: string }> {
+  const firstUser = messages.findIndex((m) => m.role === "user");
+  if (firstUser < 0) throw new Error("Model request missing user message.");
+  const prefix = messages.slice(0, firstUser);
+  if (prefix.some((m) => m.role !== "assistant")) throw new Error("Unexpected model instruction roles.");
+  const rest = messages.slice(firstUser).map((m) => ({ role: m.role, content: m.content }));
+  if (!prefix.length) return rest;
+  const instructions = prefix.map((m) => m.content).filter(Boolean).join("\n\n");
+  return instructions ? [{ role: "system", content: instructions }, ...rest] : rest;
+}
+
+/**
  * Render the honest disclosure line the Core injects into the planner context.
  * Deterministic and secret-free: it never emits an API key, and it says so
  * explicitly when a model id was not configured rather than guessing one.
@@ -103,9 +137,11 @@ function checkHttpStatus(response: Response) {
 
 function createOllamaBridge(): ModelBridge {
   const settings = resolveOllamaSettings();
+  // Ollama's /api/chat honours role:"system", so the identity contract must be
+  // delivered there rather than as a prior assistant turn.
   const body = (messages: ModelMessage[], stream: boolean, json: boolean) => JSON.stringify({
     model: settings.model,
-    messages,
+    messages: normalizeSystemInstructions(messages),
     stream,
     ...(json ? { format: "json" } : {}),
   });
@@ -192,7 +228,11 @@ async function createZaiBridge(): Promise<ModelBridge> {
     },
     async complete(messages) {
       const r = await client.chat.completions.create({
-        messages: messages.map(m => ({role: m.role, content: m.content})),
+        // The Z.ai SDK speaks the OpenAI chat schema, which distinguishes a system
+        // instruction from prior assistant output. Sending the JARVIS identity
+        // contract as "assistant" is what let the base model answer a greeting
+        // with its own vendor identity.
+        messages: normalizeSystemInstructions(messages),
         thinking: { type: "disabled" },
       });
       const text = r?.choices?.[0]?.message?.content;
@@ -201,7 +241,11 @@ async function createZaiBridge(): Promise<ModelBridge> {
     },
     async report(messages, onDelta) {
       const chunks = await client.chat.completions.create({
-        messages: messages.map(m => ({role: m.role, content: m.content})),
+        // The Z.ai SDK speaks the OpenAI chat schema, which distinguishes a system
+        // instruction from prior assistant output. Sending the JARVIS identity
+        // contract as "assistant" is what let the base model answer a greeting
+        // with its own vendor identity.
+        messages: normalizeSystemInstructions(messages),
         stream: true,
         thinking: { type: "disabled" },
       });

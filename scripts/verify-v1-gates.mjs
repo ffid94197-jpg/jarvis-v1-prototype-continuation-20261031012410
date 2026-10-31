@@ -63,6 +63,15 @@ const checks=[
  // report instead of "fix your API key". Includes the six independent
  // reproduction cases and 20,000 seeded adversarial iterations.
  ['MODEL-ERROR-STATUS-PRECEDENCE',['scripts/verify-model-error-status-precedence.cjs']],
+ // FIX 2: JARVIS product identity vs accurate provider disclosure. Guards the
+ // owner-observed leak where "hi" answered "Hello! I am GLM — a large language
+ // model developed by Zhipu AI." Covers three root causes: the identity guard
+ // defeating itself on compound self-identification, the identity contract
+ // reaching the default Z.ai backend and local Ollama as prior ASSISTANT output
+ // instead of a system message, and the guard over-reaching into legitimate
+ // factual discussion of third-party models. Disclosure is preserved, not
+ // suppressed. Includes 4,000 seeded adversarial sentences in both directions.
+ ['JARVIS-IDENTITY-DISCLOSURE',['scripts/verify-jarvis-identity-disclosure.cjs']],
  ['MINECRAFT-EFFECT-IDENTITY',['scripts/verify-minecraft-effect-identity.cjs']],
  ['MINECRAFT-OWNER-IDENTITY',['windows-companion/minecraft-bot/verify_owner_identity_offline.cjs']],
  ['MINECRAFT-FRIEND-FIXTURE',['windows-companion/minecraft-bot/verify_friend_offline.cjs']],

@@ -24,6 +24,8 @@ jobs:
           cache: npm
       - name: Install exact repository dependencies
         run: npm ci --no-audit --no-fund
+      - name: Install Minecraft bot test dependencies
+        run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
       - name: Prove native Windows host
         run: |
           Write-Output "Platform: $([System.Environment]::OSVersion)"
@@ -35,19 +37,27 @@ jobs:
           npx tsc --noEmit --incremental false
       - name: Fixed regression suites on Windows
         run: |
-          npm run test:model-error-status-precedence
-          npm run test:jarvis-identity-disclosure
-          npm run test:core-actionable-execution
-          npm run test:core-conversational-separation
-          npm run test:goal-loop-integration
-          npm run test:autonomy-reliability
-          npm run test:autonomy-tiers
-          npm run test:windows-policy
-          npm run test:companion-bridge-workflow
-          npm run test:windows-startup-preflight
-          npm run test:companion-launcher-authorization
-          npm run test:minecraft-pathfinder-lifecycle
-          npm run test:minecraft-bridge-e2e
+          $ErrorActionPreference = 'Stop'
+          $tests = @(
+            'test:model-error-status-precedence',
+            'test:jarvis-identity-disclosure',
+            'test:core-actionable-execution',
+            'test:core-conversational-separation',
+            'test:goal-loop-integration',
+            'test:autonomy-reliability',
+            'test:autonomy-tiers',
+            'test:windows-policy',
+            'test:companion-bridge-workflow',
+            'test:windows-startup-preflight',
+            'test:companion-launcher-authorization',
+            'test:minecraft-pathfinder-lifecycle',
+            'test:minecraft-bridge-e2e'
+          )
+          foreach ($test in $tests) {
+            Write-Output "RUNNING $test"
+            & npm.cmd run $test
+            if ($LASTEXITCODE -ne 0) { throw "FAILED $test with code $LASTEXITCODE" }
+          }
       - name: Massive seeded Windows-like simulation
         env:
           JARVIS_SIM_ROUNDS: '40000'

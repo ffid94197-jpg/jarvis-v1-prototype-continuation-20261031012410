@@ -1,0 +1,31 @@
+name: JARVIS source transfer for isolated sandbox testing
+on:
+  push:
+    branches: [test/sandbox-source-transfer-20261031]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Bundle tracked source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/jarvis-export
+          git ls-files -z | tar --null -T - -czf /tmp/jarvis-export/jarvis-source-20261031.tgz
+          echo "HEAD=$(git rev-parse HEAD)"
+          echo "SOURCE_BYTES=$(stat -c '%s' /tmp/jarvis-export/jarvis-source-20261031.tgz)"
+          sha256sum /tmp/jarvis-export/jarvis-source-20261031.tgz
+      - name: Store branch source as a private build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-source-sandbox-20261031
+          path: /tmp/jarvis-export/jarvis-source-20261031.tgz
+          if-no-files-found: error
+          retention-days: 1

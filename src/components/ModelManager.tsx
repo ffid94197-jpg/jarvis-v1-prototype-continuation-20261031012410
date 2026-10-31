@@ -6,6 +6,7 @@ import IntegrationsPanel from "./IntegrationsPanel";
 import {OwnerVoiceSettings, WakeStrip} from "./OwnerVoice";
 import MemoryManager from "./MemoryManager";
 import RoutineManager from "./RoutineManager";
+import AutonomyTierPanel from "./AutonomyTierPanel";
 import DeviceManager from "./DeviceManager";
 type Protocol = "openai-compatible" | "ollama" | "anthropic";
 type Location = "api" | "local";
@@ -115,7 +116,7 @@ export default function ModelManager({settingsOpen,onClose,busyTask,onCommand,la
     {message && <p role="status" aria-live="polite" className="nexus-settings-status">{message}</p>}
     {tab==="integrations" && <IntegrationsPanel/>}
     {tab==="memory" && <MemoryManager onClose={closeSettings}/>}
-    {tab==="routines" && <RoutineManager onClose={closeSettings}/>}
+    {tab==="routines" && <><AutonomyTierPanel/><RoutineManager onClose={closeSettings}/></>}
     <div hidden={tab!=="voice"} className="nexus-settings-section"><h3>Wake Word & Spoken Replies</h3><p>Enable listening to “Jarvis”, review recognized requests, control spoken replies, or interrupt speech. Microphone access requires your permission. When enabled, wake listening continues after closing Settings until you disable it here.</p><WakeStrip onCommand={onCommand} busyTask={busyTask} latestReply={latestReply}/><OwnerVoiceSettings/></div>
     {tab==="screen" && <div className="nexus-settings-section"><h3>Local Screen Feed</h3><p>Screen streaming requires a valid owner session and the Windows companion. The feed starts only when you open it.</p><button type="button" style={buttonStyle} onClick={()=>setScreenVisible(v=>!v)} aria-expanded={screenVisible}>{screenVisible?"STOP LIVE SCREEN":"OPEN LIVE SCREEN"}</button>{screenVisible&&<img alt="Live Windows screen preview" src="/api/jarvis/windows/live" className="nexus-settings-screen"/>}<small>Only the real Windows companion can supply screen frames. This view does not grant screen-control permissions.</small><DeviceManager/></div>}
     {tab==="guardian" && <div className="nexus-settings-section" aria-label="Guardian security status"><h3>Guardian-protected execution</h3><p>Every task remains bound to an authenticated owner session and server-side authorization policies. The development login is loopback-only; it does not disable Guardian permission checks or authorize remote access.</p><p>Policy editing is deliberately unavailable: the current project does not expose an authenticated policy-management API. Review the actual task trace and Windows companion security gates before approving elevated actions.</p><button type="button" style={buttonStyle} onClick={()=>setTab("system")}>OPEN RUNTIME DIAGNOSTICS</button></div>}

@@ -21,6 +21,7 @@
 import fs from "fs/promises";
 import { resolveScopedPath, assertWithinRoot } from "../guardian/policy";
 import { db } from "@/lib/db";
+import { inventoryArtifactKind, verifyInventoryCsv, verifyInventoryReport, type InventorySource } from "./inventoryIntegrity";
 
 export interface Predicate {
   kind: "folder" | "file";
@@ -37,6 +38,8 @@ export interface ArbitrationInput {
   objective: string;
   /** True when the loop is about to finalize a TOOL-ASSISTED run. */
   toolAssisted: boolean;
+  /** Source rows from current owner request or a same-owner prior objective. */
+  inventorySource?: InventorySource | null;
 }
 
 export type Verdict =
@@ -260,6 +263,67 @@ async function checkPredicate(
   };
 }
 
+
+/**
+ * Specific completion proof for a source-grounded inventory analysis.
+ * Both output files MUST be written in this task, durably settled and
+ * independently re-read from within the Guardian workspace. The report
+ * and CSV are each checked against original OWNER input, never against
+ * one another alone. Unknown formats or missing provenance remain PARTIAL.
+ */
+async function verifyInventoryArtifacts(
+  source: InventorySource,
+  effects: Array<{ status: string; tool: string; argsJson: string | null }>,
+  failedEffects: number,
+): Promise<Arbitration> {
+  const targets = new Map<"csv" | "report", string[]>();
+  for (const e of effects) {
+    if(e.status !== "SETTLED" || e.tool !== "write_file") continue;
+    let args: {path?: unknown};
+    try { args=JSON.parse(e.argsJson ?? "{}"); } catch { continue; }
+    if(typeof args.path !== "string") continue;
+    const kind=inventoryArtifactKind(args.path);
+    if(!kind)continue;
+    const paths=targets.get(kind) ?? [];
+    if(!paths.includes(args.path))paths.push(args.path);
+    targets.set(kind,paths);
+  }
+  const checked: Arbitration["predicates"]=[];
+  const predicateLines: string[]=[];
+  for(const kind of ["csv","report"] as const) {
+    const paths=targets.get(kind) ?? [];
+    if(paths.length !== 1){
+      predicateLines.push("✗ INVENTORY " + kind + " — expected exactly one durably written artifact in this task, found " + paths.length);
+      continue;
+    }
+    const rel=paths[0];
+    const pred: Predicate={kind:"file",relPath:rel};
+    const scoped=resolveScopedPath(rel);
+    let issue: string | null = null;
+    if(!scoped.ok || !scoped.abs)issue="invalid workspace-relative file path";
+    else {
+      const containment=await assertWithinRoot(scoped.abs);
+      if(!containment.ok)issue="failed Guardian containment verification";
+      else {
+        try {
+          const text=await fs.readFile(scoped.abs,"utf8");
+          issue=kind==="csv"?verifyInventoryCsv(text,source):verifyInventoryReport(text,source);
+        }catch {issue="file absent or unreadable from disk";}
+      }
+    }
+    const pass=issue===null;
+    checked.push({predicate:pred,pass,observed:pass?"all original rows and derived totals verified from disk":issue ?? "unverified"});
+    predicateLines.push((pass?"✓":"✗")+" INVENTORY "+kind+" "+rel+" — "+(pass?"source fidelity, arithmetic and disk readback verified":issue));
+  }
+  const complete=checked.length===2 && checked.every(x=>x.pass) && predicateLines.filter(x=>x.startsWith("✗")).length===0;
+  const clean=failedEffects===0;
+  predicateLines.push("INVENTORY VERDICT: "+(complete && clean?"VERIFIED":"PARTIAL")+
+    " — original source "+source.rows.length+" products, "+source.totalUnits+" units, "+
+    (source.totalPaise/100).toFixed(2)+" INR; verified "+checked.filter(x=>x.pass).length+"/2 output files"+
+    (clean?"":"; prior effect attempt failed"));
+  return {verdict:complete && clean?"verified":"partial",predicateLines,predicates:checked};
+}
+
 // ——— 3. authoritative arbitration (§6.3) ———
 
 export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbitration> {
@@ -281,6 +345,12 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
       ],
       predicates: [],
     };
+  }
+
+  // Specialize ONLY when the owner supplied structured inventory source rows.
+  // This must not certify unrelated file, desktop or Minecraft goals.
+  if(toolAssisted && input.inventorySource) {
+    return verifyInventoryArtifacts(input.inventorySource,effects,failedEffects);
   }
 
   const predicates = extractPredicates(objective);

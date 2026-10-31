@@ -1,0 +1,19 @@
+name: Inspect verified internet prompt samples
+on:
+  push:
+    branches: [analysis/hardest-sampled-prompt-20261031]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified exact sample TXT
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 41223818565 --name jarvis-test-prompts-txt --dir prompt-export
+      - name: Rank and print exact original sample text
+        run: node scripts/inspect-hardest-sampled-prompt.cjs

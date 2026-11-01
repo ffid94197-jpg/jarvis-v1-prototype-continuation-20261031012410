@@ -33,11 +33,11 @@ assert.equal(m.isAdvisoryGoalPlanCall([{role:"assistant",content:"You are an adv
 assert.equal(m.isAdvisoryGoalPlanCall([{role:"assistant",content:"different request"},{role:"user",content:"hello"}]),false);
 const originalTask="ORIGINAL Task content must not be dropped";
 const recent=[{role:"user",content:originalTask},...Array.from({length:16},(_,i)=>({role:i%2===0?"assistant":"user",content:"previous-step-"+i}))];
-const compact=m.compactOllamaWorkspaceHistory([{role:"assistant",content:"You are the JARVIS planning core"},...recent],true);
-assert.ok(compact.length<recent.length+1);
-assert.ok(compact.some(x=>x.content===originalTask),"original user objective must survive compaction");
-assert.ok(compact.some(x=>x.content==="previous-step-15"),"last observed state must survive compaction");
-assert.ok(!compact.some(x=>x.content==="previous-step-0"),"older model chatter must be evicted");
+const reducedHistory=m.compactOllamaWorkspaceHistory([{role:"assistant",content:"You are the JARVIS planning core"},...recent],true);
+assert.ok(reducedHistory.length<recent.length+1);
+assert.ok(reducedHistory.some(x=>x.content===originalTask),"original user objective must survive compaction");
+assert.ok(reducedHistory.some(x=>x.content==="previous-step-15"),"last observed state must survive compaction");
+assert.ok(!reducedHistory.some(x=>x.content==="previous-step-0"),"older model chatter must be evicted");
 const loop=fs.readFileSync("src/lib/agent/core/loop.ts","utf8");
 assert.match(loop,/selectPlannerSystemPrompt\(objective\)/);
 assert.doesNotMatch(loop,/"tool":"create_folder","args":\{"path":"name"\}/);

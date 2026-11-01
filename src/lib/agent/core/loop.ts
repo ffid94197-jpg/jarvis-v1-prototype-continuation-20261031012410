@@ -705,8 +705,8 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       // from premature model finals with a bounded authentic LLM retry.
       // Model must still propose the source write; Guardian, durable effects
       // and all verification gates remain unchanged. No fabricated action.
-      const softwareArtifactGoal = /\\b(?:website|web\\s*app(?:lication)?|frontend|backend|react|vite|typescript|full.stack)\\b/i.test(objective);
-      const sourceFilesWritten = settlementLines.some(line => /^✓ write_file\\b/.test(line));
+      const softwareArtifactGoal = /\b(?:website|web\s*app(?:lication)?|frontend|backend|react|vite|typescript|full.stack)\b/i.test(objective);
+      const sourceFilesWritten = settlementLines.some(line => /^✓ write_file\b/.test(line));
       if (softwareArtifactGoal && !sourceFilesWritten && denials === 0 &&
           actionNudges < MAX_ACTION_NUDGES && !opts.replay) {
         actionNudges++;

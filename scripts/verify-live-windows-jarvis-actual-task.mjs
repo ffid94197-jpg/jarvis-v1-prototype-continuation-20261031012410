@@ -178,10 +178,10 @@ async function waitReady(url,timeoutMs){
  }
  return {ready:false};
 }
-async function streamLiveTask(prompt,abortSignal,sessionCookie){
+async function streamLiveTask(prompt,abortSignal,sessionCookie,resumeTaskId=null){
  const response=await fetch("http://127.0.0.1:3000/api/jarvis/task",{
   method:"POST",headers:{"Content-Type":"application/json","Origin":"http://127.0.0.1:3000","Cookie":sessionCookie},
-  body:JSON.stringify({objective:prompt,stepBudget:24}),
+  body:JSON.stringify(resumeTaskId?{resumeTaskId,stepBudget:24}:{objective:prompt,stepBudget:24}),
   signal:abortSignal
  });
  result.taskApiCalled=true;
@@ -270,7 +270,27 @@ async function run(){
   if(!app.ready)throw Error("NEXUS never became ready. Actual full Windows runtime startup failed.");
   // Do not pretend a hosted runner can emulate an interactive owner desktop.
   result.notes.push("GitHub Windows hosted runner uses a service session, not the user's Lenovo LOQ interactive desktop.");
-  await streamLiveTask(prompt,abort.signal,sessionCookie);
+  const maxResumes=Number(process.env.JARVIS_LIVE_MAX_RESUMES||"2");
+  result.taskRuns=[];
+  for(let attempt=0; attempt<=maxResumes; attempt++){
+    const resumeId=attempt===0?null:result.sseFinal?.taskId;
+    if(attempt>0 && (result.sseFinal?.status!=="paused" || !resumeId)) break;
+    result.sseFinal=null;
+    const startEvents=result.taskEvents;
+    const startTools=result.toolAttempts.length;
+    console.log("REAL_TASK_RUN_STARTED attempt="+attempt+" resume="+Boolean(resumeId));
+    try{
+      await streamLiveTask(prompt,abort.signal,sessionCookie,resumeId);
+    }catch(e){
+      result.notes.push("Task streaming stopped: "+String(e?.name||"error"));
+      throw e;
+    }
+    result.taskRuns.push({attempt,resumed:Boolean(resumeId),status:result.sseFinal?.status||"missing_final",
+      taskId:result.sseFinal?.taskId||null,events:result.taskEvents-startEvents,
+      toolEvents:result.toolAttempts.length-startTools});
+    console.log("REAL_TASK_RUN_ENDED attempt="+attempt+" status="+(result.sseFinal?.status||"none"));
+    if(result.sseFinal?.status!=="paused")break;
+  }
   const produced=await collectFiles(workspace);
   result.artifacts=produced.slice(0,800);
   result.siteVerification=await verifySite(produced,initialWorkspace);

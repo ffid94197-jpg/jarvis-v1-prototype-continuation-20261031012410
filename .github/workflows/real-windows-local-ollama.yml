@@ -1,7 +1,7 @@
 name: JARVIS real Windows live task after root-cause fixes
 on:
   push:
-    branches: [fix/live-windows-autonomy-v7-20261101]
+    branches: [fix/live-windows-autonomy-resume-20261101]
 permissions:
   contents: read
 jobs:
@@ -76,6 +76,7 @@ jobs:
         timeout-minutes: 23
         env:
           JARVIS_LIVE_LOCAL_MODEL: '1'
+          JARVIS_LIVE_MAX_RESUMES: '2'
           JARVIS_OLLAMA_MODEL: qwen2.5-coder:1.5b
           JARVIS_OLLAMA_NUM_CTX: '6144'
           JARVIS_OLLAMA_NUM_PREDICT: '640'

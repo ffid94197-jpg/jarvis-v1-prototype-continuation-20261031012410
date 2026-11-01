@@ -26,10 +26,10 @@ jobs:
           if (Test-Path tsconfig.tsbuildinfo) { Remove-Item tsconfig.tsbuildinfo }
           npx tsc --noEmit --incremental false
           if ($LASTEXITCODE -ne 0) { throw "TypeScript failed" }
-      - name: Deep real-Core autonomy lifecycles
+      - name: Extended 1000-round real-Core autonomy lifecycles
         env:
           JARVIS_DEEP_SEED: '20261031'
-          JARVIS_DEEP_ROUNDS: '320'
+          JARVIS_DEEP_ROUNDS: '1000'
           JARVIS_DEEP_RESULT: jarvis-autonomy-deep-results.json
         run: |
           node scripts/verify-autonomy-deep-windows.cjs

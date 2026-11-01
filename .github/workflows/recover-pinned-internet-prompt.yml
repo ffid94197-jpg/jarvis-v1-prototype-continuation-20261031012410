@@ -1,0 +1,27 @@
+name: Recover SHA-pinned original public internet prompt
+on:
+  push:
+    branches: [analysis/jarvis-real-windows-evidence-20261031]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify-prompt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch exactly the previously recorded prompt artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 41230393594 --name jarvis-real-windows-local-model-task --dir recovered
+      - name: Verify archived public prompt and print recoverable base64
+        run: |
+          node - <<'JS'
+          const fs=require('fs'),crypto=require('crypto');
+          const p=fs.readFileSync('recovered/source-prompt.txt');
+          const sha=crypto.createHash('sha256').update(p).digest('hex');
+          if(sha!=='9276f5938fe8280e0cc39bda1f74b45489f47f97f211478a837ff50968a4a792')throw Error('Original prompt content tampered');
+          console.log('PINNED_SOURCE_SHA256='+sha);
+          console.log('PINNED_SOURCE_BASE64='+p.toString('base64'));
+          JS

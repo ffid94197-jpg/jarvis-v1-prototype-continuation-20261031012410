@@ -1,7 +1,7 @@
-name: Targeted long-horizon planner regression
+name: Targeted long-horizon planner regression v3
 on:
   push:
-    branches: [fix/live-windows-autonomy-v2-20261101]
+    branches: [fix/live-windows-autonomy-v3-20261101]
 permissions: {contents: read}
 jobs:
   planner-targeted:

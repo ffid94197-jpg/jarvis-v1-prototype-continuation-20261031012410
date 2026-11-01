@@ -179,6 +179,11 @@ function createOllamaBridge(): ModelBridge {
       ? Number(requestedContext) : 0;
     const context = parsedContext >= 4096 && parsedContext <= 32768
       ? parsedContext : undefined;
+    // Bound the size of a single tool-call response on slower CPU models.
+    // This is a completion-token budget, NEVER an effect/permission budget.
+    const rawPredict=process.env.JARVIS_OLLAMA_NUM_PREDICT;
+    const parsedPredict=rawPredict && /^\d{3,4}$/.test(rawPredict) ? Number(rawPredict) : 0;
+    const predicted=parsedPredict>=384 && parsedPredict<=2048 ? parsedPredict : undefined;
     return JSON.stringify({
       model: settings.model,
       messages: normalizeSystemInstructions(messages),
@@ -186,7 +191,7 @@ function createOllamaBridge(): ModelBridge {
       ...(json ? { format: goal ? GOAL_PLAN_OLLAMA_SCHEMA : "json" } : {}),
       ...(context || goal ? { options: {
         ...(context ? { num_ctx: context } : {}),
-        ...(goal ? { temperature: 0, num_predict: 1200 } : {}),
+        ...(goal ? { temperature: 0, num_predict: 1200 } : predicted ? { num_predict: predicted } : {}),
       } } : {}),
     });
   };

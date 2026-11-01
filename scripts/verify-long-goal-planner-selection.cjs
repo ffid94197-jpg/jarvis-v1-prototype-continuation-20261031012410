@@ -38,7 +38,7 @@ assert.ok(reducedHistory.length<recent.length+1);
 assert.ok(reducedHistory.some(x=>x.content===originalTask),"original user objective must survive compaction");
 assert.ok(reducedHistory.some(x=>x.content==="previous-step-15"),"last observed state must survive compaction");
 assert.ok(!reducedHistory.some(x=>x.content==="previous-step-0"),"older model chatter must be evicted");
-assert.doesNotMatch(compact,/workspace-relative\\/directory/,"planner must never suggest placeholder folder paths");
+assert.ok(!compact.includes("workspace-relative/directory"),"planner must never suggest placeholder folder paths");
 assert.match(compact,/write_file/);
 const loop=fs.readFileSync("src/lib/agent/core/loop.ts","utf8");
 assert.match(loop,/CODE_ARTIFACT_MISSING/);

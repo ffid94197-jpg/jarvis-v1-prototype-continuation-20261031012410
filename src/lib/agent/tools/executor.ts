@@ -11,10 +11,12 @@
 
 import { execFile } from "child_process";
 import fs from "fs/promises";
+import path from "path";
 import {
   COMMAND_TIMEOUT_MS,
   MAX_READ_BYTES,
   WORKSPACE_ROOT,
+  assertWithinRoot,
 } from "../guardian/policy";
 import type { GuardianDecision } from "../guardian/guardian";
 import { companionAction } from "../windows/bridge";
@@ -58,7 +60,23 @@ async function toolWriteFile(
   prepared: { path?: string; relPath?: string; content?: string },
 ): Promise<ToolResult> {
   try {
-    await fs.writeFile(prepared.path!, prepared.content ?? "", "utf8");
+    // Only a Guardian-approved destination reaches this branch. Recreate
+    // missing intermediate directories inside that SAME permitted scope so
+    // a model does not need to guess folder actions for src/App.tsx.
+    const destination = prepared.path!;
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    const containment = await assertWithinRoot(destination);
+    if (!containment.ok) {
+      return {ok:false,tool:"write_file",evidence:"",error:"post-parent-creation containment denied"};
+    }
+    const existing = await fs.lstat(destination).catch((err:NodeJS.ErrnoException)=>{
+      if (err.code === "ENOENT") return null;
+      throw err;
+    });
+    if (existing?.isDirectory()) {
+      return {ok:false,tool:"write_file",evidence:"",error:"TARGET_IS_DIRECTORY: cannot overwrite a directory with source text"};
+    }
+    await fs.writeFile(destination, prepared.content ?? "", "utf8");
     // Immediate readback — the executor verifies its own write.
     const readBack = await fs.readFile(prepared.path!, "utf8");
     const bytes = Buffer.byteLength(readBack, "utf8");

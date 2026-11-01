@@ -1,7 +1,7 @@
 name: JARVIS real Windows live task after root-cause fixes
 on:
   push:
-    branches: [fix/live-windows-autonomy-v4-20261101]
+    branches: [fix/live-windows-autonomy-v5-20261101]
 permissions:
   contents: read
 jobs:
@@ -34,6 +34,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Full Next.js production build failed" }
           npm run typecheck
           if ($LASTEXITCODE -ne 0) { throw "TypeScript failed" }
+          node scripts/verify-source-path-tool-safety.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Actual file write regression failed" }
       - name: Install genuine Windows companion Python dependencies
         run: |
           python -m pip install -r windows-companion/requirements.txt

@@ -18,6 +18,7 @@ import {
   resolveScopedPath,
   validateCommand,
   WORKSPACE_ROOT,
+  isSourceFileTarget,
 } from "./policy";
 
 export type GuardianVerdict = "allow" | "deny";
@@ -161,6 +162,10 @@ export async function authorizeToolCall(
         const p = resolveScopedPath(rawArgs.path);
         if (!p.ok || !p.abs || !p.rel) {
           decision = deny(p.reason ?? "invalid path");
+          break;
+        }
+        if (tool === "create_folder" && isSourceFileTarget(p.rel)) {
+          decision = deny("File-like path cannot be created as a directory; use write_file instead. Parent folders are created for an authorized write_file.");
           break;
         }
         const within = await assertWithinRoot(p.abs);

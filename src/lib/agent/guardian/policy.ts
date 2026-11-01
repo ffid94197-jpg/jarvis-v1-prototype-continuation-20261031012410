@@ -27,6 +27,14 @@ export const MAX_READ_BYTES = 64 * 1024;
 export const MAX_PATH_LENGTH = 400;
 export const COMMAND_TIMEOUT_MS = 10_000;
 
+/** Reject an attempt to create source-code FILES as folders. File-extension
+ * detection is a structural Guard, not OS authorization. Ordinary dotted
+ * directories (e.g. .github) and version folders remain permitted. */
+export function isSourceFileTarget(rel: string): boolean {
+  const last = rel.replace(/\\/g,"/").split("/").filter(Boolean).pop() ?? "";
+  return /\.(?:tsx?|jsx?|mjs|cjs|mts|cts|css|scss|less|html?|json|jsonc|py|sql|prisma|yaml|yml|xml|svg|md|txt|toml|go|rs|java|kt|sh|ps1)$/i.test(last);
+}
+
 export interface PathDecision {
   ok: boolean;
   reason?: string;

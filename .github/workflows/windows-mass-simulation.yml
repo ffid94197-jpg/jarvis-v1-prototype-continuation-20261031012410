@@ -59,9 +59,9 @@ jobs:
             & npm.cmd run $test
             if ($LASTEXITCODE -ne 0) { throw "FAILED $test with code $LASTEXITCODE" }
           }
-      - name: Massive seeded Windows-like simulation
+      - name: Extended 100k-round Windows-like simulation
         env:
-          JARVIS_SIM_ROUNDS: '40000'
+          JARVIS_SIM_ROUNDS: '100000'
           JARVIS_SIM_OUTPUT: windows-mass-simulation-results.json
         run: |
           node scripts/verify-windows-mass-simulation.cjs

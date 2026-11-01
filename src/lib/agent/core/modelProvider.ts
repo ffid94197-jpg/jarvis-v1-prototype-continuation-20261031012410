@@ -175,7 +175,7 @@ function createOllamaBridge(): ModelBridge {
     // the last half of a long user objective. The operator must explicitly
     // opt into a larger local context because KV-cache RAM is model-dependent.
     const requestedContext = process.env.JARVIS_OLLAMA_NUM_CTX;
-    const parsedContext = requestedContext && /^\\d{4,5}$/.test(requestedContext)
+    const parsedContext = requestedContext && /^\d{4,5}$/.test(requestedContext)
       ? Number(requestedContext) : 0;
     const context = parsedContext >= 4096 && parsedContext <= 32768
       ? parsedContext : undefined;

@@ -1,7 +1,7 @@
 name: JARVIS Windows mass simulation (isolated)
 on:
   push:
-    branches: [test/windows-mass-sim-20261031]
+    branches: [test/windows-mass-sim-20261031, test/full-acceptance-mass-20261101]
     paths:
       - scripts/verify-windows-mass-simulation.cjs
       - scripts/verify-companion-bridge-workflow.cjs

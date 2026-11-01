@@ -701,6 +701,23 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         await settleAndReport(taskId,gameStatus,stepsUsed,report,emit,{effectsHappened});
         return;
       }
+      // A folder alone does not constitute software development. Recover
+      // from premature model finals with a bounded authentic LLM retry.
+      // Model must still propose the source write; Guardian, durable effects
+      // and all verification gates remain unchanged. No fabricated action.
+      const softwareArtifactGoal = /\\b(?:website|web\\s*app(?:lication)?|frontend|backend|react|vite|typescript|full.stack)\\b/i.test(objective);
+      const sourceFilesWritten = settlementLines.some(line => /^✓ write_file\\b/.test(line));
+      if (softwareArtifactGoal && !sourceFilesWritten && denials === 0 &&
+          actionNudges < MAX_ACTION_NUDGES && !opts.replay) {
+        actionNudges++;
+        const note = `CODE_ARTIFACT_MISSING: only folders/no source files; bounded corrective request ${actionNudges}/${MAX_ACTION_NUDGES}`;
+        await persistStep(taskId, seq + 1, "replan", {note});
+        messages.push({role:"assistant",content:raw});
+        messages.push({role:"user",content:
+          "CORE VERIFICATION: This objective requires real software, but no successful write_file receipt exists. Empty folders are insufficient. Propose ONE genuine write_file action containing complete source text for a real project file (start with package.json if absent), or honestly report a missing capability. No fake file paths or success claims."});
+        emitStatus("replanning");
+        continue;
+      }
       if (stepsUsed === opts.stepsUsedOffset && !opts.replay) {
         // ——— POSITIVE CONVERSATIONAL SEPARATION ———
         // The legacy guard below is a DENYLIST of actionable phrasings, so any

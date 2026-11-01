@@ -1,7 +1,7 @@
 name: JARVIS real Windows live task after root-cause fixes
 on:
   push:
-    branches: [fix/live-windows-autonomy-v6-20261101]
+    branches: [fix/live-windows-autonomy-v7-20261101]
 permissions:
   contents: read
 jobs:

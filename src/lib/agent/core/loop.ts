@@ -574,11 +574,24 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     } catch (err) {
       // Model/provider/DB messages can contain secrets. Surface only a bounded
       // static phase code: diagnostic context without credentials or raw model output.
-      console.error(`[goal-plan] ${planningStage} (${err instanceof Error ? err.name : "unknown"}); no tool effects`);
-      const text = `Autonomous milestone planning failed [${planningStage}]. No tools were executed. Inspect the server log and saved plan records before retrying.`;
-      await persistStep(taskId,seq+1,"error",{note:text});
-      await settleAndReport(taskId,"failed",stepsUsed,text,emit,{effectsHappened:false});
-      return;
+      console.error(`[goal-plan] ${planningStage} (${err instanceof Error ? err.name : "unknown"}); no plan accepted`);
+      // Only a BRAND-NEW task may proceed without the optional ADVISORY plan
+      // after a model generation/validation failure. This is explicitly opt-in,
+      // records the gap, and still uses the REAL LLM for EVERY tool decision.
+      // Never soften DB/history/replay integrity failures or Guardian policy.
+      const recoverable = ["PLAN_MODEL_REQUEST_FAILED","MODEL_PLAN_INVALID","PLAN_MODEL_RETRY_FAILED"].includes(planningStage);
+      const allowedFallback = recoverable && process.env.JARVIS_GOAL_PLAN_ADVISORY_FALLBACK === "1" &&
+        opts.replay === undefined && !effectsHappened && !goalPlan;
+      if (allowedFallback) {
+        await persistStep(taskId,seq+1,"goal_plan_unavailable",{note:`Advisory plan unavailable [${planningStage}]; no plan certified`});
+        messages.push({role:"assistant",content:
+          "Advisory milestone planning failed. This is NOT a plan or authorization. Continue from the ORIGINAL objective with one actual Guardian-authorized tool action at a time. Any unmet goal remains UNVERIFIED. Never fabricate effects."});
+      } else {
+        const text = `Autonomous milestone planning failed [${planningStage}]. No tools were executed. Inspect the server log and saved plan records before retrying.`;
+        await persistStep(taskId,seq+1,"error",{note:text});
+        await settleAndReport(taskId,"failed",stepsUsed,text,emit,{effectsHappened:false});
+        return;
+      }
     }
   }
 

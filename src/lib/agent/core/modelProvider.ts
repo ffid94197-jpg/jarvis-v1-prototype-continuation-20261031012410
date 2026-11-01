@@ -165,6 +165,18 @@ export function isAdvisoryGoalPlanCall(messages: ModelMessage[]): boolean {
     messages[0].content.includes("You are an advisory JARVIS goal decomposer");
 }
 
+function ollamaRequestDeadlineMs(): number {
+  // Local CPU models may require longer bounded inference than cloud APIs.
+  // This grants NO tool authority and does not change task completion rules.
+  const raw = process.env.JARVIS_OLLAMA_REQUEST_TIMEOUT_MS;
+  if (!raw) return modelRequestDeadlineMs();
+  if (!/^[0-9]{5,6}$/.test(raw)) throw new Error("Invalid local inference deadline");
+  const n = Number(raw);
+  if (!Number.isSafeInteger(n) || n < 30000 || n > 300000)
+    throw new Error("Local inference deadline outside the supported 30-300 seconds");
+  return n;
+}
+
 function createOllamaBridge(): ModelBridge {
   const settings = resolveOllamaSettings();
   // Ollama's /api/chat honours role:"system", so the identity contract must be
@@ -208,7 +220,7 @@ function createOllamaBridge(): ModelBridge {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: body(messages, false, true),
-        signal: AbortSignal.timeout(modelRequestDeadlineMs()),
+        signal: AbortSignal.timeout(ollamaRequestDeadlineMs()),
       });
       checkHttpStatus(response);
       const result = await response.json() as OllamaChatResponse;
@@ -222,7 +234,7 @@ function createOllamaBridge(): ModelBridge {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: body(messages, true, false),
-        signal: AbortSignal.timeout(modelRequestDeadlineMs()),
+        signal: AbortSignal.timeout(ollamaRequestDeadlineMs()),
       });
       checkHttpStatus(response);
       if (!response.body) throw new Error("Local model streaming response had no body.");

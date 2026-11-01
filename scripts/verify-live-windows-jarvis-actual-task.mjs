@@ -147,7 +147,7 @@ async function verifySite(files, before){
  // This test has no isolated project-build and HTTP/browser verification yet.
  // A successful JARVIS final or static file inventory MUST NOT prove a site.
  verdict.productionSiteVerified=false;
- verdict.reason="Independent dependency-safe application build, running HTTP/browser, API and PostgreSQL checks are required; no such verification was performed.";
+ verdict.reason="Real source artifacts alone cannot certify frontend, backend and database runtime; isolated independent build/HTTP/PostgreSQL verification still required.";
  return verdict;
 }
 async function waitReady(url,timeoutMs){

@@ -7,12 +7,13 @@ function compile(p){const file=path.join(root,p);const r=ts.transpileModule(fs.r
 const planModule={};vm.runInNewContext(compile('src/lib/agent/core/goalPlanner.ts'),{exports:planModule,require},{timeout:3000});
 const goal={schemaVersion:1,milestones:[{id:'inspect',description:'Inspect the existing workspace',dependsOn:[],evidence:'Observed directory listing'},{id:'verify',description:'Verify the requested project output',dependsOn:['inspect'],evidence:'Independent readback of the created output'}]};
 const data=[],events=[],task={id:'t',status:'planned'};
-let toolCalls=0,modelCalls=0, authCalls=0;
+let toolCalls=0,modelCalls=0, authCalls=0, bridgeCalls=0;
 const db={agentStep:{findFirst:async({where})=>{if(where?.kind==='model_pin')return null;const kind=where?.kind;return data.filter(x=>typeof kind==='object'?kind.in.includes(x.kind):x.kind===kind).sort((a,b)=>(b.seq??0)-(a.seq??0))[0]??null},create:async({data:row})=>{data.push(row);return row;}},agentTask:{findUnique:async()=>task}};
 const mocks={
- './modelProvider':{modelIdentityContext:()=>'CURRENT ADVISORY PROVIDER: backend=test provider="fixture" (test metadata, NOT your identity)',createModelBridge:async()=>({identity:{backend:'test',provider:'fixture',modelId:'fixture',local:true},complete:async()=>{modelCalls++;return modelCalls===1?JSON.stringify(goal):modelCalls===2?JSON.stringify({action:'tool',tool:'list_dir',args:{path:'.'}}):JSON.stringify({action:'final',answer:'not yet won'});},report:async()=> 'Partial work; independent verification is incomplete.'})},
+ './modelProvider':{modelIdentityContext:()=>'CURRENT ADVISORY PROVIDER: backend=test provider="fixture" (test metadata, NOT your identity)',createModelBridge:async()=>{bridgeCalls++;return {identity:{backend:'test',provider:'fixture',modelId:'fixture',local:true},complete:async()=>{modelCalls++;return modelCalls===1?JSON.stringify(goal):modelCalls===2?JSON.stringify({action:'tool',tool:'list_dir',args:{path:'.'}}):JSON.stringify({action:'final',answer:'not yet verified'});},report:async()=> 'Partial work; independent verification is incomplete.'};}},
  './laya':{adviseTask:()=>({route:'test'})},
- './windowsIntent':{directWindowsLaunch:()=>null},'./minecraftIntent':{minecraftMissionFromObjective:()=>null,directMinecraftMission:()=>null},'./capabilityIntent':{directCapabilityDiscovery:()=>null},
+ './windowsIntent':{directWindowsLaunch:()=>null},'./minecraftIntent':{minecraftMissionFromObjective:()=>null,directMinecraftMission:()=>null},
+ './minecraftAiGate':{MinecraftAiGate:class{},isMinecraftAiObjective:()=>false,firstMinecraftObservationDecision:()=>null,MINECRAFT_AI_INSTRUCTIONS:''},'./capabilityIntent':{directCapabilityDiscovery:()=>null},
  './modelErrors':{classifyModelFailure:()=>({code:'MODEL_ERROR',publicMessage:'model unavailable'})},
  '@/lib/db':{db},'../guardian/guardian':{authorizeToolCall:async()=>{authCalls++;return {verdict:'allow'}}},
  '../guardian/policy':{ensureWorkspace:async()=>{}},
@@ -60,8 +61,11 @@ function compileWith(rel,depth){
     {filename:rel,timeout:10000});
   return mod;
 }
+process.env.JARVIS_MINECRAFT_LAN_ENABLED='0';
+process.env.JARVIS_MINECRAFT_AI_PLANNER_ENABLED='0';
 const loaded=compileWith('src/lib/agent/core/loop.ts',0);
 loaded.runTask({taskId:'t',ownerId:'owner',objective:'Autonomously create a multi-step workspace project and independently verify the output',budget:8,stepsUsedOffset:0,emit:x=>events.push(x),isCancelled:()=>false}).then(()=>{
+ assert.equal(bridgeCalls,1,'the generic task selected one model bridge');
  assert.equal(toolCalls,1,'exactly one authorized observation performed');
  assert.equal(authCalls,1,'every tool routed through Guardian');
  assert.equal(modelCalls,3,'plan + tool + final model calls');

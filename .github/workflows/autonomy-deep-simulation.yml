@@ -1,7 +1,7 @@
 name: JARVIS Deep Autonomy Native Windows Simulation
 on:
   push:
-    branches: [test/autonomy-deep-sim-20261031, fix/live-windows-autonomy-v8-20261101]
+    branches: [test/autonomy-deep-sim-20261031, fix/live-windows-autonomy-v8-20261101, fix/autonomy-peak-acceptance-20261101]
   workflow_dispatch:
 permissions:
   contents: read

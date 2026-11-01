@@ -82,6 +82,8 @@ let bridgeConstructions = 0;
 let constructFaults = [];  // errors thrown while CONSTRUCTING the provider bridge
 let completeFaults = [];   // errors thrown from within a completion call
 let cancelAfter = null;    // flip isCancelled() once this many steps ran
+let duplicateEffectKey = null;
+let duplicateEffectRemaining = 0;
 
 const db = {
   agentStep: {
@@ -195,8 +197,13 @@ const mocks = {
     STEP_SCOPED_EFFECTS: new Set(),
     isEffectfulToolInvocation: (tool) => tool === 'write_file',
     admitEffect: async (taskId, _planRevision, eff) => {
-      const row = { taskId, tool: eff.tool, key: `${eff.tool}:${JSON.stringify(eff.args ?? {})}`,
-        status: 'ADMITTED', effectId: `eff-${effectRows.length + 1}` };
+      const key = eff.tool + ':' + JSON.stringify(eff.args ?? {});
+      if (duplicateEffectRemaining > 0 && key === duplicateEffectKey) {
+        duplicateEffectRemaining--;
+        return { kind: 'duplicate_settled', effectId: 'preexisting-effect' };
+      }
+      const row = { taskId, tool: eff.tool, key,
+        status: 'ADMITTED', effectId: 'eff-' + (effectRows.length + 1) };
       effectRows.push(row);
       return { kind: 'admitted', effectId: row.effectId };
     },
@@ -248,16 +255,23 @@ const loop = load('src/lib/agent/core/loop.ts');
 const verifier = load('src/lib/agent/core/verifier.ts');
 
 async function runScenario({ objective, scripted, guardian = 'allow', failOnce = null, budget = 12,
-  construct = [], complete = [], cancel = null, offset = 0, keepState = false, replay = undefined }) {
+  construct = [], complete = [], cancel = null, offset = 0, keepState = false, replay = undefined,
+  goalPlanner = false, duplicateKey = null, duplicateCount = 0, preexisting = null }) {
   if (!keepState) { stepRows = []; effectRows = []; }
   decisions = [...scripted];
   constructFaults = [...construct]; completeFaults = [...complete]; cancelAfter = cancel;
   guardianVerdict = guardian; guardianCalls = 0; executorCalls = 0; modelCalls = 0;
   bridgeConstructions = 0;
   failToolOnce = failOnce; failedOnce.clear();
+  duplicateEffectKey = duplicateKey;
+  duplicateEffectRemaining = duplicateCount;
+  if (preexisting) effectRows.push({taskId:'scenario-task',tool:'write_file',key:preexisting.key,
+    status:'SETTLED',effectId:'preexisting-effect'});
   if (!keepState) taskRow.status = 'queued';
   const events = [];
   let error = null;
+  const priorGoalPlanner = process.env.JARVIS_GOAL_PLANNER_ENABLED;
+  process.env.JARVIS_GOAL_PLANNER_ENABLED = goalPlanner ? '1' : '0';
   try {
     await loop.runTask({
       taskId: 'scenario-task', ownerId: 'owner', objective, budget, stepsUsedOffset: offset,
@@ -265,6 +279,10 @@ async function runScenario({ objective, scripted, guardian = 'allow', failOnce =
       isCancelled: () => cancelAfter !== null && stepRows.filter((r) => r.kind === 'tool_call').length >= cancelAfter,
     });
   } catch (err) { error = err; }
+  finally {
+    if (priorGoalPlanner === undefined) delete process.env.JARVIS_GOAL_PLANNER_ENABLED;
+    else process.env.JARVIS_GOAL_PLANNER_ENABLED = priorGoalPlanner;
+  }
   const nudges = stepRows.filter((r) =>
     r.kind === 'replan' && /completion proposal rejected/.test(String(r.note || ''))).length;
   const toolSteps = stepRows.filter((r) => r.kind === 'tool_call').map((r) => r.tool);
@@ -373,6 +391,57 @@ async function runScenario({ objective, scripted, guardian = 'allow', failOnce =
   ok(!f.events.some((ev) => ev.type === 'final' && ev.status === 'completed'),
     '5: a cancelled run never emits a completed final event');
 
+  // ——— 6. a settled duplicate is a no-op, not an infinite successful loop ———
+  console.log('\n── 6. duplicate proposals trigger bounded durable replanning ──');
+  const duplicateObjective = 'Create file existing.txt containing "already" and create file fresh.txt containing "fresh"';
+  const duplicateArgs = {path:'existing.txt',content:'already'};
+  const duplicateKey = 'write_file:' + JSON.stringify(duplicateArgs);
+  const plan1 = JSON.stringify({schemaVersion:1,milestones:[
+    {id:'inspect',description:'Inspect the existing file',dependsOn:[],evidence:'read_file confirms existing.txt'},
+    {id:'finish',description:'Create the remaining file',dependsOn:['inspect'],evidence:'read_file confirms fresh.txt'}
+  ]});
+  const plan2 = JSON.stringify({schemaVersion:1,milestones:[
+    {id:'inspect-current',description:'Inspect existing workspace state',dependsOn:[],evidence:'read_file confirms existing.txt'},
+    {id:'create-missing',description:'Create and verify fresh.txt',dependsOn:['inspect-current'],evidence:'read_file confirms fresh.txt'}
+  ]});
+  fs.writeFileSync(path.join(workspace,'existing.txt'),'already');
+  const duplicateWrite = {action:'tool',tool:'write_file',args:duplicateArgs};
+  const duplicateRecovery = await runScenario({
+    objective:duplicateObjective,goalPlanner:true,duplicateKey,duplicateCount:3,
+    preexisting:{key:duplicateKey},
+    scripted:[plan1,duplicateWrite,duplicateWrite,duplicateWrite,plan2,
+      {action:'tool',tool:'read_file',args:{path:'existing.txt'}},
+      {action:'tool',tool:'write_file',args:{path:'fresh.txt',content:'fresh'}},
+      {action:'tool',tool:'read_file',args:{path:'fresh.txt'}},
+      {action:'final',answer:'Both files are present and verified.'}],
+  });
+  ok(duplicateRecovery.error===null,'6: duplicate recovery does not throw',duplicateRecovery.error?.message);
+  ok(duplicateRecovery.status==='completed','6: Core replans and completes after repeated duplicate proposals',duplicateRecovery.status);
+  ok(duplicateRecovery.steps.filter(x=>x.kind==='goal_replan').length===1,
+    '6: exactly one bounded durable goal replan is recorded');
+  ok(duplicateRecovery.steps.filter(x=>x.kind==='tool_result'&&JSON.parse(x.resultJson||'{}').skippedDuplicate).length===3,
+    '6: all three duplicate effects are explicitly skipped');
+  ok(duplicateRecovery.executorCalls===3,
+    '6: skipped writes never reach the executor; only inspect/write/read execute',duplicateRecovery.executorCalls);
+  ok(fs.readFileSync(path.join(workspace,'existing.txt'),'utf8')==='already'&&
+    fs.readFileSync(path.join(workspace,'fresh.txt'),'utf8')==='fresh',
+    '6: both existing and new file contents are independently correct on disk');
+  ok(duplicateRecovery.effects.filter(x=>x.status==='SETTLED').length>=2,
+    '6: prior and new effect settlements remain durable');
+
+  fs.writeFileSync(path.join(workspace,'duplicate-only.txt'),'already');
+  const duplicateOnlyArgs={path:'duplicate-only.txt',content:'already'};
+  const duplicateOnlyKey='write_file:'+JSON.stringify(duplicateOnlyArgs);
+  const duplicateOnly=await runScenario({
+    objective:'Create file duplicate-only.txt containing "already"',
+    duplicateKey:duplicateOnlyKey,duplicateCount:3,
+    preexisting:{key:duplicateOnlyKey},
+    scripted:Array.from({length:3},()=>({action:'tool',tool:'write_file',args:duplicateOnlyArgs})),
+  });
+  ok(duplicateOnly.status==='partial','6: no-plan duplicate loop stops as partial, never success',duplicateOnly.status);
+  ok(duplicateOnly.executorCalls===0,'6: duplicate no-plan loop performs no repeated side effect');
+  ok(!duplicateOnly.events.some(ev=>ev.type==='final'&&ev.status==='completed'),
+    '6: duplicate no-plan loop never emits a completed final event');
 
   // Deep simulated autonomous task lifecycles, with the REAL Core/verifier,
   // REAL scoped temporary filesystem; only LLM, DB, and authorization decisions
@@ -400,6 +469,38 @@ async function runScenario({ objective, scripted, guardian = 'allow', failOnce =
       'Create a file named '+name+' with content "'+content+'"',
     ];
     return phrase[i%phrase.length];
+  }
+  // Seeded adversarial loop test: each task sees a previously settled write
+  // repeated three times, then must replan, inspect, create a missing file and
+  // independently verify it. This exercises the real Core and real disk I/O.
+  const duplicatePlan = JSON.stringify({schemaVersion:1,milestones:[
+    {id:'inspect',description:'Inspect the settled file',dependsOn:[],evidence:'read_file confirms the old file'},
+    {id:'create',description:'Create the missing file',dependsOn:['inspect'],evidence:'read_file confirms the new file'}
+  ]});
+  for(let i=0;i<80;i++){
+    const oldName='dup-old-'+SEED.toString(16)+'-'+i+'.txt';
+    const newName='dup-new-'+SEED.toString(16)+'-'+i+'.txt';
+    const oldArgs={path:oldName,content:'settled-'+i};
+    const oldKey='write_file:'+JSON.stringify(oldArgs);
+    fs.writeFileSync(path.join(workspace,oldName),oldArgs.content);
+    const objective='Create file '+oldName+' containing "settled-'+i+'" and create file '+newName+' containing "new-'+i+'"';
+    const writeOld={action:'tool',tool:'write_file',args:oldArgs};
+    const r=await runDeep({
+      objective,goalPlanner:true,duplicateKey:oldKey,duplicateCount:3,
+      preexisting:{key:oldKey},
+      scripted:[duplicatePlan,writeOld,writeOld,writeOld,duplicatePlan,
+        {action:'tool',tool:'read_file',args:{path:oldName}},
+        {action:'tool',tool:'write_file',args:{path:newName,content:'new-'+i}},
+        {action:'tool',tool:'read_file',args:{path:newName}},
+        {action:'final',answer:'Both files are present and verified.'}],
+    });
+    verify('duplicate_proposal_recovery',r.error===null,'no exception',{i,error:r.error?.message});
+    verify('duplicate_proposal_recovery',r.status==='completed','bounded replan completes task',{i,status:r.status});
+    verify('duplicate_proposal_recovery',r.steps.filter(x=>x.kind==='goal_replan').length===1,'one replan recorded',{i});
+    verify('duplicate_proposal_recovery',r.executorCalls===3,'duplicate effects never re-executed',{i,calls:r.executorCalls});
+    verify('duplicate_proposal_recovery',fs.readFileSync(path.join(workspace,oldName),'utf8')===oldArgs.content&&
+      fs.readFileSync(path.join(workspace,newName),'utf8')==='new-'+i,'real filesystem contents verified',{i});
+    verify('duplicate_proposal_recovery',r.effects.filter(x=>x.status==='SETTLED').length>=2,'settlements remain durable',{i});
   }
   quietStress=true;
   try {

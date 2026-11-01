@@ -342,6 +342,8 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let denials = 0;
   let parseRetries = 0;
   let actionNudges = 0;
+  let duplicateProposalKey = "";
+  let duplicateProposalCount = 0;
   let inventoryDraftCorrections = 0;
   let inventorySource = parseInventorySource(objective);
   const inventoryDeliverables=/\b(?:inventory|stock)\b/i.test(objective)
@@ -609,6 +611,61 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       emit, {effectsHappened:false});
     return;
   }
+
+  // A duplicate settled effect is a safe NO-OP, but it is not progress. Some
+  // small local models can ignore the observation and propose the exact same
+  // write forever. Feed that proposal into the same bounded failure watchdog
+  // used by real tool failures; long-horizon tasks get a durable replan, while
+  // tasks without an advisory plan stop after the fixed three-repeat limit.
+  const recoverDuplicateProposal = async (
+    tool: string,
+    args: Record<string, unknown>,
+  ): Promise<"continue" | "replanned" | "blocked"> => {
+    const key = canonicalKey(tool, args);
+    duplicateProposalCount = key === duplicateProposalKey ? duplicateProposalCount + 1 : 1;
+    duplicateProposalKey = key;
+
+    if (!goalPlan) return duplicateProposalCount >= 3 ? "blocked" : "continue";
+    if (isCancelled()) return "continue";
+
+    const watch = goalWatchdog.observe(tool, args, {
+      ok: false,
+      error: "DUPLICATE_EFFECT_SKIPPED",
+    });
+    try {
+      await db.agentStep.create({
+        data: {taskId,seq:stepsUsed*10+1,kind:"goal_watchdog",note:JSON.stringify(goalWatchdog.snapshot())},
+      });
+    } catch {
+      return "blocked";
+    }
+    if (watch === "blocked") return "blocked";
+    if (watch !== "replan") return "continue";
+
+    try {
+      if (!model) throw new Error("Duplicate-proposal recovery requires the pinned model bridge.");
+      const changed = await llmJson(model, [
+        {role:"assistant",content:"You are an advisory JARVIS recovery planner, not an executor. Strict JSON only; no tool permissions."},
+        {role:"user",content:goalPlanRequest(
+          objective,
+          goalPlan,
+          tool + ": the exact proposed effect was already settled and skipped; it was NOT re-executed and made NO new progress.",
+        )},
+      ]);
+      const replacement = parseGoalPlan(changed);
+      if (!replacement) throw new Error("Invalid revised goal plan after repeated duplicate proposals.");
+      await db.agentStep.create({data:{taskId,seq,kind:"goal_replan",note:JSON.stringify(replacement)}});
+      goalPlan = replacement;
+      goalWatchdog.acknowledgeReplan();
+      await db.agentStep.create({
+        data:{taskId,seq:stepsUsed*10+2,kind:"goal_watchdog",note:JSON.stringify(goalWatchdog.snapshot())},
+      });
+      messages.push({role:"assistant",content:goalPlanContext(replacement)});
+      return "replanned";
+    } catch {
+      return "blocked";
+    }
+  };
 
   for (;;) {
     // ——— cancellation checkpoint (between steps) ———
@@ -1029,8 +1086,18 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         messages.push({ role: "assistant", content: raw });
         messages.push({
           role: "user",
-          content: `OBSERVATION (Core duplicate guard): this exact step was already completed in a previous run and was NOT re-executed. Continue with the remaining objective; use read-only tools to verify existing state if needed.`,
+          content: "CORE DUPLICATE GUARD: " + tool + " was already settled and was NOT re-executed. This no-op is NOT progress. Inspect the existing workspace with read_file/list_dir and choose a different unmet action; do not repeat this exact effect.",
         });
+        const duplicateRecovery = await recoverDuplicateProposal(tool, args);
+        if (duplicateRecovery === "blocked") {
+          const text = "Autonomous proposal loop stopped after three identical already-settled effects. No duplicate effect was re-executed; inspect the workspace and revise the task strategy.";
+          await persistStep(taskId, seq + 1, "error", {note:"repeated duplicate effect proposal; bounded recovery exhausted"});
+          await settleAndReport(taskId, "partial", stepsUsed, text, emit, {effectsHappened});
+          return;
+        }
+        if (duplicateRecovery === "replanned") {
+          messages.push({role:"user",content:"CORE RECOVERY: a new advisory milestone plan is now active. Do not repeat the skipped effect. Inspect actual files and implement the next unmet milestone."});
+        }
         if (stepsUsed - opts.stepsUsedOffset >= effectiveBudget) {
           if (isCancelled()) {
             const text = "Task cancelled by the operator. All execution has stopped; partial progress is recorded in the task journal.";
@@ -1083,8 +1150,18 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         messages.push({ role: "assistant", content: raw });
         messages.push({
           role: "user",
-          content: `OBSERVATION (Core duplicate guard): this exact effect was already settled in the durable admission table and was NOT re-executed. Continue with the remaining objective.`,
+          content: "CORE DUPLICATE GUARD: " + tool + " was already settled in the durable admission table and was NOT re-executed. This no-op is NOT progress. Inspect actual files and choose a different unmet action; do not repeat this exact effect.",
         });
+        const duplicateRecovery = await recoverDuplicateProposal(tool, args);
+        if (duplicateRecovery === "blocked") {
+          const text = "Autonomous proposal loop stopped after three identical already-settled effects. No duplicate effect was re-executed; inspect the workspace and revise the task strategy.";
+          await persistStep(taskId, seq + 1, "error", {note:"repeated duplicate effect proposal; bounded recovery exhausted"});
+          await settleAndReport(taskId, "partial", stepsUsed, text, emit, {effectsHappened});
+          return;
+        }
+        if (duplicateRecovery === "replanned") {
+          messages.push({role:"user",content:"CORE RECOVERY: a new advisory milestone plan is now active. Do not repeat the skipped effect. Inspect actual files and implement the next unmet milestone."});
+        }
         skipExecution = true;
       }
       if (admission.kind === "needs_reconciliation") {
@@ -1202,6 +1279,10 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     await persistStep(taskId, seq, "tool_call", { tool, argsJson });
 
     const result = await executeTool(taskId, tool, guardian, isCancelled);
+    if (result.ok) {
+      duplicateProposalKey = "";
+      duplicateProposalCount = 0;
+    }
 
     stepsUsed++;
     emitStatus("executing");

@@ -188,8 +188,10 @@ function ollamaRequestDeadlineMs(): number {
 export function compactOllamaWorkspaceHistory(
   messages: ModelMessage[], enabled = process.env.JARVIS_OLLAMA_COMPACT_HISTORY === "1"
 ): ModelMessage[] {
-  if (!enabled || messages.length <= 11 ||
-      !messages[0]?.content.includes("You are the JARVIS planning core")) return messages;
+  const systemPrompt = messages[0]?.content ?? "";
+  const isCorePlanner = systemPrompt.includes("You are the JARVIS planning core") ||
+    systemPrompt.includes("You are JARVIS's REAL software-workspace agent");
+  if (!enabled || messages.length <= 11 || !isCorePlanner) return messages;
   const firstUser = messages.findIndex(m => m.role === "user");
   if (firstUser < 1) return messages;
   const lead = messages.slice(0, firstUser).filter((m,i) =>

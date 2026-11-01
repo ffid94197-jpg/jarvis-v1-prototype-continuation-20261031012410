@@ -1,11 +1,15 @@
 name: JARVIS Windows mass simulation (isolated)
 on:
   push:
-    branches: [test/windows-mass-sim-20261031]
+    branches: [test/windows-mass-sim-20261031, fix/live-windows-autonomy-v8-20261101]
     paths:
       - scripts/verify-windows-mass-simulation.cjs
       - scripts/verify-companion-bridge-workflow.cjs
       - src/lib/agent/core/requestIntent.ts
+      - src/lib/agent/core/loop.ts
+      - src/lib/agent/core/modelProvider.ts
+      - scripts/verify-autonomy-deep-windows.cjs
+      - scripts/verify-long-goal-planner-selection.cjs
       - .github/workflows/windows-mass-simulation.yml
   workflow_dispatch:
 permissions:

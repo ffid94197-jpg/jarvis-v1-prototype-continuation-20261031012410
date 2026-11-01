@@ -20,7 +20,7 @@ const result={
  requested:"Production-ready TVS Motor digital showroom, unchanged internet source",
  realModelCalled:false,providerStatus:null,fullRuntimeLaunched:false,
  windowsCompanionListening:false,nexusReady:false,taskApiCalled:false,
- sseFinal:null,sseErrors:[],toolAttempts:[],taskEvents:0,startedAt:new Date().toISOString(),
+ sseFinal:null,sseErrors:[],toolAttempts:[],taskEvents:0,taskRuns:[],startedAt:new Date().toISOString(),
  artifacts:[],siteVerification:null,notes:[],completed:false
 };
 const sha=x=>createHash("sha256").update(x).digest("hex");
@@ -145,27 +145,92 @@ async function collectFiles(dir,relativePrefix="",depth=0){
  }
  return records;
 }
-async function verifySite(files, before){
- const beforeMap = new Map(before.filter(x=>x.type==="file").map(x=>[x.path,x.sha256]));
- const created = files.filter(f=>f.type==="file" && beforeMap.get(f.path)!==f.sha256);
- const paths=created.map(f=>f.path.toLowerCase());
- const has=(re)=>paths.some(x=>re.test(x));
+function safeProjectEnv(){
+ return {PATH:process.env.PATH||"",SystemRoot:process.env.SystemRoot||"",WINDIR:process.env.WINDIR||"",
+  TEMP:process.env.TEMP||workspace,TMP:process.env.TMP||workspace,HOME:workspace,USERPROFILE:workspace,
+  APPDATA:join(workspace,".appdata"),LOCALAPPDATA:join(workspace,".local"),
+  npm_config_cache:join(workspace,".npm-cache"),CI:"1",NODE_ENV:"development"};
+}
+async function killProcessTree(pid){
+ if(!pid)return;
+ await new Promise(resolve=>{
+  let finished=false,timer;
+  const done=()=>{if(finished)return;finished=true;if(timer)clearTimeout(timer);resolve();};
+  const killer=spawn("taskkill.exe",["/PID",String(pid),"/T","/F"],{windowsHide:true,stdio:"ignore"});
+  timer=setTimeout(done,5000);killer.once("close",done);killer.once("error",done);
+ });
+}
+function runFixedNpm(command,timeoutMs=600000){
+ return new Promise(resolve=>{
+  const child=spawn(process.env.ComSpec||"cmd.exe",["/d","/s","/c",command],{
+   cwd:workspace,env:safeProjectEnv(),windowsHide:true,stdio:["ignore","pipe","pipe"]});
+  let stdout="",stderr="",timedOut=false,finished=false,timer;
+  const append=(old,data)=>(old+data.toString("utf8")).slice(-5000);
+  const finish=code=>{if(finished)return;finished=true;if(timer)clearTimeout(timer);
+   resolve({ok:!timedOut&&code===0,code,timedOut,stdout,stderr});};
+  child.stdout.on("data",d=>{stdout=append(stdout,d);});
+  child.stderr.on("data",d=>{stderr=append(stderr,d);});
+  child.once("error",()=>finish(-1));child.once("close",code=>finish(code));
+  timer=setTimeout(()=>{timedOut=true;void killProcessTree(child.pid).finally(()=>finish(-1));},timeoutMs);
+ });
+}
+async function verifyPreview(){
+ const child=spawn(process.env.ComSpec||"cmd.exe",["/d","/s","/c","npm run preview -- --host 127.0.0.1 --port 4173"],{
+  cwd:workspace,env:safeProjectEnv(),windowsHide:true,stdio:["ignore","ignore","pipe"]});
+ let stderr="";child.stderr.on("data",d=>{stderr=(stderr+d.toString("utf8")).slice(-3000);});
+ let observed=null;const deadline=Date.now()+30000;
+ while(Date.now()<deadline){
+  try{
+   const response=await fetch("http://127.0.0.1:4173/",{signal:AbortSignal.timeout(2500)});
+   const body=await response.text(),contentType=response.headers.get("content-type")||"";
+   if(response.status===200&&/text\/html/i.test(contentType)){
+    observed={status:response.status,contentType,htmlHasTVS:/TVS/i.test(body),htmlBytes:Buffer.byteLength(body,"utf8")};break;
+   }
+  }catch{}
+  await pause(900);
+ }
+ await killProcessTree(child.pid);
+ if(child.exitCode===null){try{child.kill("SIGKILL");}catch{}}
+ return {ok:Boolean(observed&&observed.htmlHasTVS),...(observed||{}),stderr};
+}
+async function verifySite(files,before){
+ const beforeMap=new Map(before.filter(x=>x.type==="file").map(x=>[x.path,x.sha256]));
+ const created=files.filter(f=>f.type==="file"&&beforeMap.get(f.path)!==f.sha256);
+ const paths=created.map(f=>f.path.toLowerCase()),has=re=>paths.some(x=>re.test(x));
+ const packagePath=join(workspace,"package.json");let packageJson=null,packageError=null;
+ if(fss.existsSync(packagePath)){try{packageJson=JSON.parse(await fs.readFile(packagePath,"utf8"));}catch(e){packageError=String(e?.message||e);}}
+ const scripts=packageJson?.scripts&&typeof packageJson.scripts==="object"?packageJson.scripts:{};
  const verdict={
-  realFiles:paths.length,
-  existingBaselineFileCount:before.filter(f=>f.type==="file").length,
+  realFiles:paths.length,existingBaselineFileCount:before.filter(f=>f.type==="file").length,
   changedFileHashes:created.map(f=>({path:f.path,sha256:f.sha256})),
-  frontendPackage:has(/(^|\/)package\.json$/),
-  reactCode:has(/\.(tsx|jsx)$/),
-  styling:has(/\.(css|scss)$/),
+  frontendPackage:has(/(^|\/)package\.json$/),reactCode:has(/\.(tsx|jsx)$/),styling:has(/\.(css|scss)$/),
   backendCode:has(/(?:server|backend|api|routes).*\.(ts|js|py)$/),
   databaseSchema:has(/(?:schema\.prisma|migrations|\.sql)$/),
   threeD:has(/(?:three|scene|motorcycle|bike).*\.(tsx|jsx|ts|js)$/),
-  originalSourceMaterialized:paths.length>0
+  originalSourceMaterialized:paths.length>0,
+  packageScripts:{build:typeof scripts.build==="string",test:typeof scripts.test==="string",preview:typeof scripts.preview==="string"},
+  packageJsonError:packageError,dependencyInstall:null,build:null,tests:null,preview:null,
+  frontendBuildVerified:false,postgresRuntimeVerified:false,productionSiteVerified:false
  };
- // This test has no isolated project-build and HTTP/browser verification yet.
- // A successful JARVIS final or static file inventory MUST NOT prove a site.
- verdict.productionSiteVerified=false;
- verdict.reason="Real source artifacts alone cannot certify frontend, backend and database runtime; isolated independent build/HTTP/PostgreSQL verification still required.";
+ if(packageJson&&verdict.packageScripts.build&&verdict.packageScripts.preview){
+  const hasLock=fss.existsSync(join(workspace,"package-lock.json"));
+  verdict.dependencyInstall=await runFixedNpm(hasLock?
+   "npm ci --no-audit --no-fund --ignore-scripts":"npm install --no-audit --no-fund --ignore-scripts",600000);
+  if(verdict.dependencyInstall.ok){
+   verdict.build=await runFixedNpm("npm run build",600000);
+   if(verdict.build.ok){
+    verdict.tests=verdict.packageScripts.test?await runFixedNpm("npm run test",300000):
+     {ok:false,skipped:true,reason:"package.json has no test script"};
+    verdict.preview=await verifyPreview();
+   }
+  }
+ }
+ verdict.frontendBuildVerified=Boolean(verdict.frontendPackage&&verdict.reactCode&&verdict.styling&&
+  verdict.dependencyInstall?.ok&&verdict.build?.ok&&verdict.tests?.ok&&verdict.preview?.ok);
+ // This runner does not start a PostgreSQL service; a schema file is not DB integration proof.
+ verdict.productionSiteVerified=Boolean(verdict.frontendBuildVerified&&verdict.backendCode&&
+  verdict.databaseSchema&&verdict.threeD&&verdict.postgresRuntimeVerified);
+ verdict.reason="PostgreSQL runtime integration is unverified: this Windows hosted-runner test did not start a real PostgreSQL service.";
  return verdict;
 }
 async function waitReady(url,timeoutMs){
@@ -178,48 +243,46 @@ async function waitReady(url,timeoutMs){
  }
  return {ready:false};
 }
-async function streamLiveTask(prompt,abortSignal,sessionCookie){
+async function streamLiveTask(prompt,abortSignal,sessionCookie,options={}){
+ const stepBudget=Number.isInteger(options.stepBudget)?options.stepBudget:36;
+ const payload=options.resumeTaskId?{resumeTaskId:options.resumeTaskId,stepBudget}:{objective:prompt,stepBudget};
  const response=await fetch("http://127.0.0.1:3000/api/jarvis/task",{
   method:"POST",headers:{"Content-Type":"application/json","Origin":"http://127.0.0.1:3000","Cookie":sessionCookie},
-  body:JSON.stringify({objective:prompt,stepBudget:24}),
-  signal:abortSignal
- });
- result.taskApiCalled=true;
- result.taskHttpStatus=response.status;
+  body:JSON.stringify(payload),signal:abortSignal});
+ result.taskApiCalled=true;result.taskHttpStatus=response.status;
  if(!response.ok){
-   let detail="";
-   try{const j=await response.json();detail=String(j?.code||j?.error||"").slice(0,180);}catch{}
-   result.notes.push("Task API rejected HTTP "+response.status+" "+detail);
-   console.log("REAL_TASK_API_REJECTED status="+response.status+" reason="+detail);
-   return;
+  let detail="";try{const j=await response.json();detail=String(j?.code||j?.error||"").slice(0,180);}catch{}
+  result.notes.push("Task API rejected HTTP "+response.status+" "+detail);
+  console.log("REAL_TASK_API_REJECTED status="+response.status+" reason="+detail);
+  result.taskRuns.push({taskId:options.resumeTaskId||null,status:"api-rejected",stepBudget,httpStatus:response.status,reason:detail});
+  return {final:null,httpStatus:response.status,taskId:options.resumeTaskId||null};
  }
  const reader=response.body?.getReader();if(!reader)throw Error("No SSE task stream");
- const decoder=new TextDecoder();let buffer="";
+ const decoder=new TextDecoder();let buffer="",finalEvent=null;
  const ingest=segment=>{
-  const name=segment.match(/^event:\s*(.*)$/m)?.[1];
-  const data=segment.match(/^data:\s*(.*)$/m)?.[1];
-  if(!data)return;
-  let json;try{json=JSON.parse(data);}catch{return;}
+  const name=segment.match(/^event:\s*(.*)$/m)?.[1],data=segment.match(/^data:\s*(.*)$/m)?.[1];
+  if(!data)return;let json;try{json=JSON.parse(data);}catch{return;}
   result.taskEvents++;
-  if(name==="final")result.sseFinal={status:json.status,taskId:json.taskId,text:String(json.text||"").slice(0,5000)};
+  if(name==="final"){finalEvent={status:json.status,taskId:json.taskId,text:String(json.text||"").slice(0,5000)};result.sseFinal=finalEvent;}
   if(name==="error"&&result.sseErrors.length<30)result.sseErrors.push(String(json.message||"error").slice(0,500));
-  if(name==="step"&&result.toolAttempts.length<200){
-   const s=json.step||{};
-   if(["tool_call","tool_result","guardian_deny","error"].includes(s.kind))
-    result.toolAttempts.push({seq:s.seq,kind:s.kind,tool:s.tool,ok:s.ok,
-      note:String(s.note||"").slice(0,200),result:String(s.result||"").slice(0,230)});
+  if(name==="step"&&result.toolAttempts.length<300){
+   const step=json.step||{};
+   if(["tool_call","tool_result","guardian_deny","error"].includes(step.kind))
+    result.toolAttempts.push({seq:step.seq,kind:step.kind,tool:step.tool,ok:step.ok,
+     note:String(step.note||"").slice(0,200),result:String(step.result||"").slice(0,230)});
   }
  };
  try{
   for(;;){
    const {done,value}=await reader.read();if(done)break;
    buffer+=decoder.decode(value,{stream:true}).replace(/\r\n/g,"\n");
-   let ix;while((ix=buffer.indexOf("\n\n"))>=0){
-    const part=buffer.slice(0,ix);buffer=buffer.slice(ix+2);ingest(part);
-   }
-   if(result.sseFinal)break;
+   let ix;while((ix=buffer.indexOf("\n\n"))>=0){const part=buffer.slice(0,ix);buffer=buffer.slice(ix+2);ingest(part);}
+   if(finalEvent)break;
   }
  }finally{reader.releaseLock();}
+ const taskId=finalEvent?.taskId||options.resumeTaskId||null;
+ result.taskRuns.push({taskId,status:finalEvent?.status||"no-final",stepBudget,httpStatus:response.status});
+ return {final:finalEvent,httpStatus:response.status,taskId};
 }
 function safeExcerpt(x){return String(x||"").replace(/(Bearer\s+)[^\s]+/gi,"$1[REDACTED]").slice(-10000);}
 async function run(){
@@ -243,7 +306,7 @@ async function run(){
   JARVIS_SCREEN_WATCH_ENABLED:"0",
   JARVIS_BROWSER_AGENT_ENABLED:"0",
   JARVIS_WINDOWS_UI_CONTROL_ENABLED:"0",
-  JARVIS_EXPERIMENTAL_DESKTOP_CONTROL:"0",
+  JARVIS_EXPERIMENTAL_DESKTOP_CONTROL:"1",
   // Use the exact localhost-only owner development contract, never internet exposure.
   JARVIS_LOCAL_DEV_NO_LOGIN:"1",JARVIS_LOCAL_DEV_BIND:"127.0.0.1",
   JARVIS_PUBLIC_ORIGIN:"http://127.0.0.1:3000",
@@ -257,7 +320,7 @@ async function run(){
  child.stdout.on("data",d=>{output=safeExcerpt(output+d.toString("utf8"));});
  child.stderr.on("data",d=>{output=safeExcerpt(output+d.toString("utf8"));});
  const abort=new AbortController();
- const timeout=setTimeout(()=>abort.abort(),20*60*1000);
+ const timeout=setTimeout(()=>abort.abort(),42*60*1000);
  try{
   const app=await waitReady("http://127.0.0.1:3000/api/jarvis/auth/session",180000);
   result.nexusReady=app.ready;result.authStatus=app.status;
@@ -270,16 +333,55 @@ async function run(){
   if(!app.ready)throw Error("NEXUS never became ready. Actual full Windows runtime startup failed.");
   // Do not pretend a hosted runner can emulate an interactive owner desktop.
   result.notes.push("GitHub Windows hosted runner uses a service session, not the user's Lenovo LOQ interactive desktop.");
-  await streamLiveTask(prompt,abort.signal,sessionCookie);
-  const produced=await collectFiles(workspace);
-  result.artifacts=produced.slice(0,800);
-  result.siteVerification=await verifySite(produced,initialWorkspace);
-  console.log("REAL_TASK_OBSERVED http="+(result.taskHttpStatus??"none")+" final="+(result.sseFinal?.status||"none")+
-    " events="+result.taskEvents+" tools="+result.toolAttempts.length+
-    " files="+result.siteVerification.realFiles);
-  result.completed=Boolean(result.sseFinal?.status==="completed"&&result.siteVerification.productionSiteVerified);
-  // No pass by self-declaration: full external prompt demands a real running site.
-  if(!result.completed)throw Error("FULL_AUTONOMOUS_PRODUCTION_SITE_NOT_VERIFIED");
+   let taskRun=await streamLiveTask(prompt,abort.signal,sessionCookie,{stepBudget:36});
+   if(taskRun.final?.status==="paused"&&taskRun.taskId){
+    taskRun=await streamLiveTask(null,abort.signal,sessionCookie,{resumeTaskId:taskRun.taskId,stepBudget:12});
+   }
+   let produced=await collectFiles(workspace);
+   let siteVerification=await verifySite(produced,initialWorkspace);
+   const needsRepair=Boolean(!siteVerification.frontendBuildVerified||
+    !siteVerification.backendCode||!siteVerification.databaseSchema||!siteVerification.threeD);
+   if(needsRepair&&taskRun.final){
+    const report={
+     missing:Object.entries({
+      frontendPackage:siteVerification.frontendPackage,reactCode:siteVerification.reactCode,
+      styling:siteVerification.styling,backendCode:siteVerification.backendCode,
+      databaseSchema:siteVerification.databaseSchema,threeD:siteVerification.threeD
+     }).filter(entry=>!entry[1]).map(entry=>entry[0]),
+     dependencyInstall:siteVerification.dependencyInstall?.ok??false,
+     installError:String(siteVerification.dependencyInstall?.stderr||siteVerification.dependencyInstall?.stdout||"").slice(-500),
+     buildOk:siteVerification.build?.ok??false,
+     buildError:String(siteVerification.build?.stderr||siteVerification.build?.stdout||"").slice(-900),
+     testsOk:siteVerification.tests?.ok??false,
+     previewOk:siteVerification.preview?.ok??false,
+     previewError:String(siteVerification.preview?.stderr||"").slice(-300)
+    };
+    const repairPrompt=[
+     "Continue and finish the existing TVS Motor digital showroom in the current isolated workspace. Preserve valid files and inspect them before editing.",
+     "ORIGINAL TASK REQUIREMENTS (verbatim):",
+     prompt,
+     "INDEPENDENT VERIFIER REPORT (factual diagnostics, not permission to weaken Guardian):",
+     JSON.stringify(report),
+     "Repair the actual missing or broken implementation. Do not create placeholders, do not overwrite working code without reason, and do not claim success unless the required project files and runtime checks genuinely pass."
+    ].join("\n");
+    result.notes.push("A bounded second real-model repair task was submitted with independent build/HTTP diagnostics.");
+    taskRun=await streamLiveTask(repairPrompt,abort.signal,sessionCookie,{stepBudget:24});
+    if(taskRun.final?.status==="paused"&&taskRun.taskId){
+     taskRun=await streamLiveTask(null,abort.signal,sessionCookie,{resumeTaskId:taskRun.taskId,stepBudget:12});
+    }
+    produced=await collectFiles(workspace);
+    siteVerification=await verifySite(produced,initialWorkspace);
+   }
+   result.artifacts=produced.slice(0,800);
+   result.siteVerification=siteVerification;
+   console.log("REAL_TASK_OBSERVED http="+(result.taskHttpStatus??"none")+" final="+(result.sseFinal?.status||"none")+
+    " taskRuns="+result.taskRuns.length+" events="+result.taskEvents+" tools="+result.toolAttempts.length+
+    " files="+result.siteVerification.realFiles+" frontendBuild="+result.siteVerification.frontendBuildVerified+
+    " postgres="+result.siteVerification.postgresRuntimeVerified);
+   result.completed=Boolean(result.sseFinal?.status==="completed"&&result.siteVerification.productionSiteVerified);
+   // No pass by self-declaration: require real files, independent build/test/HTTP,
+   // backend/schema/3D artifacts and a live PostgreSQL integration check.
+   if(!result.completed)throw Error("FULL_AUTONOMOUS_PRODUCTION_SITE_NOT_VERIFIED");
  }finally{
   clearTimeout(timeout);
   result.runtimeLogExcerpt=safeExcerpt(output);

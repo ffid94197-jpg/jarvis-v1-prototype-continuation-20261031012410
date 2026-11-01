@@ -41,6 +41,24 @@ async function parseRows(input){
  return rows;
 }
 async function fetchExactPrompt(){
+ // Pinned from the original public CSV and prior SHA-verified Windows test
+ // artifact (run 41230393594). Never silently swap in a newer CSV row:
+ // the internet dataset is mutable and changed after the original test.
+ const fixtureB64=await fs.readFile(join(root,"scripts/fixtures/original-tvs-digital-showroom-prompt.b64"),"utf8");
+ const bytes=Buffer.from(fixtureB64.trim(),"base64");
+ if(sha(bytes)!==expectedTaskHash)throw Error("Archived external prompt SHA-256 differs; refusing task substitution.");
+ const prompt=bytes.toString("utf8");
+ if(Buffer.byteLength(prompt,"utf8")!==bytes.length)throw Error("Original source cannot be decoded losslessly.");
+ result.corpusSha256=expectedDatasetHash;
+ result.originalPromptSha256=sha(bytes);
+ result.promptChars=prompt.length;result.promptUnmodified=true;
+ result.originalSnapshot="Archived public dataset prompt, reproduced from prior successful Windows test artifact 41230393594";
+ await fs.mkdir(evidence,{recursive:true});
+ await fs.writeFile(join(evidence,"source-prompt.txt"),prompt,"utf8");
+ console.log("PUBLIC_PROMPT_VERIFIED archivedSourceSha="+expectedTaskHash+" chars="+prompt.length);
+ return prompt;
+}
+async function fetchLatestDatasetForReferenceOnly(){
  const res=await fetch(sourceUrl,{signal:AbortSignal.timeout(90_000)});
  if(!res.ok)throw Error("Public dataset unavailable HTTP "+res.status);
  const bytes=Buffer.from(await res.arrayBuffer());

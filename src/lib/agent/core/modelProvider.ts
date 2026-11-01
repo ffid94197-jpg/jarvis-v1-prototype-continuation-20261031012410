@@ -135,16 +135,61 @@ function checkHttpStatus(response: Response) {
   throw err;
 }
 
+// JSON Schema-constrained output for advisory long-horizon plans only. This
+// asks the REAL local LLM for a schema-valid response; it never synthesizes a
+// fake plan, authorizes tools, or relaxes Core's independent validation.
+const GOAL_PLAN_OLLAMA_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    schemaVersion: { type: "integer", enum: [1] },
+    milestones: {
+      type: "array", minItems: 2, maxItems: 8,
+      items: {
+        type: "object", additionalProperties: false,
+        properties: {
+          id: { type: "string", pattern: "^[a-z][a-z0-9_-]{0,23}$" },
+          description: { type: "string", minLength: 1, maxLength: 220 },
+          dependsOn: { type: "array", items: { type: "string" }, maxItems: 8 },
+          evidence: { type: "string", minLength: 1, maxLength: 200 },
+        },
+        required: ["id", "description", "dependsOn", "evidence"],
+      },
+    },
+  },
+  required: ["schemaVersion", "milestones"],
+} as const;
+
+export function isAdvisoryGoalPlanCall(messages: ModelMessage[]): boolean {
+  return messages.length >= 2 && messages[0].role === "assistant" &&
+    messages[0].content.includes("You are an advisory JARVIS goal decomposer");
+}
+
 function createOllamaBridge(): ModelBridge {
   const settings = resolveOllamaSettings();
   // Ollama's /api/chat honours role:"system", so the identity contract must be
   // delivered there rather than as a prior assistant turn.
-  const body = (messages: ModelMessage[], stream: boolean, json: boolean) => JSON.stringify({
-    model: settings.model,
-    messages: normalizeSystemInstructions(messages),
-    stream,
-    ...(json ? { format: "json" } : {}),
-  });
+  const body = (messages: ModelMessage[], stream: boolean, json: boolean) => {
+    const goal = json && isAdvisoryGoalPlanCall(messages);
+    // A small Ollama default context can truncate JARVIS's system contract or
+    // the last half of a long user objective. The operator must explicitly
+    // opt into a larger local context because KV-cache RAM is model-dependent.
+    const requestedContext = process.env.JARVIS_OLLAMA_NUM_CTX;
+    const parsedContext = requestedContext && /^\\d{4,5}$/.test(requestedContext)
+      ? Number(requestedContext) : 0;
+    const context = parsedContext >= 4096 && parsedContext <= 32768
+      ? parsedContext : undefined;
+    return JSON.stringify({
+      model: settings.model,
+      messages: normalizeSystemInstructions(messages),
+      stream,
+      ...(json ? { format: goal ? GOAL_PLAN_OLLAMA_SCHEMA : "json" } : {}),
+      ...(context || goal ? { options: {
+        ...(context ? { num_ctx: context } : {}),
+        ...(goal ? { temperature: 0, num_predict: 1200 } : {}),
+      } } : {}),
+    });
+  };
   return {
     identity: {
       backend: "ollama",

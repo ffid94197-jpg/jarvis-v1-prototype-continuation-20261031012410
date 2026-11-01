@@ -1,7 +1,7 @@
 name: JARVIS real Windows live task after root-cause fixes
 on:
   push:
-    branches: [fix/live-windows-autonomy-root-causes-20261101]
+    branches: [fix/live-windows-autonomy-v2-20261101]
 permissions:
   contents: read
 jobs:
@@ -65,14 +65,14 @@ jobs:
             Start-Sleep -Seconds 2
           }
           if (-not $ready) { throw "Local Ollama Windows server failed startup" }
-          & $ollama pull "qwen2.5-coder:1.5b"
+          & $ollama pull "qwen2.5-coder:3b"
           if ($LASTEXITCODE -ne 0) { throw "Coding model download failed" }
           & $ollama list
       - name: Execute unchanged hardest sampled internet task via REAL JARVIS with local model
         timeout-minutes: 23
         env:
           JARVIS_LIVE_LOCAL_MODEL: '1'
-          JARVIS_OLLAMA_MODEL: qwen2.5-coder:1.5b
+          JARVIS_OLLAMA_MODEL: qwen2.5-coder:3b\n          JARVIS_OLLAMA_NUM_CTX: '16384'
           JARVIS_MODEL_REQUEST_TIMEOUT_MS: '120000'
           NODE_ENV: development
         run: |

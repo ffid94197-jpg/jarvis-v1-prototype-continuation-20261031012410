@@ -1,0 +1,40 @@
+"use strict";
+const fs=require("node:fs");
+const ts=require("typescript");
+const vm=require("node:vm");
+const assert=require("node:assert/strict");
+function load(path,exportsUsed,requireMap={}){
+ const code=ts.transpileModule(fs.readFileSync(path,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+ const mod={exports:{}};
+ const req=name=>{
+  if(requireMap[name])return requireMap[name];
+  if(name.startsWith("node:"))return require(name);
+  throw Error("unsupported test dependency "+name);
+ };
+ vm.runInNewContext(code,{module:mod,exports:mod.exports,require:req,process:{env:{}},Buffer,URL,console,fetch}, {timeout:3000,filename:path});
+ for(const key of exportsUsed)assert.equal(typeof mod.exports[key],"function","missing "+key);
+ return mod.exports;
+}
+const p=load("src/lib/agent/core/prompts.ts",["selectPlannerSystemPrompt"]);
+const codeObjective="Build a production-ready React + TypeScript + Vite website with 3D UI, backend and PostgreSQL.";
+const compact=p.selectPlannerSystemPrompt(codeObjective);
+assert.match(compact,/write_file/);
+assert.ok(compact.length<4000,"compact prompt must remain compact");
+assert.doesNotMatch(compact,/windows_desktop_click/);
+const desktop=p.selectPlannerSystemPrompt("Play Minecraft and use the desktop screen to operate the game");
+assert.match(desktop,/minecraft_companion_command/);
+const g=load("src/lib/agent/core/goalPlanner.ts",["goalPlanRequest","requiresGoalPlan"]);
+const long=codeObjective+" ".repeat(1)+"DEEP_DETAIL ".repeat(280)+" FINAL_CRITICAL_REQUIREMENT_DATABASE_POSTGRES";
+assert.ok(long.length>2200&&long.length<5000);
+assert.equal(g.requiresGoalPlan(long),true);
+assert.ok(g.goalPlanRequest(long).includes("FINAL_CRITICAL_REQUIREMENT_DATABASE_POSTGRES"));
+const m=load("src/lib/agent/core/modelProvider.ts",["isAdvisoryGoalPlanCall"],{"./modelDeadline":{modelRequestDeadlineMs:()=>90000}});
+assert.equal(m.isAdvisoryGoalPlanCall([{role:"assistant",content:"You are an advisory JARVIS goal decomposer; respond JSON."},{role:"user",content:"build project"}]),true);
+assert.equal(m.isAdvisoryGoalPlanCall([{role:"assistant",content:"different request"},{role:"user",content:"hello"}]),false);
+const loop=fs.readFileSync("src/lib/agent/core/loop.ts","utf8");
+assert.match(loop,/selectPlannerSystemPrompt\(objective\)/);
+assert.doesNotMatch(loop,/"tool":"create_folder","args":\{"path":"name"\}/);
+const h=fs.readFileSync("scripts/verify-live-windows-jarvis-actual-task.mjs","utf8");
+assert.match(h,/initialWorkspace/);
+assert.match(h,/changedFileHashes/);
+console.log("LONG_GOAL_PLANNER_REGRESSION PASS 8 checks");

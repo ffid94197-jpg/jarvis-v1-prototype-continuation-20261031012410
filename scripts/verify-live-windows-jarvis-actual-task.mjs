@@ -92,7 +92,7 @@ async function probeProvider(){
  throw Error("No authorized working GitHub Models inference provider: "+result.providerStatus);
 }
 async function probeLocalOllama(){
- const model=process.env.JARVIS_OLLAMA_MODEL||"qwen2.5-coder:1.5b";
+ const model=process.env.JARVIS_OLLAMA_MODEL||"qwen2.5-coder:3b";
  const res=await fetch("http://127.0.0.1:11434/api/chat",{
    method:"POST",
    headers:{"Content-Type":"application/json"},
@@ -127,11 +127,15 @@ async function collectFiles(dir,relativePrefix="",depth=0){
  }
  return records;
 }
-async function verifySite(files){
- const paths=files.filter(f=>f.type==="file").map(f=>f.path.toLowerCase());
+async function verifySite(files, before){
+ const beforeMap = new Map(before.filter(x=>x.type==="file").map(x=>[x.path,x.sha256]));
+ const created = files.filter(f=>f.type==="file" && beforeMap.get(f.path)!==f.sha256);
+ const paths=created.map(f=>f.path.toLowerCase());
  const has=(re)=>paths.some(x=>re.test(x));
  const verdict={
   realFiles:paths.length,
+  existingBaselineFileCount:before.filter(f=>f.type==="file").length,
+  changedFileHashes:created.map(f=>({path:f.path,sha256:f.sha256})),
   frontendPackage:has(/(^|\/)package\.json$/),
   reactCode:has(/\.(tsx|jsx)$/),
   styling:has(/\.(css|scss)$/),
@@ -140,7 +144,10 @@ async function verifySite(files){
   threeD:has(/(?:three|scene|motorcycle|bike).*\.(tsx|jsx|ts|js)$/),
   originalSourceMaterialized:paths.length>0
  };
- verdict.productionSiteVerified=false; // an artifact inventory is NOT a running production site
+ // This test has no isolated project-build and HTTP/browser verification yet.
+ // A successful JARVIS final or static file inventory MUST NOT prove a site.
+ verdict.productionSiteVerified=false;
+ verdict.reason="Independent dependency-safe application build, running HTTP/browser, API and PostgreSQL checks are required; no such verification was performed.";
  return verdict;
 }
 async function waitReady(url,timeoutMs){
@@ -201,6 +208,8 @@ async function run(){
  if(process.platform!=="win32")throw Error("Not a genuine Windows runner.");
  await fs.mkdir(evidence,{recursive:true});
  const prompt=await fetchExactPrompt();
+ const initialWorkspace=await collectFiles(workspace);
+ result.initialWorkspaceFiles=initialWorkspace.filter(f=>f.type==="file").length;
  const useLocalModel=process.env.JARVIS_LIVE_LOCAL_MODEL==="1";
  const model=useLocalModel?await probeLocalOllama():await probeProvider();
  const env={...process.env,
@@ -246,7 +255,7 @@ async function run(){
   await streamLiveTask(prompt,abort.signal,sessionCookie);
   const produced=await collectFiles(workspace);
   result.artifacts=produced.slice(0,800);
-  result.siteVerification=await verifySite(produced);
+  result.siteVerification=await verifySite(produced,initialWorkspace);
   console.log("REAL_TASK_OBSERVED http="+(result.taskHttpStatus??"none")+" final="+(result.sseFinal?.status||"none")+
     " events="+result.taskEvents+" tools="+result.toolAttempts.length+
     " files="+result.siteVerification.realFiles);

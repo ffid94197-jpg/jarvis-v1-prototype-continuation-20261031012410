@@ -1,0 +1,18 @@
+name: Targeted long-horizon planner regression
+on:
+  push:
+    branches: [fix/live-windows-autonomy-v2-20261101]
+permissions: {contents: read}
+jobs:
+  planner-targeted:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm ci --no-audit --no-fund
+      - name: Verify production TypeScript
+        run: npm run typecheck
+      - name: Source-specific planner tests
+        run: node scripts/verify-long-goal-planner-selection.cjs

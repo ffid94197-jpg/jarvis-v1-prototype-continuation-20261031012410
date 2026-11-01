@@ -28,9 +28,16 @@ const long=codeObjective+" ".repeat(1)+"DEEP_DETAIL ".repeat(280)+" FINAL_CRITIC
 assert.ok(long.length>2200&&long.length<5000);
 assert.equal(g.requiresGoalPlan(long),true);
 assert.ok(g.goalPlanRequest(long).includes("FINAL_CRITICAL_REQUIREMENT_DATABASE_POSTGRES"));
-const m=load("src/lib/agent/core/modelProvider.ts",["isAdvisoryGoalPlanCall"],{"./modelDeadline":{modelRequestDeadlineMs:()=>90000}});
+const m=load("src/lib/agent/core/modelProvider.ts",["isAdvisoryGoalPlanCall","compactOllamaWorkspaceHistory"],{"./modelDeadline":{modelRequestDeadlineMs:()=>90000}});
 assert.equal(m.isAdvisoryGoalPlanCall([{role:"assistant",content:"You are an advisory JARVIS goal decomposer; respond JSON."},{role:"user",content:"build project"}]),true);
 assert.equal(m.isAdvisoryGoalPlanCall([{role:"assistant",content:"different request"},{role:"user",content:"hello"}]),false);
+const originalTask="ORIGINAL Task content must not be dropped";
+const recent=[{role:"user",content:originalTask},...Array.from({length:16},(_,i)=>({role:i%2===0?"assistant":"user",content:"previous-step-"+i}))];
+const compact=m.compactOllamaWorkspaceHistory([{role:"assistant",content:"You are the JARVIS planning core"},...recent],true);
+assert.ok(compact.length<recent.length+1);
+assert.ok(compact.some(x=>x.content===originalTask),"original user objective must survive compaction");
+assert.ok(compact.some(x=>x.content==="previous-step-15"),"last observed state must survive compaction");
+assert.ok(!compact.some(x=>x.content==="previous-step-0"),"older model chatter must be evicted");
 const loop=fs.readFileSync("src/lib/agent/core/loop.ts","utf8");
 assert.match(loop,/selectPlannerSystemPrompt\(objective\)/);
 assert.doesNotMatch(loop,/"tool":"create_folder","args":\{"path":"name"\}/);

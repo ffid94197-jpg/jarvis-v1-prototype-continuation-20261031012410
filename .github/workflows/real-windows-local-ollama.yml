@@ -1,7 +1,7 @@
 name: JARVIS real Windows live task after root-cause fixes
 on:
   push:
-    branches: [fix/live-windows-autonomy-v5-20261101]
+    branches: [fix/live-windows-autonomy-v6-20261101]
 permissions:
   contents: read
 jobs:
@@ -34,6 +34,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Full Next.js production build failed" }
           npm run typecheck
           if ($LASTEXITCODE -ne 0) { throw "TypeScript failed" }
+          node scripts/verify-long-goal-planner-selection.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Compact local inference regression failed" }
           node scripts/verify-source-path-tool-safety.cjs
           if ($LASTEXITCODE -ne 0) { throw "Actual file write regression failed" }
       - name: Install genuine Windows companion Python dependencies
@@ -67,16 +69,17 @@ jobs:
             Start-Sleep -Seconds 2
           }
           if (-not $ready) { throw "Local Ollama Windows server failed startup" }
-          & $ollama pull "qwen2.5-coder:3b"
+          & $ollama pull "qwen2.5-coder:1.5b"
           if ($LASTEXITCODE -ne 0) { throw "Coding model download failed" }
           & $ollama list
       - name: Execute unchanged hardest sampled internet task via REAL JARVIS with local model
         timeout-minutes: 23
         env:
           JARVIS_LIVE_LOCAL_MODEL: '1'
-          JARVIS_OLLAMA_MODEL: qwen2.5-coder:3b
-          JARVIS_OLLAMA_NUM_CTX: '8192'
-          JARVIS_OLLAMA_NUM_PREDICT: '768'
+          JARVIS_OLLAMA_MODEL: qwen2.5-coder:1.5b
+          JARVIS_OLLAMA_NUM_CTX: '6144'
+          JARVIS_OLLAMA_NUM_PREDICT: '640'
+          JARVIS_OLLAMA_COMPACT_HISTORY: '1'
           JARVIS_OLLAMA_REQUEST_TIMEOUT_MS: '240000'
           JARVIS_GOAL_PLAN_CONCISE: '1'
           JARVIS_GOAL_PLAN_ADVISORY_FALLBACK: '1'
@@ -90,6 +93,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: jarvis-real-windows-local-model-task
-          path: live-windows-evidence/**
+          path: |
+            live-windows-evidence/**
+            agent-workspace/**
           if-no-files-found: warn
           retention-days: 14

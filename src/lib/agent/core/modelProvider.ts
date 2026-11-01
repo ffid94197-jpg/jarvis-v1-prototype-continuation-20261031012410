@@ -127,6 +127,9 @@ interface OllamaChatResponse {
   message?: { content?: unknown };
   error?: unknown;
   done?: boolean;
+  prompt_eval_count?: number;
+  eval_count?: number;
+  total_duration?: number;
 }
 function checkHttpStatus(response: Response) {
   if (response.ok) return;
@@ -177,6 +180,32 @@ function ollamaRequestDeadlineMs(): number {
   return n;
 }
 
+/**
+ * CPU-only inference optimization. Immutable owner objective and recent
+ * real tool observations remain intact; omitted older model chatter NEVER
+ * becomes a fake success receipt. This changes model context, not authority.
+ */
+export function compactOllamaWorkspaceHistory(
+  messages: ModelMessage[], enabled = process.env.JARVIS_OLLAMA_COMPACT_HISTORY === "1"
+): ModelMessage[] {
+  if (!enabled || messages.length <= 11 ||
+      !messages[0]?.content.includes("You are the JARVIS planning core")) return messages;
+  const firstUser = messages.findIndex(m => m.role === "user");
+  if (firstUser < 1) return messages;
+  const lead = messages.slice(0, firstUser).filter((m,i) =>
+    i === 0 || m.content.startsWith("CURRENT ADVISORY PROVIDER") ||
+    m.content.startsWith("JARVIS-NATIVE ADVISORY MILESTONE PLAN"));
+  const first = messages[firstUser];
+  const mostRecent = messages.slice(-8);
+  if (firstUser >= messages.length - 8) return messages;
+  return [
+    ...lead,
+    first,
+    {role:"assistant",content:"Earlier model turns omitted from LOCAL inference window to prevent CPU saturation. No prior completion is implied. Inspect actual filesystem via Guardian tools before relying on older state; Core's durable effect log remains authoritative."},
+    ...mostRecent,
+  ];
+}
+
 function createOllamaBridge(): ModelBridge {
   const settings = resolveOllamaSettings();
   // Ollama's /api/chat honours role:"system", so the identity contract must be
@@ -198,12 +227,13 @@ function createOllamaBridge(): ModelBridge {
     const predicted=parsedPredict>=384 && parsedPredict<=2048 ? parsedPredict : undefined;
     return JSON.stringify({
       model: settings.model,
-      messages: normalizeSystemInstructions(messages),
+      messages: normalizeSystemInstructions(compactOllamaWorkspaceHistory(messages)),
       stream,
+      keep_alive: "20m",
       ...(json ? { format: goal ? GOAL_PLAN_OLLAMA_SCHEMA : "json" } : {}),
       ...(context || goal ? { options: {
         ...(context ? { num_ctx: context } : {}),
-        ...(goal ? { temperature: 0, num_predict: 1200 } : predicted ? { num_predict: predicted } : {}),
+        ...(goal ? { temperature: 0, num_predict: 800 } : predicted ? { temperature: 0.15, num_predict: predicted } : {}),
       } } : {}),
     });
   };
@@ -216,18 +246,36 @@ function createOllamaBridge(): ModelBridge {
       host: new URL(settings.url).host,
     },
     async complete(messages) {
-      const response = await fetch(settings.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: body(messages, false, true),
-        signal: AbortSignal.timeout(ollamaRequestDeadlineMs()),
-      });
-      checkHttpStatus(response);
-      const result = await response.json() as OllamaChatResponse;
-      if (result.error || typeof result.message?.content !== "string" || !result.message.content) {
-        throw new Error("Local model returned a malformed planning response.");
+      const started = Date.now();
+      try {
+        const response = await fetch(settings.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: body(messages, false, true),
+          signal: AbortSignal.timeout(ollamaRequestDeadlineMs()),
+        });
+        checkHttpStatus(response);
+        const result = await response.json() as OllamaChatResponse;
+        console.log("[ollama-eval] " + JSON.stringify({
+          elapsedMs:Date.now()-started,
+          messages:compactOllamaWorkspaceHistory(messages).length,
+          promptTokens:result.prompt_eval_count??null,
+          outputTokens:result.eval_count??null,
+          goal:isAdvisoryGoalPlanCall(messages),
+        }));
+        if (result.error || typeof result.message?.content !== "string" || !result.message.content) {
+          throw new Error("Local model returned a malformed planning response.");
+        }
+        return result.message.content;
+      } catch (err) {
+        console.error("[ollama-eval] " + JSON.stringify({
+          elapsedMs:Date.now()-started,
+          messages:compactOllamaWorkspaceHistory(messages).length,
+          modelErrorClass:err instanceof Error ? err.name : "unknown",
+          goal:isAdvisoryGoalPlanCall(messages),
+        }));
+        throw err;
       }
-      return result.message.content;
     },
     async report(messages, onDelta) {
       const response = await fetch(settings.url, {

@@ -85,7 +85,7 @@ function load(rel) {
   return moduleExports;
 }
 
-const { enforceJarvisIdentity, PLANNER_SYSTEM_PROMPT, JARVIS_IDENTITY_CONTRACT } =
+const { enforceJarvisIdentity, PLANNER_SYSTEM_PROMPT, selectPlannerSystemPrompt, JARVIS_IDENTITY_CONTRACT } =
   load('src/lib/agent/core/prompts.ts');
 const { normalizeSystemInstructions, modelIdentityContext } =
   load('src/lib/agent/core/modelProvider.ts');
@@ -266,8 +266,12 @@ ok(!/function normalizeCompatibleMessages/.test(compatSrc),
 ok(/const system = messages\.filter\(m => m\.role === "assistant"\)/.test(bridgeSrc) &&
    /system,messages:dialogue|system,\s*messages:\s*dialogue/.test(bridgeSrc),
   'the Anthropic adapter still hoists instructions into the top-level system field');
-ok(/const messages: Msg\[\] = \[\s*\{ role: "assistant", content: PLANNER_SYSTEM_PROMPT \}/.test(loopSrc),
-  'the planner system prompt is the FIRST message Core sends');
+ok(typeof selectPlannerSystemPrompt === 'function' &&
+   selectPlannerSystemPrompt('Build a React website').includes('REAL software-workspace agent') &&
+   selectPlannerSystemPrompt('Open Windows Settings').includes('PLANNING CORE of JARVIS'),
+  'task-aware prompt selector keeps compact coding and full desktop tool catalogs distinct');
+ok(/const messages: Msg\[\] = \[\s*\{ role: "assistant", content: selectPlannerSystemPrompt\(objective\) \}/.test(loopSrc),
+  'the selected planner system prompt is the FIRST message Core sends');
 ok(/messages\.splice\(1, 0, \{ role: "assistant", content: modelIdentityContext\(model\?\.identity\) \}\)/.test(loopSrc),
   'provider metadata is injected into the instruction preface, so it lands in the system message');
 

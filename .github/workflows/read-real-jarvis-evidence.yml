@@ -14,7 +14,7 @@ jobs:
       - name: Download exact real agent run, not a synthetic trace
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download 41278116682 --name jarvis-real-windows-local-model-task --dir evidence
+        run: gh run download 41289489112 --name jarvis-real-windows-local-model-task --dir evidence
       - name: Independently inspect saved real task receipts and filesystem outcomes
         run: |
           node - <<'JS'

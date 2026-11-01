@@ -343,6 +343,11 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let parseRetries = 0;
   let actionNudges = 0;
   let inventoryDraftCorrections = 0;
+  // Count tool effects that the durable journal already confirms, but the
+  // model keeps proposing again. This is a model-progress guard, NOT a bypass
+  // of duplicate-effect protection or a fabricated success signal.
+  let consecutiveDuplicateEffects = 0;
+  const duplicateNoProgressLimit = 4;
   let inventorySource = parseInventorySource(objective);
   const inventoryDeliverables=/\b(?:inventory|stock)\b/i.test(objective)
     &&/\b(?:csv|spreadsheet)\b/i.test(objective)
@@ -1031,6 +1036,12 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
           role: "user",
           content: `OBSERVATION (Core duplicate guard): this exact step was already completed in a previous run and was NOT re-executed. Continue with the remaining objective; use read-only tools to verify existing state if needed.`,
         });
+        if (++consecutiveDuplicateEffects >= duplicateNoProgressLimit) {
+          await settleAndReport(taskId,"partial",stepsUsed,
+            "NO_PROGRESS_DUPLICATE_EFFECT_LOOP: model repeatedly requested already-settled effects. No duplicate side effects executed; task remains incomplete.",
+            emit,{effectsHappened});
+          return;
+        }
         if (stepsUsed - opts.stepsUsedOffset >= effectiveBudget) {
           if (isCancelled()) {
             const text = "Task cancelled by the operator. All execution has stopped; partial progress is recorded in the task journal.";
@@ -1083,8 +1094,14 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         messages.push({ role: "assistant", content: raw });
         messages.push({
           role: "user",
-          content: `OBSERVATION (Core duplicate guard): this exact effect was already settled in the durable admission table and was NOT re-executed. Continue with the remaining objective.`,
+          content: `OBSERVATION (Core duplicate guard): this exact effect was already settled in the durable admission table and was NOT re-executed. Choose a DIFFERENT needed artifact or a read-only verification; do not repeat this write.`,
         });
+        if (++consecutiveDuplicateEffects >= duplicateNoProgressLimit) {
+          await settleAndReport(taskId,"partial",stepsUsed,
+            "NO_PROGRESS_DUPLICATE_EFFECT_LOOP: the model repeatedly proposed settled effects. No duplicate side effects were executed.",
+            emit,{effectsHappened});
+          return;
+        }
         skipExecution = true;
       }
       if (admission.kind === "needs_reconciliation") {
@@ -1312,6 +1329,10 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         }
       }
     }
+    // A genuinely executed tool step (including a failed but observed attempt)
+    // breaks the continuous duplicate-only cycle. The journal remains the
+    // source of truth for effect settlement.
+    if (!skipExecution) consecutiveDuplicateEffects = 0;
     // Observe the real outcome (capped) and hand it back to the model.
     const observation = compactToolObservation(result, OBSERVATION_CAP);
     messages.push({ role: "assistant", content: raw });

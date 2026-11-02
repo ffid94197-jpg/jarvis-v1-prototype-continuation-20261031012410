@@ -20,7 +20,7 @@ const ollama = 'http://127.0.0.1:11434';
 const host = 'http://127.0.0.1:3000';
 const evidenceFile = process.env.JARVIS_LIVE_EVIDENCE || path.join(runnerTemp,'jarvis-real-ollama-file-proof.json');
 const sha256 = text => crypto.createHash('sha256').update(text).digest('hex');
-const report = {startedAt:new Date().toISOString(),model,promptSha256:sha256(objective),toolCalls:[],statuses:[],inference:{},verdict:'NOT_ACCEPTED',errors:[]};
+const report = {startedAt:new Date().toISOString(),model,promptSha256:sha256(objective),toolCalls:[],stepTrace:[],statuses:[],inference:{},verdict:'NOT_ACCEPTED',errors:[]};
 const requireTrue = (pass,reason) => { if (!pass) throw Error(reason); };
 async function get(url,options) {
  const r=await fetch(url,options);
@@ -41,10 +41,25 @@ function parseEvent(raw) {
  }
  if(!data)return;
  let payload;try{payload=JSON.parse(data)}catch{payload={invalidJson:true};}
- if(kind==='step' && payload.step?.kind==='tool_call')report.toolCalls.push({tool:payload.step.tool});
+ if(kind==='step') {
+  const step=payload.step || {};
+  let scopedPath=null;
+  try {
+    const args=typeof step.args==='string'?JSON.parse(step.args):step.args;
+    if(typeof args?.path==='string') scopedPath=args.path.slice(0,240);
+  }catch{/* raw model arguments not trusted */}
+  if(report.stepTrace.length<100) report.stepTrace.push({
+    kind:String(step.kind||'').slice(0,60),
+    tool:typeof step.tool==='string'?step.tool.slice(0,100):null,
+    path:scopedPath,
+    ok:step.ok===true?true:step.ok===false?false:null,
+    note:typeof step.note==='string'?step.note.slice(0,450):null
+  });
+  if(step.kind==='tool_call')report.toolCalls.push({tool:step.tool,path:scopedPath});
+ }
  if(kind==='final')report.final=payload;
  if(kind==='error')report.errors.push(JSON.stringify(payload).slice(0,500));
- if(kind==='status')report.statuses.push(String(payload.status||'').slice(0,80));
+ if(kind==='status')report.statuses.push(String(payload.phase||payload.status||'').slice(0,80));
 }
 async function main() {
  try {

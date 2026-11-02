@@ -66,13 +66,17 @@ function lateGamePlan(world,progress={}){
   }
   if(dragonFirst && dragonVictory && dimension==='the_end')
     return action('exit_end','Use the observed End exit portal to return to Overworld; dragon already verified');
+  if(dragonFirst && dragonVictory && dimension==='overworld' && m.endReturned!==true)
+    return action('blocked','Dragon death and exit portal were verified, but the physical End-to-Overworld return receipt is missing');
 
   // Only an entityDead event observed after the live dragon was seen PLUS the
   // generated End portal may prove a kill; a disappearing entity cannot.
   // A historical equip receipt is NOT proof that the armor is still worn.
   // Require the current server-observed equipment slots at final settlement.
-  if(m.dragonKilled && m.exitPortalObserved && m.netheriteEquipped && world.wornNetherite===true)
-    return action('complete','Ender Dragon death, exit portal and currently worn full Netherite armor confirmed');
+  if(m.dragonKilled && m.exitPortalObserved && m.netheriteEquipped &&
+     (!dragonFirst || m.endReturned===true) &&
+     world.wornNetherite===true && dimension==='overworld')
+    return action('complete','Actual Ender Dragon death, End return (when required), and currently worn full Netherite armor confirmed');
   if(dimension==='the_end'){
     if(!m.netheriteEquipped || world.wornNetherite!==true)
       return action('equip_netherite','Reverify all worn armor slots and sword before End battle or victory');

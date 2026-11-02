@@ -29,7 +29,7 @@ function check(ok,label,detail=''){if(ok)console.log('PASS',label);else{failures
 try{
  const valid=[record(1,'Create a complex report from multiple source files and independently verify every requested value.'),record(2,'Reconcile conflicting records across two applications and save a validated result with an audit trail.'),record(3,'Recover a partially completed multi-step task after a restart without duplicating any external effect.')];
  let r=run(valid,3);check(r.status===0,'valid original-source corpus accepted',r.stderr);
- r=run([valid[0],{...valid[1],id:'dup-id'},valid[2]],3);check(r.status!==0,'duplicate upstream record rejected',r.stderr);
+ r=run([valid[0],{...valid[1],id:'dup-id',source:{...valid[1].source,record_id:valid[0].source.record_id}},valid[2]],3);check(r.status!==0,'duplicate upstream record rejected',r.stderr);
  r=run([valid[0],{...valid[1],difficulty:'medium'},valid[2]],3);check(r.status!==0,'non-very-hard task rejected',r.stderr);
  r=run([valid[0],{...valid[1],prompt:valid[0].prompt,id:'dup-prompt'},valid[2]],3);check(r.status!==0,'duplicate prompt rejected',r.stderr);
  r=run([valid[0],{...valid[1],source:{...valid[1].source,raw_prompt_sha256:'0'.repeat(64)}},valid[2]],3);check(r.status!==0,'modified prompt hash rejected',r.stderr);

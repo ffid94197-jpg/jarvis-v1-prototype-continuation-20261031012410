@@ -1,7 +1,7 @@
 
 'use strict';
 const assert=require('node:assert/strict');
-const {decide,GOALS}=require('./autonomy_engine.cjs');
+const {decide,GOALS,createController}=require('./autonomy_engine.cjs');
 const {validateCommand}=require('./friend_protocol.cjs');
 const w=(inventory={},workbenchNearby=false)=>({joined:true,health:20,hunger:20,threats:[],inventory:{logs:0,planks:0,sticks:0,table:0,woodenPickaxe:0,stonePickaxe:0,stoneSword:0,cobblestone:0,food:0,...inventory},workbenchNearby});
 const cases=[
@@ -76,4 +76,35 @@ assert.equal(decide('dragon_run',w({stonePickaxe:1,stoneSword:1,ironPickaxe:1}))
 assert.equal(decide('dragon_run',w({stonePickaxe:1,stoneSword:1,ironPickaxe:1,diamonds:3,sticks:2},true)).item,'diamond_pickaxe');
 const diamondGear={stonePickaxe:1,stoneSword:1,ironPickaxe:1,diamondPickaxe:1,diamondSword:1,diamondHelmet:1,diamondChestplate:1,diamondLeggings:1,diamondBoots:1};
 assert.equal(decide('dragon_run',w(diamondGear)).kind,'mine_obsidian','progresses to portal materials without claiming dragon kill');
+assert.equal(decide('survive',{...w(),hunger:6}).kind,'obtain_food',
+ 'Critically hungry survival gameplay must seek real food instead of immediately blocking');
+const woodRecovery=createController({clock:()=>100,maxSteps:150});
+woodRecovery.start('wood',300);
+for(let k=0;k<2;k++){
+ const d=woodRecovery.next(w());
+ assert.equal(d.kind,'collect_wood');
+ woodRecovery.record(d,{ok:false,verified:false,detail:'Server-verified failed path'});
+}
+const survey=woodRecovery.next(w());
+assert.equal(survey.kind,'survey_wood',
+ 'Two unverified wood approaches must cause a bounded change of search area');
+woodRecovery.record(survey,{ok:true,verified:true,detail:'Observed new position'});
+assert.equal(woodRecovery.status().failures.collect_wood,0,
+ 'Verified new terrain resets only the wood-path retry counter');
+assert.equal(woodRecovery.status().milestones.woodSurveyTrips,1,
+ 'Record limited actual scouting; no resource progress or victory is fabricated');
+assert.equal(woodRecovery.next(w()).kind,'collect_wood',
+ 'After scouting, autonomous wood collection resumes without user command');
+const falseSurvey=createController({clock:()=>100,maxSteps:150});
+falseSurvey.start('wood',300);
+for(let k=0;k<2;k++){
+ const d=falseSurvey.next(w());falseSurvey.record(d,{ok:false,verified:false});
+}
+for(let k=0;k<3;k++){
+ const d=falseSurvey.next(w());
+ assert.equal(d.kind,'survey_wood');
+ falseSurvey.record(d,{ok:false,verified:false,detail:'No safe waypoint'});
+}
+assert.equal(falseSurvey.status().status,'blocked',
+ 'Three unsuccessful terrain surveys must fail closed without infinite route retries');
 console.log('PROGRESSION EXTENDED PASS (offline planner checks only; live server not tested)');

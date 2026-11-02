@@ -64,7 +64,7 @@ One JSON object per line:
 }
 ```
 
-Supported verifier kinds are enforced in `scripts/autonomy/validate-internet-corpus.mjs`. Add new kinds only with a corresponding independent verifier implementation.
+Supported verifier kinds are enforced in `scripts/autonomy/validate-internet-corpus.cjs`. Add new kinds only with a corresponding independent verifier implementation.
 
 ## Validation
 
@@ -74,7 +74,7 @@ Place the candidate corpus at:
 Run:
 
 ```powershell
-node scripts/autonomy/validate-internet-corpus.mjs --input benchmarks/autonomy/internet-hard-200k.jsonl --expected 200000 --manifest artifacts/autonomy-corpus-manifest.json
+node scripts/autonomy/validate-internet-corpus.cjs --input benchmarks/autonomy/internet-hard-200k.jsonl --expected 200000 --manifest artifacts/autonomy-corpus-manifest.json
 ```
 
 The validator rejects duplicates, transformed prompts, non-HTTPS provenance links, missing license metadata, non-`very_hard` records and missing independent verifiers. It emits a manifest with the corpus SHA-256 and counts by source/domain.

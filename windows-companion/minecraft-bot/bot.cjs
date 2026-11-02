@@ -276,6 +276,37 @@ async function collectVerifiedDrop(blockPosition, beforeCount, readCount, epoch,
   }
   return {ok:false,verified:false,detail:label+' mined but inventory drop unverified: '+lastRoute};
 }
+async function scoutStoneSite(epoch){
+  // A finite, real-position scouting fallback for exhausted local surface
+  // layers. It never claims cobblestone from a movement observation.
+  const attempt=bot.jarvisStoneScoutCount||0;
+  if(attempt>=8)return {ok:false,verified:false,detail:'Eight stone-search regions exhausted, no ore proof'};
+  const dirs=[[8,0],[0,8],[-8,0],[0,-8],[8,8],[-8,8],[8,-8],[-8,-8]];
+  const here=bot.entity.position.clone();
+  for(let j=0;j<3;j++){
+    const [dx,dz]=dirs[(attempt+j)%dirs.length];
+    const px=Math.floor(here.x)+dx,pz=Math.floor(here.z)+dz;
+    for(const dy of [0,1,-1,2,-2]){
+      const foot=new Vec3(px,Math.floor(here.y)+dy,pz);
+      const ground=bot.blockAt(foot.offset(0,-1,0));
+      const legs=bot.blockAt(foot),head=bot.blockAt(foot.offset(0,1,0));
+      if(!ground||ground.boundingBox!=='block'||
+         /lava|water|magma|cactus/.test(ground.name)||
+         !legs||legs.boundingBox!=='empty'||!head||head.boundingBox!=='empty'||
+         /lava|water|fire|powder_snow/.test(legs.name+' '+head.name))continue;
+      try{
+        const reached=await navigate(foot.offset(.5,0,.5),2,epoch,
+          Math.min(14500,stanceNavTimeoutMs()));
+        if(reached && bot.entity.position.distanceTo(here)>3){
+          bot.jarvisStoneScoutCount=attempt+1;
+          return {ok:true,verified:true,detail:'New stone-search region reached, server observed '+here+' -> '+bot.entity.position+'; no stone claimed'};
+        }
+      }catch(error){if(epoch!==actionEpoch)throw error;}
+    }
+  }
+  bot.jarvisStoneScoutCount=attempt+1;
+  return {ok:false,verified:false,detail:'No safe reachable new stone terrain; resource count unchanged'};
+}
 async function autoExecute(plan,epoch){
   const before=digest(bot,leader);
   if(epoch!==actionEpoch)throw Error('Owner cancelled current action');
@@ -393,8 +424,7 @@ async function autoExecute(plan,epoch){
         // routes forever. Physically uncover nearby stone instead. No
         // cobblestone is claimed unless inventory later increases.
         const preparation=excavationProposal(bot);
-        if(!preparation)
-          return {ok:false,verified:false,detail:'No reachable exposed stone or safely excavatable adjacent soil'};
+        if(!preparation)return scoutStoneSite(epoch);
         const prior=bot.blockAt(preparation.position);
         if(!prior||!bot.canDigBlock?.(prior))
           return {ok:false,verified:false,detail:'Proposed soil excavation became unsafe'};

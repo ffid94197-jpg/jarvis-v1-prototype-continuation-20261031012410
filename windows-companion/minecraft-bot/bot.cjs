@@ -16,6 +16,7 @@ const {planSurveyStep}=require('./terrain_survey.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
 const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_navigation.cjs');
+const {collectObservedDrop}=require('./drop_pickup.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
 const {stoneProposal,excavationProposal}=require('./stone_access.cjs');
@@ -152,28 +153,17 @@ async function gatherOneLog(epoch,deadline){
         if(!isTreeLog(live))throw Error('Tree log no longer present');
         if(bot.entity.position.distanceTo(p)>5)throw Error('Log beyond digging reach');
         await bot.dig(live);
-        for(let i=0;i<12;i++){
-          if(epoch!==actionEpoch)throw Error('Wood collection cancelled');
-          await pause(300);
-          let after=digest(bot,leader).inventory.logs;
-          if(after>before)return {ok:true,verified:true,detail:`Logs in inventory ${before} -> ${after}`};
-          const item=bot.nearestEntity?.(e=>e?.position && (e.name==='item'||e.type==='other') && e.position.distanceTo(p)<8);
-          if(item?.position && bot.entity.position.distanceTo(item.position)>1.15){
-            // A 3s window is shorter than Mineflayer Pathfinder's route
-            // planning budget. Keep a safe bounded window and demand actual
-            // inventory delta after walking to the dropped item.
-            const remaining=deadline-Date.now();
-            if(remaining>2500){
-              try{
-                const reached=await navigate(item.position,1,epoch,Math.min(14000,remaining-500));
-                if(!reached)lastFailure='Item route ended without reaching pickup range';
-              }catch(err){
-                lastFailure='Item route failed: '+String(err.message||err).slice(0,110);
-              }
-            }
-          }
-        }
-        lastFailure='Log dug but item pickup not verified';
+        if(epoch!==actionEpoch)throw Error('Wood collection cancelled');
+        const acquired=await collectObservedDrop({
+          bot,origin:p,beforeCount:before,
+          readCount:()=>digest(bot,leader).inventory.logs,
+          move:(target,range,limitMs)=>navigate(target,range,epoch,limitMs),
+          check:()=>{if(epoch!==actionEpoch)throw Error('Wood collection cancelled')},
+          wait:pause,deadline:Math.min(deadline,Date.now()+19000),
+          Vec3,label:'Wood logs'
+        });
+        if(acquired.ok && acquired.verified)return acquired;
+        lastFailure=acquired.detail;
       }catch(err){
         if(epoch!==actionEpoch)throw Error('Wood collection cancelled');
         lastFailure=String(err.message||err).slice(0,130);
@@ -251,31 +241,13 @@ async function craftNamed(name,count,epoch,table=null){
   return {ok:after>before,verified:after>before,detail:`${name}: inventory ${before} -> ${after}`};
 }
 const lateSkills=createLateSkills({bot,navigate,craftNamed,getEpoch:()=>actionEpoch,getOwner:()=>leader,digest,Vec3});
-async function collectVerifiedDrop(blockPosition, beforeCount, readCount, epoch, label){
-  // A successfully dug block is not progression until the actual server
-  // inventory reports the drop. Pathfinder can require >3s to plan movement.
-  const deadline=Date.now()+25000;
-  let lastRoute='drop entity not yet visible';
-  while(Date.now()<deadline){
-    if(epoch!==actionEpoch)throw Error('Mining pickup cancelled');
-    await pause(350);
-    const count=readCount();
-    if(count>beforeCount)return {ok:true,verified:true,detail:label+' '+beforeCount+' -> '+count};
-    const dropped=bot.nearestEntity?.(e=>e?.position &&
-      (e.name==='item'||e.type==='other') && e.position.distanceTo(blockPosition)<8);
-    if(dropped?.position){
-      if(bot.entity.position.distanceTo(dropped.position)>1.15){
-        const remain=deadline-Date.now();
-        if(remain>1000){
-          try{
-            const reached=await navigate(dropped.position,1,epoch,Math.min(14000,remain-400));
-            lastRoute=reached?'Near drop but inventory unchanged':'Drop route out of pickup range';
-          }catch(e){lastRoute='Drop route: '+String(e.message||e).slice(0,90);}
-        }
-      }else lastRoute='Near drop, but inventory not updated';
-    }
-  }
-  return {ok:false,verified:false,detail:label+' mined but inventory drop unverified: '+lastRoute};
+async function collectVerifiedDrop(blockPosition,beforeCount,readCount,epoch,label){
+  return collectObservedDrop({
+    bot,origin:blockPosition,beforeCount,readCount,
+    move:(target,range,limitMs)=>navigate(target,range,epoch,limitMs),
+    check:()=>{if(epoch!==actionEpoch)throw Error('Mining pickup cancelled')},
+    wait:pause,deadline:Date.now()+25000,Vec3,label
+  });
 }
 async function scoutStoneSite(epoch){
   // A finite, real-position scouting fallback for exhausted local surface

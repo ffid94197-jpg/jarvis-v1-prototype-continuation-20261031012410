@@ -19,10 +19,23 @@ function record(i,prompt){
   verifier:{kind:'filesystem_state',spec:'Check the exact expected file state using a separate verifier.',independent:true}
  };
 }
-function run(rows,expected){
+function run(rows,expected,extra=[]){
  const input=path.join(tmp,'corpus.jsonl'),manifest=path.join(tmp,'manifest.json');
  fs.writeFileSync(input,rows.map(x=>JSON.stringify(x)).join('\n')+'\n');
- return spawnSync(process.execPath,[script,'--input',input,'--expected',String(expected),'--manifest',manifest],{encoding:'utf8'});
+ return spawnSync(process.execPath,[script,'--input',input,'--expected',String(expected),'--manifest',manifest,...extra],{encoding:'utf8'});
+}
+function pinnedSource(rows,wrongDigest=false){
+ const sourcePath=path.join(tmp,'upstream-original.jsonl');
+ const raw=rows.map(x=>JSON.stringify({record_id:x.source.record_id,prompt:x.prompt,difficulty:'very_hard'})).join('\n')+'\n';
+ fs.writeFileSync(sourcePath,raw);
+ const manifestPath=path.join(tmp,'upstream-manifest.json');
+ const digest=wrongDigest?'0'.repeat(64):hash(raw);
+ fs.writeFileSync(manifestPath,JSON.stringify({
+  schema:'jarvis.autonomy.upstream-attestation.v1',
+  datasets:[{name:'fixture-source',revision:'a'.repeat(40),license_spdx:'CC0-1.0',
+   path:'upstream-original.jsonl',sha256:digest,records:rows.length}]
+ }));
+ return ['--source-manifest',manifestPath];
 }
 let failures=0;
 function check(ok,label,detail=''){if(ok)console.log('PASS',label);else{failures++;console.error('FAIL',label,detail);}}
@@ -34,6 +47,15 @@ try{
  r=run([valid[0],{...valid[1],prompt:valid[0].prompt,id:'dup-prompt'},valid[2]],3);check(r.status!==0,'duplicate prompt rejected',r.stderr);
  r=run([valid[0],{...valid[1],source:{...valid[1].source,raw_prompt_sha256:'0'.repeat(64)}},valid[2]],3);check(r.status!==0,'modified prompt hash rejected',r.stderr);
  r=run([valid[0],{...valid[1],verifier:{kind:'filesystem_state',spec:'Model says it is done.',independent:false}},valid[2]],3);check(r.status!==0,'model-authored completion is not an independent verifier',r.stderr);
+ const pinned = pinnedSource(valid);
+ r=run(valid,3,pinned);check(r.status===0,'verbatim pinned upstream snapshots accepted',r.stderr);
+ const modified={...valid[1],prompt:valid[1].prompt+' Modified!',source:{...valid[1].source,raw_prompt_sha256:hash(valid[1].prompt+' Modified!')}};
+ r=run([valid[0],modified,valid[2]],3,pinned);
+ check(r.status!==0 && r.stdout.includes('does not match pinned upstream'),'self-consistent fake prompt rejected against original source');
+ r=run(valid,3,pinnedSource(valid,true));
+ check(r.status===2 && r.stderr.includes('SOURCE_ATTESTATION_INVALID'),'corrupted pinned source snapshot digest rejected');
+ r=run(valid,200000);
+ check(r.status===2 && r.stderr.includes('SOURCE_ATTESTATION_REQUIRED'),'200K certification without source manifest denied');
 }finally{fs.rmSync(tmp,{recursive:true,force:true});}
-console.log(`CORPUS VALIDATOR SELF-TEST: ${6-failures}/6 PASS`);
+console.log(`CORPUS VALIDATOR SELF-TEST: ${10-failures}/10 PASS`);
 if(failures)process.exitCode=1;

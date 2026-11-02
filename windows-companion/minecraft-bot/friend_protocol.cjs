@@ -10,6 +10,11 @@ const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','gu
 function validateCommand(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return 'Invalid command';
   if (typeof input.command !== 'string') return 'Missing command';
+  if(input.command==='natural_goal')
+    return Object.keys(input).length===2 && typeof input.text==='string' &&
+      input.text.trim().length>0 && input.text.length<=600 &&
+      !/[\x00-\x1f\x7f]/.test(input.text)
+      ?null:'Natural owner instruction must be 1-600 printable characters with no extra fields';
   if (SIMPLE.has(input.command)) return null;
   if (input.command === 'auto_goal') {
     const fixed=['survive','wood','tools','explore','follow','guard','stone_age','iron_age',

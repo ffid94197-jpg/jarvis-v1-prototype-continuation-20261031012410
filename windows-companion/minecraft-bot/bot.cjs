@@ -13,6 +13,7 @@ const {acceptDragonDeath,resetDragon}=require('./dragon_engagement.cjs');
 const {Vec3} = require('vec3');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {validateCommand, inventorySummary} = require('./friend_protocol.cjs');
+const {interpretOwnerInstruction} = require('./language_goal.cjs');
 const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
 const {planSurveyStep}=require('./terrain_survey.cjs');
@@ -60,7 +61,7 @@ let spawned=false, mode='follow', actionEpoch=0, followTimer, moveTimer, lastAct
 const failedDigTargets=new Map();
 const autopilot=createController({maxSeconds:43200,maxSteps:20000});
 const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-mission.json'),{host,port,owner:leader});
-let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;
+let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const MOB_NAMES=new Set(['zombie','skeleton','spider','husk','drowned']);
 function ack(id,ok,status,error){
@@ -943,6 +944,18 @@ async function action(q){
   if(bad)return {ok:false,error:bad};
   if(!spawned)return {ok:false,error:'Minecraft bot has not spawned'};
   switch(q.command){
+    case 'natural_goal':{
+      // The LLM interprets only; it cannot bypass the existing JARVIS executor.
+      if(languageBusy)return {ok:false,error:'Previous JARVIS language interpretation still active'};
+      languageBusy=true;
+      const before=actionEpoch;
+      try{
+        const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:conciseStatus()});
+        if(before!==actionEpoch)return {ok:false,error:'Superseded owner command cancelled stale language result'};
+        if(!parsed.ok)return {ok:false,error:parsed.error};
+        return await action(parsed.command);
+      }finally{languageBusy=false;}
+    }
     case 'status':return {ok:true,status:conciseStatus()};
     case 'inventory':return {ok:true,status:inventorySummary(bot)};
     case 'observe':{
@@ -1184,13 +1197,26 @@ bot.once('spawn',()=>{
     catch(err){lastAction='navigation error: '+String(err.message||err).slice(0,90);}
   },2000);
 });
+const CHAT_KEYWORDS=new Set(['help','auto','goal','craft','equip','pause','resume','travel','farm','build','gather',
+  'follow','come','stay','guard','stop','jump','look','status','inventory','observe','auto_status',
+  'collect_wood','say','wait']);
+function naturalChat(text){
+  action({command:'natural_goal',text}).then(r=>say(r.ok?(r.status||'Goal accepted'):(r.error||'Unavailable')))
+    .catch(()=>say('JARVIS could not interpret that owner request'));
+}
 bot.on('chat',(username,message)=>{
   if(username!==leader || !spawned || typeof message!=='string')return;
-  const match=/^jarvis(?:buddy)?[,: ]+([a-z_]+)(?:\s+(.+))?$/i.exec(message.trim());
-  if(!match)return;
+  const trimmed=message.trim();
+  const match=/^jarvis(?:buddy)?[,: ]+([a-z_]+)(?:\s+(.+))?$/i.exec(trimmed);
+  if(!match){
+    const natural=/^jarvis(?:buddy)?[,: ]+(.+)$/i.exec(trimmed);
+    if(natural)naturalChat(natural[1]);
+    return;
+  }
   const cmd=match[1].toLowerCase();
+  if(!CHAT_KEYWORDS.has(cmd)){naturalChat((match[1]+' '+(match[2]||'')).trim());return;}
   const normalized=cmd==='gather'?'collect_wood':cmd==='wait'?'stay':cmd;
-  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather [count resource], travel x y z, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_then_netherite_run|dragon_run|companion|explore|follow|guard], pause, resume, build, farm, craft, equip, observe, status, inventory');return;}
+  if(cmd==='help'){say('Ask Jarvis in your own words, or use: follow, guard, gather [count resource], auto, pause, craft, equip, build, status');return;}
   if(cmd==='auto'||cmd==='goal') {const goal=(match[2]||'survive').trim().toLowerCase();
     action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_then_netherite_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
   if(cmd==='craft' && match[2]){

@@ -68,7 +68,7 @@ jobs:
           spawn-protection=0
           view-distance=8
           simulation-distance=6
-          level-seed=20261102
+          level-seed=41902
           level-type=minecraft:normal
           pvp=false
           white-list=false

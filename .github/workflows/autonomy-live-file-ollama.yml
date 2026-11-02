@@ -5,11 +5,13 @@ on:
     paths:
       - ".github/workflows/autonomy-live-file-ollama.yml"
       - "scripts/autonomy/run-live-ollama-file-task.cjs"
+      - "src/lib/agent/core/loop.ts"
   push:
     branches: [fix/autonomy-durable-proof-and-corpus-20261102]
     paths:
       - ".github/workflows/autonomy-live-file-ollama.yml"
       - "scripts/autonomy/run-live-ollama-file-task.cjs"
+      - "src/lib/agent/core/loop.ts"
   workflow_dispatch:
 permissions:
   contents: read

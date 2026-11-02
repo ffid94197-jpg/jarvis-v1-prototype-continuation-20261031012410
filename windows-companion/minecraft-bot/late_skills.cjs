@@ -7,6 +7,7 @@ const {NETHERITE}=require('./late_game.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
 const {collectObservedDrop}=require('./drop_pickup.cjs');
+const {findPortalLayout,pos:portalCell}=require('./portal_layout.cjs');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const solid=b=>b && b.boundingBox!=='empty' && !['air','cave_air','void_air','lava','water','fire','nether_portal'].includes(b.name);
 const pos=b=>new Vec3(Math.floor(b.x),Math.floor(b.y),Math.floor(b.z));
@@ -204,38 +205,31 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
   async function constructPortal(epoch){
     if(count(bot,'obsidian')<14 && !session.portalBase)return observed(false,'Need 14 obsidian for rectangular Nether portal');
     if(!session.portalBase){
-      const p=bot.entity.position;
-      for(const [dx,dz] of [[3,0],[-5,0],[0,3],[0,-5]]){
-        const base=new Vec3(Math.floor(p.x)+dx,Math.floor(p.y),Math.floor(p.z)+dz);
-        const fits=[0,1,2,3].every(x=>{
-          const foot=bot.blockAt(base.offset(x,-1,0));
-          return solid(foot) && [0,1,2,3,4].every(y=>{
-            const b=bot.blockAt(base.offset(x,y,0));return b && ['air','cave_air','void_air'].includes(b.name);
-          });
-        });
-        if(fits){session.portalBase=base;break;}
-      }
-      if(!session.portalBase)return observed(false,'No safe open 4x5 portal building space with solid foundation');
+      const layout=findPortalLayout(bot,bot.entity.position,Vec3);
+      if(!layout)return observed(false,'No safe loaded 4x5 portal site in either horizontal orientation');
+      session.portalBase=layout.base;
+      session.portalAxis=layout.axis;
     }
-    const base=session.portalBase;
+    const base=session.portalBase, axis=session.portalAxis||{x:1,z:0};
     const cells=[];
     for(let x=0;x<=3;x++)cells.push([x,0]);
     for(let y=1;y<=3;y++){cells.push([0,y],[3,y]);}
     for(let x=0;x<=3;x++)cells.push([x,4]);
     for(const [x,y] of cells){
-      check(epoch);const target=base.offset(x,y,0);
+      check(epoch);const target=portalCell(base,axis,x,y);
       if(bot.blockAt(target)?.name==='obsidian')continue;
       if(!await placeItem(target,'obsidian',epoch))return observed(false,'Portal block placement not verified: '+target);
     }
     const lighter=item(bot,'flint_and_steel');if(!lighter)return observed(false,'Flint and steel missing');
-    await move(base.offset(1,1,0),2,epoch,10000);
+    await move(portalCell(base,axis,1,1),2,epoch,10000);
     await bot.equip(lighter,'hand');
-    const obsidian=bot.blockAt(base.offset(1,0,0));
+    const obsidian=bot.blockAt(portalCell(base,axis,1,0));
     await bot.activateBlock(obsidian);
     await delay(850);check(epoch);
-    const lit=bot.blockAt(base.offset(1,1,0));
+    const lit=bot.blockAt(portalCell(base,axis,1,1));
     if(lit?.name!=='nether_portal')return observed(false,'Frame built; ignition did not produce Nether portal blocks');
-    session.portalPosition=base.offset(1,1,0);session.homePortalPosition=session.portalPosition.clone();
+    session.portalPosition=portalCell(base,axis,1,1);
+    session.homePortalPosition=session.portalPosition.clone();
     return observed(true,'Built and observed lit 4x5 obsidian Nether portal','nether_portal');
   }
   async function enterPortal(targetDimension,epoch){

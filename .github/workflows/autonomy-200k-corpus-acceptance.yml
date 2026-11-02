@@ -40,7 +40,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Corpus validator self-test failed." }
       - name: Install exact application dependencies
         run: npm ci --no-audit --no-fund
-      - name: Install Minecraft bot test dependencies
+      - name: Generate Prisma client\n        run: npx prisma generate\n      - name: Install Minecraft bot test dependencies
         run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
       - name: Native Windows and full TypeScript check
         run: |

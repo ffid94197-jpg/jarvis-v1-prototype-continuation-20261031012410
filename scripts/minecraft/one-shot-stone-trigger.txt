@@ -4,3 +4,5 @@ Maximum hosted Linux runner time: 16 minutes.
 No other trigger files are authorized. Full mission intentionally disabled in this run.
 
 RETEST: corrected stone-sword remainder threshold and restricted unrelated Windows build job.
+
+FINAL_FOCUSED_RETEST: prioritize remote exposed stone, safe deeper excavation, bounded world movement; no full end-game runner.

@@ -152,10 +152,13 @@ const FILE_ONLY_TOOLS = `AVAILABLE TOOLS — direct authorized file tasks:
 FILE TASK RULES: Copy ACTUAL path names and exact content from the OPERATOR OBJECTIVE, not examples in this catalog. "actual-folder-name", "requested/path.txt", "name", "path", and "file" are EXAMPLES only unless the operator literally requests them. Never create unrelated output. Use create_folder for explicitly requested directories, write_file for every requested file, and read_file before reporting success. After any partial/failed receipt, correct the next concrete step within Guardian policy. Never claim verified until independent Core checks the exact requested outputs. All other tool categories are intentionally omitted for this simple task; do not invent or invoke them.`;
 
 export function selectPlannerSystemPrompt(objective: string): string {
+  // Quoted payload content is data, not an intent category. Writing the literal
+  // string "TEST" must not accidentally route into the coding/tool catalog.
+  const instruction = objective.replace(/"[^"\r\n]*"|'[^'\r\n]*'/g, "");
   if (objective.length > 600 ||
-      !DIRECT_FS_GOAL.test(objective.trim()) ||
-      !FS_OBJECT.test(objective) ||
-      COMPLEX_GOAL.test(objective)) return PLANNER_SYSTEM_PROMPT;
+      !DIRECT_FS_GOAL.test(instruction.trim()) ||
+      !FS_OBJECT.test(instruction) ||
+      COMPLEX_GOAL.test(instruction)) return PLANNER_SYSTEM_PROMPT;
   return PLANNER_SYSTEM_PROMPT.replace(TOOL_CATALOG_JSON, FILE_ONLY_TOOLS);
 }
 

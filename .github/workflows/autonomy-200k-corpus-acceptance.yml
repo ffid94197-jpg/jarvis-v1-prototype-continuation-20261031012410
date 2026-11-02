@@ -34,7 +34,7 @@ jobs:
           cache: npm
       - name: Test corpus validator against valid and invalid fixtures
         run: |
-          node scripts/autonomy/verify-corpus-validator.mjs
+          node scripts/autonomy/verify-corpus-validator.cjs
           if ($LASTEXITCODE -ne 0) { throw "Corpus validator self-test failed." }
       - name: Install exact application dependencies
         run: npm ci --no-audit --no-fund

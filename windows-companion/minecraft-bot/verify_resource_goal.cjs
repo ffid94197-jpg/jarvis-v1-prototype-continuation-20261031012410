@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('node:assert/strict');
-const {RESOURCES,resourceCount,resourcePlan}=require('./resource_goal.cjs');
+const {RESOURCES,normalizeResource,resourceCount,resourcePlan}=require('./resource_goal.cjs');
 const {decide,createController}=require('./autonomy_engine.cjs');
 const {validateCommand}=require('./friend_protocol.cjs');
 const w=(inventory={},more={})=>({joined:true,dimension:'minecraft:overworld',health:20,hunger:20,
@@ -13,6 +13,10 @@ let count=0;
 const check=(expr,msg)=>{assert.ok(expr,msg);count++;};
 const p=(resource,targetCount,world)=>decide('gather',world,{},{
  goal:'gather',resource,targetCount,steps:0,milestones:{}});
+check(normalizeResource('diamonds')==='diamond','Common plural diamond goal normalized');
+check(normalizeResource('stone')==='cobblestone','Stone alias maps to real cobblestone receipts');
+check(normalizeResource('WOOD')==='logs','Wood alias maps to aggregated observed logs');
+check(normalizeResource('command_block')===null,'Unsupported admin blocks are rejected');
 check(RESOURCES.has('cobblestone')&&!RESOURCES.has('command_block'),
  'Only explicitly supported survival resources authorized');
 check(p('logs',3,w({logs:3})).kind==='complete',

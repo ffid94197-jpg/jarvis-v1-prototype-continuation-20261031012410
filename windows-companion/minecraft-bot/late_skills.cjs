@@ -11,7 +11,6 @@ const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {findPortalLayout,pos:portalCell}=require('./portal_layout.cjs');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const solid=b=>b && b.boundingBox!=='empty' && !['air','cave_air','void_air','lava','water','fire','nether_portal'].includes(b.name);
-const pos=b=>new Vec3(Math.floor(b.x),Math.floor(b.y),Math.floor(b.z));
 const count=(bot,name)=>(bot.inventory?.items?.()||[]).reduce((n,i)=>n+(i.name===name?i.count:0),0);
 const counts=(bot,pred)=>(bot.inventory?.items?.()||[]).reduce((n,i)=>n+(pred(i.name)?i.count:0),0);
 const observed=(ok,detail,proof)=>({ok:!!ok,verified:!!ok,detail, ...(ok&&proof?{proof}:{})});

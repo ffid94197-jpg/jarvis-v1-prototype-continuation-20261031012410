@@ -12,6 +12,7 @@
 
 import { db } from "@/lib/db";
 import { validateDesktopTool, type DesktopPrepared } from "../windows/policy";
+import { prepareCIProjectBuild, type CIProjectPrepared } from "../tools/ciProjectBuild";
 import {
   assertWithinRoot,
   MAX_WRITE_BYTES,
@@ -31,6 +32,7 @@ export interface PreparedArgs {
   /** For multi-path tools (ls/cat/wc): guardian-approved absolute paths. */
   paths?: { abs: string; rel: string }[];
   desktop?: DesktopPrepared;
+  projectBuild?: CIProjectPrepared;
   integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;operation?:string;arguments?:Record<string,unknown>};
 }
 
@@ -47,6 +49,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "read_file",
   "list_dir",
   "run_command",
+  "ci_project_build",
   "windows_open_url",
   "windows_open_app",
   "windows_open_settings",
@@ -236,6 +239,14 @@ export async function authorizeToolCall(
       case "minecraft_companion_stop": {
         const d = validateDesktopTool(tool, rawArgs);
         decision = d.ok ? {verdict:"allow",prepared:{desktop:d.prepared}} : deny(d.reason);
+        break;
+      }
+      case "ci_project_build": {
+        if(!ctx.ownerId) { decision=deny("Authenticated owner required for CI build"); break; }
+        const p=await prepareCIProjectBuild(rawArgs);
+        decision=p.ok && p.prepared
+          ? { verdict:"allow", prepared:{projectBuild:p.prepared} }
+          : deny(p.reason??"CI build is not authorized");
         break;
       }
       case "run_command": {

@@ -68,6 +68,11 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     const idx=bot.getEquipmentDestSlot?.(slot);
     return Number.isInteger(idx) && bot.inventory?.slots?.[idx]?.name===name;
   });
+  const wornDiamond=[['head','diamond_helmet'],['torso','diamond_chestplate'],
+    ['legs','diamond_leggings'],['feet','diamond_boots']].every(([slot,name])=>{
+    const idx=bot.getEquipmentDestSlot?.(slot);
+    return Number.isInteger(idx) && bot.inventory?.slots?.[idx]?.name===name;
+  });
   let strongholdMissingEyes=null;
   const nearby=name=>!!bot.findBlock?.({matching:b=>b?.name===name,maxDistance:32});
   try{
@@ -92,7 +97,7 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
   const crystals=Object.values(bot.entities||{}).filter(e=>e?.name==='end_crystal' && e?.position);
   return {joined:!!p,dimension:bot.game?.dimension||'minecraft:overworld',
     smithingTableNearby,netherPortalNearby,strongholdPortalFrameNearby,strongholdMissingEyes,endPortalPresent,endPortalActivated,
-    wornNetherite,exitPortalPresent, dragonPresent:dragons.length>0,dragonId:dragons[0]?.id||null,
+    wornNetherite,wornDiamond,exitPortalPresent, dragonPresent:dragons.length>0,dragonId:dragons[0]?.id||null,
     dragonDeadObserved:dragonDead,crystalsNearby:crystals.length,
     health:number(bot.health,20),hunger:number(bot.food,20),workbenchNearby,furnaceNearby,
     position:p?{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}:null,
@@ -275,8 +280,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       // A portal observation alone never proves a dragon death. The combined
       // victory proof is emitted only by the live skill after seeing the dragon,
       // observing its entityDead event and finding an End exit portal.
-      if(outcome.proof==='dragon_death' ||
-         (decision.kind==='verify_dragon' && outcome.proof==='dragon_victory'))
+      if((decision.kind==='fight_dragon' && outcome.proof==='dragon_death' && state.milestones.dragonSeen===true) ||
+         (decision.kind==='verify_dragon' && outcome.proof==='dragon_victory' && state.milestones.dragonSeen===true))
         state.milestones.dragonKilled=true;
       if(outcome.proof==='end_exit_portal' ||
          (decision.kind==='verify_dragon' && outcome.proof==='dragon_victory'))

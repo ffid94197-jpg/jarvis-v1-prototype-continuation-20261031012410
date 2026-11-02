@@ -197,11 +197,17 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const ui=await bot.openContainer(chest);
     try{
       const found=(ui.containerItems?.()||[]).find(i=>i.name==='netherite_upgrade_smithing_template');
-      session.visitedChests.add(key);
-      if(!found)return observed(false,'Observed chest contained no netherite upgrade template');
+      if(!found){
+        session.visitedChests.add(key); // Inspected, genuinely empty.
+        return observed(false,'Observed chest contained no Netherite upgrade template');
+      }
       await ui.withdraw(found.type,found.metadata,1);
+      check(epoch);
     }finally{ui.close();}
-    return observed(count(bot,'netherite_upgrade_smithing_template')>before,'Bastion template acquired and inventory confirmed');
+    const acquired=count(bot,'netherite_upgrade_smithing_template')>before;
+    if(acquired)session.visitedChests.add(key);
+    return observed(acquired,acquired?'Bastion template acquired with server inventory proof':
+      'Template transfer unverified; preserve chest for another bounded attempt');
   }
   async function constructPortal(epoch){
     if(count(bot,'obsidian')<14 && !session.portalBase)return observed(false,'Need 14 obsidian for rectangular Nether portal');

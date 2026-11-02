@@ -105,7 +105,8 @@ async function proof(){
  assert(observed.ok,'Final Minecraft inventory observation missing');
  const world=JSON.parse(observed.status);
  assert(world.joined===true && world.wornNetherite===true,'Server-observed armor slots not equipped');
- assert(world.dimension==='minecraft:overworld','Bot must complete in Overworld after returning from End');
+ assert(String(world.dimension||'').replace(/^minecraft:/,'')==='overworld',
+   'Bot must complete in actual Overworld after End return');
  const kill=evidence.events.find(e=>e.type==='dragon_death'&&e.dimension==='the_end');
  const equip=evidence.events.find(e=>e.type==='netherite_equipped'&&e.worn===true);
  assert(kill && equip && equip.at>kill.at,'Chronological live death and later armor-slot events missing');

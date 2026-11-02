@@ -23,6 +23,7 @@
 - Hard-labelled records: 61
 - Easy-labelled records: 254
 - Unrated records: 2,332
+- Starting URLs: 2,633 HTTPS and 14 legacy HTTP
 
 ## Important discrepancy
 
@@ -37,5 +38,6 @@ Reasons:
 - 2,332 records have no difficulty label.
 - The task instructions do not carry a complete, machine-executable independent verifier for every record.
 - Many WRITE tasks require real third-party accounts and create/update/delete side effects. They must be rehosted in authorized test accounts or deterministic local replicas before execution.
+- Fourteen source tasks use legacy HTTP starting URLs; these must not be executed as-is because transport is insecure. Migrate them to authorized HTTPS replicas or exclude them from execution.
 
 The prompts are preserved verbatim. No paraphrase, model-generated variant or synthetic record was added. The source records are useful for candidate coverage and verifier-authoring, but they do not establish any JARVIS task-success result.

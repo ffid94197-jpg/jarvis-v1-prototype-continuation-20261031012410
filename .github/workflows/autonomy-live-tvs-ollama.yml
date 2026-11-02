@@ -1,0 +1,90 @@
+name: JARVIS real Ollama TVS website acceptance (Windows)
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Installed Ollama model to test
+        required: true
+        default: qwen2.5-coder:3b
+permissions:
+  contents: read
+jobs:
+  live-tvs:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install JARVIS dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Ollama on disposable Windows runner
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (!(Get-Command winget -ErrorAction SilentlyContinue)) { throw "winget is unavailable; cannot install Ollama safely on this runner." }
+          winget install --id Ollama.Ollama --exact --silent --accept-package-agreements --accept-source-agreements
+          $ollama = Get-Command ollama.exe -ErrorAction SilentlyContinue
+          if (!$ollama) {
+            $candidate = "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe"
+            if (Test-Path $candidate) { $env:PATH = (Split-Path $candidate) + ";" + $env:PATH; $ollama = Get-Command ollama.exe -ErrorAction SilentlyContinue }
+          }
+          if (!$ollama) { throw "Ollama CLI not found after installation." }
+          Start-Process -FilePath $ollama.Source -ArgumentList "serve" -WindowStyle Hidden
+          $ready = $false
+          for ($i=0; $i -lt 60; $i++) {
+            try { Invoke-RestMethod http://127.0.0.1:11434/api/tags -TimeoutSec 3 | Out-Null; $ready = $true; break } catch { Start-Sleep -Seconds 2 }
+          }
+          if (!$ready) { throw "Ollama server did not start." }
+      - name: Pull and verify actual model
+        env:
+          OLLAMA_MODEL: ${{ inputs.model }}
+        run: |
+          ollama pull $env:OLLAMA_MODEL
+          if ($LASTEXITCODE -ne 0) { throw "Ollama model pull failed." }
+          $tags = Invoke-RestMethod http://127.0.0.1:11434/api/tags
+          if (!($tags.models | Where-Object { $_.name -eq $env:OLLAMA_MODEL -or $_.name.StartsWith($env:OLLAMA_MODEL + ":") })) {
+            throw "Requested model is not installed."
+          }
+      - name: Start real JARVIS Core, Guardian, NEXUS and Windows companion
+        env:
+          JARVIS_MODEL_BACKEND: ollama
+          JARVIS_OLLAMA_BASE_URL: http://127.0.0.1:11434
+          JARVIS_OLLAMA_MODEL: ${{ inputs.model }}
+          JARVIS_MODEL_REQUEST_TIMEOUT_MS: "120000"
+          JARVIS_AGENT_WORKSPACE: ${{ runner.temp }}\jarvis-tvs-workspace
+          JARVIS_LIVE_EVIDENCE: ${{ runner.temp }}\jarvis-tvs-live-evidence.json
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (Test-Path $env:JARVIS_AGENT_WORKSPACE) { Remove-Item $env:JARVIS_AGENT_WORKSPACE -Recurse -Force }
+          New-Item -ItemType Directory -Path $env:JARVIS_AGENT_WORKSPACE | Out-Null
+          $out = Join-Path $env:RUNNER_TEMP "jarvis-nexus.stdout.log"
+          $err = Join-Path $env:RUNNER_TEMP "jarvis-nexus.stderr.log"
+          $proc = Start-Process -FilePath "npm.cmd" -ArgumentList @("run","dev:windows") -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+          "JARVIS_PID=$($proc.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $ready = $false
+          for ($i=0; $i -lt 120; $i++) {
+            if ($proc.HasExited) { Get-Content $out -ErrorAction SilentlyContinue; Get-Content $err -ErrorAction SilentlyContinue; throw "JARVIS launcher exited: $($proc.ExitCode)" }
+            try { Invoke-WebRequest http://127.0.0.1:3000/api/jarvis/auth/session -UseBasicParsing -TimeoutSec 3 | Out-Null; $ready = $true; break } catch { Start-Sleep -Seconds 2 }
+          }
+          if (!$ready) { throw "JARVIS/NEXUS did not become ready on localhost:3000." }
+          node scripts/autonomy/run-live-tvs-acceptance.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Real Ollama TVS end-to-end acceptance failed." }
+      - name: Upload full real-model evidence and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-live-tvs-ollama-evidence
+          path: |
+            ${{ runner.temp }}\jarvis-tvs-live-evidence.json
+            ${{ runner.temp }}\jarvis-nexus.stdout.log
+            ${{ runner.temp }}\jarvis-nexus.stderr.log
+          if-no-files-found: warn
+      - name: Stop JARVIS launcher
+        if: always()
+        run: |
+          if ($env:JARVIS_PID) { Stop-Process -Id ([int]$env:JARVIS_PID) -Force -ErrorAction SilentlyContinue }

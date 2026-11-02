@@ -249,6 +249,32 @@ async function craftNamed(name,count,epoch,table=null){
   return {ok:after>before,verified:after>before,detail:`${name}: inventory ${before} -> ${after}`};
 }
 const lateSkills=createLateSkills({bot,navigate,craftNamed,getEpoch:()=>actionEpoch,getOwner:()=>leader,digest,Vec3});
+async function collectVerifiedDrop(blockPosition, beforeCount, readCount, epoch, label){
+  // A successfully dug block is not progression until the actual server
+  // inventory reports the drop. Pathfinder can require >3s to plan movement.
+  const deadline=Date.now()+25000;
+  let lastRoute='drop entity not yet visible';
+  while(Date.now()<deadline){
+    if(epoch!==actionEpoch)throw Error('Mining pickup cancelled');
+    await pause(350);
+    const count=readCount();
+    if(count>beforeCount)return {ok:true,verified:true,detail:label+' '+beforeCount+' -> '+count};
+    const dropped=bot.nearestEntity?.(e=>e?.position &&
+      (e.name==='item'||e.type==='other') && e.position.distanceTo(blockPosition)<8);
+    if(dropped?.position){
+      if(bot.entity.position.distanceTo(dropped.position)>1.15){
+        const remain=deadline-Date.now();
+        if(remain>1000){
+          try{
+            const reached=await navigate(dropped.position,1,epoch,Math.min(14000,remain-400));
+            lastRoute=reached?'Near drop but inventory unchanged':'Drop route out of pickup range';
+          }catch(e){lastRoute='Drop route: '+String(e.message||e).slice(0,90);}
+        }
+      }else lastRoute='Near drop, but inventory not updated';
+    }
+  }
+  return {ok:false,verified:false,detail:label+' mined but inventory drop unverified: '+lastRoute};
+}
 async function autoExecute(plan,epoch){
   const before=digest(bot,leader);
   if(epoch!==actionEpoch)throw Error('Owner cancelled current action');
@@ -336,16 +362,8 @@ async function autoExecute(plan,epoch){
       const pick=bot.inventory.items().find(i=>['stone_pickaxe','wooden_pickaxe'].includes(i.name));
       if(!pick)throw Error('Pickaxe missing');
       await bot.equip(pick,'hand');await bot.dig(live);
-      for(let i=0;i<8;i++){
-        if(epoch!==actionEpoch)throw Error('Mining cancelled');
-        await pause(350);
-        const dropped=bot.nearestEntity?.(e=>e && e.position && (e.name==='item'||e.type==='other') && e.position.distanceTo(p)<5);
-        if(dropped?.position && bot.entity.position.distanceTo(dropped.position)>1.7)
-          await navigate(dropped.position,1,epoch,2800).catch(()=>false);
-        const now=digest(bot,leader).inventory.cobblestone;
-        if(now>before.inventory.cobblestone)return {ok:true,verified:true,detail:'Cobblestone '+before.inventory.cobblestone+' -> '+now};
-      }
-      return {ok:false,verified:false,detail:'Stone dug, but cobblestone pickup not verified'};
+       return collectVerifiedDrop(p,before.inventory.cobblestone,
+         ()=>digest(bot,leader).inventory.cobblestone,epoch,'Cobblestone');
     }
     case 'mine_iron':{
       if(!before.inventory.stonePickaxe && !before.inventory.ironPickaxe)throw Error('Iron ore needs stone or better pickaxe');
@@ -359,16 +377,8 @@ async function autoExecute(plan,epoch){
       const pick=bot.inventory.items().find(i=>['stone_pickaxe','iron_pickaxe'].includes(i.name));
       if(!pick)throw Error('Missing valid iron mining pickaxe');
       await bot.equip(pick,'hand');await bot.dig(live);
-      for(let i=0;i<9;i++){
-        if(epoch!==actionEpoch)throw Error('Mining cancelled');
-        await pause(350);
-        const dropped=bot.nearestEntity?.(e=>e?.position && (e.name==='item'||e.type==='other') && e.position.distanceTo(p)<5);
-        if(dropped?.position && bot.entity.position.distanceTo(dropped.position)>1.7)
-          await navigate(dropped.position,1,epoch,3000).catch(()=>false);
-        const now=digest(bot,leader).inventory.rawIron;
-        if(now>before.inventory.rawIron)return {ok:true,verified:true,detail:'Raw iron '+before.inventory.rawIron+' -> '+now};
-      }
-      return {ok:false,verified:false,detail:'Iron mined, but raw iron pickup not verified'};
+       return collectVerifiedDrop(p,before.inventory.rawIron,
+         ()=>digest(bot,leader).inventory.rawIron,epoch,'Raw iron');
     }
     case 'craft_furnace':{
       const station=bot.findBlock({matching:b=>b?.name==='crafting_table',maxDistance:5});
@@ -424,16 +434,8 @@ async function autoExecute(plan,epoch){
       const pick=bot.inventory.items().find(i=>['diamond_pickaxe','iron_pickaxe'].includes(i.name));
       if(!pick)throw Error('Missing pickaxe');
       await bot.equip(pick,'hand');await bot.dig(live);
-      for(let i=0;i<9;i++){
-        if(epoch!==actionEpoch)throw Error('Diamond mining cancelled');
-        await pause(350);
-        const dropped=bot.nearestEntity?.(e=>e?.position && (e.name==='item'||e.type==='other') && e.position.distanceTo(p)<5);
-        if(dropped?.position && bot.entity.position.distanceTo(dropped.position)>1.7)
-          await navigate(dropped.position,1,epoch,3000).catch(()=>false);
-        const now=digest(bot,leader).inventory.diamonds;
-        if(now>before.inventory.diamonds)return {ok:true,verified:true,detail:'Diamonds '+before.inventory.diamonds+' -> '+now};
-      }
-      return {ok:false,verified:false,detail:'Diamond ore mined, but diamond pickup not verified'};
+       return collectVerifiedDrop(p,before.inventory.diamonds,
+         ()=>digest(bot,leader).inventory.diamonds,epoch,'Diamonds');
     }
     case 'craft_diamond_gear':{
       const allowed=new Set(['diamond_pickaxe','diamond_sword','diamond_helmet','diamond_chestplate','diamond_leggings','diamond_boots']);

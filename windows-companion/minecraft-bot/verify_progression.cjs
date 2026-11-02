@@ -6,7 +6,10 @@ const {validateCommand}=require('./friend_protocol.cjs');
 const w=(inventory={},workbenchNearby=false)=>({joined:true,health:20,hunger:20,threats:[],inventory:{logs:0,planks:0,sticks:0,table:0,woodenPickaxe:0,stonePickaxe:0,stoneSword:0,cobblestone:0,food:0,...inventory},workbenchNearby});
 const cases=[
  ['wooden_tools',w(), 'collect_wood'],
- ['mine_stone',w({woodenPickaxe:1}),'mine_cobblestone'],
+ ['reserve_wood_before_mining',w({woodenPickaxe:1}),'collect_wood'],
+ ['reserve_planks_before_mining',w({woodenPickaxe:1,logs:1}),'craft_planks'],
+ ['reserve_sticks_before_mining',w({woodenPickaxe:1,planks:2}),'craft_sticks'],
+ ['mine_stone',w({woodenPickaxe:1,sticks:4}),'mine_cobblestone'],
  ['handles',w({woodenPickaxe:1,cobblestone:5,planks:3}),'craft_sticks'],
  ['station',w({woodenPickaxe:1,cobblestone:5,sticks:4,table:1}),'place_table'],
  ['pickaxe',w({woodenPickaxe:1,cobblestone:5,sticks:4},true),'craft_stone_pickaxe'],
@@ -14,6 +17,13 @@ const cases=[
  ['done',w({stonePickaxe:1,stoneSword:1}),'complete']
 ];
 for(const [label,state,expected] of cases)assert.equal(decide('stone_age',state).kind,expected,label);
+const undergroundNoHandles=w({woodenPickaxe:1,cobblestone:5,table:1});
+assert.equal(decide('stone_age',undergroundNoHandles).kind,'collect_wood',
+ 'past stranding is not a victory; record missing handles instead of falsely crafting');
+const bankedHandles=w({woodenPickaxe:1,cobblestone:5,sticks:4,table:1});
+assert.equal(decide('stone_age',bankedHandles).kind,'place_table',
+ 'when handles were reserved, five real cobblestone leads directly to workstation placement');
+
 const mobileStation={...w({woodenPickaxe:1,cobblestone:0,sticks:6},true),
  workbenchRecoverySupported:true};
 assert.equal(decide('stone_age',mobileStation).kind,'recover_table',

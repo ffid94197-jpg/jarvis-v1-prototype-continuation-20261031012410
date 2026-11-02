@@ -16,7 +16,7 @@ const {planSurveyStep}=require('./terrain_survey.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
 const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_navigation.cjs');
-const {collectObservedDrop}=require('./drop_pickup.cjs');
+const {collectObservedDrop,pickupFeet}=require('./drop_pickup.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
@@ -107,11 +107,18 @@ function startAction(name,fn){
 }
 function isTreeLog(block){return !!block && /_log$/.test(block.name) && !block.name.includes('stripped');}
 function nearbyLogs(){
-  // Inspect multiple logs; the closest one can be behind a wall or above a cliff.
-  const positions=typeof bot.findBlocks==='function' ? bot.findBlocks({matching:isTreeLog,maxDistance:SCAN_RADIUS,count:MAX_LOG_CANDIDATES}) : [];
-  if(positions?.length)return rankLogs(positions,bot.entity.position);
+  // Avoid digging canopy blocks whose drops cannot be retrieved from an
+  // observed standable foot position. The real Java 1.21.1 field run failed
+  // at Y=75 after mining logs but leaving inaccessible floating drops.
+  const eligible=p=>{
+    const foot=pickupFeet(bot,p.offset(.5,.5,.5),Vec3);
+    return !!foot && foot.distanceTo(p)<=4.5;
+  };
+  const positions=typeof bot.findBlocks==='function' ?
+    bot.findBlocks({matching:isTreeLog,maxDistance:SCAN_RADIUS,count:MAX_LOG_CANDIDATES}) : [];
+  if(positions?.length)return rankLogs(positions,bot.entity.position,eligible);
   const nearest=bot.findBlock({matching:isTreeLog,maxDistance:SCAN_RADIUS});
-  return nearest?rankLogs([nearest.position],bot.entity.position):[];
+  return nearest?rankLogs([nearest.position],bot.entity.position,eligible):[];
 }
 // Return a verified inventory delta, not a mere block-digging receipt.
 async function gatherOneLog(epoch,deadline){

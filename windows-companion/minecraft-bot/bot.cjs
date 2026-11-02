@@ -115,7 +115,7 @@ function nearbyLogs(){
     return !!foot && foot.distanceTo(p)<=4.5;
   };
   const positions=typeof bot.findBlocks==='function' ?
-    bot.findBlocks({matching:isTreeLog,maxDistance:SCAN_RADIUS,count:MAX_LOG_CANDIDATES}) : [];
+    bot.findBlocks({matching:isTreeLog,maxDistance:SCAN_RADIUS,count:MAX_LOG_CANDIDATES*3}) : [];
   if(positions?.length)return rankLogs(positions,bot.entity.position,eligible);
   const nearest=bot.findBlock({matching:isTreeLog,maxDistance:SCAN_RADIUS});
   return nearest?rankLogs([nearest.position],bot.entity.position,eligible):[];

@@ -19,6 +19,10 @@ on:
         description: Repository-relative JSONL corpus path
         required: true
         default: benchmarks/autonomy/internet-hard-200k.jsonl
+      source_manifest:
+        description: Pinned source snapshot attestations (required for a 200K claim)
+        required: true
+        default: benchmarks/autonomy/upstream-source-manifest.json
 permissions:
   contents: read
 jobs:
@@ -91,9 +95,11 @@ jobs:
         if: ${{ inputs.validate_corpus == true }}
         env:
           CORPUS_PATH: ${{ inputs.corpus_path }}
+          SOURCE_MANIFEST: ${{ inputs.source_manifest }}
         run: |
           if (!(Test-Path $env:CORPUS_PATH)) { throw "Corpus missing: $env:CORPUS_PATH. Do not substitute generated prompts." }
-          node scripts/autonomy/validate-internet-corpus.cjs --input "$env:CORPUS_PATH" --expected 200000 --manifest artifacts/autonomy-corpus-manifest.json
+          if (!(Test-Path $env:SOURCE_MANIFEST)) { throw "Pinned upstream source manifest is missing. No provenance acceptance." }
+          node scripts/autonomy/validate-internet-corpus.cjs --input "$env:CORPUS_PATH" --source-manifest "$env:SOURCE_MANIFEST" --expected 200000 --manifest artifacts/autonomy-corpus-manifest.json
           if ($LASTEXITCODE -ne 0) { throw "Internet corpus provenance validation failed." }
       - name: Upload acceptance evidence
         if: always()

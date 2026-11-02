@@ -57,7 +57,7 @@ function isolatedBuildEnv(cwd) {
   return env;
 }
 function run(command, args, cwd, timeout = 20 * 60_000) {
-  const npmShim = /^(?:npm|npm\\.cmd)$/i.test(command);
+  const npmShim = /^(?:npm|npm\.cmd)$/i.test(command);
   const r = spawnSync(command, args, {
     cwd, encoding: 'utf8', timeout, windowsHide: true,
     // Only the fixed npm shim uses cmd.exe; Node/Vite binaries run with shell:false.

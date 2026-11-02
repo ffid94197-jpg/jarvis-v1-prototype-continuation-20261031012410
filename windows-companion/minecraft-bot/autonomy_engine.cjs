@@ -6,7 +6,8 @@
  */
 const {lateGamePlan} = require('./late_game.cjs');
 const {RESOURCES,resourcePlan}=require('./resource_goal.cjs');
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel']);
+const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','sequence']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
@@ -320,6 +321,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   function start(goal,seconds=300,spec={}){
     if(!GOALS.has(goal))throw Error('Unsupported autonomous gameplay goal');
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)throw Error('Duration out of bounds');
+    if(goal==='sequence' && !validSequence(spec?.steps))
+      throw Error('Sequence requires one to eight typed valid subgoals');
     if(goal==='travel' && (!spec?.destination ||
        !['x','y','z'].every(k=>Number.isInteger(spec.destination[k]) &&
          Math.abs(spec.destination[k])<=30000000) ||
@@ -331,7 +334,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null,
       ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{}),
       ...(goal==='travel'?{destination:{...spec.destination},
-        arrivalRange:spec.arrivalRange}:{})};return status();
+        arrivalRange:spec.arrivalRange}:{}),
+      ...(goal==='sequence'?{sequence:canonicalSequence(spec.steps),sequenceIndex:0}:{})};return status();
   }
   function stop(why='Owner paused autonomous gameplay'){state.status='paused';state.why=why;return status();}
   // A long-running owner-authorized mission may continue in bounded 6-hour
@@ -350,13 +354,35 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(state.status!=='paused'||!GOALS.has(state.goal)||clock()>=state.deadline)return false;
     state.status='running';state.why='Restarted after respawn; no inventory or completion proof assumed';
     state.failures={};state.milestones={};state.steps=0;state.lastDecision=null;state.lastResult=null;
+    // Death may have destroyed inventory. Recheck earlier stages from live
+    // state instead of blindly resuming a stale sequence checkpoint.
+    if(state.goal==='sequence')state.sequenceIndex=0;
     return true;
   }
   function status(){return JSON.parse(JSON.stringify(state));}
   function next(world){
     if(state.status!=='running')return {kind:'idle',why:'Automation not running'};
     if(clock()>=state.deadline||state.steps>=maxSteps){state.status='expired';state.why='Goal time/step budget exhausted';return {kind:'idle',why:state.why};}
-    let d=decide(state.goal,world,state.failures,state);
+    let d;
+    if(state.goal==='sequence'){
+      // Do not mark a composed goal complete by merely issuing the steps.
+      // Recompute every stage against the current server-backed world and
+      // advance across at most eight already-proven stages in one tick.
+      for(let n=0;n<=state.sequence.length;n++){
+        if(state.sequenceIndex>=state.sequence.length){
+          d={kind:'complete',why:'All authorized sequence stages independently verified'};
+          break;
+        }
+        const stage=state.sequence[state.sequenceIndex];
+        d=decide(stage.goal,world,state.failures,{...state,...stage});
+        if(d.kind!=='complete')break;
+        state.sequenceIndex++;
+        state.failures={};
+        // An arrival proof for a prior target must never prove the next one.
+        state.milestones.travelArrivalVerified=false;
+      }
+      if(!d)d={kind:'blocked',why:'No valid stage decision'};
+    }else d=decide(state.goal,world,state.failures,state);
     // Autonomous wood recovery remains bounded. A successful scout must
     // observe real movement; it does not fake resource acquisition.
     if(d.kind==='collect_wood' && (state.failures.collect_wood||0)>=2){

@@ -12,6 +12,7 @@ on:
         default: Stone
         options:
           - Stone
+          - Iron
           - Full
 permissions:
   contents: read

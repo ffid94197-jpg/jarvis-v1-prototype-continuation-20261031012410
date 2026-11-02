@@ -23,6 +23,19 @@ const temp={...diamond,netherite_upgrade_smithing_template:1,netherrack:4};
 expect({raw:temp,world:{dimension:'minecraft:the_nether'}},'mine_ancient_debris');
 expect({raw:{...temp,ancient_debris:20},world:{dimension:'minecraft:the_nether'}},'collect_gold');
 expect({raw:{...temp,ancient_debris:20,gold_ingot:20},world:{dimension:'minecraft:the_nether'}},'hunt_blazes');
+const almostDone=Object.fromEntries(NETHERITE.slice(0,4).map(name=>[name,1]));
+const postDragonNether={...almostDone,netherite_upgrade_smithing_template:1,
+ netherite_ingot:1,netherrack:4};
+const postDragonMilestones={dragonKilled:true,exitPortalObserved:true};
+const postDragonState=state(postDragonNether,{dimension:'minecraft:the_nether'});
+const postDragonAction=lateGamePlan(postDragonState,{goal:'dragon_then_netherite_run',milestones:postDragonMilestones});
+check(postDragonAction.kind==='enter_overworld',
+ 'Four upgraded pieces and last ingot must return home, not require another 20 Ancient Debris');
+const partCrafted={...temp,netherite_scrap:16,gold_ingot:16,netherite_ingot:1};
+const partlyProvisioned=lateGamePlan(state(partCrafted,{dimension:'minecraft:the_nether'}),{milestones:{}});
+check(partlyProvisioned.kind==='hunt_blazes',
+ 'One prepared ingot plus 16 scraps and gold satisfies remaining four upgrades');
+
 expect({raw:{...temp,ancient_debris:20,gold_ingot:20,blaze_rod:8},world:{dimension:'minecraft:the_nether'}},'hunt_endermen');
 expect({raw:{...temp,ancient_debris:20,gold_ingot:20,blaze_rod:8,ender_pearl:16},world:{dimension:'minecraft:the_nether'}},'enter_overworld');
 const cargo={...temp,ancient_debris:20,gold_ingot:20,blaze_rod:8,ender_pearl:16,coal:8};

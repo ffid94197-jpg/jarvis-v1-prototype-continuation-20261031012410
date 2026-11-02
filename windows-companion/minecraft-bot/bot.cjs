@@ -17,6 +17,7 @@ const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
 const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_navigation.cjs');
 const {collectObservedDrop,pickupFeet}=require('./drop_pickup.cjs');
+const {retreatStances}=require('./retreat_access.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
@@ -323,10 +324,7 @@ async function autoExecute(plan,epoch){
             'Threat list and live entity positions disagree; retreat unverified'};
       }
       const initial=here.distanceTo(threat.position);
-      const targets=surveyTargets(bot,here,Vec3).filter(p=>
-        p.distanceTo(threat.position)>=initial+3 &&
-        p.distanceTo(here)>3)
-        .sort((a,b)=>a.distanceTo(here)-b.distanceTo(here));
+      const targets=retreatStances(bot,here,threat.position,Vec3);
       if(!targets.length)return {ok:false,verified:false,
         detail:'No server-observed safe retreat stance farther from '+threat.name};
       let reason='No fully reached retreat route';

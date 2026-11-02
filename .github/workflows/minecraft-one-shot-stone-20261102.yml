@@ -2,9 +2,8 @@ name: One-shot Minecraft Java stone fix validation
 # Bounded, opt-in owner development continuation. Only creation of the
 # exact one-shot trigger file activates this workflow; code pushes do not.
 on:
-  push:
-    branches: [fix/minecraft-live-survival-bridge-20261102]
-    paths: [scripts/minecraft/one-shot-safe-wood-v3-trigger.txt]
+  workflow_dispatch:
+# Bounded Java test 41429603905 launched; no further push-triggered usage.
 permissions:
   contents: read
 jobs:

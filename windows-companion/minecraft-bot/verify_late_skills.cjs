@@ -75,11 +75,16 @@ const ctx=createLateSkills({bot,navigate:async()=>true,craftNamed:async()=>{},ge
    if(slot===3){smithMaterial.push({name:'netherite_helmet',count:1});ui.slots[3]=null;}
    else ui.slots[slot]=null;
  };
+ bot.equip=async(it,slot)=>{
+   if(slot!=='head')return;
+   slots[positions.head]=it;
+   const idx=smithMaterial.indexOf(it);
+   if(idx>=0)smithMaterial.splice(idx,1);
+ };
  const wornResult=await ctx.run({kind:'smith_netherite',item:'netherite_helmet',base:'diamond_helmet'},1);
  check(wornResult.ok&&wornResult.verified,'Worn diamond base is returned from equipment and upgraded');
- check(unequipped===1 && slots[positions.head]===null &&
-    smithMaterial.some(x=>x.name==='netherite_helmet'),
-    'Verified unequip + real smithing output; no second guessed armor piece');
+ check(unequipped===1 && slots[positions.head]?.name==='netherite_helmet',
+    'After verified smithing output, upgraded Netherite armor is worn again');
  // A missing Netherite ingot must NOT cause the bot to strip armor.
  const readyItems=bot.inventory.items;
  bot.inventory.items=()=>smithMaterial.filter(x=>x.name!=='netherite_ingot'&&x.name!=='netherite_helmet');

@@ -423,6 +423,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const workbench=lookup(bot,['smithing_table'],5);
     if(!workbench)return observed(false,'No smithing table in range');
     const names=['netherite_upgrade_smithing_template',plan.base,'netherite_ingot'];
+    let removedArmorSlot=null;
     // Never remove worn armor unless all OTHER ingredients are already real.
     if(!item(bot,names[0])||!item(bot,names[2]))
       return observed(false,'Missing verified upgrade template or Netherite ingot; armor stays equipped');
@@ -445,6 +446,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
         return observed(false,'Mineflayer armor unequip API unavailable');
       check(epoch);
       await bot.unequip(slotName);
+      removedArmorSlot=slotName;
       check(epoch);
       if(bot.inventory.slots?.[slot]?.name===plan.base || !item(bot,plan.base))
         return observed(false,'Server did not confirm diamond armor returned to inventory');
@@ -486,6 +488,24 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       // Mineflayer closeWindow() can return void, not a promise. Do not
       // throw a TypeError in finally after an otherwise verified upgrade.
       try{await Promise.resolve(bot.closeWindow(ui));}catch{ /* remote close may have raced */ }
+      // The prior diamond armor is now in the backpack. Re-equip the
+      // upgraded armor when smithing succeeded, otherwise restore diamond
+      // armor, but only while the same owner-authorized action remains live.
+      // This is NOT a smithing success proof: the smithing output must
+      // independently have been verified by an inventory delta.
+      if(removedArmorSlot && getEpoch()===epoch){
+        try{
+          const slot=bot.getEquipmentDestSlot(removedArmorSlot);
+          if(Number.isInteger(slot) && !bot.inventory.slots?.[slot]){
+            const replacement=item(bot,plan.item)||item(bot,plan.base);
+            if(replacement){
+              await bot.equip(replacement,removedArmorSlot);
+              // Failure to re-equip is not reported as having worn the item.
+              // Final full-Netherite equipment remains separately verified.
+            }
+          }
+        }catch{ /* do not fabricate armor state after a failed recovery */ }
+      }
     }
   }
   async function equipDiamond(epoch){

@@ -360,6 +360,35 @@ async function autoExecute(plan,epoch){
       return collectVerifiedDrop(p,existing,()=>digest(bot,leader).inventory.table,
         epoch,'Recovered crafting table');
     }
+    case 'survey_wood':{
+      if(epoch!==actionEpoch)throw Error('Wood survey cancelled');
+      const start=bot.entity.position.clone(),used=bot.jarvisWoodSurveyVisited||new Set();
+      bot.jarvisWoodSurveyVisited=used;
+      const targets=surveyTargets(bot,start,Vec3).filter(p=>
+        !used.has([p.x,p.y,p.z].join(',')) &&
+        p.distanceTo(start)>5);
+      if(!targets.length)return {ok:false,verified:false,
+        detail:'No unvisited safe loaded wood-survey locations; no movement claimed'};
+      let last='No reachable wood survey waypoint';
+      for(const p of targets.slice(0,4)){
+        if(epoch!==actionEpoch)throw Error('Wood survey cancelled');
+        used.add([p.x,p.y,p.z].join(','));
+        try{
+          const arrived=await navigate(p,2,epoch,14000);
+          const now=bot.entity.position;
+          if(arrived && now.distanceTo(start)>4 && now.distanceTo(p)<=4){
+            return {ok:true,verified:true,detail:
+              'Observed move to new standable wood survey region '+Math.floor(now.x)+','+
+              Math.floor(now.y)+','+Math.floor(now.z)+'; NO logs claimed'};
+          }
+          last='Route ended without proved displacement to a fresh survey region';
+        }catch(err){
+          if(epoch!==actionEpoch)throw Error('Wood survey cancelled');
+          last=String(err?.message||err).slice(0,115);
+        }
+      }
+      return {ok:false,verified:false,detail:'Wood survey exhausted safe routes: '+last};
+    }
     case 'collect_wood':return await gatherOneLog(epoch,Date.now()+45000);
     case 'survey_ore':{
       if(!['iron','diamond'].includes(plan.ore))throw Error('Unsupported ore survey');

@@ -1,16 +1,26 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 'use strict';
 /** Pure command validation; identical contract for stdin and in-game chat. */
+const {RESOURCES}=require('./resource_goal.cjs');
 const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop']);
 function validateCommand(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return 'Invalid command';
   if (typeof input.command !== 'string') return 'Missing command';
   if (SIMPLE.has(input.command)) return null;
-  if (input.command === 'auto_goal')
-    return ['survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','netherite_dragon_run','dragon_then_netherite_run','companion'].includes(input.goal) &&
-      (input.durationSeconds===undefined || (Number.isInteger(input.durationSeconds) &&
-       input.durationSeconds>=10 && input.durationSeconds<=43200))
-      ? null : 'Autonomous goal needs valid goal and optional duration 10–43200 seconds';
+  if (input.command === 'auto_goal') {
+    const fixed=['survive','wood','tools','explore','follow','guard','stone_age','iron_age',
+      'dragon_run','netherite_dragon_run','dragon_then_netherite_run','companion'];
+    const validGoal=fixed.includes(input.goal)||(input.goal==='gather' &&
+      RESOURCES.has(input.resource)&&Number.isInteger(input.targetCount) &&
+      input.targetCount>=1&&input.targetCount<=64);
+    const noUnrelatedParameters=input.goal==='gather' ||
+      (input.resource===undefined&&input.targetCount===undefined);
+    return validGoal && noUnrelatedParameters &&
+      (input.durationSeconds===undefined ||
+        (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&
+          input.durationSeconds<=43200)) ? null :
+      'Autonomous goal invalid. Gather needs supported resource and targetCount 1-64; duration 10-43200 seconds';
+  }
   // Bounded general-purpose player primitives. All IDs/names are validated before I/O.
   const itemName = v => typeof v === 'string' && /^[a-z0-9_]{1,64}$/.test(v);
   const pos = v => v && typeof v === 'object' && !Array.isArray(v) &&

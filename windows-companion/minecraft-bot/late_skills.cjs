@@ -416,6 +416,9 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const workbench=lookup(bot,['smithing_table'],5);
     if(!workbench)return observed(false,'No smithing table in range');
     const names=['netherite_upgrade_smithing_template',plan.base,'netherite_ingot'];
+    // Never remove worn armor unless all OTHER ingredients are already real.
+    if(!item(bot,names[0])||!item(bot,names[2]))
+      return observed(false,'Missing verified upgrade template or Netherite ingot; armor stays equipped');
     // After a real Dragon-first fight all diamond armor pieces are WORN,
     // not present in inventory.items(). Mineflayer's smithing UI consumes
     // backpack slots only. First move the exact observed owned piece back

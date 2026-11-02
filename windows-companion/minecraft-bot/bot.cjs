@@ -790,7 +790,8 @@ async function autoTick(){
   if(mode!=='auto'||autoBusy||!spawned)return;
   const gameWorld=digest(bot,leader,{dragonDead:lateSkills.session.dragonDied});
   const active=autopilot.status();
-  if(active.goal==='build')gameWorld.buildCells=observeBuild(bot,active,Vec3);
+  if(active.goal==='build')gameWorld.buildCells=observeBuild(bot,
+    {goal:'build',position:active.position,block:active.block,axis:active.axis,length:active.length},Vec3);
   if(active.goal==='sequence')gameWorld.buildCellsByStage=(active.sequence||[]).map(s=>
     s.goal==='build'?observeBuild(bot,s,Vec3):null);
   const plan=autopilot.next(gameWorld);

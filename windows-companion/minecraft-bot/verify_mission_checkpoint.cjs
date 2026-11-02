@@ -19,6 +19,12 @@ try{
   {goal:'gather',resource:'logs',targetCount:8},
   {goal:'travel',destination:{x:40,y:64,z:-5},arrivalRange:2}
  ]});
+ const buildController=createController({clock,maxSeconds:43200,maxSteps:40});
+ buildController.start('build',1200,{block:'cobblestone',length:2,axis:'z+',
+   position:{x:3,y:65,z:7}});
+ ok(c.save(buildController.status())&&c.load().spec.block==='cobblestone' &&
+   c.load().spec.position.z===7,
+   'Owner-authorized construction intent can be restored without prior block proof');
  const active=controller.status();
  ok(c.save(active),'Authorized running sequence is stored');
  const saved=c.load();

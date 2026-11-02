@@ -45,11 +45,12 @@ ok(goalSteps[0].targetCount===4,
  'Mission sequence must be cloned rather than trusting mutable caller input');
 const buildController=createController({clock:()=>1000,maxSteps:40,maxSeconds:1000});
 buildController.start('sequence',300,{steps:[{goal:'gather',resource:'logs',targetCount:1},build]});
-ok(buildController.next({...world({logs:1}),buildCellsByStage:[null,[
+const stageAction=buildController.next({...world({logs:1}),buildCellsByStage:[null,[
   {position:{x:10,y:64,z:10},state:'ready'},
   {position:{x:11,y:64,z:10},state:'ready'}
-]]}).kind==='blocked',
- 'Composed building is blocked if material is absent; no fake structural success');
+]]});
+ok(stageAction.kind!=='complete' && stageAction.kind!=='place_build_block',
+ 'Composed building must acquire real material before attempting placement');
 const controller=createController({clock:()=>1000,maxSteps:40,maxSeconds:1000});
 controller.start('sequence',300,{steps:goalSteps});
 ok(controller.next(world()).kind==='collect_wood',

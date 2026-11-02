@@ -89,7 +89,7 @@ function resourcePlan(world,failures={},progress={},delegate){
      return required('craft_diamond_gear','Make diamond pickaxe to harvest obsidian',
        {item:'diamond_pickaxe'});
    }
-   return mine('mine_obsidian','Mine naturally generated obsidian with diamond pickaxe','obsidian');
+   return required('mine_obsidian','Search or mine real obsidian with a diamond pickaxe; only inventory delta counts');
  }
  case 'flint':return required('collect_flint','Mine loaded gravel until flint is received');
  case 'netherrack':

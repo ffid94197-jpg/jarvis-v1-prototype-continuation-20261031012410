@@ -6,6 +6,7 @@
 const {NETHERITE}=require('./late_game.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
+const {collectObservedDrop}=require('./drop_pickup.cjs');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const solid=b=>b && b.boundingBox!=='empty' && !['air','cave_air','void_air','lava','water','fire','nether_portal'].includes(b.name);
 const pos=b=>new Vec3(Math.floor(b.x),Math.floor(b.y),Math.floor(b.z));
@@ -27,32 +28,12 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     return true;
   }
   async function collectDrop(name,before,around,epoch){
-    // Vanilla drops do not instantly enter inventory after a block is dug or
-    // a mob dies. A single 3.3s A* request is insufficient in real terrain.
-    const deadline=Date.now()+25000;
-    let last='No observed dropped item';
-    while(Date.now()<deadline){
-      check(epoch);
-      if(count(bot,name)>before)
-        return observed(true,`${name} verified ${before} -> ${count(bot,name)}`);
-      const dropped=bot.nearestEntity?.(entity=>entity?.position &&
-        (entity.name==='item'||entity.type==='other') &&
-        entity.position.distanceTo(around)<8);
-      if(dropped?.position && bot.entity.position.distanceTo(dropped.position)>1.15){
-        const remaining=deadline-Date.now();
-        if(remaining>1200){
-          try {
-            await move(dropped.position,1,epoch,Math.min(14000,remaining-500));
-            last='Reached an item-drop route; inventory still unchanged';
-          } catch(error) {
-            check(epoch);
-            last='Drop route failed: '+String(error?.message||error).slice(0,90);
-          }
-        }
-      }
-      await delay(350);
-    }
-    return observed(false,`${name} dropped but not acquired into real inventory: ${last}`);
+    return collectObservedDrop({
+      bot,origin:around,beforeCount:before,readCount:()=>count(bot,name),
+      move:(position,range,timeout)=>move(position,range,epoch,timeout),
+      check:()=>check(epoch),wait:delay,deadline:Date.now()+25000,
+      Vec3,label:name
+    });
   }
   async function mineKnown(names,drop,toolNames,epoch,searchRadius=26,visibleOnly=false){
     // Restrict approach-face verification to the progression ores that can be

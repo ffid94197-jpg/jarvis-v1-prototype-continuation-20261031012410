@@ -437,9 +437,12 @@ async function autoExecute(plan,epoch){
         const changed=bot.blockAt(preparation.position);
         if(!changed||changed.name===prior.name||/lava|water/.test(changed.name))
           return {ok:false,verified:false,detail:'Excavation did not safely change actual server block state'};
-        if(['stone','cobblestone'].includes(prior.name))
-          return collectVerifiedDrop(preparation.position,beforeStone,
+        if(['stone','cobblestone'].includes(prior.name)){
+          const picked=await collectVerifiedDrop(preparation.position,beforeStone,
             ()=>digest(bot,leader).inventory.cobblestone,epoch,'Excavated cobblestone');
+          if(picked.ok&&picked.verified)bot.jarvisStoneScoutCount=0;
+          return picked;
+        }
         return {ok:true,verified:true,detail:'Server-confirmed safe preparatory excavation; no stone drop claimed'};
       }
       if(candidate.stance){
@@ -456,8 +459,10 @@ async function autoExecute(plan,epoch){
       const beforeStone=before.inventory.cobblestone;
       await bot.equip(pick,'hand');
       await bot.dig(live);
-      return collectVerifiedDrop(candidate.position,beforeStone,
+      const picked=await collectVerifiedDrop(candidate.position,beforeStone,
         ()=>digest(bot,leader).inventory.cobblestone,epoch,'Cobblestone');
+      if(picked.ok&&picked.verified)bot.jarvisStoneScoutCount=0;
+      return picked;
     }
     case 'mine_iron':{
       if(!before.inventory.stonePickaxe && !before.inventory.ironPickaxe)throw Error('Iron ore needs stone or better pickaxe');

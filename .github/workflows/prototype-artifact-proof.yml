@@ -1,0 +1,48 @@
+name: Prototype artifact proof targeted acceptance
+on:
+  pull_request:
+    branches: [autonomy-100-percent-acceptance-20261102]
+    paths:
+      - "src/lib/agent/core/verifier.ts"
+      - "scripts/verify-task-outcome-honesty.cjs"
+      - ".github/workflows/prototype-artifact-proof.yml"
+  push:
+    branches: [fix/autonomy-artifact-receipt-20261102]
+    paths:
+      - "src/lib/agent/core/verifier.ts"
+      - "scripts/verify-task-outcome-honesty.cjs"
+      - ".github/workflows/prototype-artifact-proof.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-proof:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Generate Prisma and compile TypeScript
+        run: |
+          npx prisma generate
+          if ($LASTEXITCODE -ne 0) { throw "Prisma generation failed" }
+          npx tsc --noEmit --incremental false
+          if ($LASTEXITCODE -ne 0) { throw "TypeScript compilation failed" }
+      - name: Verify task completion honesty with real disk reads
+        run: |
+          node scripts/verify-task-outcome-honesty.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Artifact receipt acceptance failed" }
+      - name: Guard against Core behavior regression
+        run: |
+          npm.cmd run test:core-actionable-execution
+          if ($LASTEXITCODE -ne 0) { throw "Core action regression failed" }

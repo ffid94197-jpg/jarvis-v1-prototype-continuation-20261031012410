@@ -1,7 +1,7 @@
 
 'use strict';
 const assert=require('node:assert/strict');
-const {decide,GOALS,createController}=require('./autonomy_engine.cjs');
+const {decide,GOALS,createController,digest}=require('./autonomy_engine.cjs');
 const {validateCommand}=require('./friend_protocol.cjs');
 const w=(inventory={},workbenchNearby=false)=>({joined:true,health:20,hunger:20,threats:[],inventory:{logs:0,planks:0,sticks:0,table:0,woodenPickaxe:0,stonePickaxe:0,stoneSword:0,cobblestone:0,food:0,...inventory},workbenchNearby});
 const cases=[
@@ -113,4 +113,16 @@ for(let k=0;k<3;k++){
 }
 assert.equal(falseSurvey.status().status,'blocked',
  'Three unsuccessful terrain surveys must fail closed without infinite route retries');
+const endBot={
+ entity:{position:{x:0,y:65,z:0}},
+ game:{dimension:'minecraft:the_end'},health:6,food:20,players:{},
+ entities:{4:{id:4,name:'ender_dragon',position:{x:8,y:65,z:0,distanceTo:()=>8}}},
+ inventory:{items:()=>[],slots:[]},
+ findBlock:()=>null
+};
+const danger=digest(endBot,'owner');
+assert.equal(danger.threats[0]?.name,'ender_dragon',
+ 'Real observed Ender Dragon must participate in critical-health threat model');
+assert.equal(decide('dragon_then_netherite_run',danger).kind,'retreat',
+ 'Low-health player near actual Dragon must retreat instead of attacking blindly');
 console.log('PROGRESSION EXTENDED PASS (offline planner checks only; live server not tested)');

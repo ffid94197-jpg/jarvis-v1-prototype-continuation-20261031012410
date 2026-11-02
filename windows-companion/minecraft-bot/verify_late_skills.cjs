@@ -90,5 +90,29 @@ const ctx=createLateSkills({bot,navigate:async()=>true,craftNamed:async()=>{},ge
  try{await deniedRoutes.run({kind:'loot_bastion_template'},1);}
  catch(e){denied=/No server-confirmed route/.test(String(e.message));}
  check(denied,'False navigator result cannot certify Bastion exploration as progress');
+ const netherScout=await deniedRoutes.run({kind:'hunt_blazes'},1);
+ check(!netherScout.ok&&!netherScout.verified,
+   'A failed Nether scout navigation is NOT verified exploration');
+ const fakeSuccess=createLateSkills({
+   bot,navigate:async()=>true,craftNamed:async()=>({verified:true}),
+   getEpoch:()=>1,getOwner:()=>'',digest:()=>({inventory:{raw:{}}}),Vec3
+ });
+ const staticScout=await fakeSuccess.run({kind:'hunt_blazes'},1);
+ check(!staticScout.ok&&!staticScout.verified,
+   'Navigator true without server-observed movement is NOT verified exploration');
+ bot.game.dimension='minecraft:overworld';
+ bot.inventory.items=()=>[{name:'ender_eye',count:1}];
+ fakeSuccess.session.bearing={x:1,z:0};fakeSuccess.session.eyesThrown=1;
+ const staticEye=await fakeSuccess.run({kind:'track_stronghold'},1);
+ check(!staticEye.ok&&!staticEye.verified,
+   'Stronghold bearing traversal cannot claim progress without real displacement');
+ bot.game.dimension='minecraft:the_nether';
+ const physicalMove=createLateSkills({
+   bot,navigate:async(target)=>{bot.entity.position=target.clone();return true;},
+   craftNamed:async()=>({verified:true}),getEpoch:()=>1,getOwner:()=>'',digest:()=>({inventory:{raw:{}}}),Vec3
+ });
+ const provenScout=await physicalMove.run({kind:'hunt_blazes'},1);
+ check(provenScout.ok&&provenScout.verified,
+   'Scouting only succeeds after observed navigation arrival and displacement');
  console.log(`LATE_SKILLS_MOCK ${ok}/${ok} PASS (no live Minecraft server)`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -62,8 +62,14 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const vectors=[[16,0],[0,16],[-16,0],[0,-16],[16,16],[-16,16],[-16,-16],[16,-16]];
     const [dx,dz]=vectors[session.surveyIndex++%vectors.length];
     const d=here.offset(dx,0,dz);
-    await move(d,3,epoch,18000);
-    return observed(true,`Explored a real loaded waypoint for ${kind}, target not yet guaranteed`);
+    const moved=await move(d,3,epoch,18000);
+    check(epoch);
+    const actual=bot.entity.position;
+    const verified=moved===true && actual?.distanceTo(d)<=5 &&
+      actual.distanceTo(here)>=4;
+    return observed(verified,verified?
+      `Server-observed scouting displacement for ${kind} (no loot claimed)`:
+      `No confirmed safe scouting arrival for ${kind}; world state unchanged`);
   }
   async function placeItem(target,itemName,epoch){
     check(epoch);
@@ -294,9 +300,16 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const existing=lookup(bot,['end_portal_frame'],30);
     if(existing)return observed(true,'Stronghold End portal frame actually observed nearby');
     if(session.bearing && session.eyesThrown%3!==0){
-      const p=bot.entity.position;
-      await move(p.offset(session.bearing.x*22,0,session.bearing.z*22),4,epoch,18000);
-      session.eyesThrown++;return observed(true,'Moved along observed Eye of Ender heading; stronghold not yet verified');
+      const p=bot.entity.position.clone();
+      const target=p.offset(session.bearing.x*22,0,session.bearing.z*22);
+      const arrived=await move(target,4,epoch,18000);
+      check(epoch);
+      const actual=bot.entity.position;
+      if(arrived!==true || !actual || actual.distanceTo(p)<4 ||
+         actual.distanceTo(target)>6)
+        return observed(false,'Eye-heading navigation did not yield physical displacement and target arrival');
+      session.eyesThrown++;
+      return observed(true,'Server-observed movement along thrown-eye bearing; stronghold still unverified');
     }
     const eye=item(bot,'ender_eye')||item(bot,'eye_of_ender');
     const origin=bot.entity.position.clone();

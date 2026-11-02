@@ -1,0 +1,86 @@
+#!/usr/bin/env node
+'use strict';
+/*
+ * TRUE JAVA SERVER SMOKE, never a simulated mission. Starts the unmodified
+ * Mineflayer companion as another Java protocol player against a vanilla
+ * survival server on localhost. Verifies empty inventory at spawn and then
+ * wood physically appears in the server-backed inventory during autonomous
+ * action. Does NOT award a Dragon / Netherite PASS.
+ */
+const { spawn }=require('node:child_process');
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const readline=require('node:readline');
+const crypto=require('node:crypto');
+const root=path.resolve(__dirname,'..','..');
+const botSource=path.join(__dirname,'bot.cjs');
+const host='127.0.0.1',port=Number(process.env.JARVIS_MC_TEST_PORT||25565);
+const owner='CIObserver';
+const env={...process.env,JARVIS_MINECRAFT_LAN_HOST:host,
+ JARVIS_MINECRAFT_LAN_PORT:String(port),JARVIS_MINECRAFT_PLAYER:owner};
+const output=[];
+const bot=spawn(process.execPath,[botSource],{cwd:__dirname,env,stdio:['pipe','pipe','pipe'],windowsHide:true});
+let joined=false,exit=null;
+let waiter=new Map(),seq=0;
+bot.on('exit',(code,signal)=>{exit={code,signal};for(const w of waiter.values())w.reject(Error('Bot exited '+code+' '+signal));waiter.clear();});
+readline.createInterface({input:bot.stdout}).on('line',line=>{
+ output.push(line.slice(0,1000));if(output.length>200)output.shift();
+ if(line.includes('MINECRAFT_COMPANION_JOINED'))joined=true;
+ if(line.startsWith('BOT_ACK ')){
+  try{const v=JSON.parse(line.slice(8)),w=waiter.get(v.id);if(w){waiter.delete(v.id);w.resolve(v);}}catch{}
+ }
+});
+readline.createInterface({input:bot.stderr}).on('line',line=>{output.push('STDERR '+line.slice(0,300));});
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function command(cmd,timeout=16000){
+ return new Promise((resolve,reject)=>{
+  if(exit)return reject(Error('Bot already exited: '+JSON.stringify(exit)));
+  const id=(++seq).toString(16).padStart(16,'0');
+  const alarm=setTimeout(()=>{waiter.delete(id);reject(Error('Bot command timeout '+cmd.command));},timeout);
+  waiter.set(id,{resolve:x=>{clearTimeout(alarm);resolve(x)},reject:e=>{clearTimeout(alarm);reject(e)}});
+  bot.stdin.write(JSON.stringify({...cmd,id})+'\n');
+ });
+}
+async function main(){
+ const initialAt=Date.now();
+ try{
+  for(let i=0;i<120 && !joined && !exit;i++)await wait(1000);
+  assert(joined,'Mineflayer never spawned as a real Java server player. '+JSON.stringify(output.slice(-15)));
+  const pre=await command({command:'inventory'});
+  assert(pre.ok&&pre.status==='empty','Survival world must begin with genuinely empty inventory. Got '+JSON.stringify(pre));
+  const state=await command({command:'observe'});
+  assert(state.ok && !/creative/i.test(state.status||''),'Unverified server/world state');
+  const started=await command({command:'auto_goal',goal:'wood',durationSeconds:600});
+  assert(started.ok,'Owner-authorized autonomous wood goal was rejected: '+JSON.stringify(started));
+  let received='',lastState='';
+  const until=Date.now()+205000;
+  while(Date.now()<until && !exit){
+   await wait(3000);
+   const inventory=await command({command:'inventory'});
+   if(inventory.ok)received=inventory.status||'';
+   if(/(?:^|, )(?:oak|spruce|birch|jungle|acacia|dark_oak|cherry|mangrove|pale_oak)_log:[1-9]/.test(received))break;
+   const status=await command({command:'auto_status'});
+   if(status.ok){lastState=status.status||'';
+     let js;try{js=JSON.parse(lastState)}catch{}
+     if(js && ['blocked','paused','complete'].includes(js.status))break;
+   }
+  }
+  assert(/(?:^|, )(?:oak|spruce|birch|jungle|acacia|dark_oak|cherry|mangrove|pale_oak)_log:[1-9]/.test(received),
+    'No physically gathered wood in server inventory; last='+received+' state='+lastState+' output='+JSON.stringify(output.slice(-22)));
+  const stopped=await command({command:'auto_stop'});
+  assert(stopped.ok,'Owner cancellation not acknowledged');
+  console.log('MINECRAFT_REAL_JAVA_WOOD_SMOKE PASS; server-backed independent bot joined, empty survival spawn and mined logs observed; elapsedMs='+String(Date.now()-initialAt));
+  console.log('MINECRAFT_FULL_DRAGON_NETHERITE_NOT_ACCEPTED: no real game kill/equip proof');
+ }catch(error){
+  console.error('MINECRAFT_REAL_JAVA_WOOD_SMOKE FAIL '+String(error?.stack||error));
+  process.exitCode=1;
+ }finally{
+  for(const w of waiter.values())w.reject(Error('Bot terminated'));waiter.clear();
+  try{bot.stdin.end()}catch{}
+  if(!exit){try{bot.kill('SIGTERM')}catch{}}
+  const deadline=Date.now()+5000;
+  while(!exit && Date.now()<deadline)await wait(100);
+  if(!exit){try{bot.kill('SIGKILL')}catch{}}
+ }
+}
+main();

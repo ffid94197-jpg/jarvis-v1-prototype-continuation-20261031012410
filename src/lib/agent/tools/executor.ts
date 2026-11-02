@@ -19,6 +19,7 @@ import {
 import type { GuardianDecision } from "../guardian/guardian";
 import { companionAction } from "../windows/bridge";
 import type { DesktopPrepared } from "../windows/policy";
+import { executeCIProjectBuild, type CIProjectPrepared } from "./ciProjectBuild";
 
 export interface ToolResult {
   ok: boolean;
@@ -256,6 +257,7 @@ export async function executeTool(
     command?: string;
     args?: string[];
     desktop?: DesktopPrepared;
+    projectBuild?: CIProjectPrepared;
     integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;arguments?:Record<string,unknown>};
   };
   switch (tool) {
@@ -297,6 +299,9 @@ export async function executeTool(
       return toolListDir(prepared);
     case "run_command":
       return toolRunCommand(taskId, prepared);
+    case "ci_project_build":
+      if (!prepared.projectBuild) return {ok:false,tool,evidence:"",error:"Guardian CI project approval absent"};
+      return executeCIProjectBuild(prepared.projectBuild,isCancelled,child=>registerChild(taskId,child));
     case "windows_open_url":
     case "windows_open_app":
     case "windows_open_settings":

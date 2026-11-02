@@ -14,6 +14,30 @@ const cases=[
  ['done',w({stonePickaxe:1,stoneSword:1}),'complete']
 ];
 for(const [label,state,expected] of cases)assert.equal(decide('stone_age',state).kind,expected,label);
+const mobileStation={...w({woodenPickaxe:1,cobblestone:0,sticks:6},true),
+ workbenchRecoverySupported:true};
+assert.equal(decide('stone_age',mobileStation).kind,'recover_table',
+ 'recover the actual placed workstation before stone excavation');
+const withPackedStation={...w({woodenPickaxe:1,cobblestone:0,sticks:6,table:1},false),
+ workbenchRecoverySupported:true};
+assert.equal(decide('stone_age',withPackedStation).kind,'mine_cobblestone',
+ 'packed workstation must not trigger unnecessary wood collection');
+const afterStone={...w({woodenPickaxe:1,cobblestone:6,sticks:6,table:1},false),
+ workbenchRecoverySupported:true};
+assert.equal(decide('stone_age',afterStone).kind,'place_table',
+ 'six collected cobblestone plus portable table must lead to workstation placement, NOT wood search');
+const afterPlaced={...w({woodenPickaxe:1,cobblestone:6,sticks:6},true),
+ workbenchRecoverySupported:true};
+assert.equal(decide('stone_age',afterPlaced).kind,'craft_stone_pickaxe',
+ 'after placing the recovered workstation, craft the real stone pickaxe');
+assert.equal(decide('stone_age',{...afterPlaced,inventory:{...afterPlaced.inventory,
+ stonePickaxe:1,cobblestone:3,sticks:4}}).kind,'craft_stone_sword',
+ 'then craft the stone sword without further lumber');
+const ironStation={...w({stonePickaxe:1,stoneSword:1,woodenPickaxe:1,ironIngot:0},true),
+ workbenchRecoverySupported:true};
+assert.equal(decide('iron_age',ironStation).kind,'recover_table',
+ 'the workstation is likewise recovered before long iron exploration');
+
 assert.ok(GOALS.has('dragon_run'));assert.equal(validateCommand({command:'auto_goal',goal:'dragon_run',durationSeconds:300}),null);
 assert.equal(decide('dragon_run',w({stonePickaxe:1,stoneSword:1})).kind,'mine_iron');
 assert.equal(decide('iron_age',w({stonePickaxe:1,stoneSword:1,rawIron:1,cobblestone:2})).kind,'mine_cobblestone');

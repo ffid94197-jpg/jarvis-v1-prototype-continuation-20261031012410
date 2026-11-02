@@ -41,6 +41,16 @@ expect({raw:{...temp,ancient_debris:20,gold_ingot:20,blaze_rod:8,ender_pearl:16}
 const cargo={...temp,ancient_debris:20,gold_ingot:20,blaze_rod:8,ender_pearl:16,coal:8};
 expect({raw:cargo},'smelt_resource');
 expect({raw:{...cargo,ancient_debris:0,netherite_scrap:20}},'craft_netherite_ingot');
+const readyMaterials={...cargo,ancient_debris:0,netherite_scrap:20,gold_ingot:20};
+expect({raw:{...readyMaterials,crafting_table:1},
+ world:{workbenchNearby:false}},'place_table');
+expect({raw:{...readyMaterials,oak_planks:4},
+ world:{workbenchNearby:false}},'craft_table');
+const netherGold=state({...temp,ancient_debris:20,gold_nugget:9,crafting_table:1},
+ {dimension:'minecraft:the_nether',workbenchNearby:false});
+check(lateGamePlan(netherGold,{milestones:{}}).kind==='place_table',
+ 'Nine gold nuggets require owned crafting table before ingot conversion');
+
 expect({raw:{...cargo,ancient_debris:0,netherite_scrap:0,netherite_ingot:5,diamond:0}},'mine_diamond');
 expect({raw:{...cargo,ancient_debris:0,netherite_ingot:5,diamond:7,netherrack:1}},'duplicate_template');
 expect({raw:{...cargo,ancient_debris:0,netherite_ingot:5,diamond:7,netherrack:1,netherite_upgrade_smithing_template:5}},'smith_netherite');

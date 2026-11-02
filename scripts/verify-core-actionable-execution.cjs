@@ -335,6 +335,24 @@ async function runScenario({ objective, scripted, guardian = 'allow', failOnce =
   ok(wrongVerdict.verdict !== 'completed', 'B2: the REAL verifier rejects mismatched contents',
     `verdict=${wrongVerdict.verdict}`);
 
+  // ——— B3. Real Ollama root cause: partial work + premature FINAL ————————
+  console.log('\n── B3. incomplete external work must replan before finalizing ──');
+  const b3 = await runScenario({
+    objective: 'Create file recovered.txt containing "RECOVERED"',
+    scripted: [
+      { action: 'tool', tool: 'write_file', args: { path: 'unrelated.txt', content: 'NOT_THE_GOAL' } },
+      { action: 'final', answer: 'All done.' },
+      { action: 'tool', tool: 'write_file', args: { path: 'recovered.txt', content: 'RECOVERED' } },
+      { action: 'final', answer: 'The file is ready.' },
+    ],
+  });
+  ok(b3.error === null, 'B3: partial-final recovery completes without throwing', b3.error?.message);
+  ok(b3.nudges === 1, 'B3: exactly one bounded replan after premature tool-assisted final', `nudges=${b3.nudges}`);
+  ok(b3.status === 'completed', 'B3: independently verified required action completes after replanning', `status=${b3.status}`);
+  ok(fs.readFileSync(path.join(workspace, 'recovered.txt'), 'utf8') === 'RECOVERED',
+    'B3: subsequent real filesystem write has the exact requested content');
+  ok(b3.effects.filter(e=>e.status==='SETTLED').length === 2,
+    'B3: unrelated and later relevant effects remain durably recorded');
   // ——— C. transient tool failure must be recovered, not terminal ————————————
   console.log('\n── C. recovery from a transient tool failure ──');
   fs.rmSync(path.join(workspace, 'sample.txt'), { force: true });

@@ -90,9 +90,11 @@ const ctx=createLateSkills({bot,navigate:async()=>true,craftNamed:async()=>{},ge
  try{await deniedRoutes.run({kind:'loot_bastion_template'},1);}
  catch(e){denied=/No server-confirmed route/.test(String(e.message));}
  check(denied,'False navigator result cannot certify Bastion exploration as progress');
- const netherScout=await deniedRoutes.run({kind:'hunt_blazes'},1);
- check(!netherScout.ok&&!netherScout.verified,
-   'A failed Nether scout navigation is NOT verified exploration');
+ let netherDenied=false;
+ try{await deniedRoutes.run({kind:'hunt_blazes'},1);}
+ catch(e){netherDenied=/No server-confirmed route/.test(String(e.message));}
+ check(netherDenied,
+   'A failed Nether scout navigation cannot be verified as exploration');
  const fakeSuccess=createLateSkills({
    bot,navigate:async()=>true,craftNamed:async()=>({verified:true}),
    getEpoch:()=>1,getOwner:()=>'',digest:()=>({inventory:{raw:{}}}),Vec3

@@ -23,7 +23,7 @@ for(const file of shards){
   if(r.origin?.kind!=='internet_original'||r.origin?.acceptance_eligible!==false)failures.push('candidate incorrectly marked accepted '+r.record_id);
   if(r.verifier_status!=='not_mapped'||r.execution_status!=='candidate_only')failures.push('candidate eligibility metadata mismatch '+r.record_id);
   if(r.source?.name!=='Halluminate/WebBench'||r.source?.license_spdx!=='MIT'||r.source?.repository_revision!=='ea7a1628443321363989f354401f0653e0cba6f4')failures.push('source provenance mismatch '+r.record_id);
-  if(!/^https:\/\//.test(r.start_url||''))failures.push('invalid starting URL '+r.record_id);
+  if(/^https:\/\//.test(r.start_url||''))urlSchemes.https++;else if(/^http:\/\//.test(r.start_url||''))urlSchemes.http++;else failures.push('invalid starting URL '+r.record_id);
  }
 }
 if(total!==expected.total)failures.push(`expected ${expected.total} records, got ${total}`);

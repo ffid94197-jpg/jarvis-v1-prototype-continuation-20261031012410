@@ -210,7 +210,12 @@ function decide(goal, world, failures={}, progress={}) {
       const base=decide('tools',world,failures,progress);
       return base.kind==='complete'?{kind:'blocked',why:'Pickaxe state inconsistent'}:base;
     }
-    if(inv.cobblestone<5)return {kind:'mine_cobblestone',why:'Collect five cobblestone for stone tools'};
+    // Before upgrading, reserve 3 blocks for the pickaxe and 2 for the
+    // sword. After the pickaxe has been crafted, only two blocks are needed;
+    // insisting on five causes unnecessary mining and remote table loss.
+    const stoneNeeded=inv.stonePickaxe?2:5;
+    if(inv.cobblestone<stoneNeeded)
+      return {kind:'mine_cobblestone',why:'Collect '+stoneNeeded+' cobblestone required for remaining stone tools'};
     if(inv.sticks<3){
       if(inv.planks>=2)return {kind:'craft_sticks',why:'Need sticks for stone tools'};
       if(inv.logs>=1)return {kind:'craft_planks',why:'Need planks for sticks'};

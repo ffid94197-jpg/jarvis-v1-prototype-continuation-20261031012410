@@ -155,9 +155,20 @@ async function gatherOneLog(epoch,deadline){
           await pause(300);
           let after=digest(bot,leader).inventory.logs;
           if(after>before)return {ok:true,verified:true,detail:`Logs in inventory ${before} -> ${after}`};
-          const item=bot.nearestEntity?.(e=>e?.position && (e.name==='item'||e.type==='other') && e.position.distanceTo(p)<6);
-          if(item?.position && bot.entity.position.distanceTo(item.position)>1.5){
-            try{await navigate(item.position,1,epoch,Math.min(3000,Math.max(500,deadline-Date.now())));}catch{ /* Pickup still requires an inventory delta. */ }
+          const item=bot.nearestEntity?.(e=>e?.position && (e.name==='item'||e.type==='other') && e.position.distanceTo(p)<8);
+          if(item?.position && bot.entity.position.distanceTo(item.position)>1.15){
+            // A 3s window is shorter than Mineflayer Pathfinder's route
+            // planning budget. Keep a safe bounded window and demand actual
+            // inventory delta after walking to the dropped item.
+            const remaining=deadline-Date.now();
+            if(remaining>2500){
+              try{
+                const reached=await navigate(item.position,1,epoch,Math.min(14000,remaining-500));
+                if(!reached)lastFailure='Item route ended without reaching pickup range';
+              }catch(err){
+                lastFailure='Item route failed: '+String(err.message||err).slice(0,110);
+              }
+            }
           }
         }
         lastFailure='Log dug but item pickup not verified';

@@ -9,6 +9,8 @@ const {RESOURCES,resourcePlan}=require('./resource_goal.cjs');
 const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,buildPlan}=require('./structure_goal.cjs');
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
+// An owner-issued long mission has a finite authority lease across all renewals.
+const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
 const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','farm_wheat','sequence']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
@@ -363,7 +365,11 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(state.status!=='expired' || !['netherite_dragon_run','dragon_then_netherite_run','dragon_run','companion'].includes(state.goal))return false;
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)return false;
     const t=clock();
-    state.status='running';state.deadline=t+seconds*1000;state.steps=0;
+    if(!Number.isSafeInteger(state.since)||t<state.since)return false;
+    const remaining=Math.floor((state.since+MAX_MISSION_LIFETIME_MS-t)/1000);
+    if(remaining<10)return false;
+    const renewedSeconds=Math.min(seconds,remaining);
+    state.status='running';state.deadline=t+renewedSeconds*1000;state.steps=0;
     state.failures={};state.why='Continued authorized gameplay; goal not yet complete';
     state.lastDecision=null;state.lastResult=null;
     return true;

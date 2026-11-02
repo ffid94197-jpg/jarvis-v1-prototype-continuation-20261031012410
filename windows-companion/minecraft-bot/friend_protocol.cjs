@@ -29,6 +29,9 @@ function validateCommand(input) {
         Number.isInteger(input.targetCount) &&
         input.targetCount>=1&&input.targetCount<=64)||
       (input.goal==='sequence' && validSequence(input.steps));
+    const allowedKeys=new Set(['command','goal','durationSeconds','resource','targetCount',
+      'destination','arrivalRange','steps','position','block','axis','length','width','depth']);
+    if(Object.keys(input).some(key=>!allowedKeys.has(key)))return 'Unexpected autonomous parameter';
     const noUnrelatedParameters=
       (input.goal==='gather' && input.steps===undefined&&input.destination===undefined&&input.arrivalRange===undefined) ||
       (input.goal==='travel' && input.resource===undefined&&input.targetCount===undefined&&input.steps===undefined) ||

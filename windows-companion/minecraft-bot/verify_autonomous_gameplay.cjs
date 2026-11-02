@@ -8,7 +8,16 @@ let seed=432109;function random(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;
 function world(overrides={}){return {joined:true,health:20,hunger:20,ownerVisible:true,ownerDistance:4,threats:[],workbenchNearby:false,
  inventory:{logs:0,planks:0,sticks:0,table:0,woodenPickaxe:0,food:0,raw:{}},...overrides};}
 function inv(overrides={}){return {...world().inventory,...overrides};}
-for(const goal of GOALS)ok(validateCommand({command:'auto_goal',goal,durationSeconds:300})===null,'allowed '+goal);
+const parameterized={
+ gather:{resource:'logs',targetCount:3},
+ travel:{destination:{x:3,y:64,z:7},arrivalRange:2},
+ build:{position:{x:3,y:64,z:7},length:2,axis:'x+',block:'cobblestone'},
+ farm_wheat:{position:{x:3,y:64,z:7},width:2,depth:2,targetCount:4},
+ sequence:{steps:[{goal:'stone_age'}]}
+};
+for(const goal of GOALS)
+ ok(validateCommand({command:'auto_goal',goal,...(parameterized[goal]||{}),durationSeconds:300})===null,
+ 'valid typed goal '+goal);
 for(const command of [{command:'auto_goal',goal:'mine_everything'}, {command:'auto_goal',goal:'survive',durationSeconds:100000},
  {command:'auto_goal',goal:'wood',durationSeconds:0},{command:'auto_goal',goal:'wood',durationSeconds:'20'},
  {command:'auto_goal',goal:'survive',durationSeconds:10.2}])ok(!!validateCommand(command),'denied malformed goal');
@@ -42,6 +51,24 @@ ok(c.next(world({inventory:inv({logs:4})})).kind==='complete','verified goal com
 ok(c.status().status==='complete','completion durable state');
 c.start('wood',10);for(let i=0;i<3;i++){const d=c.next(world());c.record(d,{verified:false,detail:'no log pickup'});}
 ok(c.status().status==='blocked','three failed tasks block instead of looping');
+// Bound continuation by the ORIGINAL 12-hour owner authorization, not
+// an infinite series of newly fabricated 6-hour leases.
+let missionClock=1000000;
+const long=createController({clock:()=>missionClock,maxSeconds:43200,maxSteps:120});
+long.start('dragon_then_netherite_run',21600);
+missionClock+=21600*1000;
+ok(long.next(world()).kind==='idle'&&long.status().status==='expired',
+ 'Initial long mission expires at its requested window');
+ok(long.renewMission(21600),'One bounded six-hour mission continuation permitted');
+ok(long.status().deadline===1000000+43200*1000,
+ 'Second window cannot exceed original 12-hour authority boundary');
+missionClock+=21600*1000;
+ok(long.next(world()).kind==='idle'&&long.status().status==='expired',
+ 'Long mission expires at absolute 12-hour limit');
+ok(!long.renewMission(21600),'Renewal denied after owner authority has expired');
+const paused=createController({clock:()=>missionClock,maxSeconds:43200});
+paused.start('dragon_run',300);paused.stop('Owner stop');
+ok(!paused.renewMission(21600),'Explicit owner stop cannot be renewed');
 c.start('follow',10);ok(c.next(world()).kind==='follow','follow chosen');now+=11000;ok(c.next(world()).kind==='idle','deadline stops bot');
 ok(c.status().status==='expired','expiry recorded');c.start('explore',10);c.stop();ok(c.next(world()).kind==='idle','manual pause prevents action');
 for(let i=0;i<60000;i++){

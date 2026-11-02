@@ -41,6 +41,8 @@ jobs:
           node --check windows-companion/minecraft-bot/verify_real_java_full_campaign.cjs
           node windows-companion/minecraft-bot/verify_stone_access.cjs
           node windows-companion/minecraft-bot/verify_crafting_site.cjs
+          node --check windows-companion/minecraft-bot/drop_pickup.cjs
+          node windows-companion/minecraft-bot/verify_drop_pickup.cjs
       - name: Get official Mojang Minecraft Java 1.21.1 vanilla server
         env:
           MC_VERSION: "1.21.1"

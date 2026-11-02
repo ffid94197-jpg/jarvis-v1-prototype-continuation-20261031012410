@@ -80,6 +80,11 @@ check(!c.status().milestones.dragonKilled,'unverified dragon proof rejected');
 c.record(bad,{ok:true,verified:true,proof:'end_exit_portal'});
 check(!c.status().milestones.dragonKilled && c.status().milestones.exitPortalObserved,
   'a verified End portal alone never proves that the Dragon died');
+c.record({kind:'collect_wood'},{ok:true,verified:true,proof:'dragon_death'});
+check(!c.status().milestones.dragonKilled,'forged death proof from unrelated wood action denied');
+c.record(bad,{ok:true,verified:true,proof:'dragon_victory'});
+check(!c.status().milestones.dragonKilled,'dragon victory cannot precede witnessed dragon entity');
+c.record({kind:'observe_dragon'},{ok:true,verified:true,proof:'dragon_seen'});
 c.record(bad,{ok:true,verified:true,proof:'dragon_victory'});
 check(c.status().milestones.dragonKilled && c.status().milestones.exitPortalObserved,
   'combined live dragon death and End exit portal proof recorded');

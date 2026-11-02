@@ -47,6 +47,10 @@ jobs:
           if ((node -p "process.platform") -ne "win32") { throw "Native Windows runner required." }
           npx tsc --noEmit --incremental false
           if ($LASTEXITCODE -ne 0) { throw "TypeScript failed." }
+      - name: Verify bounded model deadline policy
+        run: |
+          node scripts/verify-model-deadline-offline.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Model deadline regression failed." }
       - name: Core autonomy and safety regression gates
         run: |
           $tests = @(

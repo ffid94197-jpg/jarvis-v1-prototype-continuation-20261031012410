@@ -501,9 +501,13 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
         const safeRaw=bot.inventory.items().find(i=>['beef','porkchop','mutton','rabbit'].includes(i.name));
         if(safeRaw){const before=bot.food;await bot.equip(safeRaw,'hand');await bot.consume();
           check(epoch);return observed(bot.food>before,'Hunger '+before+' -> '+bot.food);}
-        const entity=bot.nearestEntity(e=>['cow','pig','sheep'].includes(e?.name)&&e?.position);
-        if(!entity)return walkScout(epoch,'passive livestock for food');
-        return hunt(entity.name,entity.name==='cow'?'beef':entity.name==='pig'?'porkchop':'mutton',epoch);
+        const inNether=String(bot.game?.dimension||'').includes('nether');
+        const targetTypes=inNether?['hoglin']:['cow','pig','sheep'];
+        const entity=bot.nearestEntity(e=>targetTypes.includes(e?.name)&&e?.position);
+        if(!entity)return walkScout(epoch,inNether?'hoglin for Nether survival':'passive livestock for food');
+        // Hoglins drop raw, edible porkchop. Next iteration consumes only
+        // after a real inventory delta and server food-level observation.
+        return hunt(entity.name,entity.name==='cow'?'beef':entity.name==='sheep'?'mutton':'porkchop',epoch);
       }
       case 'track_stronghold':return searchEye(epoch);
       case 'activate_end_portal':return activateEnd(epoch);

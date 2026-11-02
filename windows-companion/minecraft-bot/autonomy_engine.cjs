@@ -124,8 +124,8 @@ function decide(goal, world, failures={}, progress={}) {
   if(world.hunger<=12 && (inv.food||0)>0)return {kind:'eat',why:'Hunger low; edible inventory item detected'};
   if(['dragon_run','netherite_dragon_run','dragon_then_netherite_run'].includes(goal) && world.hunger<=9 && (inv.food||0)===0)return {kind:'obtain_food',why:'Obtain safe food before autonomous survival progression'};
   if(closest?.name==='creeper' && closest.distance<=7)return {kind:'retreat',why:'Avoid nearby creeper explosion'};
-  if(goal==='survive' && world.hunger<=7 && (inv.food||0)===0)
-    return {kind:'blocked',why:'Critically hungry with no edible supplies; autonomous food procurement not implemented'};
+  if(goal==='survive' && world.hunger<=9 && (inv.food||0)===0)
+    return {kind:'obtain_food',why:'Seek actual safe food or livestock; verify inventory pickup before consumption'};
   if(closest?.distance<=6 && world.health>=12 && ['guard','survive'].includes(goal)) {
     if(closest.name==='creeper')return {kind:'retreat',why:'Creeper explosion risk'};
     return {kind:'defend',why:'Hostile within defensive range',targetId:closest.id};
@@ -317,7 +317,16 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   function next(world){
     if(state.status!=='running')return {kind:'idle',why:'Automation not running'};
     if(clock()>=state.deadline||state.steps>=maxSteps){state.status='expired';state.why='Goal time/step budget exhausted';return {kind:'idle',why:state.why};}
-    const d=decide(state.goal,world,state.failures,state);state.lastDecision=d;
+    let d=decide(state.goal,world,state.failures,state);
+    // Autonomous wood recovery remains bounded. A successful scout must
+    // observe real movement; it does not fake resource acquisition.
+    if(d.kind==='collect_wood' && (state.failures.collect_wood||0)>=2){
+      d=(state.milestones.woodSurveyTrips||0)>=8
+        ?{kind:'blocked',why:'Eight proven alternate wood-search regions exhausted'}
+        :{kind:'survey_wood',index:state.steps,
+          why:'Two failed tree approaches: scout fresh safe ground before retrying wood'};
+    }
+    state.lastDecision=d;
     if(d.kind==='complete'){state.status='complete';state.why=d.why;}
     if(d.kind==='blocked'){state.status='blocked';state.why=d.why;}
     if(!['wait','idle','complete','blocked'].includes(d.kind))state.steps++;
@@ -340,7 +349,11 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         state.milestones.exitPortalObserved=true;
       if(decision.kind==='track_stronghold')state.milestones.strongholdSearchStarted=true;
       if(outcome.proof==='netherite_equipped')state.milestones.netheriteEquipped=true;
-      if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':'mine_diamond']=0;}}
+      if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':'mine_diamond']=0;}
+      if(decision.kind==='survey_wood'){
+        state.milestones.woodSurveyTrips=(state.milestones.woodSurveyTrips||0)+1;
+        state.failures.collect_wood=0;
+      }}
     else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;
     state.lastResult={kind:decision.kind,verified:ok,detail:String(outcome?.detail||'unverified').slice(0,140)};
     if(!ok && !['mine_iron','mine_diamond','mine_obsidian','mine_ancient_debris','hunt_blazes','hunt_endermen','track_stronghold','search_dragon','collect_flint','collect_gold','loot_bastion_template','prepare_archery','obtain_food','mine_netherrack','survey_ore'].includes(decision.kind) && (state.failures[decision.kind]||0)>=3){

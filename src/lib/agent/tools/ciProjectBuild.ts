@@ -73,7 +73,7 @@ export async function executeCIProjectBuild(
  if(isCancelled())return {ok:false,tool,evidence:"",error:"Task cancelled before CI project build"};
  // Use a minimal, non-secret environment. The project must run in a disposable
  // VM; generated Vite configs may still execute arbitrary JS within that VM.
- const env: Record<string,string>={NODE_ENV:"production"};
+ const env:NodeJS.ProcessEnv={NODE_ENV:"production"};
  for(const key of ["PATH","SystemRoot","WINDIR","TEMP","TMP","USERPROFILE","APPDATA","LOCALAPPDATA"])
    if(process.env[key])env[key]=process.env[key];
  env.HOME=prepared.abs;

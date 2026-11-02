@@ -335,6 +335,37 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
   const unknownEffects = effects.filter((e) => e.status === "EFFECT_UNKNOWN").length;
   const settledOk = effects.filter((e) => e.status === "SETTLED").length;
   const failedEffects = effects.filter((e) => e.status === "FAILED").length;
+  // Disk state alone may predate this task. Match each completed artifact to
+  // a Guardian-admitted, durably settled effect of THIS task with a verified
+  // executor/readback receipt. Missing/legacy/corrupt receipts are not proof.
+  const settledArtifactProof = new Set<string>();
+  for (const effect of effects) {
+    if (effect.status !== "SETTLED" ||
+      (effect.tool !== "write_file" && effect.tool !== "create_folder")) continue;
+    try {
+      const admitted = JSON.parse(effect.argsJson ?? "{}") as { path?: unknown };
+      const receipt = JSON.parse(effect.receiptJson ?? "{}") as {
+        ok?: unknown; tool?: unknown; reconciled?: unknown; path?: unknown;
+        isDirectory?: unknown; contentVerified?: unknown;
+        detail?: { path?: unknown; isDirectory?: unknown; verified?: unknown };
+      };
+      const scoped = resolveScopedPath(admitted.path);
+      if (!scoped.ok || !scoped.rel) continue;
+      const directSuccess = receipt.ok === true && receipt.tool === effect.tool &&
+        receipt.detail?.path === scoped.rel &&
+        (effect.tool === "write_file"
+          ? receipt.detail?.verified === true
+          : receipt.detail?.isDirectory === true);
+      const recoveredSuccess = receipt.reconciled === true &&
+        receipt.path === scoped.rel &&
+        (effect.tool === "write_file"
+          ? receipt.contentVerified === true
+          : receipt.isDirectory === true);
+      if (directSuccess || recoveredSuccess) {
+        settledArtifactProof.add(effect.tool + ":" + scoped.rel);
+      }
+    } catch { /* malformed or incomplete receipt is never completion proof */ }
+  }
 
   // Uncertain effects can NEVER yield a verified completion (VER-06).
   if (admittedUnsettled > 0 || unknownEffects > 0) {
@@ -385,10 +416,14 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
   const checked: Arbitration["predicates"] = [];
   for (const p of predicates) {
     const r = await checkPredicate(p);
+    const proofKey = (p.kind === "folder" ? "create_folder:" : "write_file:") + r.observedPath;
+    const provenance = settledArtifactProof.has(proofKey);
     checked.push({
       predicate: { ...p, relPath: r.observedPath },
-      pass: r.pass,
-      observed: r.observed,
+      pass: r.pass && provenance,
+      observed: r.pass && !provenance
+        ? r.observed + "; missing matching verified SETTLED effect for this task"
+        : r.observed,
     });
   }
   const allPass = checked.every((c) => c.pass);
@@ -413,7 +448,8 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
       predicates: checked,
     };
   }
-  if (somePass || settledOk > 0) {
+  if (somePass || settledOk > 0 ||
+      checked.some(c => c.observed.includes("missing matching verified SETTLED effect"))) {
     return {
       verdict: "partial",
       predicateLines: [...predicateLines, `VERDICT: PARTIAL — ${checked.filter((c) => c.pass).length}/${checked.length} predicates confirmed; effects settled ${settledOk}, failed ${failedEffects}`],

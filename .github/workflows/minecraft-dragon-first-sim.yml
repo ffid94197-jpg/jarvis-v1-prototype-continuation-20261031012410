@@ -36,7 +36,7 @@ jobs:
       - name: Actual planner versus independent survival world model
         shell: bash
         env:
-          JARVIS_MC_SIM_SEEDS: "40"
+          JARVIS_MC_SIM_SEEDS: "1000"
         run: node windows-companion/minecraft-bot/verify_java_survival_campaign.cjs
       - name: Live-skill mocked protocol regressions (not a Minecraft server)
         shell: bash

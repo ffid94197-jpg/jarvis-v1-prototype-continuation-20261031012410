@@ -117,3 +117,8 @@ Next without hosted Actions: in the isolated Windows prototype checkout run .\sc
 - `late_skills.cjs` stronghold staircase descent now verifies server-observed block removal after each dig and actual displacement toward the next lower step. The previous path counted digging as progress even if the bot never descended; this is now denied without physical movement.
 - After the equipped-diamond-armor upgrade fix and this movement hardening, source-isolated `verify_late_skills.cjs` passed **26/26** mocked checks. The suite specifically covers missing smithing materials, worn diamond armor, Nether/Overworld boundary, and digging-without-moving failure.
 - The end-to-end empty-survival Minecraft Java Dragon-first victory gate remains unrun and **NOT ACCEPTED**. No GitHub Actions minutes have been used for this continuation.
+
+## November 2: protect player armor after smithing
+- Added same-epoch post-smithing armor restoration in `late_skills.cjs`. After verified equipped-diamond upgrade, the bot closes the smithing GUI and attempts to equip the newly crafted Netherite armor. If upgrade fails but the original diamond piece remains in inventory, it attempts to re-equip that original piece. Owner cancellation prevents further inventory mutations. The final mission continues to require independent in-game armor-slot proof.
+- Updated the smithing regression to assert upgraded Netherite helmet is worn again after a successful verified GUI output. Source-isolated suite: **26/26 mock checks PASS**. This does NOT prove the real 1.21.1 GUI behavior or run the Ender Dragon campaign.
+- All development commits on this branch use `[skip ci]`; no GitHub Actions workflow was requested.

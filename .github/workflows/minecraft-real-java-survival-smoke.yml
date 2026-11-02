@@ -31,6 +31,12 @@ jobs:
           node-version: "22"
       - name: Install pinned Mineflayer dependency tree
         run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
+      - name: Check live skill syntax and stone-target geometry
+        run: |
+          node --check windows-companion/minecraft-bot/bot.cjs
+          node --check windows-companion/minecraft-bot/stone_access.cjs
+          node --check windows-companion/minecraft-bot/verify_real_java_full_campaign.cjs
+          node windows-companion/minecraft-bot/verify_stone_access.cjs
       - name: Get official Mojang Minecraft Java 1.21.1 vanilla server
         env:
           MC_VERSION: "1.21.1"

@@ -47,5 +47,6 @@ mining.record('minecraft_companion_command',{command:'observe'},{ok:true,detail:
 no(mining.check('minecraft_companion_command',{command:'collect_wood'}).ok,'do not substitute wood for cobblestone when pickaxe owned');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('ordinary language'),'main JARVIS natural-language prompt');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('same main JARVIS model'),'single JARVIS brain');
-ok(!MINECRAFT_AI_INSTRUCTIONS.includes('separate Mindcraft process/model'),'no separate agent');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('single Minecraft planning capability'),'one native JARVIS capability');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('NEVER start a second bot'),'no second bot');
 console.log('MINECRAFT_NATURAL_LANGUAGE '+checks+'/'+checks+' PASS (offline gate/prompt tests; no live game)');

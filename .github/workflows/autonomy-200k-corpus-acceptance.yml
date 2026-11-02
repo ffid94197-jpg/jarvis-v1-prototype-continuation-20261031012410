@@ -5,7 +5,9 @@ on:
     paths:
       - "scripts/autonomy/**"
       - ".github/workflows/autonomy-200k-corpus-acceptance.yml"
-      - "src/lib/agent/**"\n      - "scripts/verify-task-outcome-honesty.cjs"\n      - "scripts/verify-model-deadline-offline.cjs"
+      - "src/lib/agent/**"
+      - "scripts/verify-task-outcome-honesty.cjs"
+      - "scripts/verify-model-deadline-offline.cjs"
   workflow_dispatch:
     inputs:
       validate_corpus:

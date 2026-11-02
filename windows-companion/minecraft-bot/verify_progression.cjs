@@ -49,7 +49,8 @@ assert.equal(decide('iron_age',ironStation).kind,'recover_table',
  'the workstation is likewise recovered before long iron exploration');
 
 assert.ok(GOALS.has('dragon_run'));assert.equal(validateCommand({command:'auto_goal',goal:'dragon_run',durationSeconds:300}),null);
-assert.equal(decide('dragon_run',w({stonePickaxe:1,stoneSword:1})).kind,'mine_iron');
+assert.equal(decide('dragon_run',w({stonePickaxe:1,stoneSword:1})).kind,'collect_wood',
+ 'Full survival must carry iron-tool handles/fuel before mining deeper');
 assert.equal(decide('iron_age',w({stonePickaxe:1,stoneSword:1,rawIron:1,cobblestone:2})).kind,'mine_cobblestone');
 assert.equal(decide('iron_age',w({stonePickaxe:1,stoneSword:1,rawIron:1,cobblestone:8},true)).kind,'craft_furnace');
 assert.equal(decide('iron_age',{...w({stonePickaxe:1,stoneSword:1,rawIron:1,planks:2}),furnaceNearby:true}).kind,'smelt_iron');

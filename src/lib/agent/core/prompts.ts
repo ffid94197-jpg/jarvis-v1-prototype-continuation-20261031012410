@@ -141,9 +141,9 @@ ${TOOL_CATALOG_JSON}`;
  * file/folder creation requests; general multi-app and coding goals retain
  * the full universal catalog.
  */
-const DIRECT_FS_GOAL = /^(?:please\\s+|jarvis[,! ]+)?(?:create|write|make|save)\\b/i;
-const FS_OBJECT = /\\b(?:files?|folders?|directories)\\b/i;
-const COMPLEX_GOAL = /\\b(?:website|web\\s*app|browser|minecraft|windows|desktop|game|editor|program|project|install|internet|build|test|network|git|github|application|video|launch|open\\s+app|download|research|navigate)\\b/i;
+const DIRECT_FS_GOAL = /^(?:please\s+|jarvis[,! ]+)?(?:create|write|make|save)\b/i;
+const FS_OBJECT = /\b(?:files?|folders?|directories)\b/i;
+const COMPLEX_GOAL = /\b(?:website|web\s*app|browser|minecraft|windows|desktop|game|editor|program|project|install|internet|build|test|network|git|github|application|video|launch|open\s+app|download|research|navigate)\b/i;
 const FILE_ONLY_TOOLS = `AVAILABLE TOOLS — direct authorized file tasks:
 - create_folder {"path":"actual-folder-name"} — create one requested workspace-relative directory, recursively
 - write_file {"path":"requested/path.txt","content":"exact requested content"} — write one requested file

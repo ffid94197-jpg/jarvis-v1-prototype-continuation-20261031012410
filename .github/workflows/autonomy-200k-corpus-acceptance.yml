@@ -75,7 +75,7 @@ jobs:
           CORPUS_PATH: ${{ inputs.corpus_path }}
         run: |
           if (!(Test-Path $env:CORPUS_PATH)) { throw "Corpus missing: $env:CORPUS_PATH. Do not substitute generated prompts." }
-          node scripts/autonomy/validate-internet-corpus.mjs --input "$env:CORPUS_PATH" --expected 200000 --manifest artifacts/autonomy-corpus-manifest.json
+          node scripts/autonomy/validate-internet-corpus.cjs --input "$env:CORPUS_PATH" --expected 200000 --manifest artifacts/autonomy-corpus-manifest.json
           if ($LASTEXITCODE -ne 0) { throw "Internet corpus provenance validation failed." }
       - name: Upload acceptance evidence
         if: always()

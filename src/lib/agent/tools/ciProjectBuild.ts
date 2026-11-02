@@ -93,6 +93,7 @@ export async function executeCIProjectBuild(
    let cancelled=false;
    let child:ChildProcess;
    let watchdog:ReturnType<typeof setInterval> | undefined;
+   let hardDeadline:ReturnType<typeof setTimeout> | undefined;
    const endTree=()=>{
      if(cancelled)return;
      cancelled=true;
@@ -109,6 +110,7 @@ export async function executeCIProjectBuild(
        timeout:timeoutMs,maxBuffer:65536,windowsHide:true,
      },async(error,stdout,stderr)=>{
        if(watchdog)clearInterval(watchdog);
+       if(hardDeadline)clearTimeout(hardDeadline);
        const code=error?typeof (error as {code?:unknown}).code==="number"
          ? (error as {code:number}).code:1:0;
        const detail:Record<string,unknown>={
@@ -142,10 +144,13 @@ export async function executeCIProjectBuild(
        }
      });
      register(child);
+     hardDeadline=setTimeout(endTree,timeoutMs);
+     hardDeadline.unref?.();
      watchdog=setInterval(()=>{if(isCancelled())endTree();},250);
      watchdog.unref?.();
    } catch {
      if(watchdog)clearInterval(watchdog);
+     if(hardDeadline)clearTimeout(hardDeadline);
      resolve({ok:false,tool,evidence:"",error:"Unable to launch fixed CI project operation"});
    }
  });

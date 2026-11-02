@@ -9,6 +9,7 @@ const readline = require('readline');
 const net = require('node:net');
 const path = require('node:path');
 const {createCheckpoint} = require('./mission_checkpoint.cjs');
+const {acceptDragonDeath,resetDragon}=require('./dragon_engagement.cjs');
 const {Vec3} = require('vec3');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {validateCommand, inventorySummary} = require('./friend_protocol.cjs');
@@ -945,7 +946,7 @@ async function action(q){
         // A new owner/Guardian instruction is mandatory after process restart;
         // no old witnessed Dragon death or crafting receipt is restored.
         halt();deathsOnCurrentGoal=0;resumeAfterSpawn=false;
-        lateSkills.session.dragonSeen=false;lateSkills.session.dragonDied=false;
+        resetDragon(lateSkills.session);
         autopilot.start(lease.spec.goal,lease.remainingSeconds,lease.spec);
         mode='auto';lastAction='Owner-confirmed restart recovery; milestones recheck live world';
         return {ok:true,status:'Autonomous '+lease.spec.goal+' RESUMED from saved goal intent only; prior success proofs discarded'};
@@ -970,8 +971,7 @@ async function action(q){
         return {ok:false,error:'Autonomous goal already running; inspect auto_status or use auto_stop before replacement'};
       halt();mode='auto';resumeAfterSpawn=false;deathsOnCurrentGoal=0;
        // Evidence from an earlier owner mission is NOT proof for a new run.
-       lateSkills.session.dragonSeen=false;
-       lateSkills.session.dragonDied=false;
+       resetDragon(lateSkills.session);
       try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),{resource:q.resource,targetCount:q.targetCount,destination:q.destination,arrivalRange:q.arrivalRange,
           position:q.position,block:q.block,axis:q.axis,length:q.length,
           width:q.width,depth:q.depth,steps:q.steps});lastAction='Autonomous '+st.goal+' STARTED';
@@ -1230,8 +1230,7 @@ bot.on('entityDead',entity=>{
    // A death event is only admissible if the current mission observed a
    // Dragon in the End, and this is the same live encounter.
    const inEnd=String(bot.game?.dimension||'').replace(/^minecraft:/,'')==='the_end';
-   if(inEnd && entity?.name==='ender_dragon' && lateSkills.session.dragonSeen){
-     lateSkills.session.dragonDied=true;
+   if(inEnd && acceptDragonDeath(lateSkills.session,entity,bot.game?.dimension,Date.now())){
      if(autopilot.status().goal==='dragon_then_netherite_run' && autopilot.status().status==='running')
        process.stdout.write('BOT_EVENT '+JSON.stringify({type:'dragon_death',
          at:Date.now(),dimension:'the_end',entityId:entity.id??null,
@@ -1239,6 +1238,7 @@ bot.on('entityDead',entity=>{
    }
  });
 bot.on('death',()=>{
+  resetDragon(lateSkills.session);
   const active=mode==='auto' && autopilot.status().status==='running';
   if(active){
     deathsOnCurrentGoal++;

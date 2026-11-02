@@ -205,4 +205,17 @@ dummy.game.dimension='minecraft:the_end';
 const endWorld=digest(dummy,'Owner');
 check(endWorld.exitPortalPresent && !endWorld.endPortalActivated && !endWorld.endPortalPresent,
   'End exit portal distinct from stronghold portal');
+// A partly loaded portal ring does not establish the missing-eye budget.
+dummy.game.dimension='minecraft:overworld';
+dummy.findBlock=({matching})=>{const b={name:'end_portal_frame'};return matching(b)?b:null;};
+const pos=Array.from({length:12},(_,idx)=>({idx}));
+dummy.findBlocks=()=>pos.slice(0,4);
+dummy.blockAt=p=>({name:'end_portal_frame',getProperties:()=>({eye:p.idx<10})});
+const partialRing=digest(dummy,'Owner');
+check(partialRing.strongholdPortalFrameNearby && partialRing.strongholdMissingEyes===null,
+ 'Only four observed frames do not prove the remaining Eye count');
+dummy.findBlocks=()=>pos;
+const fullRing=digest(dummy,'Owner');
+check(fullRing.strongholdMissingEyes===2,
+ 'Exactly twelve server-observed frames can prove two missing Eyes');
 console.log(`LATE_GAME_PLANNER ${checks}/${checks} PASS (100,000 offline randomized snapshots; NOT 100,000 playthroughs)`);

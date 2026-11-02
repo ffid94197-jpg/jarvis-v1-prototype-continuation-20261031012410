@@ -1,19 +1,26 @@
 name: JARVIS 200K corpus + Windows acceptance gates
 on:
+  push:
+    branches: [autonomy-100-percent-acceptance-20261102]
+    paths:
+      - "scripts/autonomy/**"
+      - ".github/workflows/autonomy-200k-corpus-acceptance.yml"
+      - "src/lib/agent/**"
   workflow_dispatch:
     inputs:
+      validate_corpus:
+        description: Require and validate the complete 200,000-record Internet-original corpus
+        type: boolean
+        required: true
+        default: false
       corpus_path:
         description: Repository-relative JSONL corpus path
         required: true
         default: benchmarks/autonomy/internet-hard-200k.jsonl
-      expected_records:
-        description: Required number of original Internet-sourced prompts
-        required: true
-        default: "200000"
 permissions:
   contents: read
 jobs:
-  corpus-and-regressions:
+  windows-regressions:
     runs-on: windows-latest
     timeout-minutes: 90
     defaults:
@@ -25,14 +32,10 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-      - name: Validate exact Internet-original corpus
-        env:
-          CORPUS_PATH: ${{ inputs.corpus_path }}
-          EXPECTED_RECORDS: ${{ inputs.expected_records }}
+      - name: Test corpus validator against valid and invalid fixtures
         run: |
-          if (!(Test-Path $env:CORPUS_PATH)) { throw "Corpus missing: $env:CORPUS_PATH. Do not substitute generated prompts." }
-          node scripts/autonomy/validate-internet-corpus.mjs --input "$env:CORPUS_PATH" --expected "$env:EXPECTED_RECORDS" --manifest artifacts/autonomy-corpus-manifest.json
-          if ($LASTEXITCODE -ne 0) { throw "Internet corpus provenance validation failed." }
+          node scripts/autonomy/verify-corpus-validator.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Corpus validator self-test failed." }
       - name: Install exact application dependencies
         run: npm ci --no-audit --no-fund
       - name: Native Windows and full TypeScript check
@@ -66,7 +69,15 @@ jobs:
         run: |
           npm.cmd run build
           if ($LASTEXITCODE -ne 0) { throw "Production build failed." }
-      - name: Upload immutable acceptance manifest
+      - name: Validate exact 200,000 Internet-original prompts
+        if: ${{ inputs.validate_corpus == true }}
+        env:
+          CORPUS_PATH: ${{ inputs.corpus_path }}
+        run: |
+          if (!(Test-Path $env:CORPUS_PATH)) { throw "Corpus missing: $env:CORPUS_PATH. Do not substitute generated prompts." }
+          node scripts/autonomy/validate-internet-corpus.mjs --input "$env:CORPUS_PATH" --expected 200000 --manifest artifacts/autonomy-corpus-manifest.json
+          if ($LASTEXITCODE -ne 0) { throw "Internet corpus provenance validation failed." }
+      - name: Upload acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:

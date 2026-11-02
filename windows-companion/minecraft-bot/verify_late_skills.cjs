@@ -171,5 +171,35 @@ const ctx=createLateSkills({bot,navigate:async()=>true,craftNamed:async()=>{},ge
  const provenScout=await physicalMove.run({kind:'hunt_blazes'},1);
  check(provenScout.ok&&provenScout.verified,
    'Scouting only succeeds after observed navigation arrival and displacement');
+ // Opening real stone blocks without physical downward movement is not a
+ // completed stronghold route. The owner must never see false path proof.
+ const dugStairs=new Map();
+ const stairKey=p=>[p.x,p.y,p.z].join(',');
+ bot.entity.position=new Vec3(0,64,0);
+ bot.game.dimension='minecraft:overworld';
+ const deepFrame=new Vec3(4,40,0);
+ const stairBlock=p=>{
+   const key=stairKey(p);
+   if(dugStairs.has(key))return dugStairs.get(key);
+   return {name:'stone',boundingBox:'block',position:p.clone()};
+ };
+ bot.findBlocks=()=>[deepFrame];
+ bot.blockAt=stairBlock;
+ bot.findBlock=()=>null;
+ bot.canDigBlock=()=>true;
+ bot.equip=async()=>{};
+ bot.lookAt=async()=>{};
+ bot.setControlState=()=>{};
+ bot.inventory.items=()=>[{name:'diamond_pickaxe',count:1}];
+ bot.dig=async block=>dugStairs.set(stairKey(block.position),
+    {name:'air',boundingBox:'empty',position:block.position.clone()});
+ const stairCheck=createLateSkills({
+   bot,navigate:async()=>true,craftNamed:async()=>({verified:true}),
+   getEpoch:()=>1,getOwner:()=>'',digest:()=>({inventory:{raw:{}}}),Vec3
+ });
+ const stationaryStair=await stairCheck.run({kind:'activate_end_portal'},1);
+ check(!stationaryStair.ok&&!stationaryStair.verified &&
+   /movement not verified/.test(stationaryStair.detail),
+   'Digging underground stone does not prove stronghold route without server movement');
  console.log(`LATE_SKILLS_MOCK ${ok}/${ok} PASS (no live Minecraft server)`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

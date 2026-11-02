@@ -344,16 +344,23 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       for(const block of clear){
         if(block.boundingBox!=='empty'){
           if(!bot.canDigBlock?.(block))return observed(false,'Unmineable stronghold stair obstacle');
-          await bot.dig(block);dug++;
+          await bot.dig(block);check(epoch);
+          if(bot.blockAt(block.position)?.boundingBox!=='empty')
+            return observed(false,'Stronghold dig was dispatched but no server block-state change observed');
+          dug++;
         }
       }
+      const start=bot.entity.position.clone();
       await bot.lookAt(next.offset(.5,1,.5),true);
       bot.setControlState('forward',true);
       try{await delay(450);}finally{bot.setControlState('forward',false);}
       check(epoch);
+      if(!confirmedMove(start,bot.entity.position,next,{minHorizontal:.45,maxTargetDistance:2.4}))
+        return observed(false,'Stair blocks cleared but physical player movement not verified');
     }
-    session.eyesThrown++;
-    return observed(dug>0,dug?`Opened ${dug} observed blocks toward stronghold depth`:'No safe downward path opened');
+    if(dug>0)session.eyesThrown++;
+    return observed(dug>0,dug?`Opened ${dug} server-observed blocks and confirmed movement down the stronghold stair`:
+      'No safe downward path opened');
   }
   async function activateEnd(epoch){
     const frames=bot.findBlocks({matching:b=>b?.name==='end_portal_frame',maxDistance:30,count:12});

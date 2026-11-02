@@ -10,7 +10,7 @@ const net = require('node:net');
 const {Vec3} = require('vec3');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {validateCommand, inventorySummary} = require('./friend_protocol.cjs');
-const {digest, createController, FOOD, resolveOwnerEntity} = require('./autonomy_engine.cjs');
+const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
 const {planSurveyStep}=require('./terrain_survey.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
@@ -307,14 +307,47 @@ async function autoExecute(plan,epoch){
       return {ok:reached,verified:reached,detail:'Owner distance '+digest(bot,leader).ownerDistance};
     }
     case 'retreat':{
-      const enemy=bot.nearestEntity(e=>e && e.position && ['creeper','zombie','skeleton','spider','husk','drowned','witch'].includes(e.name) && e.position.distanceTo(bot.entity.position)<=12);
-      if(!enemy)return {ok:true,verified:true,detail:'Threat no longer nearby'};
-      const p=bot.entity.position, e=enemy.position;
-      const mag=Math.max(1,Math.hypot(p.x-e.x,p.z-e.z));
-      const dest={x:p.x+8*(p.x-e.x)/mag,y:p.y,z:p.z+8*(p.z-e.z)/mag};
-      const reached=await navigate(dest,3,epoch,9000);
-      const now=digest(bot,leader).threats[0];
-      return {ok:reached,verified:reached && (!now || now.distance>4),detail:'Retreat destination attempted, nearby threat distance '+(now?.distance||'none')};
+      // The planner and executor MUST recognize the same hostile set, even
+      // in Nether and End. Never return "threat cleared" for an observed
+      // Dragon just because an Overworld-only filter missed its entity.
+      const here=bot.entity.position.clone();
+      const threat=Object.values(bot.entities||{})
+        .filter(e=>e?.position && HOSTILES.has(e.name) &&
+          e.position.distanceTo(here)<=16)
+        .sort((a,b)=>a.position.distanceTo(here)-b.position.distanceTo(here))[0];
+      if(!threat){
+        const observed=digest(bot,leader).threats;
+        const clear=observed.length===0;
+        return {ok:clear,verified:clear,
+          detail:clear?'No hostile entity remains in loaded danger range':
+            'Threat list and live entity positions disagree; retreat unverified'};
+      }
+      const initial=here.distanceTo(threat.position);
+      const targets=surveyTargets(bot,here,Vec3).filter(p=>
+        p.distanceTo(threat.position)>=initial+3 &&
+        p.distanceTo(here)>3)
+        .sort((a,b)=>a.distanceTo(here)-b.distanceTo(here));
+      if(!targets.length)return {ok:false,verified:false,
+        detail:'No server-observed safe retreat stance farther from '+threat.name};
+      let reason='No fully reached retreat route';
+      for(const target of targets.slice(0,4)){
+        if(epoch!==actionEpoch)throw Error('Retreat cancelled');
+        try{
+          const reached=await navigate(target,2,epoch,12500);
+          const current=bot.entity.position.clone();
+          const separation=current.distanceTo(threat.position);
+          if(reached && separation>=initial+2 && current.distanceTo(here)>=3){
+            return {ok:true,verified:true,
+              detail:'Real '+threat.name+' retreat from distance '+
+                initial.toFixed(1)+' to '+separation.toFixed(1)};
+          }
+          reason='Retreat path returned but actual separation did not improve';
+        }catch(err){
+          if(epoch!==actionEpoch)throw Error('Retreat cancelled');
+          reason=String(err?.message||err).slice(0,110);
+        }
+      }
+      return {ok:false,verified:false,detail:'Retreat not verified: '+reason};
     }
     case 'defend':{
       const hostile=bot.entities?.[plan.targetId];

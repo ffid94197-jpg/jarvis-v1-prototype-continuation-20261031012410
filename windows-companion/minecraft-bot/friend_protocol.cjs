@@ -4,6 +4,7 @@
 const {RESOURCES}=require('./resource_goal.cjs');
 const {validSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec}=require('./structure_goal.cjs');
+const {validFarmSpec}=require('./wheat_goal.cjs');
 const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop','auto_checkpoint','auto_resume']);
 function validateCommand(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return 'Invalid command';
@@ -21,7 +22,9 @@ function validateCommand(input) {
       input.arrivalRange>=1 && input.arrivalRange<=8;
     const validBuild=input.goal==='build' && validBuildSpec({goal:'build',position:input.position,
       length:input.length,axis:input.axis,block:input.block});
-    const validGoal=fixed.includes(input.goal)||validTravel||validBuild||
+    const validFarm=input.goal==='farm_wheat'&&validFarmSpec({goal:'farm_wheat',
+      position:input.position,width:input.width,depth:input.depth,targetCount:input.targetCount});
+    const validGoal=fixed.includes(input.goal)||validTravel||validBuild||validFarm||
       (input.goal==='gather' && RESOURCES.has(input.resource) &&
         Number.isInteger(input.targetCount) &&
         input.targetCount>=1&&input.targetCount<=64)||
@@ -31,13 +34,18 @@ function validateCommand(input) {
       (input.goal==='travel' && input.resource===undefined&&input.targetCount===undefined&&input.steps===undefined) ||
       (input.goal==='sequence' && input.resource===undefined&&input.targetCount===undefined&&
         input.destination===undefined&&input.arrivalRange===undefined) ||
+      (input.goal==='farm_wheat' && input.steps===undefined&&input.resource===undefined &&
+        input.destination===undefined&&input.arrivalRange===undefined&&input.block===undefined&&
+        input.axis===undefined&&input.length===undefined) ||
       (input.goal==='build' && input.steps===undefined&&input.resource===undefined &&
         input.targetCount===undefined&&input.destination===undefined&&input.arrivalRange===undefined) ||
       (fixed.includes(input.goal) && input.steps===undefined&&input.resource===undefined &&
         input.targetCount===undefined&&input.destination===undefined &&
         input.arrivalRange===undefined);
     return validGoal && noUnrelatedParameters &&
-      (input.goal==='build'||['position','block','axis','length'].every(k=>input[k]===undefined)) &&
+      (input.goal==='build'||['block','axis','length'].every(k=>input[k]===undefined)) &&
+      (input.goal==='farm_wheat'||['width','depth'].every(k=>input[k]===undefined)) &&
+      (['build','farm_wheat'].includes(input.goal)||input.position===undefined) &&
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&
           input.durationSeconds<=43200)) ? null :

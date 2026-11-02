@@ -22,6 +22,7 @@ const {collectObservedDrop,pickupFeet}=require('./drop_pickup.cjs');
 const {retreatStances}=require('./retreat_access.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
 const {validBuildSpec,observeBuild}=require('./structure_goal.cjs');
+const {validFarmSpec,observeWheat}=require('./wheat_goal.cjs');
 const {safeSurveyFeet}=require('./wood_navigation.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
@@ -308,6 +309,59 @@ async function autoExecute(plan,epoch){
   const before=digest(bot,leader);
   if(epoch!==actionEpoch)throw Error('Owner cancelled current action');
   switch(plan.kind){
+    case 'harvest_wheat':case 'plant_wheat':{
+      const p=plan.position;
+      const target=new Vec3(p.x,p.y,p.z),prior=bot.blockAt(target);
+      const floor=bot.blockAt(target.offset(0,-1,0));
+      if(!prior||!floor||floor.name!=='farmland')
+        return {ok:false,verified:false,detail:'Wheat field no longer observed on tilled farmland'};
+      const pos=bot.entity.position;
+      if(pos.distanceTo(target.offset(.5,.5,.5))>12)
+        return {ok:false,verified:false,detail:'Wheat action outside 12-block local boundary'};
+      if(pos.distanceTo(target.offset(.5,.5,.5))>4.2){
+        let navigated=false;
+        for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+          const foot=safeSurveyFeet(bot,p.x+dx,p.z+dz,p.y,Vec3);
+          if(!foot)continue;
+          try{
+            if(await navigate(foot.offset(.5,0,.5),0,epoch,stanceNavTimeoutMs()) &&
+               bot.entity.position.distanceTo(target.offset(.5,.5,.5))<=4.2){
+              navigated=true;break;
+            }
+          }catch(e){if(epoch!==actionEpoch)throw e;}
+        }
+        if(!navigated)return {ok:false,verified:false,detail:'No safe reachable wheat field stance'};
+      }
+      if(epoch!==actionEpoch)throw Error('Owner cancelled wheat farming');
+      const crop=bot.blockAt(target),actualFloor=bot.blockAt(target.offset(0,-1,0));
+      if(actualFloor?.name!=='farmland')return {ok:false,verified:false,detail:'Farmland changed during travel'};
+      if(plan.kind==='harvest_wheat'){
+        if(crop?.name!=='wheat'||Number(crop.getProperties?.().age)<7 ||
+           !bot.canDigBlock?.(crop))
+          return {ok:false,verified:false,detail:'Wheat is no longer mature and diggable'};
+        const beforeWheat=rawCount(bot,'wheat');
+        await bot.dig(crop);
+        if(epoch!==actionEpoch)throw Error('Owner cancelled wheat harvest');
+        if(bot.blockAt(target)?.name==='wheat')
+          return {ok:false,verified:false,detail:'Mature wheat removal not observed'};
+        return collectVerifiedDrop(target,beforeWheat,()=>rawCount(bot,'wheat'),epoch,'Wheat harvest');
+      }
+      if(!crop||!['air','cave_air'].includes(crop.name))
+        return {ok:false,verified:false,detail:'Planting target is not empty farmland'};
+      const seed=bot.inventory.items().find(i=>i.name==='wheat_seeds'&&i.count>0);
+      if(!seed)return {ok:false,verified:false,detail:'No server-verified wheat seeds'};
+      const beforeSeed=rawCount(bot,'wheat_seeds');
+      await bot.equip(seed,'hand');
+      if(epoch!==actionEpoch)throw Error('Owner cancelled wheat planting');
+      await bot.placeBlock(actualFloor,new Vec3(0,1,0));
+      for(let j=0;j<8;j++){
+        if(epoch!==actionEpoch)throw Error('Owner cancelled wheat planting');
+        if(bot.blockAt(target)?.name==='wheat'&&rawCount(bot,'wheat_seeds')<beforeSeed)
+          return {ok:true,verified:true,detail:'Wheat seed consumed; crop present on verified farmland'};
+        await pause(200);
+      }
+      return {ok:false,verified:false,detail:'New wheat crop plus seed consumption not both verified'};
+    }
     case 'place_build_block':{
       const p=plan.position;
       if(!validBuildSpec({goal:'build',position:p,block:plan.block,axis:'x+',length:1}))
@@ -790,10 +844,17 @@ async function autoTick(){
   if(mode!=='auto'||autoBusy||!spawned)return;
   const gameWorld=digest(bot,leader,{dragonDead:lateSkills.session.dragonDied});
   const active=autopilot.status();
+  if(active.goal==='farm_wheat')gameWorld.wheatCells=observeWheat(bot,
+    {goal:'farm_wheat',position:active.position,width:active.width,depth:active.depth,
+      targetCount:active.targetCount},Vec3);
   if(active.goal==='build')gameWorld.buildCells=observeBuild(bot,
     {goal:'build',position:active.position,block:active.block,axis:active.axis,length:active.length},Vec3);
-  if(active.goal==='sequence')gameWorld.buildCellsByStage=(active.sequence||[]).map(s=>
-    s.goal==='build'?observeBuild(bot,s,Vec3):null);
+  if(active.goal==='sequence'){
+    gameWorld.buildCellsByStage=(active.sequence||[]).map(s=>
+      s.goal==='build'?observeBuild(bot,s,Vec3):null);
+    gameWorld.wheatCellsByStage=(active.sequence||[]).map(s=>
+      s.goal==='farm_wheat'?observeWheat(bot,s,Vec3):null);
+  }
   const plan=autopilot.next(gameWorld);
   // Expiring a safety window must not silently claim mission completion or
   // force the owner to reissue a high-level instruction. Continue only a
@@ -891,12 +952,15 @@ async function action(q){
     }
     case 'auto_stop':resumeAfterSpawn=false;setMode('stay');return {ok:true,status:'Autonomous gameplay stopped; movement cancelled'};
     case 'auto_goal':{
+      if(q.goal==='farm_wheat' && bot.entity.position.distanceTo(
+        new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>12)
+        return {ok:false,error:'Wheat field origin must be within 12 blocks of actual player'};
       if(q.goal==='build' && bot.entity.position.distanceTo(
         new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>12)
         return {ok:false,error:'Build origin must be within 12 blocks of the actual player'};
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
-      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','build','sequence'].includes(q.goal) &&
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','build','farm_wheat','sequence'].includes(q.goal) &&
          bot.game?.gameMode!=='survival')
         return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an
@@ -908,7 +972,8 @@ async function action(q){
        lateSkills.session.dragonSeen=false;
        lateSkills.session.dragonDied=false;
       try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),{resource:q.resource,targetCount:q.targetCount,destination:q.destination,arrivalRange:q.arrivalRange,
-          position:q.position,block:q.block,axis:q.axis,length:q.length,steps:q.steps});lastAction='Autonomous '+st.goal+' STARTED';
+          position:q.position,block:q.block,axis:q.axis,length:q.length,
+          width:q.width,depth:q.depth,steps:q.steps});lastAction='Autonomous '+st.goal+' STARTED';
         let saved=false;try{saved=missionCheckpoint.save(st);}catch{ /* Mission runs but restart recovery is unavailable. */ }
         return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; '+(saved?'recoverable goal intent saved':'restart recovery unavailable')+'; verify progress via auto_status'};
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}
@@ -1102,7 +1167,7 @@ bot.on('chat',(username,message)=>{
   if(!match)return;
   const cmd=match[1].toLowerCase();
   const normalized=cmd==='gather'?'collect_wood':cmd==='wait'?'stay':cmd;
-  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather [count resource], travel x y z, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_then_netherite_run|dragon_run|companion|explore|follow|guard], pause, resume, build, observe, status, inventory');return;}
+  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather [count resource], travel x y z, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_then_netherite_run|dragon_run|companion|explore|follow|guard], pause, resume, build, farm, observe, status, inventory');return;}
   if(cmd==='auto'||cmd==='goal') {const goal=(match[2]||'survive').trim().toLowerCase();
     action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_then_netherite_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
   if(cmd==='pause') {action({command:'auto_stop'}).then(r=>say(r.status||r.error));return;}
@@ -1118,6 +1183,15 @@ bot.on('chat',(username,message)=>{
     return;
   }
 
+  if(cmd==='farm' && match[2]){
+    const a=/^(\d{1,2})\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d)\s+(\d)$/.exec(match[2].trim());
+    if(!a){say('Use: jarvis farm 2 10 65 10 2 2');return;}
+    action({command:'auto_goal',goal:'farm_wheat',targetCount:Number(a[1]),
+      position:{x:Number(a[2]),y:Number(a[3]),z:Number(a[4])},
+      width:Number(a[5]),depth:Number(a[6]),durationSeconds:3600})
+      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start wheat farming'));
+    return;
+  }
   if(cmd==='build' && match[2]){
     const args=/^(\d)\s+([a-z_]+)\s+(x\+|x-|z\+|z-)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)$/i.exec(match[2].trim());
     if(!args){say('Use: jarvis build 4 cobblestone x+ 10 65 10');return;}

@@ -4,6 +4,7 @@
  * chat-supplied function, tool name, shell command or arbitrary Minecraft ID.
  */
 const {RESOURCES}=require('./resource_goal.cjs');
+const {validBuildSpec}=require('./structure_goal.cjs');
 const SIMPLE_STEPS=new Set(['tools','stone_age','iron_age']);
 function validPosition(p){
  return !!p&&typeof p==='object'&&!Array.isArray(p)&&
@@ -14,6 +15,7 @@ function validStep(s){
    return false;
  if(SIMPLE_STEPS.has(s.goal))
    return Object.keys(s).length===1;
+ if(s.goal==='build')return validBuildSpec(s);
  if(s.goal==='gather')
    return Object.keys(s).every(k=>['goal','resource','targetCount'].includes(k)) &&
      RESOURCES.has(s.resource)&&Number.isInteger(s.targetCount)&&

@@ -3,6 +3,7 @@
 /** Pure command validation; identical contract for stdin and in-game chat. */
 const {RESOURCES}=require('./resource_goal.cjs');
 const {validSequence}=require('./mission_sequence.cjs');
+const {validBuildSpec}=require('./structure_goal.cjs');
 const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop','auto_checkpoint','auto_resume']);
 function validateCommand(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return 'Invalid command';
@@ -18,7 +19,9 @@ function validateCommand(input) {
     const validTravel=input.goal==='travel' && position(input.destination) &&
       Number.isInteger(input.arrivalRange) &&
       input.arrivalRange>=1 && input.arrivalRange<=8;
-    const validGoal=fixed.includes(input.goal)||validTravel||
+    const validBuild=input.goal==='build' && validBuildSpec({goal:'build',position:input.position,
+      length:input.length,axis:input.axis,block:input.block});
+    const validGoal=fixed.includes(input.goal)||validTravel||validBuild||
       (input.goal==='gather' && RESOURCES.has(input.resource) &&
         Number.isInteger(input.targetCount) &&
         input.targetCount>=1&&input.targetCount<=64)||
@@ -28,10 +31,13 @@ function validateCommand(input) {
       (input.goal==='travel' && input.resource===undefined&&input.targetCount===undefined&&input.steps===undefined) ||
       (input.goal==='sequence' && input.resource===undefined&&input.targetCount===undefined&&
         input.destination===undefined&&input.arrivalRange===undefined) ||
+      (input.goal==='build' && input.steps===undefined&&input.resource===undefined &&
+        input.targetCount===undefined&&input.destination===undefined&&input.arrivalRange===undefined) ||
       (fixed.includes(input.goal) && input.steps===undefined&&input.resource===undefined &&
         input.targetCount===undefined&&input.destination===undefined &&
         input.arrivalRange===undefined);
     return validGoal && noUnrelatedParameters &&
+      (input.goal==='build'||['position','block','axis','length'].every(k=>input[k]===undefined)) &&
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&
           input.durationSeconds<=43200)) ? null :

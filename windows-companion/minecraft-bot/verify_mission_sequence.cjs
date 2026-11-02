@@ -2,9 +2,17 @@
 'use strict';
 const assert=require('node:assert/strict');
 const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
+const {validBuildSpec}=require('./structure_goal.cjs');
 const {validateCommand}=require('./friend_protocol.cjs');
 const {createController}=require('./autonomy_engine.cjs');
 let checks=0;function ok(x,m){assert.ok(x,m);checks++;}
+const build={goal:'build',block:'cobblestone',axis:'x+',length:2,position:{x:10,y:64,z:10}};
+ok(validBuildSpec(build),'Bounded construction step contract');
+ok(validSequence([build]),'A build stage is allowed within multi-step sequence');
+ok(validateCommand({command:'auto_goal',...build})===null,
+  'Live owner protocol allows bounded construction');
+ok(validateCommand({command:'auto_goal',goal:'build',...build,block:'command_block'})!==null,
+  'Live owner protocol rejects admin or unsupported blocks');
 const goalSteps=[
  {goal:'gather',resource:'logs',targetCount:4},
  {goal:'travel',destination:{x:40,y:64,z:-5},arrivalRange:2},
@@ -35,6 +43,13 @@ for(const bad of [
 const copy=canonicalSequence(goalSteps);copy[0].targetCount=1;
 ok(goalSteps[0].targetCount===4,
  'Mission sequence must be cloned rather than trusting mutable caller input');
+const buildController=createController({clock:()=>1000,maxSteps:40,maxSeconds:1000});
+buildController.start('sequence',300,{steps:[{goal:'gather',resource:'logs',targetCount:1},build]});
+ok(buildController.next({...world({logs:1}),buildCellsByStage:[null,[
+  {position:{x:10,y:64,z:10},state:'ready'},
+  {position:{x:11,y:64,z:10},state:'ready'}
+]]}).kind==='blocked',
+ 'Composed building is blocked if material is absent; no fake structural success');
 const controller=createController({clock:()=>1000,maxSteps:40,maxSeconds:1000});
 controller.start('sequence',300,{steps:goalSteps});
 ok(controller.next(world()).kind==='collect_wood',

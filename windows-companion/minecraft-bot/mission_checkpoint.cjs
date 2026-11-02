@@ -26,6 +26,8 @@ function extractGoal(state){
    spec.resource=state.resource;spec.targetCount=state.targetCount;
  }else if(goal==='travel'){
    spec.destination=state.destination;spec.arrivalRange=state.arrivalRange;
+ }else if(goal==='build'){
+   spec.position=state.position;spec.block=state.block;spec.axis=state.axis;spec.length=state.length;
  }else if(goal==='sequence')spec.steps=state.sequence;
  if(validateCommand({command:'auto_goal',...spec})!==null)return null;
  return JSON.parse(JSON.stringify(spec));
@@ -43,7 +45,7 @@ function validateLease(data,identity,now=Date.now()){
     data.deadline-now>MAX_LEASE_MS)
    return {ok:false,reason:'Missing, expired or mismatched mission lease'};
  if(!data.spec||typeof data.spec!=='object'||Array.isArray(data.spec)||
-    Object.keys(data.spec).some(k=>!['goal','resource','targetCount','destination','arrivalRange','steps'].includes(k))||
+    Object.keys(data.spec).some(k=>!['goal','resource','targetCount','destination','arrivalRange','steps','position','block','axis','length'].includes(k))||
     validateCommand({command:'auto_goal',...data.spec})!==null)
    return {ok:false,reason:'Checkpoint contains unsupported goal parameters'};
  const remainingSeconds=Math.floor((data.deadline-now)/1000);

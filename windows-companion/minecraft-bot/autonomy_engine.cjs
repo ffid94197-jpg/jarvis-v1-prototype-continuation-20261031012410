@@ -7,7 +7,8 @@
 const {lateGamePlan} = require('./late_game.cjs');
 const {RESOURCES,resourcePlan}=require('./resource_goal.cjs');
 const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','sequence']);
+const {validBuildSpec,buildPlan}=require('./structure_goal.cjs');
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','sequence']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
@@ -136,6 +137,11 @@ function decide(goal, world, failures={}, progress={}) {
   // mission remains alive until stopped; it chooses and verifies its own
   // survival, crafting and movement actions instead of requiring commands.
   if(goal==='gather')return resourcePlan(world,failures,progress,needed=>decide(needed,world,failures,progress));
+  if(goal==='build'){
+    const spec={goal:'build',position:progress.position,block:progress.block,
+      axis:progress.axis,length:progress.length};
+    return buildPlan(world,spec,(needed,extra)=>decide(needed,world,failures,{...progress,...extra}));
+  }
   if(goal==='travel'){
     const t=progress.destination,p=world.position;
     if(!t || !['x','y','z'].every(k=>Number.isInteger(t[k])) ||
@@ -321,6 +327,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   function start(goal,seconds=300,spec={}){
     if(!GOALS.has(goal))throw Error('Unsupported autonomous gameplay goal');
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)throw Error('Duration out of bounds');
+    if(goal==='build' && !validBuildSpec({goal,position:spec?.position,block:spec?.block,
+      axis:spec?.axis,length:spec?.length}))throw Error('Invalid bounded construction goal');
     if(goal==='sequence' && !validSequence(spec?.steps))
       throw Error('Sequence requires one to eight typed valid subgoals');
     if(goal==='travel' && (!spec?.destination ||
@@ -333,6 +341,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       throw Error('Gather requires supported resource and targetCount 1-64');
     const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null,
       ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{}),
+      ...(goal==='build'?{position:{...spec.position},block:spec.block,axis:spec.axis,length:spec.length}:{}),
       ...(goal==='travel'?{destination:{...spec.destination},
         arrivalRange:spec.arrivalRange}:{}),
       ...(goal==='sequence'?{sequence:canonicalSequence(spec.steps),sequenceIndex:0}:{})};return status();
@@ -374,7 +383,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           break;
         }
         const stage=state.sequence[state.sequenceIndex];
-        d=decide(stage.goal,world,state.failures,{...state,...stage});
+        const stageWorld=stage.goal==='build'?
+          {...world,buildCells:world.buildCellsByStage?.[state.sequenceIndex]}:world;
+        d=decide(stage.goal,stageWorld,state.failures,{...state,...stage});
         if(d.kind!=='complete')break;
         state.sequenceIndex++;
         state.failures={};

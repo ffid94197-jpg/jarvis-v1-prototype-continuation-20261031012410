@@ -21,6 +21,8 @@ const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_na
 const {collectObservedDrop,pickupFeet}=require('./drop_pickup.cjs');
 const {retreatStances}=require('./retreat_access.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
+const {validBuildSpec,observeBuild}=require('./structure_goal.cjs');
+const {safeSurveyFeet}=require('./wood_navigation.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
@@ -306,6 +308,50 @@ async function autoExecute(plan,epoch){
   const before=digest(bot,leader);
   if(epoch!==actionEpoch)throw Error('Owner cancelled current action');
   switch(plan.kind){
+    case 'place_build_block':{
+      const p=plan.position;
+      if(!validBuildSpec({goal:'build',position:p,block:plan.block,axis:'x+',length:1}))
+        return {ok:false,verified:false,detail:'Invalid bounded construction cell'};
+      const target=new Vec3(p.x,p.y,p.z);
+      if(bot.entity.position.distanceTo(target.offset(.5,.5,.5))>12)
+        return {ok:false,verified:false,detail:'Construction cell outside 12-block local authority radius'};
+      const beforeBlock=bot.blockAt(target),ground=bot.blockAt(target.offset(0,-1,0));
+      if(!beforeBlock||beforeBlock.boundingBox!=='empty'||!ground||
+        ground.boundingBox!=='block'||/lava|water|fire|magma|cactus/.test(ground.name))
+        return {ok:false,verified:false,detail:'Construction target obstructed, unloaded or lacks safe support'};
+      const stack=bot.inventory.items().find(i=>i.name===plan.block&&i.count>0);
+      if(!stack)return {ok:false,verified:false,detail:'Actual building block missing from survival inventory'};
+      const beforeCount=rawCount(bot,plan.block);
+      // Navigation is allowed only to observed safe adjacent foot locations.
+      if(bot.entity.position.distanceTo(target.offset(.5,.5,.5))>4.2){
+        const feet=[[p.x+1,p.z],[p.x-1,p.z],[p.x,p.z+1],[p.x,p.z-1]]
+          .map(([x,z])=>safeSurveyFeet(bot,x,z,p.y,Vec3)).filter(Boolean);
+        let reached=false;
+        for(const foot of feet.slice(0,4)){
+          if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
+          try{
+            if(await navigate(foot.offset(.5,0,.5),0,epoch,stanceNavTimeoutMs()) &&
+               bot.entity.position.distanceTo(target.offset(.5,.5,.5))<=4.2){reached=true;break;}
+          }catch(e){if(epoch!==actionEpoch)throw e;}
+        }
+        if(!reached)return {ok:false,verified:false,detail:'No safe reachable placement stance'};
+      }
+      if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
+      if(bot.blockAt(target)?.boundingBox!=='empty'||bot.blockAt(ground.position)?.name!==ground.name)
+        return {ok:false,verified:false,detail:'Target or floor changed before placement'};
+      await bot.equip(stack,'hand');
+      if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
+      await bot.placeBlock(ground,new Vec3(0,1,0));
+      for(let attempt=0;attempt<8;attempt++){
+        if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
+        const placed=bot.blockAt(target)?.name===plan.block;
+        const consumed=rawCount(bot,plan.block)<beforeCount;
+        if(placed&&consumed)return {ok:true,verified:true,
+          detail:'Survival block placed and inventory consumed at '+p.x+','+p.y+','+p.z};
+        await pause(200);
+      }
+      return {ok:false,verified:false,detail:'Placement not proved by BOTH block state and survival inventory consumption'};
+    }
     case 'travel_target':{
       const dest=plan.destination,radius=plan.range;
       if(!dest || !['x','y','z'].every(k=>Number.isInteger(dest[k])) ||
@@ -742,7 +788,12 @@ async function autoExecute(plan,epoch){
 }
 async function autoTick(){
   if(mode!=='auto'||autoBusy||!spawned)return;
-  const plan=autopilot.next(digest(bot,leader,{dragonDead:lateSkills.session.dragonDied}));
+  const gameWorld=digest(bot,leader,{dragonDead:lateSkills.session.dragonDied});
+  const active=autopilot.status();
+  if(active.goal==='build')gameWorld.buildCells=observeBuild(bot,active,Vec3);
+  if(active.goal==='sequence')gameWorld.buildCellsByStage=(active.sequence||[]).map(s=>
+    s.goal==='build'?observeBuild(bot,s,Vec3):null);
+  const plan=autopilot.next(gameWorld);
   // Expiring a safety window must not silently claim mission completion or
   // force the owner to reissue a high-level instruction. Continue only a
   // still-authorized long mission; blocked or stopped goals remain stopped.
@@ -839,9 +890,12 @@ async function action(q){
     }
     case 'auto_stop':resumeAfterSpawn=false;setMode('stay');return {ok:true,status:'Autonomous gameplay stopped; movement cancelled'};
     case 'auto_goal':{
+      if(q.goal==='build' && bot.entity.position.distanceTo(
+        new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>12)
+        return {ok:false,error:'Build origin must be within 12 blocks of the actual player'};
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
-      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','sequence'].includes(q.goal) &&
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','build','sequence'].includes(q.goal) &&
          bot.game?.gameMode!=='survival')
         return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an
@@ -852,7 +906,8 @@ async function action(q){
        // Evidence from an earlier owner mission is NOT proof for a new run.
        lateSkills.session.dragonSeen=false;
        lateSkills.session.dragonDied=false;
-      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),{resource:q.resource,targetCount:q.targetCount,destination:q.destination,arrivalRange:q.arrivalRange,steps:q.steps});lastAction='Autonomous '+st.goal+' STARTED';
+      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),{resource:q.resource,targetCount:q.targetCount,destination:q.destination,arrivalRange:q.arrivalRange,
+          position:q.position,block:q.block,axis:q.axis,length:q.length,steps:q.steps});lastAction='Autonomous '+st.goal+' STARTED';
         let saved=false;try{saved=missionCheckpoint.save(st);}catch{ /* Mission runs but restart recovery is unavailable. */ }
         return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; '+(saved?'recoverable goal intent saved':'restart recovery unavailable')+'; verify progress via auto_status'};
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}
@@ -1046,7 +1101,7 @@ bot.on('chat',(username,message)=>{
   if(!match)return;
   const cmd=match[1].toLowerCase();
   const normalized=cmd==='gather'?'collect_wood':cmd==='wait'?'stay':cmd;
-  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather [count resource], travel x y z, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_then_netherite_run|dragon_run|companion|explore|follow|guard], pause, resume, observe, status, inventory');return;}
+  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather [count resource], travel x y z, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_then_netherite_run|dragon_run|companion|explore|follow|guard], pause, resume, build, observe, status, inventory');return;}
   if(cmd==='auto'||cmd==='goal') {const goal=(match[2]||'survive').trim().toLowerCase();
     action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_then_netherite_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
   if(cmd==='pause') {action({command:'auto_stop'}).then(r=>say(r.status||r.error));return;}
@@ -1062,6 +1117,15 @@ bot.on('chat',(username,message)=>{
     return;
   }
 
+  if(cmd==='build' && match[2]){
+    const args=/^(\d)\s+([a-z_]+)\s+(x\+|x-|z\+|z-)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)$/i.exec(match[2].trim());
+    if(!args){say('Use: jarvis build 4 cobblestone x+ 10 65 10');return;}
+    action({command:'auto_goal',goal:'build',length:Number(args[1]),block:args[2].toLowerCase(),
+      axis:args[3].toLowerCase(),position:{x:Number(args[4]),y:Number(args[5]),z:Number(args[6])},
+      durationSeconds:3600}).then(r=>say(r.ok?r.status:r.error))
+      .catch(()=>say('Could not start construction goal'));
+    return;
+  }
   if(cmd==='gather' && match[2]){
     // Plain owner-chat entrypoint for finite dynamic goals. The validator
     // still checks resource names and count before changing game state.

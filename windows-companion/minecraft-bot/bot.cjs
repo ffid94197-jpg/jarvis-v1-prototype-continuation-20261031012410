@@ -18,6 +18,7 @@ const {confirmedMove}=require('./movement_proof.cjs');
 const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_navigation.cjs');
 const {collectObservedDrop,pickupFeet}=require('./drop_pickup.cjs');
 const {retreatStances}=require('./retreat_access.cjs');
+const {normalizeResource}=require('./resource_goal.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
@@ -1010,7 +1011,8 @@ bot.on('chat',(username,message)=>{
     // still checks resource names and count before changing game state.
     const spec=/^(\d{1,2})\s+([a-z_]+)$/i.exec(match[2].trim());
     if(!spec){say('Use: jarvis gather 16 cobblestone');return;}
-    action({command:'auto_goal',goal:'gather',resource:spec[2].toLowerCase(),
+    action({command:'auto_goal',goal:'gather',
+      resource:normalizeResource(spec[2].toLowerCase()),
       targetCount:Number(spec[1]),durationSeconds:21600})
       .then(r=>say(r.ok?r.status:r.error))
       .catch(()=>say('Could not start resource goal'));

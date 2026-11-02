@@ -350,10 +350,11 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon'&&e?.position);
     if(!dragon)return observed(false,'No live dragon entity in loaded world');
     session.dragonSeen=true;
-    const gear=NETHERITE.every(n=>count(bot,n)>0||digest(bot,getOwner()).inventory.raw[n]>0);
-    if(!gear)return observed(false,'Full Netherite loadout not observed');
-    const sword=bot.inventory.items().find(i=>i.name==='netherite_sword');
-    if(!sword)return observed(false,'Netherite sword not available');
+    const live=digest(bot,getOwner());
+    if(live.wornDiamond!==true && live.wornNetherite!==true)
+      return observed(false,'Four diamond or Netherite armor slots must be server-observed as worn');
+    const sword=bot.inventory.items().find(i=>i.name==='netherite_sword'||i.name==='diamond_sword');
+    if(!sword)return observed(false,'Diamond or Netherite sword not available');
     if(bot.entity.position.distanceTo(dragon.position)>5){
       return shootVisibleEntity(dragon,epoch);
     }
@@ -408,6 +409,21 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       }
       await bot.closeWindow(ui).catch(()=>{});
     }
+  }
+  async function equipDiamond(epoch){
+    const pieces=[['diamond_helmet','head'],['diamond_chestplate','torso'],['diamond_leggings','legs'],['diamond_boots','feet']];
+    for(const [name,slot] of pieces){
+      check(epoch);
+      const idx=bot.getEquipmentDestSlot?.(slot);
+      if(!Number.isInteger(idx))return observed(false,'Unknown equipment slot '+slot);
+      if(bot.inventory.slots?.[idx]?.name===name)continue;
+      const piece=item(bot,name);if(!piece)return observed(false,'Missing actual '+name);
+      await bot.equip(piece,slot);check(epoch);
+      if(bot.inventory.slots?.[idx]?.name!==name)
+        return observed(false,'Diamond equipment slot not server-verified: '+slot);
+    }
+    const good=pieces.every(([name,slot])=>bot.inventory.slots?.[bot.getEquipmentDestSlot(slot)]?.name===name);
+    return observed(good,good?'Four diamond armor slots verified by server':'Diamond equipment verification incomplete');
   }
   async function equipNetherite(epoch){
     const pieces=[['netherite_helmet','head'],['netherite_chestplate','torso'],['netherite_leggings','legs'],['netherite_boots','feet']];
@@ -480,6 +496,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
         return observed(placed,'Smithing table '+(placed?'block verified':'could not be placed'));
       }
       case 'smith_netherite':return smithGear(plan,epoch);
+      case 'equip_diamond':return equipDiamond(epoch);
       case 'equip_netherite':return equipNetherite(epoch);
       case 'hunt_blazes':return hunt('blaze','blaze_rod',epoch);
       case 'hunt_endermen':return hunt('enderman','ender_pearl',epoch);

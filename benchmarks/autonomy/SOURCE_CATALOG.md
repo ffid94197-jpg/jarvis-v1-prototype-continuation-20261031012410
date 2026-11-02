@@ -1,6 +1,6 @@
 # Candidate public task-source catalog for the 200K programme
 
-**State: discovery only. No source rows below have been imported into the accepted corpus.** Each source must be pinned to a revision and checked against its upstream data card, LICENSE file, terms, task-level restrictions and verifier before ingestion. Counts are source-reported, not additive: datasets overlap and many tasks are not eligible as very-hard executable tasks.
+**State: discovery plus candidate import. WebBench's current raw CSV has been imported as 2,647 candidate records; none are accepted into the 200K corpus. See [WebBench import report](WEBBENCH_IMPORT_REPORT_2026-11-02.md). Each source must be pinned to a revision and checked against its upstream data card, LICENSE file, terms, task-level restrictions and verifier before ingestion. Counts are source-reported, not additive: datasets overlap and many tasks are not eligible as very-hard executable tasks.
 
 | Source | Publicly reported task count | Platform / value | Eligibility notes |
 |---|---:|---|---|

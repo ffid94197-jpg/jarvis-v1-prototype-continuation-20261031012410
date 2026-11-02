@@ -14,7 +14,7 @@ const bot={game:{dimension:'minecraft:overworld'},health:20,food:20,entity:{posi
  findBlock:()=>null,findBlocks:()=>[],nearestEntity:()=>null,
  get heldItem(){return held;},
 };
-const ctx=createLateSkills({bot,navigate:async()=>{},craftNamed:async()=>{},getEpoch:()=>1,getOwner:()=>'',digest:()=>({inventory:{raw:{}}}),Vec3});
+const ctx=createLateSkills({bot,navigate:async()=>true,craftNamed:async()=>{},getEpoch:()=>1,getOwner:()=>'',digest:()=>({inventory:{raw:{}}}),Vec3});
 (async()=>{
  const result=await ctx.run({kind:'equip_netherite'},1);
  check(result.ok && result.verified,'Armor equip verified');
@@ -78,5 +78,17 @@ const ctx=createLateSkills({bot,navigate:async()=>{},craftNamed:async()=>{},getE
  const victory=await ctx.run({kind:'verify_dragon'},1);
  check(victory.ok && victory.verified && victory.proof==='dragon_victory',
   'Combined End portal and witnessed dragon death emits distinct proof');
+ // Do not claim scouting/progression when Pathfinder returns false without
+ // throwing. The real bot navigate() provides this boolean from world position.
+ bot.game.dimension='minecraft:the_nether';
+ bot.findBlock=()=>null;
+ const deniedRoutes=createLateSkills({
+   bot,navigate:async()=>false,craftNamed:async()=>({verified:true}),
+   getEpoch:()=>1,getOwner:()=>'',digest:()=>({inventory:{raw:{}}}),Vec3
+ });
+ let denied=false;
+ try{await deniedRoutes.run({kind:'loot_bastion_template'},1);}
+ catch(e){denied=/No server-confirmed route/.test(String(e.message));}
+ check(denied,'False navigator result cannot certify Bastion exploration as progress');
  console.log(`LATE_SKILLS_MOCK ${ok}/${ok} PASS (no live Minecraft server)`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

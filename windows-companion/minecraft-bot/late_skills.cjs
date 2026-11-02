@@ -416,6 +416,29 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const workbench=lookup(bot,['smithing_table'],5);
     if(!workbench)return observed(false,'No smithing table in range');
     const names=['netherite_upgrade_smithing_template',plan.base,'netherite_ingot'];
+    // After a real Dragon-first fight all diamond armor pieces are WORN,
+    // not present in inventory.items(). Mineflayer's smithing UI consumes
+    // backpack slots only. First move the exact observed owned piece back
+    // into survival inventory, verifying the server changed the armor slot.
+    // Never pull an unrelated armor item or invent a diamond base.
+    if(!item(bot,plan.base)){
+      const slotName=plan.base.endsWith('_helmet')?'head':
+        plan.base.endsWith('_chestplate')?'torso':
+        plan.base.endsWith('_leggings')?'legs':
+        plan.base.endsWith('_boots')?'feet':null;
+      const slot=slotName?bot.getEquipmentDestSlot?.(slotName):null;
+      if(!Number.isInteger(slot) || bot.inventory.slots?.[slot]?.name!==plan.base)
+        return observed(false,'Missing real '+plan.base+' in backpack or equipped armor');
+      if(String(bot.game?.dimension||'').replace(/^minecraft:/,'')!=='overworld')
+        return observed(false,'Equipped diamond armor may only be removed for smithing in Overworld');
+      if(typeof bot.unequip!=='function')
+        return observed(false,'Mineflayer armor unequip API unavailable');
+      check(epoch);
+      await bot.unequip(slotName);
+      check(epoch);
+      if(bot.inventory.slots?.[slot]?.name===plan.base || !item(bot,plan.base))
+        return observed(false,'Server did not confirm diamond armor returned to inventory');
+    }
     if(names.some(n=>!item(bot,n)))return observed(false,'Missing real template/diamond base/netherite ingot');
     const before=count(bot,plan.item);
     const ui=await bot.openBlock(workbench);

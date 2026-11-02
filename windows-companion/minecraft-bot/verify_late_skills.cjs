@@ -45,6 +45,52 @@ const ctx=createLateSkills({bot,navigate:async()=>true,craftNamed:async()=>{},ge
  const crafted=await ctx.run({kind:'smith_netherite',item:'netherite_sword',base:'diamond_sword'},1);
  check(crafted.ok && crafted.verified,'Smithing UI path validated with simulated window states');
  check(i.some(x=>x.name==='netherite_sword'),'Smithing output verified in inventory');
+ // Real Dragon-first progress wears diamond armor; inventory.items excludes
+ // those slots. Smithing must unequip it into inventory before opening UI.
+ const diamondHelmet={name:'diamond_helmet',count:1};
+ const smithMaterial=[
+  {name:'netherite_upgrade_smithing_template',count:1},
+  {name:'netherite_ingot',count:1}
+ ];
+ bot.game.dimension='minecraft:overworld';
+ bot.inventory.items=()=>smithMaterial;
+ slots[positions.head]=diamondHelmet;
+ let unequipped=0;
+ bot.unequip=async(slot)=>{
+   if(slot!=='head')throw Error('Unexpected equipment destination');
+   unequipped++;
+   smithMaterial.push(slots[positions.head]);slots[positions.head]=null;
+ };
+ bot.openBlock=async()=>{
+   ui={type:'minecraft:smithing',inventoryStart:4,slots:new Array(40).fill(null)};
+   smithMaterial.forEach((piece,idx)=>{ui.slots[4+idx]=piece;});
+   return ui;
+ };
+ bot.moveSlotItem=async(src,dst)=>{
+   ui.slots[dst]=ui.slots[src];ui.slots[src]=null;
+   if(ui.slots[0]&&ui.slots[1]&&ui.slots[2])
+     ui.slots[3]={name:'netherite_helmet',count:1};
+ };
+ bot.clickWindow=async(slot)=>{
+   if(slot===3){smithMaterial.push({name:'netherite_helmet',count:1});ui.slots[3]=null;}
+   else ui.slots[slot]=null;
+ };
+ const wornResult=await ctx.run({kind:'smith_netherite',item:'netherite_helmet',base:'diamond_helmet'},1);
+ check(wornResult.ok&&wornResult.verified,'Worn diamond base is returned from equipment and upgraded');
+ check(unequipped===1 && slots[positions.head]===null &&
+    smithMaterial.some(x=>x.name==='netherite_helmet'),
+    'Verified unequip + real smithing output; no second guessed armor piece');
+ // The same worn base must never be removed outside the Overworld.
+ bot.game.dimension='minecraft:the_nether';
+ bot.inventory.items=()=>smithMaterial.filter(x=>x.name!=='netherite_helmet'&&x.name!=='diamond_helmet');
+ slots[positions.head]=diamondHelmet;
+ const beforeDenied=unequipped;
+ const wrongWorld=await ctx.run({kind:'smith_netherite',item:'netherite_helmet',base:'diamond_helmet'},1);
+ check(!wrongWorld.ok&&unequipped===beforeDenied,
+    'In-Nether worn armor is not removed for smithing');
+ bot.game.dimension='minecraft:overworld';
+ // Restore original smithing test inputs.
+ bot.inventory.items=()=>i;
  bot.openBlock=async()=>({type:'minecraft:smithing',inventoryStart:4,slots:Array.from({length:40},(_,idx)=>idx===0?{name:'stolen',count:1}:null)});
  moves=0;
  const occupied=await ctx.run({kind:'smith_netherite',item:'netherite_sword',base:'diamond_sword'},1);

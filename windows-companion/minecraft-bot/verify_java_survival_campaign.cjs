@@ -24,7 +24,7 @@ const ALLOWED=new Set(['collect_wood','craft_planks','craft_sticks','craft_table
  'collect_iron','craft_flint_steel','build_nether_portal','enter_nether','hunt_blazes',
  'hunt_endermen','enter_overworld','prepare_archery','craft_blaze_powder',
  'craft_eyes','track_stronghold','activate_end_portal','enter_end',
- 'observe_dragon','destroy_end_crystal','fight_dragon','verify_dragon','exit_end',
+ 'equip_diamond','observe_dragon','destroy_end_crystal','fight_dragon','verify_dragon','exit_end',
  'loot_bastion_template','mine_ancient_debris','collect_gold','mine_netherrack',
  'smelt_resource','craft_netherite_ingot','duplicate_template','craft_smithing_table',
  'place_smithing_table','smith_netherite','equip_netherite','obtain_food',
@@ -83,6 +83,8 @@ class World {
    strongholdPortalFrameNearby:this.stronghold && this.dimension==='overworld',
    wornNetherite:Object.entries(GEAR_SLOTS).every(([gear,slot])=>this.equipment[slot]===gear) &&
      this.equipment.hand==='netherite_sword',
+   wornDiamond:Object.values(GEAR_SLOTS).every(slot=>this.equipment[slot]==='diamond_'+
+     (slot==='head'?'helmet':slot==='torso'?'chestplate':slot==='legs'?'leggings':'boots')),
    dragonPresent:this.dimension==='end'&&this.dragonPresent,
    dragonId:this.dimension==='end'&&this.dragonPresent?1001:null,
    dragonDeadObserved:this.dimension==='end'&&this.dragonDeathEvent,
@@ -160,10 +162,15 @@ class World {
    case 'track_stronghold':dest('overworld');req(this.count('eye_of_ender')>=13,'not enough eyes to locate plus open portal');this.take('eye_of_ender');this.strongholdScout++;this.stronghold=this.strongholdScout>=3;break;
    case 'activate_end_portal':dest('overworld');req(this.stronghold && this.count('eye_of_ender')>=12,'12 actual eyes and stronghold frames');this.take('eye_of_ender',12);this.portalEyesInserted=12;this.endPortal=true;break;
    case 'enter_end':dest('overworld');req(this.endPortal && this.portalEyesInserted===12,'portal frames not verified');this.dimension='end';break;
+   case 'equip_diamond':
+    dest('end');req(['diamond_helmet','diamond_chestplate','diamond_leggings','diamond_boots'].every(above),'four actual diamond armor pieces missing');
+    for(const [name,slot] of Object.entries(GEAR_SLOTS))this.equipment[slot]='diamond_'+name.split('_')[1];
+    req(this.world().wornDiamond,'diamond armor slots failed live verification');
+    this.events.push(['diamond_equipped',this.ticks]);break;
    case 'observe_dragon':dest('end');req(this.dragonPresent,'dragon not visible');evidence.proof='dragon_seen';break;
    case 'destroy_end_crystal':dest('end');req(this.dragonPresent && this.crystals>0 && above('bow') && this.count('arrow')>=1,'need observed crystal/bow/arrow');this.take('arrow');this.crystals--;break;
    case 'fight_dragon':
-    dest('end');req(this.dragonPresent && this.crystals===0 && above('bow') && above('arrow'),'dragon shield or bow unavailable');
+    dest('end');req(this.world().wornDiamond && this.dragonPresent && this.crystals===0 && above('bow') && above('arrow'),'dragon combat armor/shield/bow unavailable');
     this.take('arrow');this.dragonHP-=18+Math.floor(this.random()*11);
     if(this.dragonHP<=0){
       this.dragonHP=0;this.dragonPresent=false;this.dragonDeathEvent=true;this.exitPortal=true;

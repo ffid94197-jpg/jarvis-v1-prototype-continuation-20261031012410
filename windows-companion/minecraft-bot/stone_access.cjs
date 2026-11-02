@@ -6,6 +6,7 @@
  * actual server blocks before a dig; this module never moves or edits world.
  */
 const {isExposed,reachableStances}=require('./mining_navigation.cjs');
+const {Vec3}=require('vec3');
 const STONE=new Set(['stone','cobblestone']);
 const SOIL=new Set(['grass_block','dirt','coarse_dirt','rooted_dirt','podzol','mycelium','gravel','sand']);
 const DANGER=/lava|water|fire|magma|powder_snow|cactus/;
@@ -38,12 +39,12 @@ function excavationProposal(bot) {
  // Up to three levels down are within the player interaction envelope.
  for(const dy of [-1,-2,-3]){
    for(const [dx,dz] of OFFSETS){
-     const p={x:x+dx,y:y+dy,z:z+dz};
+     const p=new Vec3(x+dx,y+dy,z+dz);
      const block=bot.blockAt(p);
      if(!block||!SOIL.has(block.name)||!bot.canDigBlock(block))continue;
      if(near(pos,{x:p.x+.5,y:p.y+.5,z:p.z+.5})>4.15)continue;
-     const above=bot.blockAt({x:p.x,y:p.y+1,z:p.z});
-     const below=bot.blockAt({x:p.x,y:p.y-1,z:p.z});
+     const above=bot.blockAt(p.offset(0,1,0));
+     const below=bot.blockAt(p.offset(0,-1,0));
      // For the surface, air is already exposed. At deeper levels the same
      // column must have been opened by previous verified excavation.
      if(!above||above.boundingBox!=='empty'||!below||

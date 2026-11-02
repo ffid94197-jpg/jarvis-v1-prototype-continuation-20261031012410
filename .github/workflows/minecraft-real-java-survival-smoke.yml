@@ -86,6 +86,7 @@ jobs:
       - name: Real server-backed empty-survival to wood mission
         env:
           JARVIS_MC_TEST_PORT: "25565"
+          JARVIS_MC_TEST_STONE: "1"
         run: node windows-companion/minecraft-bot/verify_real_java_server_wood.cjs
       - name: Preserve game and companion evidence
         if: always()

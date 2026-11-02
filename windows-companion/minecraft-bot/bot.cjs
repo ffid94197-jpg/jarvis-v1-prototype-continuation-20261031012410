@@ -360,6 +360,30 @@ async function autoExecute(plan,epoch){
       return collectVerifiedDrop(p,existing,()=>digest(bot,leader).inventory.table,
         epoch,'Recovered crafting table');
     }
+    case 'scout_survival':{
+      if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
+      const origin=bot.entity.position.clone();
+      const sites=surveyTargets(bot,origin,Vec3).filter(p=>p.distanceTo(origin)>4);
+      if(!sites.length)return {ok:false,verified:false,
+        detail:'No safe loaded waypoint for owner-independent survival exploration'};
+      const start=(Number.isInteger(plan.index)?Math.abs(plan.index):0)%sites.length;
+      let last='All selected safe routes inaccessible';
+      for(let attempt=0;attempt<Math.min(3,sites.length);attempt++){
+        const site=sites[(start+attempt)%sites.length];
+        try{
+          const arrived=await navigate(site,2,epoch,14000);
+          const actual=bot.entity.position.clone();
+          if(arrived && actual.distanceTo(origin)>3 && actual.distanceTo(site)<=4)
+            return {ok:true,verified:true,detail:'Independent safe exploration reached '+Math.floor(actual.x)+','+
+              Math.floor(actual.y)+','+Math.floor(actual.z)+'; no loot or combat success claimed'};
+          last='No significant observed player displacement';
+        }catch(e){
+          if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
+          last=String(e?.message||e).slice(0,110);
+        }
+      }
+      return {ok:false,verified:false,detail:'Safe independent exploration blocked: '+last};
+    }
     case 'survey_wood':{
       if(epoch!==actionEpoch)throw Error('Wood survey cancelled');
       const start=bot.entity.position.clone(),used=bot.jarvisWoodSurveyVisited||new Set();

@@ -314,9 +314,14 @@ async function autoExecute(plan,epoch){
       // If left at the surface before underground mining, the only table
       // becomes unreachable and the planner falsely seeks more timber.
       const existing=before.inventory.table;
-      const station=bot.findBlock?.({matching:block=>block?.name==='crafting_table',maxDistance:6});
-      if(!station||!station.position)
-        return {ok:false,verified:false,detail:'No live crafting table within recoverable range'};
+      // Do not mine another player's table. This coordinate is saved ONLY
+      // after a confirmed place_table action by our own autonomous bot.
+      const owned=bot.jarvisOwnedCraftingTablePos;
+      if(!owned)
+        return {ok:false,verified:false,detail:'No proof this crafting table belongs to the bot'};
+      const station=bot.blockAt(owned);
+      if(station?.name!=='crafting_table')
+        return {ok:false,verified:false,detail:'Previously placed crafting table no longer exists'};
       if(epoch!==actionEpoch)throw Error('Workstation retrieval cancelled');
       const p=station.position;
       const distance=bot.entity.position.distanceTo(p.offset(.5,.5,.5));
@@ -329,6 +334,7 @@ async function autoExecute(plan,epoch){
       if(live?.name!=='crafting_table' || !bot.canDigBlock?.(live))
         return {ok:false,verified:false,detail:'Crafting table is no longer present or diggable'};
       await bot.dig(live);
+      bot.jarvisOwnedCraftingTablePos=null; // The block is gone even if pickup fails.
       if(epoch!==actionEpoch)throw Error('Workstation retrieval cancelled');
       return collectVerifiedDrop(p,existing,()=>digest(bot,leader).inventory.table,
         epoch,'Recovered crafting table');
@@ -526,6 +532,7 @@ async function autoExecute(plan,epoch){
         await bot.equip(tableItem,'hand');await bot.placeBlock(ground,{x:0,y:1,z:0});
         const placed=bot.blockAt(ground.position.offset(0,1,0));
         const ok=placed?.name==='crafting_table';
+        if(ok)bot.jarvisOwnedCraftingTablePos=placed.position.clone();
         return {ok,verified:ok,detail:'Crafting table '+(ok?'placed and observed':'placement unverified')};
       }
       throw Error('No safe adjacent ground for crafting table');

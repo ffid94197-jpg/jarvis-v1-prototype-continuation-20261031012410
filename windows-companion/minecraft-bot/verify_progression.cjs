@@ -55,6 +55,13 @@ assert.equal(decide('iron_age',w({stonePickaxe:1,stoneSword:1,rawIron:1,cobblest
 assert.equal(decide('iron_age',{...w({stonePickaxe:1,stoneSword:1,rawIron:1,planks:2}),furnaceNearby:true}).kind,'smelt_iron');
 assert.equal(decide('iron_age',w({stonePickaxe:1,stoneSword:1,ironIngot:3,sticks:2},true)).kind,'craft_iron_pickaxe');
 assert.equal(decide('iron_age',w({stonePickaxe:1,stoneSword:1,ironPickaxe:1})).kind,'complete');
+assert.equal(decide('iron_age',w({stonePickaxe:1,stoneSword:1,sticks:1,planks:2})).kind,'craft_sticks',
+ 'Reserve iron pickaxe handles before descending into new caves');
+assert.equal(decide('iron_age',w({stonePickaxe:1,stoneSword:1,sticks:2})).kind,'collect_wood',
+ 'Reserve smelting fuel while trees are still reachable');
+assert.equal(decide('iron_age',w({stonePickaxe:1,stoneSword:1,sticks:2,logs:1})).kind,'mine_iron',
+ 'Iron excavation may proceed only when handles and fuel have been reserved');
+
 assert.equal(decide('dragon_run',w({stonePickaxe:1,stoneSword:1,ironPickaxe:1})).kind,'mine_diamond');
 assert.equal(decide('dragon_run',w({stonePickaxe:1,stoneSword:1,ironPickaxe:1,diamonds:3,sticks:2},true)).item,'diamond_pickaxe');
 const diamondGear={stonePickaxe:1,stoneSword:1,ironPickaxe:1,diamondPickaxe:1,diamondSword:1,diamondHelmet:1,diamondChestplate:1,diamondLeggings:1,diamondBoots:1};

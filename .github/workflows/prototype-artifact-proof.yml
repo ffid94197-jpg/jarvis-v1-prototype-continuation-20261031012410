@@ -4,6 +4,8 @@ on:
     branches: [autonomy-100-percent-acceptance-20261102, fix/autonomy-artifact-receipt-20261102]
     paths:
       - "src/lib/agent/core/verifier.ts"
+      - "src/lib/agent/core/loop.ts"
+      - "scripts/verify-core-actionable-execution.cjs"
       - "scripts/verify-task-outcome-honesty.cjs"
       - "scripts/verify-inventory-integrity.cjs"
       - "scripts/autonomy/validate-internet-corpus.cjs"
@@ -18,6 +20,8 @@ on:
     branches: [fix/autonomy-artifact-receipt-20261102, fix/autonomy-durable-proof-and-corpus-20261102]
     paths:
       - "src/lib/agent/core/verifier.ts"
+      - "src/lib/agent/core/loop.ts"
+      - "scripts/verify-core-actionable-execution.cjs"
       - "scripts/verify-task-outcome-honesty.cjs"
       - ".github/workflows/prototype-artifact-proof.yml"
   workflow_dispatch:

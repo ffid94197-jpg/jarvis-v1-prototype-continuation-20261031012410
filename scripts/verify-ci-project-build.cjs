@@ -39,6 +39,24 @@ function ok(value,label){assert.ok(value,label);passed++;console.log('PASS',labe
  try{
   const policy=compile('src/lib/agent/guardian/policy.ts');
   const tool=compile('src/lib/agent/tools/ciProjectBuild.ts',{'../guardian/policy':policy});
+
+  const audited=[];
+  const guardian=compile('src/lib/agent/guardian/guardian.ts',{
+   '@/lib/db':{db:{auditLog:{create:async ({data})=>{audited.push(data);return {id:String(audited.length)};}}}},
+   '../windows/policy':{validateDesktopTool:()=>({ok:false,reason:'unavailable in isolated test'})},
+   './policy':policy,
+   '../tools/ciProjectBuild':tool,
+  });
+  let admitted=await guardian.authorizeToolCall({taskId:'ci-test',ownerId:'owner'},'ci_project_build',{project:'site',action:'build'});
+  ok(admitted.verdict==='allow' && admitted.prepared.projectBuild.rel==='site',
+    'Guardian approved only the prepared workspace project');
+  ok(audited.at(-1).verdict==='ALLOW' && audited.at(-1).argsJson.includes('redacted'),
+    'Guardian durably audited allow without persisting raw inputs');
+  admitted=await guardian.authorizeToolCall({taskId:'ci-test',ownerId:'owner'},'ci_project_build',{project:'../site',action:'build'});
+  ok(admitted.verdict==='deny' && audited.at(-1).verdict==='DENY',
+    'Guardian audit retains rejected traversal intent');
+  admitted=await guardian.authorizeToolCall({taskId:'ci-test'},'ci_project_build',{project:'site',action:'build'});
+  ok(admitted.verdict==='deny','CI build cannot be authorized without an authenticated owner');
   let d=await tool.prepareCIProjectBuild({project:'site',action:'build'});
   ok(d.ok===true,'fixed Vite build authorized in isolated runner');
   ok(d.prepared.rel==='site','Guardian normalized project path');

@@ -75,6 +75,20 @@ ok(controller.next(state({torch:4})).kind==='equip_general',
 ok(controller.next(state({torch:4},{equipped:{hand:'torch'}})).kind==='complete',
  'Both stages complete from independently observed inventory and hand slot');
 ok(controller.status().status==='complete','Sequence settles after all proofs');
+const consecutive=createController({clock:()=>clock,maxSteps:40,maxSeconds:1000});
+consecutive.start('craft',300,{item:'chest',targetCount:2});
+const action={kind:'craft_general'};
+for(let n=0;n<2;n++)consecutive.record(action,{ok:true,verified:false,detail:'Unsettled receipt'});
+ok(consecutive.status().status==='running','Two consecutive misses preserve retry budget');
+consecutive.record(action,{ok:true,verified:true,detail:'Server inventory increased'});
+ok(consecutive.status().failures.craft_general===0,
+ 'Verified successful craft resets previously accumulated failures');
+for(let n=0;n<2;n++)consecutive.record(action,{ok:false,verified:false});
+ok(consecutive.status().status==='running',
+ 'Two new misses after verified success are not three consecutive failures');
+consecutive.record(action,{ok:false,verified:false});
+ok(consecutive.status().status==='blocked',
+ 'Third genuinely consecutive failed craft must fail closed');
 const paused=createController({clock:()=>clock,maxSteps:40,maxSeconds:1000});
 paused.start('equip',300,{item:'diamond_helmet',destination:'head'});
 paused.stop('Owner emergency stop');

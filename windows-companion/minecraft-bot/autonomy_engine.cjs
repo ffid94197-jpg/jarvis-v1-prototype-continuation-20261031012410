@@ -444,7 +444,12 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   function record(decision, outcome){
     if(state.status!=='running' || !decision)return;
     const ok=outcome?.ok===true && outcome?.verified===true;
-    if(ok){state.successes++;
+    if(ok){
+      // Only CONSECUTIVE unresolved attempts should exhaust an action's
+      // bounded retry budget. Previously verified success left old failures
+      // accumulated, falsely blocking long multi-recipe missions.
+      state.failures[decision.kind]=0;
+      state.successes++;
       if(outcome.proof==='nether_portal')state.milestones.netherPortalBuilt=true;
       if(outcome.proof==='dragon_seen')state.milestones.dragonSeen=true;
       // A portal observation alone never proves a dragon death. The combined

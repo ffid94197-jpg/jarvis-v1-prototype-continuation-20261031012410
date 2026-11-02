@@ -42,9 +42,15 @@ function lateGamePlan(world,progress={}){
       }
       return action('build_nether_portal','Build and ignite a verified obsidian portal');
     }
-    if(qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8 ||
-       qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)
-      return action('enter_nether','Collect missing End progression drops');
+    // Count crafted eyes as already secured: turning rods and pearls into
+    // blaze powder/eyes must never send the planner back to Nether forever.
+    // Before the stronghold, budget 16 possible eyes (travel breakage).
+    // Once portal frames are found, require 12 at hand for an empty frame ring.
+    const availableEyes=qty(i,'eye_of_ender')+
+      Math.min(qty(i,'ender_pearl'),qty(i,'blaze_powder')+2*qty(i,'blaze_rod'));
+    const minEyes=world.strongholdPortalFrameNearby || world.endPortalPresent ? 12 : 16;
+    if(availableEyes<minEyes)
+      return action('enter_nether','Replenish real Eye of Ender ingredients');
     if(!has(i,'bow') || qty(i,'arrow')<32)
       return action('prepare_archery','Acquire bow and 32 actual arrows');
     if(qty(i,'eye_of_ender')<12){
@@ -86,9 +92,9 @@ function lateGamePlan(world,progress={}){
       return action('mine_ancient_debris','Expose and mine naturally generated Ancient Debris at safe Nether Y-level');
     if(qty(i,'gold_ingot')<Math.max(0,20-4*qty(i,'netherite_ingot')))
       return action('collect_gold','Collect gold ingots from actual gold ore/nuggets');
-    if(qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8)
+    if(!(dragonFirst && dragonVictory) && qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8)
       return action('hunt_blazes','Locate Nether fortress and collect eight actual Blaze rods');
-    if(qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)
+    if(!(dragonFirst && dragonVictory) && qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)
       return action('hunt_endermen','Collect Ender pearls through real mob drops or trading');
     if(qty(i,'netherrack')<4)return action('mine_netherrack','Carry at least four netherrack for smithing template duplication');
     return action('enter_overworld','Take observed Nether portal back to Overworld with loot');
@@ -110,8 +116,8 @@ function lateGamePlan(world,progress={}){
     if(!has(i,'netherite_upgrade_smithing_template') ||
       qty(i,'ancient_debris')+qty(i,'netherite_scrap')+4*qty(i,'netherite_ingot') < 4*missing.length ||
       qty(i,'gold_ingot')+4*qty(i,'netherite_ingot') < 4*missing.length ||
-      qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8 ||
-      qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)
+      (!(dragonFirst && dragonVictory) && (qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8 ||
+      qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)))
       return action('enter_nether','Collect missing Netherite/End progression materials in Nether');
     if(qty(i,'ancient_debris')>0){
       if(!world.furnaceNearby){

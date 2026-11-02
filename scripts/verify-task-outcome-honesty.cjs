@@ -120,6 +120,24 @@ async function main() {
   await check('wrong file content does not become verified','Create file sample.txt containing "different"',true,
     [writeAck('sample.txt','expected')],'partial',/content mismatch/);
   await check('nonexistent artifact fails','Create file absent.txt',true,[],'failed');
+  await check('stale existing file is not a new completion',
+    'Create file sample.txt containing "expected"',true,[],'partial',/missing matching verified SETTLED effect/);
+  await check('different file effect is not sufficient',
+    'Create file sample.txt containing "expected"',true,
+    [writeAck('other.txt','expected')],'partial',/missing matching verified SETTLED effect/);
+  await check('write without verified receipt is not sufficient',
+    'Create file sample.txt containing "expected"',true,
+    [ack('write_file',{path:'sample.txt',verified:false},{path:'sample.txt',content:'expected'})],
+    'partial',/missing matching verified SETTLED effect/);
+  fs.mkdirSync(path.join(workspace,'existing'),{recursive:true});
+  await check('stale folder is not proof of new folder creation',
+    'Create a folder existing',true,[],'partial',/missing matching verified SETTLED effect/);
+  await check('current-task verified folder passes',
+    'Create a folder existing',true,[folderAck('existing')],'verified',/VERDICT: VERIFIED/);
+  await check('incorrect receipt target is not evidence',
+    'Create file sample.txt containing "expected"',true,
+    [ack('write_file',{path:'other.txt',verified:true},{path:'sample.txt',content:'expected'})],
+    'partial',/missing matching verified SETTLED effect/);
   console.log(`CORE_OUTCOME_HONESTY ${checks}/${checks} PASS (isolated/mock DB and actual temporary filesystem)`);
  } finally { fs.rmSync(workspace,{recursive:true,force:true}); }
 }

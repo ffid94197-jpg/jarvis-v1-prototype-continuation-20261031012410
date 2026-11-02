@@ -8,6 +8,17 @@ const inv=raw=>({raw,...raw});
 const state=(raw={},other={})=>({joined:true,health:20,hunger:20,threats:[],dimension:'minecraft:overworld',workbenchNearby:true,furnaceNearby:true,smithingTableNearby:true,netherPortalNearby:true,inventory:inv(raw),...other});
 const gear=Object.fromEntries(NETHERITE.map(n=>[n,1]));
 const flightReady={...gear,bow:1,arrow:64};
+const realEyes={ender_eye:16};
+const readyForEnd={...Object.fromEntries(DIAMOND.map(n=>[n,1])),bow:1,arrow:64};
+// Canonical Java item and historical alias must be equivalent without
+// counting an inventory alias as a second physical stack.
+const {eyeCount}=require('./late_game.cjs');
+check(eyeCount({raw:{ender_eye:3},eye_of_ender:3})===3,
+  'Real ender_eye and digest alias are one physical inventory stack');
+check(eyeCount({raw:{ender_eye:3,eye_of_ender:1}})===4,
+  'When both distinct real IDs are supplied, preserve each raw quantity');
+check(eyeCount({eye_of_ender:7})===7,'Historical normalized snapshots still supported');
+
 const diamond=Object.fromEntries(DIAMOND.map(n=>[n,1]));
 const actual=({raw={},world={},milestones={}})=>lateGamePlan(state(raw,{wornNetherite:milestones.netheriteEquipped===true,...world}),{milestones});
 const expect=(params,kind)=>{const a=actual(params);check(a.kind===kind,`expected ${kind}, got ${JSON.stringify(a)}`);};
@@ -18,6 +29,16 @@ expect({raw:{...diamond,obsidian:14},world:{netherPortalNearby:false}},'collect_
 expect({raw:{...diamond,obsidian:14,flint:1,iron_ingot:1},world:{netherPortalNearby:false}},'craft_flint_steel');
 expect({raw:{...diamond,obsidian:14,flint_and_steel:1},world:{netherPortalNearby:false}},'build_nether_portal');
 expect({raw:diamond},'enter_nether');
+// The Dragon-first path MUST continue using Java's actual ender_eye ID.
+expect({raw:{...readyForEnd,...realEyes},
+  world:{netherPortalNearby:true}},'track_stronghold');
+expect({raw:{...readyForEnd,ender_eye:3,ender_pearl:4,blaze_powder:4},
+  world:{netherPortalNearby:true,strongholdPortalFrameNearby:true,strongholdMissingEyes:7}},'craft_eyes');
+expect({raw:{...readyForEnd,ender_eye:3},
+  world:{netherPortalNearby:true,strongholdPortalFrameNearby:true,strongholdMissingEyes:3}},'activate_end_portal');
+expect({raw:readyForEnd,
+  world:{netherPortalNearby:true,endPortalPresent:true,endPortalActivated:true}},'enter_end');
+
 expect({raw:diamond,world:{dimension:'minecraft:the_nether'}},'loot_bastion_template');
 const temp={...diamond,netherite_upgrade_smithing_template:1,netherrack:4};
 expect({raw:temp,world:{dimension:'minecraft:the_nether'}},'mine_ancient_debris');
@@ -89,6 +110,9 @@ expect({raw:{...cargo,...gear,ancient_debris:0,netherite_upgrade_smithing_templa
 expect({raw:{...flightReady,blaze_rod:8,ender_pearl:16},milestones:{netheriteEquipped:true}},'craft_blaze_powder');
 expect({raw:{...flightReady,blaze_powder:16,ender_pearl:16},milestones:{netheriteEquipped:true}},'craft_eyes');
 expect({raw:{...flightReady,eye_of_ender:16},milestones:{netheriteEquipped:true}},'track_stronghold');
+expect({raw:{...flightReady,ender_eye:16},milestones:{netheriteEquipped:true}},'track_stronghold');
+expect({raw:{...flightReady,ender_eye:6,blaze_powder:6,ender_pearl:6},
+ milestones:{netheriteEquipped:true}},'craft_eyes');
 expect({raw:{...flightReady,eye_of_ender:16},milestones:{netheriteEquipped:true},world:{strongholdPortalFrameNearby:true}},'activate_end_portal');
 expect({raw:{...flightReady,eye_of_ender:16},milestones:{netheriteEquipped:true},world:{endPortalPresent:true,endPortalActivated:true}},'enter_end');
 const end={dimension:'minecraft:the_end',dragonPresent:true,dragonId:23,crystalsNearby:12};

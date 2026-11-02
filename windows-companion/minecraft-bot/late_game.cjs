@@ -8,6 +8,16 @@ const DIAMOND=['diamond_helmet','diamond_chestplate','diamond_leggings','diamond
 const action=(kind,why,other={})=>({kind,why,...other});
 const qty=(i,k)=>Number.isFinite(i?.raw?.[k])?i.raw[k]:Number.isFinite(i?.[k])?i[k]:0;
 const has=(i,k)=>qty(i,k)>0;
+// Minecraft Java's real item ID is "ender_eye"; historical model snapshots
+// use "eye_of_ender". Read the raw inventory first to avoid double-counting
+// the same item through a normalized alias added by digest().
+const eyeCount=i=>{
+  const raw=i?.raw;
+  if(raw && (Object.hasOwn(raw,'ender_eye')||Object.hasOwn(raw,'eye_of_ender')))
+    return (Number.isFinite(raw.ender_eye)?Math.max(0,raw.ender_eye):0)+
+      (Number.isFinite(raw.eye_of_ender)?Math.max(0,raw.eye_of_ender):0);
+  return Math.max(qty(i,'ender_eye'),qty(i,'eye_of_ender'));
+};
 function lateGamePlan(world,progress={}){
   const i=world.inventory||{},m=progress.milestones||{};
   const dimension=String(world.dimension||'minecraft:overworld').replace(/^minecraft:/,'');
@@ -31,7 +41,7 @@ function lateGamePlan(world,progress={}){
     }
     if(dimension==='the_nether'){
       if(qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8)return action('hunt_blazes','Collect actual blaze rods');
-      if(qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)return action('hunt_endermen','Collect actual pearls');
+      if(qty(i,'ender_pearl')+eyeCount(i)<16)return action('hunt_endermen','Collect actual pearls');
       return action('enter_overworld','Return from Nether to locate End portal');
     }
     if(dimension!=='overworld')return action('blocked','Unknown game dimension '+dimension);
@@ -48,18 +58,31 @@ function lateGamePlan(world,progress={}){
     // blaze powder/eyes must never send the planner back to Nether forever.
     // Before the stronghold, budget 16 possible eyes (travel breakage).
     // Once portal frames are found, require 12 at hand for an empty frame ring.
-    const availableEyes=qty(i,'eye_of_ender')+
+    // An already-active portal needs no extra Eyes; sending a player back
+    // to the Nether at this point can make a completed portal unreachable.
+    if(world.endPortalPresent && world.endPortalActivated){
+      if(!has(i,'bow') || qty(i,'arrow')<32)
+        return action('prepare_archery','Prepare for real End combat before entering open portal');
+      return action('enter_end','Enter actual already-open End portal');
+    }
+    const neededInFrames=world.strongholdPortalFrameNearby &&
+      Number.isInteger(world.strongholdMissingEyes) &&
+      world.strongholdMissingEyes>=0 && world.strongholdMissingEyes<=12
+      ? world.strongholdMissingEyes : 12;
+    const minEyes=world.strongholdPortalFrameNearby||world.endPortalPresent
+      ?neededInFrames:(m.strongholdSearchStarted?12:16);
+    const availableEyes=eyeCount(i)+
       Math.min(qty(i,'ender_pearl'),qty(i,'blaze_powder')+2*qty(i,'blaze_rod'));
-    const minEyes=world.strongholdPortalFrameNearby || world.endPortalPresent || m.strongholdSearchStarted ? 12 : 16;
     if(availableEyes<minEyes)
-      return action('enter_nether','Replenish real Eye of Ender ingredients');
+      return action('enter_nether','Replenish actual Eye of Ender supplies');
     if(!has(i,'bow') || qty(i,'arrow')<32)
       return action('prepare_archery','Acquire bow and 32 actual arrows');
-    if(qty(i,'eye_of_ender')<minEyes && !world.strongholdPortalFrameNearby){
+    // Activating frames requires PHYSICAL crafted Eyes, not just raw pearls
+    // and Blaze powder. Apply this even after the frames are discovered.
+    if(eyeCount(i)<minEyes){
       if(qty(i,'blaze_powder')<1)return action('craft_blaze_powder','Create blaze powder from real rods');
       return action('craft_eyes','Create Eyes of Ender from observed ingredients');
     }
-    if(world.endPortalPresent && world.endPortalActivated)return action('enter_end','Enter opened End portal');
     if(world.strongholdPortalFrameNearby || world.endPortalPresent)
       return action('activate_end_portal','Activate twelve observed stronghold portal frames');
     return action('track_stronghold','Locate a real stronghold using Eyes of Ender');
@@ -111,7 +134,7 @@ function lateGamePlan(world,progress={}){
         ' additional real gold ingot equivalents');
     if(!(dragonFirst && dragonVictory) && qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8)
       return action('hunt_blazes','Locate Nether fortress and collect eight actual Blaze rods');
-    if(!(dragonFirst && dragonVictory) && qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)
+    if(!(dragonFirst && dragonVictory) && qty(i,'ender_pearl')+eyeCount(i)<16)
       return action('hunt_endermen','Collect Ender pearls through real mob drops or trading');
     if(qty(i,'netherrack')<4)return action('mine_netherrack','Carry at least four netherrack for smithing template duplication');
     return action('enter_overworld','Take observed Nether portal back to Overworld with loot');
@@ -135,7 +158,7 @@ function lateGamePlan(world,progress={}){
       qty(i,'gold_ingot')+qty(i,'raw_gold')+Math.floor(qty(i,'gold_nugget')/9)+
        4*qty(i,'netherite_ingot') < 4*missing.length ||
       (!(dragonFirst && dragonVictory) && (qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8 ||
-      qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)))
+      qty(i,'ender_pearl')+eyeCount(i)<16)))
       return action('enter_nether','Collect missing Netherite/End progression materials in Nether');
     if(qty(i,'ancient_debris')>0){
       if(!world.furnaceNearby){
@@ -204,14 +227,14 @@ function lateGamePlan(world,progress={}){
   }
   if(!m.netheriteEquipped || world.wornNetherite!==true)
     return action('equip_netherite','Equip and reverify four Netherite armor slots and sword');
-  if(qty(i,'eye_of_ender')+qty(i,'blaze_powder')+2*qty(i,'blaze_rod')<12 || qty(i,'ender_pearl')+qty(i,'eye_of_ender')<12)
+  if(eyeCount(i)+qty(i,'blaze_powder')+2*qty(i,'blaze_rod')<12 || qty(i,'ender_pearl')+eyeCount(i)<12)
     return action('enter_nether','Obtain remaining blaze rods and pearls for Eyes of Ender');
   if(!has(i,'bow') || qty(i,'arrow')<32){
     if(!world.workbenchNearby && !has(i,'bow'))
       return has(i,'crafting_table')?action('place_table','Place crafting station for bow'):action('craft_table','Craft bow workbench');
     return action('prepare_archery','Prepare physical bow and at least thirty-two arrows before dragon fight');
   }
-  if(qty(i,'eye_of_ender')<12){
+  if(eyeCount(i)<12){
     if(qty(i,'blaze_powder')<1)return action('craft_blaze_powder','Craft blaze powder from real rods');
     return action('craft_eyes','Craft Eye of Ender with pearl and powder');
   }
@@ -222,4 +245,4 @@ function lateGamePlan(world,progress={}){
   if(world.strongholdPortalFrameNearby)return action('activate_end_portal','Fill actual loaded End portal frames');
   return action('track_stronghold','Follow observed thrown-eye direction and search for stronghold');
 }
-module.exports={lateGamePlan,NETHERITE,DIAMOND};
+module.exports={lateGamePlan,NETHERITE,DIAMOND,eyeCount};

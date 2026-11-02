@@ -18,6 +18,8 @@ function lateGamePlan(world,progress={}){
   // It never accepts entity disappearance or a planner receipt as proof.
   if(dragonFirst && !dragonVictory){
     if(dimension==='the_end'){
+      if(world.wornDiamond!==true && world.wornNetherite!==true)
+        return action('equip_diamond','Equip and verify four diamond armor slots before the Dragon fight');
       if(world.dragonDeadObserved===true && m.dragonSeen===true && world.exitPortalPresent===true)
         return action('verify_dragon','Verify real dragon death event plus generated End exit portal');
       if(world.dragonPresent){

@@ -12,13 +12,14 @@ const {spawnSync}=require('node:child_process');
 const path=require('node:path');
 const ROOT=__dirname;
 const files=[
-  'bot.cjs','autonomy_engine.cjs','late_game.cjs','late_skills.cjs',
+  'bot.cjs','autonomy_engine.cjs','late_game.cjs','late_skills.cjs','resource_goal.cjs',
   'drop_pickup.cjs','wood_navigation.cjs','stone_access.cjs','portal_layout.cjs',
   'crafting_site.cjs','inventory_settlement.cjs',
   'verify_real_java_server_wood.cjs','verify_real_java_full_campaign.cjs'
 ];
 const tests=[
   'verify_progression.cjs',
+  'verify_resource_goal.cjs',
   'verify_late_game.cjs',
   'verify_late_skills.cjs',
   'verify_crafting_site.cjs',

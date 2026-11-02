@@ -533,7 +533,10 @@ async function action(q){
       if(autopilot.status().status==='running')
         return {ok:false,error:'Autonomous goal already running; inspect auto_status or use auto_stop before replacement'};
       halt();mode='auto';resumeAfterSpawn=false;deathsOnCurrentGoal=0;
-      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_run'||q.goal==='companion'?21600:300));lastAction='Autonomous '+st.goal+' STARTED';
+       // Evidence from an earlier owner mission is NOT proof for a new run.
+       lateSkills.session.dragonSeen=false;
+       lateSkills.session.dragonDied=false;
+      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'?21600:300));lastAction='Autonomous '+st.goal+' STARTED';
         return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; verify progress via auto_status'};
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}
     }
@@ -726,9 +729,9 @@ bot.on('chat',(username,message)=>{
   if(!match)return;
   const cmd=match[1].toLowerCase();
   const normalized=cmd==='gather'?'collect_wood':cmd==='wait'?'stay':cmd;
-  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_run|companion|explore|follow|guard], pause, observe, status, inventory');return;}
+  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_then_netherite_run|dragon_run|companion|explore|follow|guard], pause, observe, status, inventory');return;}
   if(cmd==='auto'||cmd==='goal') {const goal=(match[2]||'survive').trim().toLowerCase();
-    action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
+    action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_then_netherite_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
   if(cmd==='pause') {action({command:'auto_stop'}).then(r=>say(r.status||r.error));return;}
   const q={command:normalized};
   if(normalized==='say')q.text=match[2]||'';
@@ -741,7 +744,13 @@ reader.on('line',line=>{
   action(q).then(r=>ack(q.id,r.ok,r.status,r.error))
     .catch(err=>ack(q.id,false,'',String(err.message||err).slice(0,120)));
 });
-bot.on('entityDead',entity=>{if(entity?.name==='ender_dragon' && lateSkills.session.dragonSeen)lateSkills.session.dragonDied=true;});
+bot.on('entityDead',entity=>{
+   // A death event is only admissible if the current mission observed a
+   // Dragon in the End, and this is the same live encounter.
+   const inEnd=String(bot.game?.dimension||'').replace(/^minecraft:/,'')==='the_end';
+   if(inEnd && entity?.name==='ender_dragon' && lateSkills.session.dragonSeen)
+     lateSkills.session.dragonDied=true;
+ });
 bot.on('death',()=>{
   const active=mode==='auto' && autopilot.status().status==='running';
   if(active){

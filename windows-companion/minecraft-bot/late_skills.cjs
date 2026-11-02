@@ -514,6 +514,21 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
         for(let j=0;j<20;j++){check(epoch);if(String(bot.game?.dimension).includes('the_end'))return observed(true,'End dimension verified');await delay(500);}
         return observed(false,'Server dimension did not change to the_end');
       }
+      case 'exit_end':{
+        const dimension=String(bot.game?.dimension||'').replace(/^minecraft:/,'');
+        if(dimension!=='the_end'||!session.dragonDied||!session.dragonSeen)
+          return observed(false,'Refuse End exit without real End dragon-death and prior entity observation');
+        const portal=lookup(bot,['end_portal'],36);
+        if(!portal)return observed(false,'No server-observed End exit portal');
+        await move(portal.position,1,epoch,16000);
+        for(let j=0;j<35;j++){
+          check(epoch);
+          if(String(bot.game?.dimension).replace(/^minecraft:/,'')==='overworld')
+            return observed(true,'Exited End through actual portal and server dimension changed to Overworld','end_return');
+          await delay(500);
+        }
+        return observed(false,'End exit did not cause actual Overworld dimension transition');
+      }
       case 'destroy_end_crystal':return destroyCrystal(epoch);
       case 'fight_dragon':return fightDragon(epoch);
       case 'observe_dragon':{const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon');

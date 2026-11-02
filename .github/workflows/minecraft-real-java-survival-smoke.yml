@@ -103,6 +103,7 @@ jobs:
         env:
           JARVIS_MC_TEST_PORT: "25565"
           JARVIS_MC_TEST_STONE: "1"
+          JARVIS_MC_TRACE_AUTONOMY: "1"
           JARVIS_MC_TEST_IRON: ${{ inputs.mission == 'Iron' && '1' || '0' }}
         run: node windows-companion/minecraft-bot/verify_real_java_server_wood.cjs
       - name: Real survival Dragon death then four equipped Netherite armor pieces

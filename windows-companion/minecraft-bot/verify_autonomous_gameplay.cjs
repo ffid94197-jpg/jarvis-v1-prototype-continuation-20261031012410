@@ -26,13 +26,14 @@ ok(validateCommand({command:'auto_status'})===null,'progress observation');
 ok(validateCommand({command:'auto_stop'})===null,'stop allowed');
 ok(decide('wood',world({inventory:inv({logs:4})})).kind==='complete','wood ends by inventory proof');
 ok(decide('wood',world({inventory:inv({logs:2})})).kind==='collect_wood','wood needs pickup');
-ok(decide('tools',world({inventory:inv({logs:1,planks:0})})).kind==='craft_planks','can craft planks');
-ok(decide('tools',world({inventory:inv({planks:4})})).kind==='craft_sticks','sticks before table');
-ok(decide('tools',world({inventory:inv({planks:4,sticks:4})})).kind==='craft_table','workbench after sticks');
+ok(decide('tools',world({inventory:inv({logs:3,planks:0})})).kind==='craft_planks','can craft planks');
+ok(decide('tools',world({inventory:inv({planks:9})})).kind==='craft_sticks','sticks before table');
+ok(decide('tools',world({inventory:inv({planks:7,sticks:4})})).kind==='craft_table','workbench after sticks');
 ok(decide('tools',world({inventory:inv({table:1,planks:3,sticks:2})})).kind==='place_table','table placement');
 ok(decide('tools',world({inventory:inv({table:0,planks:3,sticks:2}),workbenchNearby:true})).kind==='craft_pickaxe','already placed table honored');
 ok(decide('tools',world({inventory:inv({woodenPickaxe:1})})).kind==='complete','pickaxe inventory proof');
-ok(decide('survive',world({ownerVisible:false,inventory:inv({planks:4})})).kind==='wait','no owner -> no wander');
+ok(decide('survive',world({ownerVisible:false,inventory:inv({planks:4})})).kind==='collect_wood',
+  'Independent survival continues with safe tool prerequisites even when owner is absent');
 ok(decide('guard',world({threats:[{name:'creeper',distance:3}],health:16})).kind==='retreat','creeper retreat');
 ok(decide('guard',world({threats:[{name:'zombie',distance:3,id:1}],health:18})).kind==='defend','defend hostile');
 ok(decide('guard',world({threats:[{name:'zombie',distance:3,id:1}],health:6})).kind==='retreat','critical health retreat');
@@ -50,7 +51,8 @@ let now=100000;const c=createController({clock:()=>now,maxSteps:4,maxSeconds:100
 ok(c.next(world({inventory:inv({logs:4})})).kind==='complete','verified goal completion');
 ok(c.status().status==='complete','completion durable state');
 c.start('wood',10);for(let i=0;i<3;i++){const d=c.next(world());c.record(d,{verified:false,detail:'no log pickup'});}
-ok(c.status().status==='blocked','three failed tasks block instead of looping');
+ok(c.status().status==='running' && c.status().lastDecision?.kind==='survey_wood',
+  'Repeated wood failures switch to bounded survey instead of claiming success');
 // Bound continuation by the ORIGINAL 12-hour owner authorization, not
 // an infinite series of newly fabricated 6-hour leases.
 let missionClock=1000000;

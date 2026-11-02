@@ -10,7 +10,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Offline','Code','Wood','Stone','Full')]
+    [ValidateSet('Offline','Code','Wood','Stone','Iron','Full')]
     [string]$Mode = 'Stone',
     [string]$OwnerName = '',
     [string]$HostAddress = '127.0.0.1',
@@ -49,7 +49,7 @@ if ($Mode -notin @('Offline','Code')) {
     }
 }
 $keys = @('JARVIS_MINECRAFT_LAN_HOST','JARVIS_MINECRAFT_LAN_PORT',
-    'JARVIS_MINECRAFT_PLAYER','JARVIS_MC_TEST_PORT','JARVIS_MC_TEST_STONE',
+    'JARVIS_MINECRAFT_PLAYER','JARVIS_MC_TEST_PORT','JARVIS_MC_TEST_STONE','JARVIS_MC_TEST_IRON',
     'MINECRAFT_LIVE_ACCEPTANCE','JARVIS_MC_EVIDENCE_DIR','JARVIS_MC_SIM_SEEDS')
 $old = @{}
 foreach ($key in $keys) { $old[$key] = [Environment]::GetEnvironmentVariable($key, 'Process') }
@@ -87,6 +87,12 @@ try {
             }
             'Stone' {
                 [Environment]::SetEnvironmentVariable('JARVIS_MC_TEST_STONE','1','Process')
+                [Environment]::SetEnvironmentVariable('JARVIS_MC_TEST_IRON','0','Process')
+                & $node.Source (Join-Path $bot 'verify_real_java_server_wood.cjs')
+            }
+            'Iron' {
+                [Environment]::SetEnvironmentVariable('JARVIS_MC_TEST_STONE','1','Process')
+                [Environment]::SetEnvironmentVariable('JARVIS_MC_TEST_IRON','1','Process')
                 & $node.Source (Join-Path $bot 'verify_real_java_server_wood.cjs')
             }
             'Full' {

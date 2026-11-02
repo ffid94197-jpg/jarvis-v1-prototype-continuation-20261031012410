@@ -16,7 +16,8 @@ function fixture(){
    boundingBox:name==='air'?'empty':'block'});
  }
  for(let x=-6;x<=6;x++)for(let z=-6;z<=6;z++){
-  put(x,63,z,'stone');put(x,64,z,'dirt');
+  for(let y=45;y<=63;y++)put(x,y,z,'stone');
+  put(x,64,z,'dirt');
  }
  const origin=new Vec3(.5,65,.5);
  const bot={
@@ -36,7 +37,7 @@ function fixture(){
 const f=fixture();
 check(stoneProposal(f.bot,()=>null)===null,'reject buried nearest stone that old findBlock selected');
 const soil=excavationProposal(f.bot);
-check(soil?.position?.x!==0||soil.position.z!==0,'do not excavate underneath player');
+check(soil && (soil.position.x!==0||soil.position.z!==0),'do not excavate underneath player');
 check(soil?.potentialStone===true,'choose observed soil with stone directly beneath');
 check(f.bot.canDigBlock(f.bot.blockAt(soil.position)),'preparatory soil really within legal mining reach');
 f.put(soil.position.x,soil.position.y,soil.position.z,'air');

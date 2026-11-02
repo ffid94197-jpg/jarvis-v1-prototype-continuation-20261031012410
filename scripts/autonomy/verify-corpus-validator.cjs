@@ -5,7 +5,7 @@ const os=require('node:os');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const {spawnSync}=require('node:child_process');
-const script=path.join(__dirname,'validate-internet-corpus.mjs');
+const script=path.join(__dirname,'validate-internet-corpus.cjs');
 const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'jarvis-corpus-validator-'));
 const hash=s=>crypto.createHash('sha256').update(s,'utf8').digest('hex');
 function record(i,prompt){

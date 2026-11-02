@@ -112,3 +112,8 @@ Next without hosted Actions: in the isolated Windows prototype checkout run .\sc
 - Official Mineflayer API confirms `bot.unequip(destination)` is supported (see https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md ).
 - Source-isolated `verify_late_skills.cjs` passed **25/25** mocked assertions, covering successful smithing of a worn diamond helmet, wrong-dimension denial, missing-ingot denial without stripping armor, plus pre-existing smithing layout/Dragon event/Nether navigation gates. This test is not a real server or actual GUI compatibility proof.
 - Existing `verify_real_java_full_campaign.cjs` still owns the strict external acceptance condition: one actual empty-inventory Java survival session, Ender Dragon death observed, genuine End portal return, and subsequent equipped full Netherite. **NOT PASSED; code fix is not a victory.**
+
+## Further November 2 stronghold-proof fix
+- `late_skills.cjs` stronghold staircase descent now verifies server-observed block removal after each dig and actual displacement toward the next lower step. The previous path counted digging as progress even if the bot never descended; this is now denied without physical movement.
+- After the equipped-diamond-armor upgrade fix and this movement hardening, source-isolated `verify_late_skills.cjs` passed **26/26** mocked checks. The suite specifically covers missing smithing materials, worn diamond armor, Nether/Overworld boundary, and digging-without-moving failure.
+- The end-to-end empty-survival Minecraft Java Dragon-first victory gate remains unrun and **NOT ACCEPTED**. No GitHub Actions minutes have been used for this continuation.

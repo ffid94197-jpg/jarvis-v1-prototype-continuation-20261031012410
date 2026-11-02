@@ -10,7 +10,7 @@ export function modelRequestDeadlineMs(env: NodeJS.ProcessEnv = process.env): nu
   }
   const value = Number(raw);
   if (!Number.isSafeInteger(value) || value < 30_000 || value > 300_000) {
-    throw new Error("JARVIS_MODEL_REQUEST_TIMEOUT_MS must be an integer from 30000 to 120000.");
+    throw new Error("JARVIS_MODEL_REQUEST_TIMEOUT_MS must be an integer from 30000 to 300000.");
   }
   return value;
 }

@@ -60,3 +60,14 @@ Do not assume this historical directory still contains the current GitHub branch
 - Travel proof cannot be recycled at the next waypoint. On real respawn, the stage cursor resets and previously fulfilled goals are **re-evaluated against actual surviving inventory**. The bot remains subject to owner stop, Guardian preflight, time/step budgets, fail-closed security and verified game state.
 - `verify_mission_sequence.cjs` **27/27 offline assertions** passed without GitHub Actions. `verify_travel_goal.cjs` **16/16**, `verify_resource_goal.cjs` **31/31**, `verify_late_game.cjs` **200,057/200,057** (100,000 planner snapshots), all independently rechecked in source-isolated JS. This is not a real Node/Minecraft integration proof.
 - The open-ended instruction requirement **remains unsatisfied**. Sequence composition works only within the finite, verified action vocabulary. Arbitrary construction, biome tasks, farming, trading, exploration reasoning and novel crafting chains still require additional planning and real-world testing.
+
+
+## November 2 continuation: restart intent and safer pickup, no hosted minutes
+- Commit 594103e33e54ced95987de0206f866115055da9a: added a bounded atomic local mission-intent lease. auto_resume requires owner/Guardian authorization, matching configured LAN host/port/owner, unexpired deadline, and a newly verified survival mode. Stale Dragon, End, inventory or sequence success evidence is NEVER restored. auto_checkpoint reports restart availability.
+- Commit 08d6e6c23d53d03b82837234305435e6df020a23: physical item-drop recovery now rotates among observed safe pickup footprints; no walking or packet acknowledgement is treated as inventory proof.
+- Offline regression verify_mission_checkpoint.cjs and two candidate-starvation assertions in verify_drop_pickup.cjs are registered in the local runner. ACTUAL FULL NODE REGRESSION ON THESE CHANGES: NOT RUN. Committed test source is not a passing test.
+- GitHub Actions list showed zero workflow runs attached to either commit. No hosted workflow was dispatched.
+- Owner chat 'jarvis resume' or authorized auto_resume is required after a process restart. The same host and port can represent a changed world, so automatically replaying previously authorized actions is unsafe. An automatic restart supervisor was NOT implemented.
+- Remaining mandatory gates: actual Java stone drop pickup; Iron, diamond, Nether, End, Dragon victory, End return, post-Dragon Netherite. Finite goal vocabulary is not arbitrary construction, farming, trading, novel crafting or genuinely universal gameplay.
+
+Run offline with zero Actions minutes from the isolated, updated checkout: node windows-companion/minecraft-bot/run_offline_minecraft_gates.cjs

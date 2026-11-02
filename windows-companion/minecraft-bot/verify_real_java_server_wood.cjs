@@ -30,13 +30,19 @@ assert(Number.isInteger(port)&&port>=1024&&port<=65535,'Invalid Minecraft server
 assert(/^[A-Za-z0-9_]{1,16}$/.test(owner) && owner.toLowerCase()!=='jarvisbuddy','Invalid owner name');
 const env={...process.env,JARVIS_MINECRAFT_LAN_HOST:host,
  JARVIS_MINECRAFT_LAN_PORT:String(port),JARVIS_MINECRAFT_PLAYER:owner};
-const output=[];
+const output=[],receipts=[];
 const bot=spawn(process.execPath,[botSource],{cwd:__dirname,env,stdio:['pipe','pipe','pipe'],windowsHide:true});
 let joined=false,exit=null;
 let waiter=new Map(),seq=0;
 bot.on('exit',(code,signal)=>{exit={code,signal};for(const w of waiter.values())w.reject(Error('Bot exited '+code+' '+signal));waiter.clear();});
 readline.createInterface({input:bot.stdout}).on('line',line=>{
  output.push(line.slice(0,1000));if(output.length>200)output.shift();
+ if(line.startsWith('BOT_STEP ')){
+   try{
+     const step=JSON.parse(line.slice(9));
+     receipts.push(step);if(receipts.length>80)receipts.shift();
+   }catch{}
+ }
  if(line.includes('MINECRAFT_COMPANION_JOINED'))joined=true;
  if(line.startsWith('BOT_ACK ')){
   try{const v=JSON.parse(line.slice(8)),w=waiter.get(v.id);if(w){waiter.delete(v.id);w.resolve(v);}}catch{}
@@ -81,7 +87,9 @@ async function main(){
    }
   }
   assert(/(?:^|, )(?:oak|spruce|birch|jungle|acacia|dark_oak|cherry|mangrove|pale_oak)_log:[1-9]/.test(received),
-    'No physically gathered wood in server inventory; last='+received+' state='+lastState+' output='+JSON.stringify(output.slice(-22)));
+    'No physically gathered wood in server inventory; last='+received+
+    ' state='+lastState+' actionReceipts='+JSON.stringify(receipts.slice(-20))+
+    ' output='+JSON.stringify(output.slice(-12)));
   const stopped=await command({command:'auto_stop'});
   assert(stopped.ok,'Owner cancellation not acknowledged');
   console.log('MINECRAFT_REAL_JAVA_WOOD_SMOKE PASS; server-backed independent bot joined, empty survival spawn and mined logs observed; elapsedMs='+String(Date.now()-initialAt));
@@ -103,7 +111,9 @@ async function main(){
     }
     const inventory=observedStone?.inventory?.raw||{};
     assert((inventory.stone_pickaxe||0)>0 && (inventory.stone_sword||0)>0,
-      'Live stone crafting not verified; status='+finalStone+' observed='+JSON.stringify(observedStone));
+      'Live stone crafting not verified; status='+finalStone+
+      ' actionReceipts='+JSON.stringify(receipts.slice(-24))+
+      ' observed='+JSON.stringify(observedStone));
     const stopStone=await command({command:'auto_stop'});
     assert(stopStone.ok,'Stone mission cancellation failed');
     console.log('MINECRAFT_REAL_JAVA_STONE_AGE PASS; actual server-backed stone pickaxe+sword observed after real crafting');

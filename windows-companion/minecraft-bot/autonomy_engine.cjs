@@ -5,7 +5,8 @@
  * run shell commands, trust other players' chat, or claim task completion.
  */
 const {lateGamePlan} = require('./late_game.cjs');
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run']);
+const {RESOURCES,resourcePlan}=require('./resource_goal.cjs');
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
@@ -133,6 +134,7 @@ function decide(goal, world, failures={}, progress={}) {
   // An owner can give ONE high-level instruction to play together. This
   // mission remains alive until stopped; it chooses and verifies its own
   // survival, crafting and movement actions instead of requiring commands.
+  if(goal==='gather')return resourcePlan(world,failures,progress,needed=>decide(needed,world,failures,progress));
   if(goal==='companion') {
     if(closest?.distance<=6 && world.health>=12 && closest.name!=='creeper')
       return {kind:'defend',why:'Defend against observed hostile',targetId:closest.id};
@@ -302,10 +304,14 @@ function decide(goal, world, failures={}, progress={}) {
 }
 function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={}) {
   let state={milestones:{},goal:null,status:'idle',since:0,deadline:0,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null};
-  function start(goal,seconds=300){
+  function start(goal,seconds=300,spec={}){
     if(!GOALS.has(goal))throw Error('Unsupported autonomous gameplay goal');
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)throw Error('Duration out of bounds');
-    const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null};return status();
+    if(goal==='gather' && (!RESOURCES.has(spec?.resource) ||
+        !Number.isInteger(spec?.targetCount) || spec.targetCount<1 || spec.targetCount>64))
+      throw Error('Gather requires supported resource and targetCount 1-64');
+    const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null,
+      ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{})};return status();
   }
   function stop(why='Owner paused autonomous gameplay'){state.status='paused';state.why=why;return status();}
   // A long-running owner-authorized mission may continue in bounded 6-hour

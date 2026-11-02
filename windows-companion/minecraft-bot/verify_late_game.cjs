@@ -79,8 +79,8 @@ expect({raw:{...readyMaterials,planks:4},
  world:{workbenchNearby:false}},'craft_table');
 const netherGold=state({...temp,ancient_debris:20,gold_nugget:9,crafting_table:1},
  {dimension:'minecraft:the_nether',workbenchNearby:false});
-check(lateGamePlan(netherGold,{milestones:{}}).kind==='place_table',
- 'Nine gold nuggets require owned crafting table before ingot conversion');
+check(lateGamePlan(netherGold,{milestones:{}}).kind==='collect_gold',
+ 'One ingot worth of gold nuggets is insufficient; gather raw loot rather than crafting dangerously in Nether');
 
 expect({raw:{...cargo,ancient_debris:0,netherite_scrap:0,netherite_ingot:5,diamond:0}},'mine_diamond');
 expect({raw:{...cargo,ancient_debris:0,netherite_ingot:5,diamond:7,netherrack:1}},'duplicate_template');

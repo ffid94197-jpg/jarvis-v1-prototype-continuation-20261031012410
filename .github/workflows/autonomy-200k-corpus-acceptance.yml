@@ -42,6 +42,10 @@ jobs:
         run: |
           node scripts/autonomy/verify-webbench-candidate-import.cjs
           if ($LASTEXITCODE -ne 0) { throw "WebBench candidate source integrity failed." }
+      - name: Verify Windows Agent Arena task and evaluator import
+        run: |
+          node scripts/autonomy/verify-windows-agent-arena-candidate.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Windows Agent Arena candidate integrity failed." }
       - name: Install exact application dependencies
         run: npm ci --no-audit --no-fund
       - name: Generate Prisma client

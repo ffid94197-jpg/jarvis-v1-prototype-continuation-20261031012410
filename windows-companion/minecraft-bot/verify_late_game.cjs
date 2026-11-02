@@ -44,7 +44,7 @@ expect({raw:{...cargo,ancient_debris:0,netherite_scrap:20}},'craft_netherite_ing
 const readyMaterials={...cargo,ancient_debris:0,netherite_scrap:20,gold_ingot:20};
 expect({raw:{...readyMaterials,crafting_table:1},
  world:{workbenchNearby:false}},'place_table');
-expect({raw:{...readyMaterials,oak_planks:4},
+expect({raw:{...readyMaterials,planks:4},
  world:{workbenchNearby:false}},'craft_table');
 const netherGold=state({...temp,ancient_debris:20,gold_nugget:9,crafting_table:1},
  {dimension:'minecraft:the_nether',workbenchNearby:false});

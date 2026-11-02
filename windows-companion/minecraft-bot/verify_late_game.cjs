@@ -33,6 +33,14 @@ expect({raw:{...diamond,obsidian:14},world:{netherPortalNearby:false}},'collect_
 expect({raw:{...diamond,obsidian:14,flint:1,iron_ingot:1},world:{netherPortalNearby:false}},'craft_flint_steel');
 expect({raw:{...diamond,obsidian:14,flint_and_steel:1},world:{netherPortalNearby:false}},'build_nether_portal');
 expect({raw:diamond},'enter_nether');
+// Dragon-first archery must provision the table and sticks before crafting.
+expectDragonFirst({raw:{...readyForEnd,ender_eye:16,arrow:0,bow:0,string:3,stick:3,crafting_table:1},
+ world:{netherPortalNearby:true,workbenchNearby:false}},'place_table');
+expectDragonFirst({raw:{...readyForEnd,ender_eye:16,arrow:0,bow:0,string:3,stick:3,planks:4},
+ world:{netherPortalNearby:true,workbenchNearby:false}},'craft_table');
+expectDragonFirst({raw:{...readyForEnd,ender_eye:16,arrow:0,bow:0,string:3,stick:0,planks:2},
+ world:{netherPortalNearby:true}},'craft_sticks');
+
 // The Dragon-first path MUST continue using Java's actual ender_eye ID.
 expectDragonFirst({raw:{...readyForEnd,...realEyes},
   world:{netherPortalNearby:true}},'track_stronghold');
@@ -115,6 +123,12 @@ expect({raw:{...flightReady,blaze_rod:8,ender_pearl:16},milestones:{netheriteEqu
 expect({raw:{...flightReady,blaze_powder:16,ender_pearl:16},milestones:{netheriteEquipped:true}},'craft_eyes');
 expect({raw:{...flightReady,eye_of_ender:16},milestones:{netheriteEquipped:true}},'track_stronghold');
 expect({raw:{...flightReady,ender_eye:16},milestones:{netheriteEquipped:true}},'track_stronghold');
+expect({raw:{...gear,eye_of_ender:16,string:3,stick:3,crafting_table:1},
+  milestones:{netheriteEquipped:true},
+  world:{workbenchNearby:false}},'place_table');
+expect({raw:{...gear,eye_of_ender:16,bow:1,arrow:4,flint:3,feather:3,stick:3,crafting_table:1},
+  milestones:{netheriteEquipped:true},
+  world:{workbenchNearby:false}},'place_table');
 expect({raw:{...flightReady,ender_eye:6,blaze_powder:6,ender_pearl:6},
  milestones:{netheriteEquipped:true}},'craft_eyes');
 expect({raw:{...flightReady,eye_of_ender:16},milestones:{netheriteEquipped:true},world:{strongholdPortalFrameNearby:true}},'activate_end_portal');

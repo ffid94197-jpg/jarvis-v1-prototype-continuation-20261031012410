@@ -22,6 +22,24 @@ function lateGamePlan(world,progress={}){
   const i=world.inventory||{},m=progress.milestones||{};
   const dimension=String(world.dimension||'minecraft:overworld').replace(/^minecraft:/,'');
   const dragonFirst=progress.goal==='dragon_then_netherite_run';
+  // Physical bow/arrow crafting requires a real 3x3 workstation and sticks.
+  // Never send a craft action into a world where the recipe cannot run.
+  const prepareArchery=()=>{
+    const needBow=!has(i,'bow');
+    const canCraftArrows=qty(i,'flint')>0&&qty(i,'stick')>0&&qty(i,'feather')>0;
+    if((needBow||canCraftArrows) && !world.workbenchNearby){
+      if(has(i,'crafting_table'))return action('place_table','Place actual crafting table for bow/arrows');
+      if(qty(i,'planks')>=4)return action('craft_table','Craft workstation for bow/arrows');
+      if(qty(i,'logs')>0)return action('craft_planks','Prepare planks for bow workstation');
+      return action('collect_wood','Acquire wood for real bow workstation');
+    }
+    if(needBow && qty(i,'stick')<3){
+      if(qty(i,'planks')>=2)return action('craft_sticks','Prepare three physical bow sticks');
+      if(qty(i,'logs')>0)return action('craft_planks','Convert logs to sticks for bow');
+      return action('collect_wood','Gather stick material for bow');
+    }
+    return action('prepare_archery','Acquire observed bow and arrows for the End');
+  };
   const dragonVictory=m.dragonKilled===true && m.exitPortalObserved===true;
   // This separate user-authorized mission enforces a strict temporal order:
   // dragon death and the End exit portal FIRST, full worn Netherite LAST.
@@ -62,7 +80,7 @@ function lateGamePlan(world,progress={}){
     // to the Nether at this point can make a completed portal unreachable.
     if(world.endPortalPresent && world.endPortalActivated){
       if(!has(i,'bow') || qty(i,'arrow')<32)
-        return action('prepare_archery','Prepare for real End combat before entering open portal');
+        return prepareArchery();
       return action('enter_end','Enter actual already-open End portal');
     }
     const neededInFrames=world.strongholdPortalFrameNearby &&
@@ -76,7 +94,7 @@ function lateGamePlan(world,progress={}){
     if(availableEyes<minEyes)
       return action('enter_nether','Replenish actual Eye of Ender supplies');
     if(!has(i,'bow') || qty(i,'arrow')<32)
-      return action('prepare_archery','Acquire bow and 32 actual arrows');
+      return prepareArchery();
     // Activating frames requires PHYSICAL crafted Eyes, not just raw pearls
     // and Blaze powder. Apply this even after the frames are discovered.
     if(eyeCount(i)<minEyes){
@@ -238,12 +256,8 @@ function lateGamePlan(world,progress={}){
     (eyeCount(i)+qty(i,'blaze_powder')+2*qty(i,'blaze_rod')<neededEyes ||
       qty(i,'ender_pearl')+eyeCount(i)<neededEyes))
     return action('enter_nether','Obtain remaining blaze rods and pearls for Eyes of Ender');
-  if(!has(i,'bow') || qty(i,'arrow')<32){
-    if(!world.workbenchNearby && !has(i,'bow'))
-      return has(i,'crafting_table')?action('place_table','Place crafting station for bow'):
-        action('craft_table','Craft bow workbench');
-    return action('prepare_archery','Prepare physical bow and at least thirty-two arrows before dragon fight');
-  }
+  if(!has(i,'bow') || qty(i,'arrow')<32)
+    return prepareArchery();
   if(alreadyOpen)return action('enter_end','Enter actual activated portal; verify End dimension');
   if(eyeCount(i)<neededEyes){
     if(qty(i,'blaze_powder')<1)return action('craft_blaze_powder','Craft blaze powder from real rods');

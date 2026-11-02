@@ -1190,9 +1190,25 @@ bot.on('chat',(username,message)=>{
   if(!match)return;
   const cmd=match[1].toLowerCase();
   const normalized=cmd==='gather'?'collect_wood':cmd==='wait'?'stay':cmd;
-  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather [count resource], travel x y z, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_then_netherite_run|dragon_run|companion|explore|follow|guard], pause, resume, build, farm, observe, status, inventory');return;}
+  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather [count resource], travel x y z, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_then_netherite_run|dragon_run|companion|explore|follow|guard], pause, resume, build, farm, craft, equip, observe, status, inventory');return;}
   if(cmd==='auto'||cmd==='goal') {const goal=(match[2]||'survive').trim().toLowerCase();
     action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_then_netherite_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
+  if(cmd==='craft' && match[2]){
+    const m=/^(\d{1,2})\s+([a-z_]{1,64})$/i.exec(match[2].trim());
+    if(!m){say('Use: jarvis craft 2 chest');return;}
+    action({command:'auto_goal',goal:'craft',item:m[2].toLowerCase(),
+      targetCount:Number(m[1]),durationSeconds:3600})
+      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start crafting goal'));
+    return;
+  }
+  if(cmd==='equip' && match[2]){
+    const m=/^([a-z_]{1,64})\s+(hand|head|torso|legs|feet|off-hand)$/i.exec(match[2].trim());
+    if(!m){say('Use: jarvis equip iron_helmet head');return;}
+    action({command:'auto_goal',goal:'equip',item:m[1].toLowerCase(),
+      destinationSlot:m[2].toLowerCase(),durationSeconds:3600})
+      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start equip goal'));
+    return;
+  }
   if(cmd==='pause') {action({command:'auto_stop'}).then(r=>say(r.status||r.error));return;}
   if(cmd==='resume') {action({command:'auto_resume'}).then(r=>say(r.status||r.error));return;}
   if(cmd==='travel' && match[2]){

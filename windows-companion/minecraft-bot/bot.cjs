@@ -309,6 +309,30 @@ async function autoExecute(plan,epoch){
       if(epoch!==actionEpoch)throw Error('Owner stopped action');
       return {ok:bot.food>old,verified:bot.food>old,detail:'Hunger '+old+' -> '+bot.food};
     }
+    case 'recover_table':{
+      // Physically retrieve the SAME table that crafted the wooden pickaxe.
+      // If left at the surface before underground mining, the only table
+      // becomes unreachable and the planner falsely seeks more timber.
+      const existing=before.inventory.table;
+      const station=bot.findBlock?.({matching:block=>block?.name==='crafting_table',maxDistance:6});
+      if(!station||!station.position)
+        return {ok:false,verified:false,detail:'No live crafting table within recoverable range'};
+      if(epoch!==actionEpoch)throw Error('Workstation retrieval cancelled');
+      const p=station.position;
+      const distance=bot.entity.position.distanceTo(p.offset(.5,.5,.5));
+      if(distance>4.2){
+        const reached=await navigate(p,2,epoch,stanceNavTimeoutMs());
+        if(!reached) return {ok:false,verified:false,detail:'Placed crafting table is inaccessible'};
+      }
+      if(epoch!==actionEpoch)throw Error('Workstation retrieval cancelled');
+      const live=bot.blockAt(p);
+      if(live?.name!=='crafting_table' || !bot.canDigBlock?.(live))
+        return {ok:false,verified:false,detail:'Crafting table is no longer present or diggable'};
+      await bot.dig(live);
+      if(epoch!==actionEpoch)throw Error('Workstation retrieval cancelled');
+      return collectVerifiedDrop(p,existing,()=>digest(bot,leader).inventory.table,
+        epoch,'Recovered crafting table');
+    }
     case 'collect_wood':return await gatherOneLog(epoch,Date.now()+45000);
     case 'survey_ore':{
       if(!['iron','diamond'].includes(plan.ore))throw Error('Unsupported ore survey');

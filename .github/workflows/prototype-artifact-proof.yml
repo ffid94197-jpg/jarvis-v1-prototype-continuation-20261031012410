@@ -46,3 +46,11 @@ jobs:
         run: |
           npm.cmd run test:core-actionable-execution
           if ($LASTEXITCODE -ne 0) { throw "Core action regression failed" }
+      - name: Verify long-horizon reliability and resume fixtures
+        run: |
+          npm.cmd run test:autonomy-reliability
+          if ($LASTEXITCODE -ne 0) { throw "Long-horizon regression failed" }
+      - name: Compile production application (not release certification)
+        run: |
+          npm.cmd run build
+          if ($LASTEXITCODE -ne 0) { throw "Production build failed" }

@@ -769,6 +769,36 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         return;
       }
 
+      // Autonomous recovery from a premature partial FINAL. After at least
+      // one tool action, a model may falsely decide it is done (observed with
+      // real Ollama: create_folder -> final, requested file never written).
+      // Arbitrate BEFORE generating the final prose. Replan only for specific
+      // unmet deterministic predicates and only under the shared bounded
+      // action-nudge and step budgets; never retry uncertain effects.
+      if (!effectJournalDegraded && !isCancelled() &&
+          actionNudges < MAX_ACTION_NUDGES &&
+          stepsUsed - opts.stepsUsedOffset < effectiveBudget) {
+        const preview = await arbitrateCompletion({taskId,objective,toolAssisted:true,inventorySource});
+        const missing = preview.verdict === "partial"
+          ? preview.predicates.filter(p => !p.pass).map(p => p.predicate.relPath).slice(0,5)
+          : [];
+        if (missing.length > 0) {
+          actionNudges++;
+          seq++;
+          await persistStep(taskId,seq,"replan",{
+            note:`completion proposal rejected after partial tool execution: missing independently verified predicates (${missing.join(", ")}) [${actionNudges}/${MAX_ACTION_NUDGES}]`.slice(0,1000),
+          });
+          messages.push({role:"assistant",content:raw});
+          messages.push({role:"user",content:
+            `COMPLETION NOT VERIFIED. The independent Core verifier still requires these exact outcomes: ${missing.join(", ")}. `+
+            `Take the next ONE permitted concrete tool action to satisfy the missing outcome, then observe the result. `+
+            `Do not repeat already verified work or fabricate receipts. If a safe action is impossible, give an honest BLOCKED/PARTIAL final. `+
+            `Remaining replan allowance: ${MAX_ACTION_NUDGES-actionNudges}.`});
+          emitStatus("replanning");
+          continue;
+        }
+      }
+
       // Tool-assisted task: produce a GROUNDED final report.
       messages.push({ role: "assistant", content: raw });
       messages.push({ role: "user", content: FINAL_REPORT_INSTRUCTION });

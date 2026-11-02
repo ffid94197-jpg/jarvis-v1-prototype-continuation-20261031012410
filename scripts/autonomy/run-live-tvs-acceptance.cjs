@@ -106,15 +106,25 @@ async function findProject(dir, depth = 0) {
     assert(typeof answer==='string' && answer.length>0,'Ollama returned no actual model response.');
     evidence.inference = { durationMs:Date.now()-t0, responseChars:answer.length, responseSha256:sha(answer), done:warm.done===true, evalCount:warm.eval_count??null, promptEvalCount:warm.prompt_eval_count??null };
 
-    // Ensure JARVIS is responding on the expected local-only endpoint.
-    await getJson(new URL('/api/jarvis/auth/session',app));
+    // Bootstrap the dedicated loopback-only owner session and retain its cookie.
+    // A successful GET alone is not authentication for the subsequent task POST.
+    const sessionResponse = await fetch(new URL('/api/jarvis/auth/session',app));
+    const sessionText = await sessionResponse.text();
+    assert(sessionResponse.ok, `JARVIS session endpoint returned HTTP ${sessionResponse.status}: ${sessionText.slice(0,500)}`);
+    const sessionData = JSON.parse(sessionText);
+    assert(sessionData.authenticated === true, 'Local development session was not authenticated: ' + JSON.stringify(sessionData));
+    const setCookies = typeof sessionResponse.headers.getSetCookie === 'function'
+      ? sessionResponse.headers.getSetCookie()
+      : [sessionResponse.headers.get('set-cookie')].filter(Boolean);
+    const sessionCookie = setCookies.map(value => value.split(';',1)[0]).filter(Boolean).join('; ');
+    assert(sessionCookie.length > 0, 'Local session endpoint did not issue a session cookie.');
 
     const controller = new AbortController();
     const kill = setTimeout(()=>controller.abort(new Error('JARVIS task exceeded 60-minute acceptance budget')),60*60_000);
     let response;
     try {
       response = await fetch(new URL('/api/jarvis/task',app),{
-        method:'POST',headers:{'content-type':'application/json','accept':'text/event-stream'},
+        method:'POST',headers:{'content-type':'application/json','accept':'text/event-stream','cookie':sessionCookie},
         body:JSON.stringify({objective:prompt,stepBudget:24}),
         signal:controller.signal
       });

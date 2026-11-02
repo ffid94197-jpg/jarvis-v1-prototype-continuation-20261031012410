@@ -6,6 +6,7 @@
 const {RESOURCES}=require('./resource_goal.cjs');
 const {validBuildSpec}=require('./structure_goal.cjs');
 const {validFarmSpec}=require('./wheat_goal.cjs');
+const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const SIMPLE_STEPS=new Set(['tools','stone_age','iron_age']);
 function validPosition(p){
  return !!p&&typeof p==='object'&&!Array.isArray(p)&&
@@ -16,6 +17,8 @@ function validStep(s){
    return false;
  if(SIMPLE_STEPS.has(s.goal))
    return Object.keys(s).length===1;
+ if(s.goal==='craft')return validCraftSpec(s);
+ if(s.goal==='equip')return validEquipSpec(s);
  if(s.goal==='build')return validBuildSpec(s);
  if(s.goal==='farm_wheat')return validFarmSpec(s);
  if(s.goal==='gather')

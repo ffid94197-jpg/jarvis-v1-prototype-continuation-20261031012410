@@ -9,9 +9,10 @@ const {RESOURCES,resourcePlan}=require('./resource_goal.cjs');
 const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,buildPlan}=require('./structure_goal.cjs');
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
+const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','farm_wheat','sequence']);
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','farm_wheat','sequence','craft','equip']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
@@ -75,6 +76,11 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     return Number.isInteger(idx) && bot.inventory?.slots?.[idx]?.name===name;
   });
   const heldNetheriteSword=bot.heldItem?.name==='netherite_sword';
+  const equipped={hand:bot.heldItem?.name||null};
+  for(const dest of ['head','torso','legs','feet','off-hand']){
+    const slot=bot.getEquipmentDestSlot?.(dest);
+    equipped[dest]=Number.isInteger(slot)?bot.inventory?.slots?.[slot]?.name||null:null;
+  }
   const wornDiamond=[['head','diamond_helmet'],['torso','diamond_chestplate'],
     ['legs','diamond_leggings'],['feet','diamond_boots']].every(([slot,name])=>{
     const idx=bot.getEquipmentDestSlot?.(slot);
@@ -111,7 +117,7 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
   const crystals=Object.values(bot.entities||{}).filter(e=>e?.name==='end_crystal' && e?.position);
   return {joined:!!p,dimension:bot.game?.dimension||'minecraft:overworld',
     smithingTableNearby,netherPortalNearby,strongholdPortalFrameNearby,strongholdMissingEyes,endPortalPresent,endPortalActivated,
-    wornNetherite,wornDiamond,heldNetheriteSword,exitPortalPresent, dragonPresent:dragons.length>0,dragonId:dragons[0]?.id||null,
+    wornNetherite,wornDiamond,heldNetheriteSword,equipped,exitPortalPresent, dragonPresent:dragons.length>0,dragonId:dragons[0]?.id||null,
     dragonDeadObserved:dragonDead,crystalsNearby:crystals.length,
     health:number(bot.health,20),hunger:number(bot.food,20),workbenchNearby,
      // Only the native Mineflayer runtime advertises physical workstation
@@ -141,6 +147,8 @@ function decide(goal, world, failures={}, progress={}) {
   // An owner can give ONE high-level instruction to play together. This
   // mission remains alive until stopped; it chooses and verifies its own
   // survival, crafting and movement actions instead of requiring commands.
+  if(goal==='craft'||goal==='equip')return generalPlan(world,{...progress,goal},
+    (needed,extra)=>decide(needed,world,failures,{...progress,...extra}));
   if(goal==='gather')return resourcePlan(world,failures,progress,needed=>decide(needed,world,failures,progress));
   if(goal==='farm_wheat')return wheatPlan(world,{
     goal,position:progress.position,width:progress.width,
@@ -340,6 +348,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       throw Error('Invalid bounded wheat farming goal');
     if(goal==='build' && !validBuildSpec({goal,position:spec?.position,block:spec?.block,
       axis:spec?.axis,length:spec?.length}))throw Error('Invalid bounded construction goal');
+    if(goal==='craft' && !validCraftSpec({goal,item:spec?.item,targetCount:spec?.targetCount}))
+      throw Error('Unsupported general crafting recipe or target quantity');
+    if(goal==='equip' && !validEquipSpec({goal,item:spec?.item,destination:spec?.destination}))
+      throw Error('Unsupported equipment item or slot');
     if(goal==='sequence' && !validSequence(spec?.steps))
       throw Error('Sequence requires one to eight typed valid subgoals');
     if(goal==='travel' && (!spec?.destination ||
@@ -352,6 +364,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       throw Error('Gather requires supported resource and targetCount 1-64');
     const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null,
       ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{}),
+      ...(goal==='craft'?{item:spec.item,targetCount:spec.targetCount}:{}),
+      ...(goal==='equip'?{item:spec.item,destination:spec.destination}:{}),
       ...(goal==='build'?{position:{...spec.position},block:spec.block,axis:spec.axis,length:spec.length}:{}),
       ...(goal==='farm_wheat'?{position:{...spec.position},width:spec.width,
         depth:spec.depth,targetCount:spec.targetCount}:{}),

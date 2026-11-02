@@ -24,6 +24,7 @@ const {retreatStances}=require('./retreat_access.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
 const {validBuildSpec,observeBuild}=require('./structure_goal.cjs');
 const {validFarmSpec,observeWheat}=require('./wheat_goal.cjs');
+const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {safeSurveyFeet}=require('./wood_navigation.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
@@ -310,6 +311,27 @@ async function autoExecute(plan,epoch){
   const before=digest(bot,leader);
   if(epoch!==actionEpoch)throw Error('Owner cancelled current action');
   switch(plan.kind){
+    case 'craft_general':{
+      if(!validCraftSpec({goal:'craft',item:plan.item,targetCount:1}))
+        return {ok:false,verified:false,detail:'Unapproved crafting target'};
+      const table=bot.findBlock({matching:b=>b?.name==='crafting_table',maxDistance:4});
+      if(!['stick','crafting_table','torch'].includes(plan.item)&&!table)
+        return {ok:false,verified:false,detail:'Required workstation not server-observed'};
+      return craftNamed(plan.item,1,epoch,table||null);
+    }
+    case 'equip_general':{
+      if(!validEquipSpec({goal:'equip',item:plan.item,destination:plan.destination}))
+        return {ok:false,verified:false,detail:'Unapproved equipment combination'};
+      const owned=bot.inventory.items().find(i=>i.name===plan.item);
+      if(!owned)return {ok:false,verified:false,detail:'Equipment item not in backpack'};
+      await bot.equip(owned,plan.destination);
+      if(epoch!==actionEpoch)throw Error('Equipment action cancelled by owner');
+      const slot=bot.getEquipmentDestSlot?.(plan.destination);
+      const observed=plan.destination==='hand'?bot.heldItem?.name:
+        Number.isInteger(slot)?bot.inventory.slots?.[slot]?.name:null;
+      return {ok:observed===plan.item,verified:observed===plan.item,
+        detail:'Server equipment '+plan.destination+': '+String(observed||'unverified')};
+    }
     case 'harvest_wheat':case 'plant_wheat':{
       const p=plan.position;
       const target=new Vec3(p.x,p.y,p.z),prior=bot.blockAt(target);
@@ -962,7 +984,7 @@ async function action(q){
         return {ok:false,error:'Build origin must be within 12 blocks of the actual player'};
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
-      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','build','farm_wheat','sequence'].includes(q.goal) &&
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','build','farm_wheat','sequence','craft','equip'].includes(q.goal) &&
          bot.game?.gameMode!=='survival')
         return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an
@@ -974,7 +996,7 @@ async function action(q){
        resetDragon(lateSkills.session);
       try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),{resource:q.resource,targetCount:q.targetCount,destination:q.destination,arrivalRange:q.arrivalRange,
           position:q.position,block:q.block,axis:q.axis,length:q.length,
-          width:q.width,depth:q.depth,steps:q.steps});lastAction='Autonomous '+st.goal+' STARTED';
+          width:q.width,depth:q.depth,steps:q.steps,item:q.item,destination:q.destinationSlot});lastAction='Autonomous '+st.goal+' STARTED';
         let saved=false;try{saved=missionCheckpoint.save(st);}catch{ /* Mission runs but restart recovery is unavailable. */ }
         return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; '+(saved?'recoverable goal intent saved':'restart recovery unavailable')+'; verify progress via auto_status'};
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}

@@ -27,17 +27,31 @@ const containment = {
     return {ok:real === base || real.startsWith(base + path.sep)};
   },
 };
-function loadVerifier() {
-  const file = path.join(root, 'src/lib/agent/core/verifier.ts');
-  const output = ts.transpileModule(fs.readFileSync(file,'utf8'), {
-    fileName:file,
+function loadTsModule(file, cache = new Map()) {
+  const absolute = path.resolve(file);
+  if (cache.has(absolute)) return cache.get(absolute).exports;
+  const mod = {exports:{}};
+  cache.set(absolute, mod);
+  const output = ts.transpileModule(fs.readFileSync(absolute,'utf8'), {
+    fileName:absolute,
     compilerOptions:{ target:ts.ScriptTarget.ES2022, module:ts.ModuleKind.CommonJS, esModuleInterop:true },
   }).outputText;
-  const mod = {exports:{}};
-  const mockRequire = (name) => name === '@/lib/db' ? {db} :
-    name === '../guardian/policy' ? containment : require(name);
+  const mockRequire = (name) => {
+    if (name === '@/lib/db') return {db};
+    if (name === '../guardian/policy') return containment;
+    if (name.startsWith('.')) {
+      const base = path.resolve(path.dirname(absolute), name);
+      for (const candidate of [base+'.ts', path.join(base,'index.ts')]) {
+        if (fs.existsSync(candidate)) return loadTsModule(candidate, cache);
+      }
+    }
+    return require(name);
+  };
   new Function('require','module','exports',output)(mockRequire,mod,mod.exports);
   return mod.exports;
+}
+function loadVerifier() {
+  return loadTsModule(path.join(root, 'src/lib/agent/core/verifier.ts'));
 }
 const {arbitrateCompletion} = loadVerifier();
 const ack = (tool,detail) => ({status:'SETTLED',tool,receiptJson:JSON.stringify({ok:true,tool,detail})});

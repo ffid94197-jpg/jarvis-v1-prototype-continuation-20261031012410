@@ -107,7 +107,7 @@ function decide(goal, world, failures={}, progress={}) {
   const closest=threats[0];
   if(world.health<=8 && closest?.distance<=10)return {kind:'retreat',why:'Critical health near hostile entity'};
   if(world.hunger<=12 && (inv.food||0)>0)return {kind:'eat',why:'Hunger low; edible inventory item detected'};
-  if(['dragon_run','netherite_dragon_run'].includes(goal) && world.hunger<=9 && (inv.food||0)===0)return {kind:'obtain_food',why:'Obtain safe food before autonomous survival progression'};
+  if(['dragon_run','netherite_dragon_run','dragon_then_netherite_run'].includes(goal) && world.hunger<=9 && (inv.food||0)===0)return {kind:'obtain_food',why:'Obtain safe food before autonomous survival progression'};
   if(closest?.name==='creeper' && closest.distance<=7)return {kind:'retreat',why:'Avoid nearby creeper explosion'};
   if(goal==='survive' && world.hunger<=7 && (inv.food||0)===0)
     return {kind:'blocked',why:'Critically hungry with no edible supplies; autonomous food procurement not implemented'};
@@ -142,17 +142,17 @@ function decide(goal, world, failures={}, progress={}) {
     if(inv.logs>=4)return {kind:'complete',why:'Four logs verified in inventory'};
     return failures.collect_wood>=3?{kind:'blocked',why:'Wood unavailable after three attempts'}:{kind:'collect_wood',why:'Need four logs'};
   }
-  if(goal==='dragon_run' || goal==='netherite_dragon_run'){
+  if(goal==='dragon_run' || goal==='netherite_dragon_run' || goal==='dragon_then_netherite_run'){
     if((world.dimension && !String(world.dimension).includes('overworld')) || progress.milestones?.netherPortalBuilt)
-      return lateGamePlan(world,progress);
+      return lateGamePlan(world,{...progress,goal});
   }
-  if(goal==='stone_age' || goal==='iron_age' || goal==='dragon_run' || goal==='netherite_dragon_run') {
+  if(goal==='stone_age' || goal==='iron_age' || goal==='dragon_run' || goal==='netherite_dragon_run' || goal==='dragon_then_netherite_run') {
     if(inv.stonePickaxe && inv.stoneSword) {
       if(goal==='stone_age')return {kind:'complete',why:'Stone pickaxe and stone sword verified in inventory'};
       if(inv.ironPickaxe){
         if(goal==='iron_age')return {kind:'complete',why:'Iron pickaxe verified in inventory'};
         if(inv.diamondPickaxe && inv.diamondSword && inv.diamondHelmet && inv.diamondChestplate && inv.diamondLeggings && inv.diamondBoots)
-          return lateGamePlan(world,progress);
+          return lateGamePlan(world,{...progress,goal});
         // Total: pickaxe 3, sword 2, helmet 5, chestplate 8, leggings 7, boots 4 = 29 diamonds.
         const gear=[['diamond_pickaxe','diamondPickaxe',3],['diamond_sword','diamondSword',2],['diamond_chestplate','diamondChestplate',8],['diamond_leggings','diamondLeggings',7],['diamond_helmet','diamondHelmet',5],['diamond_boots','diamondBoots',4]];
         for(const [name,key,cost] of gear){
@@ -242,7 +242,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   // windows. This is NOT a completion, and never resumes a blocked, cancelled,
   // or owner-paused task. The next decision is recomputed from live world state.
   function renewMission(seconds=21600){
-    if(state.status!=='expired' || !['netherite_dragon_run','dragon_run','companion'].includes(state.goal))return false;
+    if(state.status!=='expired' || !['netherite_dragon_run','dragon_then_netherite_run','dragon_run','companion'].includes(state.goal))return false;
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)return false;
     const t=clock();
     state.status='running';state.deadline=t+seconds*1000;state.steps=0;

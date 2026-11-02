@@ -3,10 +3,22 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 const root=path.join(__dirname,'..');
 const source=fs.readFileSync(path.join(root,'src/lib/agent/core/minecraftAiGate.ts'),'utf8');
-const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const transpile=(file,text)=>{
+ const result=ts.transpileModule(text,{reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
+ const errors=(result.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
+ assert.equal(errors.length,0,file+' must parse without TypeScript syntax errors');
+ checks++;
+ return result.outputText;
+};
+let checks=0;
+const js=transpile('minecraftAiGate.ts',source);
+const promptSource=fs.readFileSync(path.join(root,'src/lib/agent/core/prompts.ts'),'utf8');
+transpile('prompts.ts',promptSource);
+assert.ok(promptSource.includes('Minecraft natural-language tasks'),'main tool catalog documents natural language');
+checks++;
 const out={};vm.runInNewContext(js,{exports:out,console,JSON,Number,Object,Array,Math,Set,String,RegExp});
 const {isMinecraftAiObjective,isMinecraftObservationOnlyObjective,MinecraftAiGate,MINECRAFT_AI_INSTRUCTIONS}=out;
-let checks=0;const ok=(v,label)=>{assert.equal(v,true,label);checks++;};
+const ok=(v,label)=>{assert.equal(v,true,label);checks++;};
 const no=(v,label)=>{assert.equal(v,false,label);checks++;};
 for(const s of [
  'Jarvis, can you mine diamonds in Minecraft?','Please build a small house in Minecraft',

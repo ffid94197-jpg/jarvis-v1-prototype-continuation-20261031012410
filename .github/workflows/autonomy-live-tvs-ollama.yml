@@ -4,7 +4,7 @@ on:
     branches: [autonomy-100-percent-acceptance-20261102]
     paths:
       - ".github/workflows/autonomy-live-tvs-ollama.yml"
-      - "scripts/autonomy/run-live-tvs-acceptance.mjs"
+      - "scripts/autonomy/run-live-tvs-acceptance.cjs"
       - "benchmarks/autonomy/fixtures/tvs-motor-original-3954.txt"
       - "src/lib/agent/core/modelDeadline.ts"
   workflow_dispatch:
@@ -79,7 +79,7 @@ jobs:
             try { Invoke-WebRequest http://127.0.0.1:3000/api/jarvis/auth/session -UseBasicParsing -TimeoutSec 3 | Out-Null; $ready = $true; break } catch { Start-Sleep -Seconds 2 }
           }
           if (!$ready) { throw "JARVIS/NEXUS did not become ready on localhost:3000." }
-          node scripts/autonomy/run-live-tvs-acceptance.mjs
+          node scripts/autonomy/run-live-tvs-acceptance.cjs
           if ($LASTEXITCODE -ne 0) { throw "Real Ollama TVS end-to-end acceptance failed." }
       - name: Upload full real-model evidence and logs
         if: always()

@@ -2,6 +2,7 @@
 'use strict';
 /** Pure command validation; identical contract for stdin and in-game chat. */
 const {RESOURCES}=require('./resource_goal.cjs');
+const {validSequence}=require('./mission_sequence.cjs');
 const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop']);
 function validateCommand(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return 'Invalid command';
@@ -20,18 +21,21 @@ function validateCommand(input) {
     const validGoal=fixed.includes(input.goal)||validTravel||
       (input.goal==='gather' && RESOURCES.has(input.resource) &&
         Number.isInteger(input.targetCount) &&
-        input.targetCount>=1&&input.targetCount<=64);
+        input.targetCount>=1&&input.targetCount<=64)||
+      (input.goal==='sequence' && validSequence(input.steps));
     const noUnrelatedParameters=
-      (input.goal==='gather' && input.destination===undefined&&input.arrivalRange===undefined) ||
-      (input.goal==='travel' && input.resource===undefined&&input.targetCount===undefined) ||
-      (fixed.includes(input.goal) && input.resource===undefined &&
+      (input.goal==='gather' && input.steps===undefined&&input.destination===undefined&&input.arrivalRange===undefined) ||
+      (input.goal==='travel' && input.resource===undefined&&input.targetCount===undefined&&input.steps===undefined) ||
+      (input.goal==='sequence' && input.resource===undefined&&input.targetCount===undefined&&
+        input.destination===undefined&&input.arrivalRange===undefined) ||
+      (fixed.includes(input.goal) && input.steps===undefined&&input.resource===undefined &&
         input.targetCount===undefined&&input.destination===undefined &&
         input.arrivalRange===undefined);
     return validGoal && noUnrelatedParameters &&
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&
           input.durationSeconds<=43200)) ? null :
-      'Autonomous goal invalid. Gather requires resource/count 1-64; travel requires destination/range 1-8; duration 10-43200 seconds';
+      'Autonomous goal invalid. Gather needs quantity 1-64; travel needs coordinates/radius 1-8; sequence allows 1-8 validated steps; duration 10-43200';
   }
   // Bounded general-purpose player primitives. All IDs/names are validated before I/O.
   const itemName = v => typeof v === 'string' && /^[a-z0-9_]{1,64}$/.test(v);

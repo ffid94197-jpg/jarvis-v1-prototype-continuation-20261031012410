@@ -2,7 +2,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const {Vec3}=require('vec3');
-const {itemEntities,pickupFeet,collectObservedDrop}=require('./drop_pickup.cjs');
+const {itemEntities,pickupFeet,pickupFootCandidates,collectObservedDrop}=require('./drop_pickup.cjs');
 let checks=0;
 function ok(cond,why){assert(cond,why);checks++;}
 const mk=(type='dirt')=>{
@@ -63,6 +63,28 @@ const mk=(type='dirt')=>{
    'Alternate physical item location succeeds only after server inventory gain');
  ok(moves.length>=2&&moves.some(x=>x<3)&&moves.some(x=>x>=4),
    'Unreachable first drop does not starve a second safe pickup location');
+ // The nearest pickup point can have NO route even while an adjacent
+ // safe standable floor tile is reachable. Rotate within the same drop.
+ const oneDrop=mk();
+ oneDrop.entities={1:{id:1,name:'item',position:new Vec3(3.5,64.2,.5)}};
+ const feet=pickupFootCandidates(oneDrop,oneDrop.entities[1].position,Vec3);
+ ok(feet.length>=2 && feet[0].x===3,
+   'One visible item exposes several safe alternative collection stances');
+ let routeNow=0,routeMoves=[],items=0;
+ const rotated=await collectObservedDrop({
+   bot:oneDrop,origin:new Vec3(3,64,0),beforeCount:0,
+   readCount:()=>items,
+   move:async(target)=>{
+     routeMoves.push(target.x);
+     // The center is obstructed to pathfinding, but the east neighbor is open.
+     if(target.x>=4){items=1;oneDrop.entity.position=target.clone();return true;}
+     return false;
+   },
+   check:()=>{},wait:async()=>{routeNow+=350},deadline:3500,now:()=>routeNow,Vec3
+ });
+ ok(rotated.ok && rotated.verified && routeMoves.some(x=>x<4) &&
+    routeMoves.some(x=>x>=4),
+   'Pickup retries a different safe stance for the SAME drop, then verifies inventory');
  let cancelled=false;
  try{await collectObservedDrop({
    bot:mk(),origin,beforeCount:0,readCount:()=>0,

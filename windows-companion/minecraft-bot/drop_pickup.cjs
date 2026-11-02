@@ -14,24 +14,35 @@ function itemEntities(bot,origin,radius=10){
    e.position.distanceTo(origin)<=radius)
    .sort((a,b)=>a.position.distanceTo(origin)-b.position.distanceTo(origin));
 }
-function pickupFeet(bot,drop,Vec3){
- if(!drop||!bot?.entity?.position)return null;
- // Try the actual observed item location first; never plan into a liquid.
- // Look for feet-level positions that have solid safe floor and two air cells.
+function pickupFootCandidates(bot,drop,Vec3){
+ if(!drop||!bot?.entity?.position||!Vec3)return [];
+ // A visible item could be above a cliff or behind a blocked center cell.
+ // Try all nearby standable locations, but NEVER label a distant stance
+ // (including one several blocks vertically above the item) as pickup reach.
  const origins=[[drop.x,drop.z],[drop.x+1,drop.z],[drop.x-1,drop.z],
    [drop.x,drop.z+1],[drop.x,drop.z-1]];
- const choices=[];
+ const choices=[],seen=new Set();
  for(const [x,z] of origins){
    for(const y of [drop.y,bot.entity.position.y]){
      const p=safeSurveyFeet(bot,x,z,y,Vec3);
      if(!p)continue;
-     const block=bot.blockAt(p),head=bot.blockAt(p.offset(0,1,0));
-     if(!block||!head||HAZARD.test(block.name+' '+head.name))continue;
-     choices.push(p);
+     const key=[p.x,p.y,p.z].join(',');
+     if(seen.has(key))continue;
+     const foot=bot.blockAt(p),head=bot.blockAt(p.offset(0,1,0));
+     const floor=bot.blockAt(p.offset(0,-1,0));
+     if(!foot||!head||!floor||HAZARD.test(
+       String(foot.name)+' '+String(head.name)+' '+String(floor.name)))continue;
+     // The drop must overlap the player's pickup envelope at this stance.
+     if(p.offset(.5,0,.5).distanceTo(drop)>1.8)continue;
+     seen.add(key);choices.push(p);
    }
  }
- choices.sort((a,b)=>a.distanceTo(drop)-b.distanceTo(drop));
- return choices[0]||null;
+ choices.sort((a,b)=>a.offset(.5,0,.5).distanceTo(drop)-
+   b.offset(.5,0,.5).distanceTo(drop));
+ return choices.slice(0,5);
+}
+function pickupFeet(bot,drop,Vec3){
+ return pickupFootCandidates(bot,drop,Vec3)[0]||null;
 }
 /**
  * move(position, range, timeoutMs) is a caller-owned, cancellable navigation
@@ -58,17 +69,21 @@ async function collectObservedDrop({bot,origin,beforeCount,readCount,move,check,
    const drops=itemEntities(bot,origin,10).slice(0,8);
    const options=[],seen=new Set();
    for(const drop of drops){
-     const foot=pickupFeet(bot,drop.position,Vec3);
-     if(!foot)continue;
-     const key=foot.x+','+foot.y+','+foot.z;
-     if(!seen.has(key)){seen.add(key);options.push({foot,key});}
+     for(const foot of pickupFootCandidates(bot,drop.position,Vec3)){
+       const key=foot.x+','+foot.y+','+foot.z;
+       if(!seen.has(key)){seen.add(key);options.push({foot,key});}
+     }
    }
    // If no item entity is visible, Mineflayer may still deliver a delayed
    // block drop. Try the actually observed mining footprint only once.
    if(!drops.length && !footprintAttempted){
-     const foot=pickupFeet(bot,origin,Vec3);
+     // Try every safe stance near the actual mined block. A drop may be
+     // delayed or not exposed as an entity even after block removal.
+     for(const foot of pickupFootCandidates(bot,origin,Vec3)){
+       const key=foot.x+','+foot.y+','+foot.z;
+       if(!seen.has(key)){seen.add(key);options.push({foot,key});}
+     }
      footprintAttempted=true;
-     if(foot)options.push({foot,key:'footprint'});
    }
    options.sort((a,b)=>
      (attempted.get(a.key)||0)-(attempted.get(b.key)||0) ||
@@ -103,4 +118,4 @@ async function collectObservedDrop({bot,origin,beforeCount,readCount,move,check,
  return {ok:false,verified:false,
    detail:label+' mined but actual item not acquired before deadline: '+last};
 }
-module.exports={itemEntities,pickupFeet,collectObservedDrop};
+module.exports={itemEntities,pickupFeet,pickupFootCandidates,collectObservedDrop};

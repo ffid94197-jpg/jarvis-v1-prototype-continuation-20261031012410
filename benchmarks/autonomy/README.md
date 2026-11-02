@@ -74,10 +74,29 @@ Place the candidate corpus at:
 Run:
 
 ```powershell
-node scripts/autonomy/validate-internet-corpus.cjs --input benchmarks/autonomy/internet-hard-200k.jsonl --expected 200000 --manifest artifacts/autonomy-corpus-manifest.json
+node scripts/autonomy/validate-internet-corpus.cjs --input benchmarks/autonomy/internet-hard-200k.jsonl --source-manifest benchmarks/autonomy/upstream-source-manifest.json --expected 200000 --manifest artifacts/autonomy-corpus-manifest.json
 ```
 
-The validator rejects duplicates, transformed prompts, non-HTTPS provenance links, missing license metadata, non-`very_hard` records and missing independent verifiers. It emits a manifest with the corpus SHA-256 and counts by source/domain.
+The validator rejects duplicates, transformed prompts, non-HTTPS provenance links, missing license metadata, non-`very_hard` records and missing independent verifiers.
+
+The `--source-manifest` is **mandatory** for any 200,000-task validation. It must have this schema and point to snapshots saved under the manifest's own directory:
+
+```json
+{
+  "schema": "jarvis.autonomy.upstream-attestation.v1",
+  "datasets": [{
+    "name": "pinned-upstream-name",
+    "revision": "immutable-upstream-commit",
+    "license_spdx": "MIT",
+    "path": "sources/upstream-original.jsonl",
+    "sha256": "64-character lowercase SHA-256 of the snapshot file",
+    "records": 100
+  }]
+}
+```
+
+Each snapshot JSONL row must contain an original upstream `record_id`, verbatim `prompt`, and source-side `difficulty: "very_hard"`. The validator compares every candidate against the exact matching upstream record, checks snapshot hashes, and rejects missing/mismatched source rows. It **cannot** independently establish Internet authenticity, redistribution permission, task difficulty or execution merely from local snapshots. Those still require separate source review and live evaluation; the final release gate must remain blocked without them. Do not generate fake snapshots to bypass acceptance.
+ It emits a manifest with the corpus SHA-256 and counts by source/domain.
 
 **Validation is not execution.** A corpus-validation PASS means only that the supplied records meet the declared schema/provenance constraints. It does not mean JARVIS completed any task.
 

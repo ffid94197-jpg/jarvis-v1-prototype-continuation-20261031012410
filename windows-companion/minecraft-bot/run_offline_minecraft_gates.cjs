@@ -21,6 +21,7 @@ const tests=[
   'verify_progression.cjs',
   'verify_resource_goal.cjs',
   'verify_retreat_access.cjs',
+  'verify_travel_goal.cjs',
   'verify_late_game.cjs',
   'verify_late_skills.cjs',
   'verify_crafting_site.cjs',

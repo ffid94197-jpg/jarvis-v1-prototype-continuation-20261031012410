@@ -220,5 +220,27 @@ const ctx=createLateSkills({bot,navigate:async()=>true,craftNamed:async()=>{},ge
  check(!stationaryStair.ok&&!stationaryStair.verified &&
    /movement not verified/.test(stationaryStair.detail),
    'Digging underground stone does not prove stronghold route without server movement');
- console.log(`LATE_SKILLS_MOCK ${ok}/${ok} PASS (no live Minecraft server)`);
+ // A Dragon bow action must consume an arrow in the survival inventory.
+ // Successful activation alone is not verified gameplay progress.
+ bot.entity.position=new Vec3(0,64,0);
+ const dragon={id:450,name:'ender_dragon',position:new Vec3(12,68,0)};
+ bot.nearestEntity=fn=>fn(dragon)?dragon:null;
+ bot.lookAt=async()=>{};
+ bot.equip=async()=>{};
+ bot.activateItem=()=>{};
+ let arrowCount=3;
+ bot.inventory.items=()=>[{name:'bow',count:1},{name:'arrow',count:arrowCount},
+   {name:'diamond_sword',count:1}];
+ bot.deactivateItem=()=>{arrowCount--;};
+ const bowContext=createLateSkills({bot,navigate:async()=>true,
+   craftNamed:async()=>({verified:true}),getEpoch:()=>1,
+   getOwner:()=>'',digest:()=>({wornDiamond:true,wornNetherite:false}),Vec3});
+ const released=await bowContext.run({kind:'fight_dragon'},1);
+ check(released.ok&&released.verified&&arrowCount===2&&released.proof===undefined,
+   'Bow firing requires an observed arrow consumption, not an assumed hit');
+ bot.deactivateItem=()=>{};
+ const noReceipt=await bowContext.run({kind:'fight_dragon'},1);
+ check(!noReceipt.ok&&!noReceipt.verified&&arrowCount===2,
+   'No arrow inventory delta means shot remains unverified');
+  console.log(`LATE_SKILLS_MOCK ${ok}/${ok} PASS (no live Minecraft server)`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

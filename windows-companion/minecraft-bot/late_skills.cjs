@@ -180,13 +180,23 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     if(!target?.position)return observed(false,'Target entity not visible');
     const dist=bot.entity.position.distanceTo(target.position);
     if(dist>55)return observed(false,'Target outside bounded bow range');
+    const beforeArrows=count(bot,'arrow');
     await bot.equip(bow,'hand');
+    check(epoch);
     const aim=target.position.offset(0,Math.min(5,dist*dist/135),0);
     await bot.lookAt(aim,true);
     bot.activateItem();
     try{await delay(1200);}finally{bot.deactivateItem();}
-    check(epoch);await delay(1000);
-    return observed(true,'Bow shot dispatched toward observed target; hit not claimed');
+    // Arrow consumption is server-backed physical evidence of an actual
+    // survival shot. A button release alone is not evidence. Even a real
+    // arrow shot does not prove a hit or the Dragon's death.
+    for(let attempt=0;attempt<15;attempt++){
+      check(epoch);
+      if(count(bot,'arrow')<beforeArrows)
+        return observed(true,'Bow fired: actual arrow inventory consumed; target damage unverified');
+      await delay(150);
+    }
+    return observed(false,'Bow activation returned without verified arrow consumption; hit not claimed');
   }
   async function findTemplate(epoch){
     // Never loot a player's overworld storage. Chests must be observed in Nether

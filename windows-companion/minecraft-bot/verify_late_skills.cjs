@@ -95,8 +95,10 @@ const ctx=createLateSkills({bot,navigate:async()=>true,craftNamed:async()=>{},ge
     'Missing smithing materials must leave worn diamond armor untouched');
  bot.inventory.items=readyItems;
  // A failed smithing window open must not strand armor in the backpack.
- bot.inventory.items=()=>smithMaterial.filter(x=>
-   x.name!=='netherite_helmet' && x.name!=='diamond_helmet');
+ // Equipment does not appear in inventory.items UNTIL the server unequips it.
+ const helmetInBag=smithMaterial.indexOf(diamondHelmet);
+ if(helmetInBag>=0)smithMaterial.splice(helmetInBag,1);
+ bot.inventory.items=()=>smithMaterial.filter(x=>x.name!=='netherite_helmet');
  slots[positions.head]=diamondHelmet;
  let windowFailure=false;
  bot.openBlock=async()=>{throw Error('Simulated smithing window open failure');};

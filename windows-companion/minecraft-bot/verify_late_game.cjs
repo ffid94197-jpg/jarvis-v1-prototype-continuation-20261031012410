@@ -23,6 +23,20 @@ const temp={...diamond,netherite_upgrade_smithing_template:1,netherrack:4};
 expect({raw:temp,world:{dimension:'minecraft:the_nether'}},'mine_ancient_debris');
 expect({raw:{...temp,ancient_debris:20},world:{dimension:'minecraft:the_nether'}},'collect_gold');
 expect({raw:{...temp,ancient_debris:20,gold_ingot:20},world:{dimension:'minecraft:the_nether'}},'hunt_blazes');
+const goldFromOre={...temp,ancient_debris:20,raw_gold:20,
+ blaze_rod:8,ender_pearl:16,netherrack:4};
+expect({raw:goldFromOre,world:{dimension:'minecraft:the_nether'}},'enter_overworld');
+const goldFromNuggets={...temp,ancient_debris:20,gold_nugget:180,
+ blaze_rod:8,ender_pearl:16,netherrack:4};
+expect({raw:goldFromNuggets,world:{dimension:'minecraft:the_nether'}},'enter_overworld');
+const refineMaterials={...temp,ancient_debris:0,netherite_scrap:20,
+ raw_gold:20,blaze_rod:8,ender_pearl:16,netherrack:4};
+const refine=actual({raw:refineMaterials});
+check(refine.kind==='smelt_resource' &&
+ refine.input==='raw_gold' && refine.output==='gold_ingot',
+ 'Observed raw gold must be refined in Overworld, not sent back into Nether');
+expect({raw:{...refineMaterials,raw_gold:0,gold_nugget:180}},'collect_gold');
+
 const almostDone=Object.fromEntries(NETHERITE.slice(0,4).map(name=>[name,1]));
 const postDragonNether={...almostDone,netherite_upgrade_smithing_template:1,
  netherite_ingot:1,netherrack:4};

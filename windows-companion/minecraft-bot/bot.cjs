@@ -19,6 +19,7 @@ const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_na
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
 const {stoneProposal,excavationProposal}=require('./stone_access.cjs');
+const {findCraftingSite}=require('./crafting_site.cjs');
 const {stopPathfinder,clearStaleStop}=require('./pathfinder_lifecycle.cjs');
 // mineflayer-pathfinder needs up to thinkTimeout (5000ms default) just to
 // decide a route. A per-leg navigation budget below that expires while A* is
@@ -557,19 +558,25 @@ async function autoExecute(plan,epoch){
     case 'place_table':{
       const tableItem=bot.inventory.items().find(i=>i.name==='crafting_table');
       if(!tableItem)throw Error('Crafting table not in inventory');
-      const p=bot.entity.position;
-      for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1]]){
-        if(epoch!==actionEpoch)throw Error('Placement cancelled');
-        const ground=bot.blockAt(p.offset(dx,-1,dz));
-        const above=bot.blockAt(p.offset(dx,0,dz));
-        if(!ground || ground.boundingBox==='empty' || above?.name!=='air')continue;
-        await bot.equip(tableItem,'hand');await bot.placeBlock(ground,{x:0,y:1,z:0});
-        const placed=bot.blockAt(ground.position.offset(0,1,0));
-        const ok=placed?.name==='crafting_table';
-        if(ok)bot.jarvisOwnedCraftingTablePos=placed.position.clone();
-        return {ok,verified:ok,detail:'Crafting table '+(ok?'placed and observed':'placement unverified')};
+      const site=findCraftingSite(bot);
+      if(!site){
+        // A tree canopy or uneven surface can surround the player. Relocate
+        // to a safe, server-confirmed clearing; do not retry four bad blocks.
+        return scoutStoneSite(epoch);
       }
-      throw Error('No safe adjacent ground for crafting table');
+      if(epoch!==actionEpoch)throw Error('Placement cancelled');
+      const ground=bot.blockAt(site.ground);
+      if(!ground || ground.boundingBox!=='block' ||
+         !bot.entity.position || bot.entity.position.distanceTo(site.target.offset(.5,.5,.5))>4.2)
+        return {ok:false,verified:false,detail:'Crafting site moved or became unreachable'};
+      await bot.equip(tableItem,'hand');
+      await bot.placeBlock(ground,new Vec3(0,1,0));
+      if(epoch!==actionEpoch)throw Error('Placement cancelled');
+      await pause(150);
+      const placed=bot.blockAt(site.target);
+      const ok=placed?.name==='crafting_table';
+      if(ok)bot.jarvisOwnedCraftingTablePos=placed.position.clone();
+      return {ok,verified:ok,detail:'Crafting table '+(ok?'placed at observed safe ground '+site.target:'placement unverified')};
     }
     case 'craft_pickaxe':{
       const station=bot.findBlock({matching:b=>b?.name==='crafting_table',maxDistance:5});

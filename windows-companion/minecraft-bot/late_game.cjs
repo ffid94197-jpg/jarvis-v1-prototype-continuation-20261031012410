@@ -90,10 +90,16 @@ function lateGamePlan(world,progress={}){
     // back home; Overworld is safer for crafting and smithing workstations.
     if(!has(i,'netherite_upgrade_smithing_template'))
       return action('loot_bastion_template','Find Bastion Remnant and withdraw one actual Netherite upgrade template');
-    if(qty(i,'netherite_scrap')+qty(i,'ancient_debris') < 20 && qty(i,'netherite_ingot')<5)
-      return action('mine_ancient_debris','Expose and mine naturally generated Ancient Debris at safe Nether Y-level');
-    if(qty(i,'gold_ingot')<Math.max(0,20-4*qty(i,'netherite_ingot')))
-      return action('collect_gold','Collect gold ingots from actual gold ore/nuggets');
+    // Track what is STILL missing, not 20 new scraps/gold every time.
+    // Previously a partially upgraded inventory (four Netherite pieces and
+    // one pre-crafted ingot) restarted the 20-debris grind indefinitely.
+    const upgradesRemaining=NETHERITE.filter(n=>!has(i,n)).length;
+    const uncraftedIngotCount=Math.max(0,upgradesRemaining-qty(i,'netherite_ingot'));
+    const materialUnits=uncraftedIngotCount*4;
+    if(qty(i,'netherite_scrap')+qty(i,'ancient_debris')<materialUnits)
+      return action('mine_ancient_debris','Collect only the remaining actual Ancient Debris for uncrafted upgrades');
+    if(qty(i,'gold_ingot')<materialUnits)
+      return action('collect_gold','Collect gold for only the remaining uncrafted Netherite ingots');
     if(!(dragonFirst && dragonVictory) && qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8)
       return action('hunt_blazes','Locate Nether fortress and collect eight actual Blaze rods');
     if(!(dragonFirst && dragonVictory) && qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)

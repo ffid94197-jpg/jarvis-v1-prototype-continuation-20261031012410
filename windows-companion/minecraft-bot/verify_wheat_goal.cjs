@@ -25,6 +25,13 @@ for(const p of ps){map.set(key(p),{name:'wheat',getProperties:()=>({age:7})});ma
 const bot={entity:{position:{x:4,y:65,z:7}},blockAt:p=>map.get(key(p))||air};
 let observation=observeWheat(bot,spec,V);
 ok(observation.every(c=>c.state==='mature'),'Only fully grown wheat considered mature');
+map.set(key(ps[0]),{name:'wheat',getProperties:()=>({age:'unknown'})});
+ok(observeWheat(bot,spec,V)[0].state==='unloaded',
+ 'Unknown crop age is unverified and cannot authorize harvesting');
+map.set(key(ps[0]),{name:'wheat',getProperties:()=>({age:8})});
+ok(observeWheat(bot,spec,V)[0].state==='unloaded',
+ 'Impossible crop age is rejected before reaching executor');
+map.set(key(ps[0]),{name:'wheat',getProperties:()=>({age:7})});
 const world={joined:true,health:20,hunger:20,threats:[],inventory:{raw:{wheat:0,wheat_seeds:0}},wheatCells:observation};
 ok(wheatPlan(world,spec).kind==='harvest_wheat','Plan physical crop harvest');
 const controller=createController({clock:()=>1000,maxSeconds:20000,maxSteps:100});

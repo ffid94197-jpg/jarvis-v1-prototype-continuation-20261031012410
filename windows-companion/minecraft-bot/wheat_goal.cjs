@@ -32,7 +32,8 @@ function observeWheat(bot,s,Vec3){
      if(ground.name!=='farmland')state='blocked';
      else if(crop.name==='wheat'){
        const age=Number(crop.getProperties?.().age);
-       state=Number.isInteger(age)&&age>=7?'mature':'growing';
+       state=Number.isInteger(age)&&age>=0&&age<=7?
+         (age===7?'mature':'growing'):'unloaded';
      }else if(crop.name==='air'||crop.name==='cave_air')state='empty';
      else state='blocked';
    }

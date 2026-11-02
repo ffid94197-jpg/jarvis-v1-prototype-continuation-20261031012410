@@ -336,7 +336,8 @@ async function autoExecute(plan,epoch){
       const crop=bot.blockAt(target),actualFloor=bot.blockAt(target.offset(0,-1,0));
       if(actualFloor?.name!=='farmland')return {ok:false,verified:false,detail:'Farmland changed during travel'};
       if(plan.kind==='harvest_wheat'){
-        if(crop?.name!=='wheat'||Number(crop.getProperties?.().age)<7 ||
+        const observedAge=Number(crop?.getProperties?.().age);
+        if(crop?.name!=='wheat'||!Number.isInteger(observedAge)||observedAge!==7 ||
            !bot.canDigBlock?.(crop))
           return {ok:false,verified:false,detail:'Wheat is no longer mature and diggable'};
         const beforeWheat=rawCount(bot,'wheat');

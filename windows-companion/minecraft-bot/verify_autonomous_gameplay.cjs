@@ -13,7 +13,9 @@ const parameterized={
  travel:{destination:{x:3,y:64,z:7},arrivalRange:2},
  build:{position:{x:3,y:64,z:7},length:2,axis:'x+',block:'cobblestone'},
  farm_wheat:{position:{x:3,y:64,z:7},width:2,depth:2,targetCount:4},
- sequence:{steps:[{goal:'stone_age'}]}
+ sequence:{steps:[{goal:'stone_age'}]},
+ craft:{item:'chest',targetCount:2},
+ equip:{item:'iron_helmet',destinationSlot:'head'}
 };
 for(const goal of GOALS)
  ok(validateCommand({command:'auto_goal',goal,...(parameterized[goal]||{}),durationSeconds:300})===null,

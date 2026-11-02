@@ -30,7 +30,8 @@ const goldFromNuggets={...temp,ancient_debris:20,gold_nugget:180,
  blaze_rod:8,ender_pearl:16,netherrack:4};
 expect({raw:goldFromNuggets,world:{dimension:'minecraft:the_nether'}},'enter_overworld');
 const refineMaterials={...temp,ancient_debris:0,netherite_scrap:20,
- raw_gold:20,blaze_rod:8,ender_pearl:16,netherrack:4};
+ raw_gold:20,blaze_rod:8,ender_pearl:16,netherrack:4,coal:1};
+expect({raw:{...refineMaterials,coal:0}},'collect_wood');
 const refine=actual({raw:refineMaterials});
 check(refine.kind==='smelt_resource' &&
  refine.input==='raw_gold' && refine.output==='gold_ingot',

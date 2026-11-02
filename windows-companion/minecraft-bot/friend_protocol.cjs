@@ -7,7 +7,7 @@ function validateCommand(input) {
   if (typeof input.command !== 'string') return 'Missing command';
   if (SIMPLE.has(input.command)) return null;
   if (input.command === 'auto_goal')
-    return ['survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','netherite_dragon_run','companion'].includes(input.goal) &&
+    return ['survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','netherite_dragon_run','dragon_then_netherite_run','companion'].includes(input.goal) &&
       (input.durationSeconds===undefined || (Number.isInteger(input.durationSeconds) &&
        input.durationSeconds>=10 && input.durationSeconds<=43200))
       ? null : 'Autonomous goal needs valid goal and optional duration 10–43200 seconds';

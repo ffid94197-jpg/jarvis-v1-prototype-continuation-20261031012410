@@ -477,7 +477,7 @@ def validate_action(body):
         if command == 'natural_goal':
             text=body.get('text')
             if (not isinstance(text,str) or not 1 <= len(text.strip()) <= 600 or
-                re.search(r'[\\x00-\\x1f\\x7f]',text) or
+                re.search(r'[\x00-\x1f\x7f]',text) or
                 set(body) - {'operation','taskId','command','text'}):
                 return 'Invalid natural-language Minecraft instruction.'
         if command == 'navigate' and (not mc_position(body.get('position')) or

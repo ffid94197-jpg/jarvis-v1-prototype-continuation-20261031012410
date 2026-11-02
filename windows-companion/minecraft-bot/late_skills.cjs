@@ -4,6 +4,7 @@
  * No commands/creative mode/seed inspection/teleports. Failure is explicit.
  */
 const {NETHERITE}=require('./late_game.cjs');
+const {observeDragon,noteDragonAttack}=require('./dragon_engagement.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
 const {collectObservedDrop}=require('./drop_pickup.cjs');
@@ -17,7 +18,7 @@ const observed=(ok,detail,proof)=>({ok:!!ok,verified:!!ok,detail, ...(ok&&proof?
 const lookup=(bot,names,radius=28)=>bot.findBlock({matching:b=>b && names.includes(b.name),maxDistance:radius});
 const item=(bot,name)=>bot.inventory.items().find(i=>i.name===name);
 function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3}){
-  const session={portalBase:null,portalPosition:null,homePortalPosition:null,netherPortalPosition:null,eyesThrown:0,bearing:null,dragonSeen:false,dragonDied:false,visitedChests:new Set(),surveyIndex:0};
+  const session={portalBase:null,portalPosition:null,homePortalPosition:null,netherPortalPosition:null,eyesThrown:0,bearing:null,dragonSeen:false,dragonDied:false,dragonEntityId:null,dragonAttackAt:null,dragonAttempts:0,visitedChests:new Set(),surveyIndex:0};
   const check=epoch=>{if(getEpoch()!==epoch)throw Error('Minecraft action cancelled by owner');};
   async function move(position,range,epoch,timeout=20000){
     check(epoch);
@@ -192,8 +193,10 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     // arrow shot does not prove a hit or the Dragon's death.
     for(let attempt=0;attempt<15;attempt++){
       check(epoch);
-      if(count(bot,'arrow')<beforeArrows)
+      if(count(bot,'arrow')<beforeArrows){
+        if(target.name==='ender_dragon')noteDragonAttack(session,target);
         return observed(true,'Bow fired: actual arrow inventory consumed; target damage unverified');
+      }
       await delay(150);
     }
     return observed(false,'Bow activation returned without verified arrow consumption; hit not claimed');
@@ -404,7 +407,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
   async function fightDragon(epoch){
     const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon'&&e?.position);
     if(!dragon)return observed(false,'No live dragon entity in loaded world');
-    session.dragonSeen=true;
+    if(!observeDragon(session,dragon))return observed(false,'Dragon lacked stable server ID');
     const live=digest(bot,getOwner());
     if(live.wornDiamond!==true && live.wornNetherite!==true)
       return observed(false,'Four diamond or Netherite armor slots must be server-observed as worn');
@@ -413,7 +416,9 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     if(bot.entity.position.distanceTo(dragon.position)>5){
       return shootVisibleEntity(dragon,epoch);
     }
-    await bot.equip(sword,'hand');bot.attack(dragon);await delay(350);check(epoch);
+    await bot.equip(sword,'hand');bot.attack(dragon);check(epoch);
+    noteDragonAttack(session,dragon);
+    await delay(350);check(epoch);
     return observed(true,'Melee attack dispatched at visible dragon; death not claimed','dragon_seen');
   }
   async function destroyCrystal(epoch){
@@ -663,11 +668,13 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       case 'fight_dragon':return fightDragon(epoch);
       case 'observe_dragon':{const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon');
         if(!dragon)return observed(false,'No dragon entity to observe');
-        session.dragonSeen=true;return observed(true,'Observed dragon entity ID '+dragon.id,'dragon_seen');
+        if(!observeDragon(session,dragon))return observed(false,'Dragon identity unverified');
+        return observed(true,'Observed dragon entity ID '+dragon.id,'dragon_seen');
       }
       case 'search_dragon':{
         const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon');
-        if(dragon){session.dragonSeen=true;return observed(true,'Ender Dragon observed','dragon_seen');}
+        if(dragon&&observeDragon(session,dragon))
+          return observed(true,'Ender Dragon observed ID '+dragon.id,'dragon_seen');
         return walkScout(epoch,'Ender Dragon');
       }
       case 'verify_dragon':{

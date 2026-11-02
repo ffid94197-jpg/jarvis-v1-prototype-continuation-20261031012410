@@ -31,6 +31,7 @@ jobs:
           node windows-companion/minecraft-bot/verify_late_skills.cjs
           node windows-companion/minecraft-bot/verify_late_game.cjs
           node --check windows-companion/minecraft-bot/stone_access.cjs
+          node --check windows-companion/minecraft-bot/verify_real_java_server_wood.cjs
           node --check windows-companion/minecraft-bot/verify_real_java_full_campaign.cjs
           node windows-companion/minecraft-bot/verify_stone_access.cjs
           node windows-companion/minecraft-bot/verify_crafting_site.cjs

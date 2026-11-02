@@ -134,6 +134,31 @@ OPERATING RULES:
 
 ${TOOL_CATALOG_JSON}`;
 
+/**
+ * LAYA-compatible prompt-size optimization for deterministic local file work.
+ * This is advisory tool discovery, NEVER an authorization change: Guardian
+ * still checks every proposed call. Restrict only unambiguous short, direct
+ * file/folder creation requests; general multi-app and coding goals retain
+ * the full universal catalog.
+ */
+const DIRECT_FS_GOAL = /^(?:please\\s+|jarvis[,! ]+)?(?:create|write|make|save)\\b/i;
+const FS_OBJECT = /\\b(?:files?|folders?|directories)\\b/i;
+const COMPLEX_GOAL = /\\b(?:website|web\\s*app|browser|minecraft|windows|desktop|game|editor|program|project|install|internet|build|test|network|git|github|application|video|launch|open\\s+app|download|research|navigate)\\b/i;
+const FILE_ONLY_TOOLS = `AVAILABLE TOOLS — direct authorized file tasks:
+- create_folder {"path":"actual-folder-name"} — create one requested workspace-relative directory, recursively
+- write_file {"path":"requested/path.txt","content":"exact requested content"} — write one requested file
+- read_file {"path":"requested/path.txt"} — independently read back a file
+- list_dir {"path":"requested-folder"} — inspect an existing directory
+FILE TASK RULES: Copy ACTUAL path names and exact content from the OPERATOR OBJECTIVE, not examples in this catalog. "actual-folder-name", "requested/path.txt", "name", "path", and "file" are EXAMPLES only unless the operator literally requests them. Never create unrelated output. Use create_folder for explicitly requested directories, write_file for every requested file, and read_file before reporting success. After any partial/failed receipt, correct the next concrete step within Guardian policy. Never claim verified until independent Core checks the exact requested outputs. All other tool categories are intentionally omitted for this simple task; do not invent or invoke them.`;
+
+export function selectPlannerSystemPrompt(objective: string): string {
+  if (objective.length > 600 ||
+      !DIRECT_FS_GOAL.test(objective.trim()) ||
+      !FS_OBJECT.test(objective) ||
+      COMPLEX_GOAL.test(objective)) return PLANNER_SYSTEM_PROMPT;
+  return PLANNER_SYSTEM_PROMPT.replace(TOOL_CATALOG_JSON, FILE_ONLY_TOOLS);
+}
+
 export const FINAL_REPORT_INSTRUCTION = `All steps are complete. Produce the final report for the operator now, in the JARVIS voice (composed, precise, may address the operator as "sir" occasionally).
 
 Requirements:

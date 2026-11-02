@@ -55,7 +55,7 @@ jobs:
           JARVIS_MODEL_BACKEND: ollama
           JARVIS_OLLAMA_BASE_URL: http://127.0.0.1:11434
           JARVIS_OLLAMA_MODEL: ${{ inputs.model }}
-          JARVIS_MODEL_REQUEST_TIMEOUT_MS: "120000"
+          JARVIS_MODEL_REQUEST_TIMEOUT_MS: "300000"
           JARVIS_AGENT_WORKSPACE: ${{ runner.temp }}\jarvis-tvs-workspace
           JARVIS_LIVE_EVIDENCE: ${{ runner.temp }}\jarvis-tvs-live-evidence.json
         run: |

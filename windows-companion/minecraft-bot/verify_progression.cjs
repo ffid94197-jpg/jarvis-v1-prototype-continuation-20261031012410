@@ -76,6 +76,12 @@ assert.equal(decide('dragon_run',w({stonePickaxe:1,stoneSword:1,ironPickaxe:1}))
 assert.equal(decide('dragon_run',w({stonePickaxe:1,stoneSword:1,ironPickaxe:1,diamonds:3,sticks:2},true)).item,'diamond_pickaxe');
 const diamondGear={stonePickaxe:1,stoneSword:1,ironPickaxe:1,diamondPickaxe:1,diamondSword:1,diamondHelmet:1,diamondChestplate:1,diamondLeggings:1,diamondBoots:1};
 assert.equal(decide('dragon_run',w(diamondGear)).kind,'mine_obsidian','progresses to portal materials without claiming dragon kill');
+assert.equal(decide('survive',w()).kind,'collect_wood',
+ 'Independent survival begins tool progression even if no owner is connected');
+assert.equal(decide('survive',w({woodenPickaxe:1,sticks:4})).kind,'mine_cobblestone',
+ 'Independent survival progresses from wood to Stone without owner');
+assert.equal(decide('survive',w({stonePickaxe:1,stoneSword:1,ironPickaxe:1})).kind,'scout_survival',
+ 'Iron-equipped independent survival safely explores instead of waiting for invisible owner');
 assert.equal(decide('survive',{...w(),hunger:6}).kind,'obtain_food',
  'Critically hungry survival gameplay must seek real food instead of immediately blocking');
 const woodRecovery=createController({clock:()=>100,maxSteps:150});

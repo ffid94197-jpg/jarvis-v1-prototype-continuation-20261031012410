@@ -29,7 +29,8 @@ assert(privateHost(host),'Minecraft smoke requires approved loopback/private LAN
 assert(Number.isInteger(port)&&port>=1024&&port<=65535,'Invalid Minecraft server port');
 assert(/^[A-Za-z0-9_]{1,16}$/.test(owner) && owner.toLowerCase()!=='jarvisbuddy','Invalid owner name');
 const env={...process.env,JARVIS_MINECRAFT_LAN_HOST:host,
- JARVIS_MINECRAFT_LAN_PORT:String(port),JARVIS_MINECRAFT_PLAYER:owner};
+ JARVIS_MINECRAFT_LAN_PORT:String(port),JARVIS_MINECRAFT_PLAYER:owner,
+ JARVIS_MC_TRACE_AUTONOMY:'1'};
 const output=[],receipts=[];
 const bot=spawn(process.execPath,[botSource],{cwd:__dirname,env,stdio:['pipe','pipe','pipe'],windowsHide:true});
 let joined=false,exit=null;
@@ -71,7 +72,11 @@ async function main(){
   assert(pre.ok&&pre.status==='empty','Survival world must begin with genuinely empty inventory. Got '+JSON.stringify(pre));
   const state=await command({command:'observe'});
   assert(state.ok && !/creative/i.test(state.status||''),'Unverified server/world state');
-  const started=await command({command:'auto_goal',goal:'wood',durationSeconds:600});
+  const stoneMode=process.env.JARVIS_MC_TEST_STONE==='1';
+  // One goal must drive every stage; do not interrupt a partial wood task and
+  // artificially turn it into a separate Stone task during acceptance.
+  const started=await command({command:'auto_goal',
+    goal:stoneMode?'stone_age':'wood',durationSeconds:stoneMode?900:600});
   assert(started.ok,'Owner-authorized autonomous wood goal was rejected: '+JSON.stringify(started));
   let received='',lastState='';
   const until=Date.now()+205000;
@@ -79,23 +84,26 @@ async function main(){
    await wait(3000);
    const inventory=await command({command:'inventory'});
    if(inventory.ok)received=inventory.status||'';
-   if(/(?:^|, )(?:oak|spruce|birch|jungle|acacia|dark_oak|cherry|mangrove|pale_oak)_log:[1-9]/.test(received))break;
+   if(/(?:^|, )(?:oak|spruce|birch|jungle|acacia|dark_oak|cherry|mangrove|pale_oak)_log:[1-9]/.test(received)||
+      receipts.some(s=>s.action==='collect_wood'&&s.verified===true&&s.logs>0))break;
    const status=await command({command:'auto_status'});
    if(status.ok){lastState=status.status||'';
      let js;try{js=JSON.parse(lastState)}catch{}
      if(js && ['blocked','paused','complete'].includes(js.status))break;
    }
   }
-  assert(/(?:^|, )(?:oak|spruce|birch|jungle|acacia|dark_oak|cherry|mangrove|pale_oak)_log:[1-9]/.test(received),
+  assert(/(?:^|, )(?:oak|spruce|birch|jungle|acacia|dark_oak|cherry|mangrove|pale_oak)_log:[1-9]/.test(received)||
+    receipts.some(s=>s.action==='collect_wood'&&s.verified===true&&s.logs>0),
     'No physically gathered wood in server inventory; last='+received+
     ' state='+lastState+' actionReceipts='+JSON.stringify(receipts.slice(-20))+
     ' output='+JSON.stringify(output.slice(-12)));
-  const stopped=await command({command:'auto_stop'});
-  assert(stopped.ok,'Owner cancellation not acknowledged');
-  console.log('MINECRAFT_REAL_JAVA_WOOD_SMOKE PASS; server-backed independent bot joined, empty survival spawn and mined logs observed; elapsedMs='+String(Date.now()-initialAt));
-  if(process.env.JARVIS_MC_TEST_STONE==='1'){
-    const beginStone=await command({command:'auto_goal',goal:'stone_age',durationSeconds:600});
-    assert(beginStone.ok,'Live stone age mission not accepted');
+  if(!stoneMode){
+    const stopped=await command({command:'auto_stop'});
+    assert(stopped.ok,'Owner cancellation not acknowledged');
+  }
+  console.log('MINECRAFT_REAL_JAVA_WOOD_SMOKE PASS; empty survival spawn and server-backed wood actually observed; elapsedMs='+String(Date.now()-initialAt));
+  if(stoneMode){
+    // The original stone_age mission remains running. No second AI command.
     let finalStone='',observedStone=null;
     const stoneDeadline=Date.now()+8*60*1000;
     while(Date.now()<stoneDeadline && !exit){

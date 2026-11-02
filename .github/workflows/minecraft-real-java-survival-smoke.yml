@@ -1,15 +1,8 @@
 name: Minecraft Java vanilla survival live server smoke
+# Paused: GitHub Actions included minutes exhausted. This workflow is
+# manual-only; prefer local Windows test scripts (no GitHub-runner minutes).
 on:
-  push:
-    branches: [fix/minecraft-live-survival-bridge-20261102]
-    paths:
-      - "windows-companion/minecraft-bot/**"
-      - ".github/workflows/minecraft-real-java-survival-smoke.yml"
-  pull_request:
-    branches: [test/minecraft-dragon-first-netherite-sim-20261102]
-    paths:
-      - "windows-companion/minecraft-bot/**"
-      - ".github/workflows/minecraft-real-java-survival-smoke.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

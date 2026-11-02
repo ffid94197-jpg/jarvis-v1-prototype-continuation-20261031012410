@@ -5,6 +5,17 @@
  */
 const RESOURCES=new Set(['logs','planks','sticks','cobblestone','raw_iron',
   'iron_ingot','diamond','obsidian','flint','netherrack']);
+const ALIASES=Object.freeze({
+ wood:'logs',log:'logs',stones:'cobblestone',stone:'cobblestone',
+ diamonds:'diamond',iron:'iron_ingot',rawiron:'raw_iron',
+ nuggets:'flint',plank:'planks',stick:'sticks'
+});
+function normalizeResource(name){
+ if(typeof name!=='string')return null;
+ const raw=name.trim().toLowerCase().replace(/[ -]+/g,'_');
+ const normalized=ALIASES[raw]||raw;
+ return RESOURCES.has(normalized)?normalized:null;
+}
 const COUNTS={logs:'logs',planks:'planks',sticks:'sticks',
   cobblestone:'cobblestone',raw_iron:'rawIron',iron_ingot:'ironIngot',
   diamond:'diamonds',obsidian:'obsidian',flint:'flint',netherrack:'netherrack'};
@@ -99,4 +110,4 @@ function resourcePlan(world,failures={},progress={},delegate){
  default:return required('blocked','Resource target not supported');
  }
 }
-module.exports={RESOURCES,resourceCount,resourcePlan};
+module.exports={RESOURCES,normalizeResource,resourceCount,resourcePlan};

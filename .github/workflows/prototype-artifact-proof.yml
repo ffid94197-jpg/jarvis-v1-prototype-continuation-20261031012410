@@ -1,13 +1,16 @@
 name: Prototype artifact proof targeted acceptance
 on:
   pull_request:
-    branches: [autonomy-100-percent-acceptance-20261102]
+    branches: [autonomy-100-percent-acceptance-20261102, fix/autonomy-artifact-receipt-20261102]
     paths:
       - "src/lib/agent/core/verifier.ts"
       - "scripts/verify-task-outcome-honesty.cjs"
+      - "scripts/verify-inventory-integrity.cjs"
+      - "scripts/autonomy/validate-internet-corpus.cjs"
+      - "scripts/autonomy/verify-corpus-validator.cjs"
       - ".github/workflows/prototype-artifact-proof.yml"
   push:
-    branches: [fix/autonomy-artifact-receipt-20261102]
+    branches: [fix/autonomy-artifact-receipt-20261102, fix/autonomy-durable-proof-and-corpus-20261102]
     paths:
       - "src/lib/agent/core/verifier.ts"
       - "scripts/verify-task-outcome-honesty.cjs"
@@ -42,6 +45,14 @@ jobs:
         run: |
           node scripts/verify-task-outcome-honesty.cjs
           if ($LASTEXITCODE -ne 0) { throw "Artifact receipt acceptance failed" }
+      - name: Source-grounded inventory checks
+        run: |
+          node scripts/verify-inventory-integrity.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Inventory source-fidelity regression failed" }
+      - name: Internet corpus source-attestation tests
+        run: |
+          node scripts/autonomy/verify-corpus-validator.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Corpus provenance regression failed" }
       - name: Guard against Core behavior regression
         run: |
           npm.cmd run test:core-actionable-execution

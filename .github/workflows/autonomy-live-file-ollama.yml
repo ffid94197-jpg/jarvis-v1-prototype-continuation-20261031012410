@@ -1,0 +1,94 @@
+name: Prototype real Ollama Core file acceptance (native Windows)
+on:
+  push:
+    branches: [fix/autonomy-durable-proof-and-corpus-20261102]
+    paths:
+      - ".github/workflows/autonomy-live-file-ollama.yml"
+      - "scripts/autonomy/run-live-ollama-file-task.cjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-core-file:
+    runs-on: windows-latest
+    timeout-minutes: 100
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked JARVIS dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+          npx prisma generate
+          if ($LASTEXITCODE -ne 0) { throw "Prisma generate failed" }
+      - name: Install Ollama in disposable Windows VM
+        run: |
+          $ErrorActionPreference="Stop"
+          if (!(Get-Command winget -ErrorAction SilentlyContinue)) { throw "winget unavailable" }
+          winget install --id Ollama.Ollama --exact --silent --accept-package-agreements --accept-source-agreements
+          $cli=Get-Command ollama.exe -ErrorAction SilentlyContinue
+          if (!$cli) {
+            $alt=Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"
+            if (Test-Path $alt) { Add-Content $env:GITHUB_PATH (Split-Path $alt); $cli=Get-Item $alt }
+          }
+          if (!$cli) { throw "Ollama not installed" }
+          $exe=$cli.Source
+          if (!$exe) { $exe=$cli.FullName }
+          Start-Process -FilePath $exe -ArgumentList "serve" -WindowStyle Hidden
+          $ready=$false
+          for($i=0;$i -lt 60;$i++){
+            try { Invoke-RestMethod "http://127.0.0.1:11434/api/tags" -TimeoutSec 3 | Out-Null; $ready=$true; break } catch { Start-Sleep -Seconds 2 }
+          }
+          if (!$ready) { throw "Ollama server unreachable" }
+      - name: Pull real local model
+        run: |
+          ollama pull qwen2.5-coder:1.5b
+          if ($LASTEXITCODE -ne 0) { throw "Ollama model pull failed" }
+      - name: Run genuine model-directed Core filesystem objective
+        env:
+          JARVIS_MODEL_BACKEND: ollama
+          JARVIS_OLLAMA_BASE_URL: http://127.0.0.1:11434
+          JARVIS_OLLAMA_MODEL: qwen2.5-coder:1.5b
+          JARVIS_MODEL_REQUEST_TIMEOUT_MS: "300000"
+          JARVIS_AGENT_WORKSPACE: ${{ runner.temp }}\jarvis-real-ollama-workspace
+          JARVIS_LIVE_EVIDENCE: ${{ runner.temp }}\jarvis-real-ollama-file-proof.json
+        run: |
+          $ErrorActionPreference="Stop"
+          New-Item -ItemType Directory -Force -Path $env:JARVIS_AGENT_WORKSPACE | Out-Null
+          $out=Join-Path $env:RUNNER_TEMP "jarvis-real-ollama-console.log"
+          $err=Join-Path $env:RUNNER_TEMP "jarvis-real-ollama-console-errors.log"
+          $proc=Start-Process -FilePath "npm.cmd" -ArgumentList @("run","dev:no-login") -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+          "JARVIS_DEV_PID=$($proc.Id)" | Out-File $env:GITHUB_ENV -Append
+          $ready=$false
+          for($i=0;$i -lt 120;$i++){
+            if ($proc.HasExited) { throw "JARVIS exited before task acceptance. Exit $($proc.ExitCode)" }
+            try {
+              Invoke-RestMethod "http://127.0.0.1:3000/api/jarvis/auth/session" -TimeoutSec 4 | Out-Null
+              $ready=$true;break
+            } catch { Start-Sleep -Seconds 2 }
+          }
+          if (!$ready) { throw "Local JARVIS endpoint unreachable" }
+          node scripts/autonomy/run-live-ollama-file-task.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Real Ollama Core acceptance failed" }
+      - name: Upload independent task evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-real-ollama-core-file-evidence
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}\jarvis-real-ollama-file-proof.json
+            ${{ runner.temp }}\jarvis-real-ollama-console.log
+            ${{ runner.temp }}\jarvis-real-ollama-console-errors.log
+      - name: Stop local JARVIS dev server
+        if: always()
+        run: |
+          if($env:JARVIS_DEV_PID){ Stop-Process -Id ([int]$env:JARVIS_DEV_PID) -Force -ErrorAction SilentlyContinue }

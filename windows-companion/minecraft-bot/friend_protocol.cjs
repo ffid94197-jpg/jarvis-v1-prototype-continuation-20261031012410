@@ -10,16 +10,28 @@ function validateCommand(input) {
   if (input.command === 'auto_goal') {
     const fixed=['survive','wood','tools','explore','follow','guard','stone_age','iron_age',
       'dragon_run','netherite_dragon_run','dragon_then_netherite_run','companion'];
-    const validGoal=fixed.includes(input.goal)||(input.goal==='gather' &&
-      RESOURCES.has(input.resource)&&Number.isInteger(input.targetCount) &&
-      input.targetCount>=1&&input.targetCount<=64);
-    const noUnrelatedParameters=input.goal==='gather' ||
-      (input.resource===undefined&&input.targetCount===undefined);
+    const position=target=>target && typeof target==='object' &&
+      !Array.isArray(target) &&
+      ['x','y','z'].every(k=>Number.isInteger(target[k]) &&
+        Math.abs(target[k])<=30000000);
+    const validTravel=input.goal==='travel' && position(input.destination) &&
+      Number.isInteger(input.arrivalRange) &&
+      input.arrivalRange>=1 && input.arrivalRange<=8;
+    const validGoal=fixed.includes(input.goal)||validTravel||
+      (input.goal==='gather' && RESOURCES.has(input.resource) &&
+        Number.isInteger(input.targetCount) &&
+        input.targetCount>=1&&input.targetCount<=64);
+    const noUnrelatedParameters=
+      (input.goal==='gather' && input.destination===undefined&&input.arrivalRange===undefined) ||
+      (input.goal==='travel' && input.resource===undefined&&input.targetCount===undefined) ||
+      (fixed.includes(input.goal) && input.resource===undefined &&
+        input.targetCount===undefined&&input.destination===undefined &&
+        input.arrivalRange===undefined);
     return validGoal && noUnrelatedParameters &&
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&
           input.durationSeconds<=43200)) ? null :
-      'Autonomous goal invalid. Gather needs supported resource and targetCount 1-64; duration 10-43200 seconds';
+      'Autonomous goal invalid. Gather requires resource/count 1-64; travel requires destination/range 1-8; duration 10-43200 seconds';
   }
   // Bounded general-purpose player primitives. All IDs/names are validated before I/O.
   const itemName = v => typeof v === 'string' && /^[a-z0-9_]{1,64}$/.test(v);

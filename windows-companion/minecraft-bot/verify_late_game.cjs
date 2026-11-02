@@ -22,6 +22,10 @@ check(eyeCount({eye_of_ender:7})===7,'Historical normalized snapshots still supp
 const diamond=Object.fromEntries(DIAMOND.map(n=>[n,1]));
 const actual=({raw={},world={},milestones={}})=>lateGamePlan(state(raw,{wornNetherite:milestones.netheriteEquipped===true,...world}),{milestones});
 const expect=(params,kind)=>{const a=actual(params);check(a.kind===kind,`expected ${kind}, got ${JSON.stringify(a)}`);};
+const expectDragonFirst=(params,kind)=>{
+ const a=lateGamePlan(state(params.raw,params.world),{goal:'dragon_then_netherite_run',milestones:{}});
+ check(a.kind===kind,`dragon-first expected ${kind}, got ${JSON.stringify(a)}`);
+};
 check(validateCommand({command:'auto_goal',goal:'netherite_dragon_run',durationSeconds:21600})===null,'six-hour goal');
 check(validateCommand({command:'auto_goal',goal:'netherite_dragon_run',durationSeconds:43201})!==null,'bounded mission time');
 expect({raw:diamond,world:{netherPortalNearby:false}},'mine_obsidian');
@@ -30,13 +34,13 @@ expect({raw:{...diamond,obsidian:14,flint:1,iron_ingot:1},world:{netherPortalNea
 expect({raw:{...diamond,obsidian:14,flint_and_steel:1},world:{netherPortalNearby:false}},'build_nether_portal');
 expect({raw:diamond},'enter_nether');
 // The Dragon-first path MUST continue using Java's actual ender_eye ID.
-expect({raw:{...readyForEnd,...realEyes},
+expectDragonFirst({raw:{...readyForEnd,...realEyes},
   world:{netherPortalNearby:true}},'track_stronghold');
-expect({raw:{...readyForEnd,ender_eye:3,ender_pearl:4,blaze_powder:4},
+expectDragonFirst({raw:{...readyForEnd,ender_eye:3,ender_pearl:4,blaze_powder:4},
   world:{netherPortalNearby:true,strongholdPortalFrameNearby:true,strongholdMissingEyes:7}},'craft_eyes');
-expect({raw:{...readyForEnd,ender_eye:3},
+expectDragonFirst({raw:{...readyForEnd,ender_eye:3},
   world:{netherPortalNearby:true,strongholdPortalFrameNearby:true,strongholdMissingEyes:3}},'activate_end_portal');
-expect({raw:readyForEnd,
+expectDragonFirst({raw:readyForEnd,
   world:{netherPortalNearby:true,endPortalPresent:true,endPortalActivated:true}},'enter_end');
 
 expect({raw:diamond,world:{dimension:'minecraft:the_nether'}},'loot_bastion_template');

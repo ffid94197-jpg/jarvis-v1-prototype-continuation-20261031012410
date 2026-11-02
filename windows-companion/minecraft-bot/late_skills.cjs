@@ -7,6 +7,7 @@ const {NETHERITE}=require('./late_game.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
 const {collectObservedDrop}=require('./drop_pickup.cjs');
+const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {findPortalLayout,pos:portalCell}=require('./portal_layout.cjs');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const solid=b=>b && b.boundingBox!=='empty' && !['air','cave_air','void_air','lava','water','fire','nether_portal'].includes(b.name);
@@ -417,8 +418,13 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       await delay(250);check(epoch);
       if(ui.slots[3]?.name!==plan.item)return observed(false,'Server did not offer expected '+plan.item+' output');
       await bot.clickWindow(3,0,1); // shift-click verified smithing output
-      await delay(200);check(epoch);
-      return observed(count(bot,plan.item)>before,`Smithing result ${plan.item} count ${before} -> ${count(bot,plan.item)}`);
+      const settled=await waitForInventoryIncrease({
+        before,read:()=>count(bot,plan.item),
+        check:()=>check(epoch),wait:delay,deadline:Date.now()+3500
+      });
+      return observed(settled.ok,
+        `Smithing result ${plan.item} inventory ${before} -> ${settled.after}`+
+        (settled.ok?' (server observed)':' (input clicked; output not proven)'));
     }finally{
       // Return any stranded input items to inventory when server permits.
       for(let slot=0;slot<3;slot++){
@@ -426,7 +432,9 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
           try{await bot.clickWindow(slot,0,1);}catch{}
         }
       }
-      await bot.closeWindow(ui).catch(()=>{});
+      // Mineflayer closeWindow() can return void, not a promise. Do not
+      // throw a TypeError in finally after an otherwise verified upgrade.
+      try{await Promise.resolve(bot.closeWindow(ui));}catch{ /* remote close may have raced */ }
     }
   }
   async function equipDiamond(epoch){

@@ -275,17 +275,19 @@ async function verifyInventoryArtifacts(
   source: InventorySource,
   effects: Array<{ status: string; tool: string; argsJson: string | null }>,
   failedEffects: number,
+  verifiedProof: ReadonlySet<string>,
 ): Promise<Arbitration> {
   const targets = new Map<"csv" | "report", string[]>();
   for (const e of effects) {
     if(e.status !== "SETTLED" || e.tool !== "write_file") continue;
     let args: {path?: unknown};
     try { args=JSON.parse(e.argsJson ?? "{}"); } catch { continue; }
-    if(typeof args.path !== "string") continue;
-    const kind=inventoryArtifactKind(args.path);
+    const scoped = resolveScopedPath(args.path);
+    if(!scoped.ok || !scoped.rel || !verifiedProof.has("write_file:"+scoped.rel)) continue;
+    const kind=inventoryArtifactKind(scoped.rel);
     if(!kind)continue;
     const paths=targets.get(kind) ?? [];
-    if(!paths.includes(args.path))paths.push(args.path);
+    if(!paths.includes(scoped.rel))paths.push(scoped.rel);
     targets.set(kind,paths);
   }
   const checked: Arbitration["predicates"]=[];
@@ -385,7 +387,7 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
     return {verdict:"partial",predicates:[],
       predicateLines:["INVENTORY_SOURCE_UNAVAILABLE: folder-only proof cannot certify inventory"]};
   if(toolAssisted&&input.inventorySource)
-    return verifyInventoryArtifacts(input.inventorySource,effects,failedEffects);
+    return verifyInventoryArtifacts(input.inventorySource,effects,failedEffects,settledArtifactProof);
   const predicates=extractPredicates(objective);
   if(toolAssisted&&/\b(?:files?|csv|spreadsheet)\b/i.test(objective)
      &&predicates.length>0&&predicates.every(p=>p.kind==="folder"))

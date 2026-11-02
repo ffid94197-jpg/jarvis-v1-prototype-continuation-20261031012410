@@ -6,7 +6,7 @@
  */
 const {lateGamePlan} = require('./late_game.cjs');
 const {RESOURCES,resourcePlan}=require('./resource_goal.cjs');
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather']);
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
@@ -135,6 +135,19 @@ function decide(goal, world, failures={}, progress={}) {
   // mission remains alive until stopped; it chooses and verifies its own
   // survival, crafting and movement actions instead of requiring commands.
   if(goal==='gather')return resourcePlan(world,failures,progress,needed=>decide(needed,world,failures,progress));
+  if(goal==='travel'){
+    const t=progress.destination,p=world.position;
+    if(!t || !['x','y','z'].every(k=>Number.isInteger(t[k])) ||
+       !Number.isInteger(progress.arrivalRange))
+      return {kind:'blocked',why:'Missing validated travel destination'};
+    if(p && ['x','y','z'].every(k=>Number.isFinite(p[k]))){
+      const dist=Math.hypot(p.x-t.x,p.y-t.y,p.z-t.z);
+      if(dist<=progress.arrivalRange && progress.milestones?.travelArrivalVerified===true)
+        return {kind:'complete',why:'Goal target reached with independently verified physical arrival'};
+    }
+    return {kind:'travel_target',destination:t,range:progress.arrivalRange,
+      why:'Navigate to saved destination and verify actual position'};
+  }
   if(goal==='companion') {
     if(closest?.distance<=6 && world.health>=12 && closest.name!=='creeper')
       return {kind:'defend',why:'Defend against observed hostile',targetId:closest.id};
@@ -307,11 +320,18 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   function start(goal,seconds=300,spec={}){
     if(!GOALS.has(goal))throw Error('Unsupported autonomous gameplay goal');
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)throw Error('Duration out of bounds');
+    if(goal==='travel' && (!spec?.destination ||
+       !['x','y','z'].every(k=>Number.isInteger(spec.destination[k]) &&
+         Math.abs(spec.destination[k])<=30000000) ||
+       !Number.isInteger(spec?.arrivalRange) || spec.arrivalRange<1 || spec.arrivalRange>8))
+      throw Error('Travel requires integer destination and arrivalRange 1-8');
     if(goal==='gather' && (!RESOURCES.has(spec?.resource) ||
         !Number.isInteger(spec?.targetCount) || spec.targetCount<1 || spec.targetCount>64))
       throw Error('Gather requires supported resource and targetCount 1-64');
     const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null,
-      ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{})};return status();
+      ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{}),
+      ...(goal==='travel'?{destination:{...spec.destination},
+        arrivalRange:spec.arrivalRange}:{})};return status();
   }
   function stop(why='Owner paused autonomous gameplay'){state.status='paused';state.why=why;return status();}
   // A long-running owner-authorized mission may continue in bounded 6-hour
@@ -371,6 +391,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         state.milestones.endReturned=true;
       if(outcome.proof==='netherite_equipped')state.milestones.netheriteEquipped=true;
       if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':'mine_diamond']=0;}
+      if(decision.kind==='travel_target' && outcome.proof==='travel_arrival')
+        state.milestones.travelArrivalVerified=true;
       if(decision.kind==='survey_wood'){
         state.milestones.woodSurveyTrips=(state.milestones.woodSurveyTrips||0)+1;
         state.failures.collect_wood=0;

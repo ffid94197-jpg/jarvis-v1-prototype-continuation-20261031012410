@@ -105,10 +105,10 @@ const policy={
 };
 const v=compile("src/lib/agent/core/verifier.ts",{"@/lib/db":{db},"../guardian/policy":policy,"./inventoryIntegrity":inventory});
 function setEffects(mode="ok"){
- effects=[
-  {status:"SETTLED",tool:"write_file",argsJson:JSON.stringify({path:"inventory_analysis/inventory_data.csv",content:"written"})},
-  {status:"SETTLED",tool:"write_file",argsJson:JSON.stringify({path:"inventory_analysis/inventory_report.txt",content:"written"})},
- ];
+ effects=["inventory_analysis/inventory_data.csv","inventory_analysis/inventory_report.txt"].map(rel=>({
+  status:"SETTLED",tool:"write_file",argsJson:JSON.stringify({path:rel,content:"written"}),
+  receiptJson:JSON.stringify({ok:true,tool:"write_file",detail:{path:rel,verified:true}})
+ }));
  if(mode==="failed")effects.push({status:"FAILED",tool:"write_file",argsJson:"{}"});
  if(mode==="unknown")effects.push({status:"ADMITTED",tool:"write_file",argsJson:"{}"});
  if(mode==="missing")effects.pop();
@@ -132,6 +132,14 @@ async function asyncCases(){
   assert.equal(a.verdict,"partial");count++;console.log("PASS failed effect not erased by valid files: PARTIAL");
   setEffects("unknown");a=await v.arbitrateCompletion({taskId:"t",objective:original,toolAssisted:true,inventorySource:source});
   assert.equal(a.verdict,"effect_unknown");count++;console.log("PASS unsettled effect: EFFECT_UNKNOWN");
+  setEffects("ok");
+  effects[1].receiptJson=JSON.stringify({ok:true,tool:"write_file",detail:{path:"other-report.txt",verified:true}});
+  a=await v.arbitrateCompletion({taskId:"t",objective:original,toolAssisted:true,inventorySource:source});
+  assert.equal(a.verdict,"partial");count++;console.log("PASS forged report receipt path rejected: PARTIAL");
+  setEffects("ok");
+  delete effects[1].receiptJson;
+  a=await v.arbitrateCompletion({taskId:"t",objective:original,toolAssisted:true,inventorySource:source});
+  assert.equal(a.verdict,"partial");count++;console.log("PASS stale report without verified receipt rejected: PARTIAL");
   setEffects("ok");fs.unlinkSync(cPath);
   a=await v.arbitrateCompletion({taskId:"t",objective:original,toolAssisted:true,inventorySource:source});
   assert.equal(a.verdict,"partial");count++;console.log("PASS missing disk file: PARTIAL");

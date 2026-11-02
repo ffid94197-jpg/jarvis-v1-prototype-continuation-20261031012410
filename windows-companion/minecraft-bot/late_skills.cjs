@@ -17,17 +17,42 @@ const item=(bot,name)=>bot.inventory.items().find(i=>i.name===name);
 function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3}){
   const session={portalBase:null,portalPosition:null,homePortalPosition:null,netherPortalPosition:null,eyesThrown:0,bearing:null,dragonSeen:false,dragonDied:false,visitedChests:new Set(),surveyIndex:0};
   const check=epoch=>{if(getEpoch()!==epoch)throw Error('Minecraft action cancelled by owner');};
-  async function move(position,range,epoch,timeout=20000){check(epoch);await navigate(position,range,epoch,timeout);check(epoch);}
+  async function move(position,range,epoch,timeout=20000){
+    check(epoch);
+    const reached=await navigate(position,range,epoch,timeout);
+    check(epoch);
+    // Mineflayer's pathfinder may return false without throwing. Never
+    // report progress just because the navigation request was dispatched.
+    if(reached!==true)throw Error('No server-confirmed route to action target');
+    return true;
+  }
   async function collectDrop(name,before,around,epoch){
-    for(let k=0;k<12;k++){
+    // Vanilla drops do not instantly enter inventory after a block is dug or
+    // a mob dies. A single 3.3s A* request is insufficient in real terrain.
+    const deadline=Date.now()+25000;
+    let last='No observed dropped item';
+    while(Date.now()<deadline){
       check(epoch);
-      if(count(bot,name)>before)return observed(true,`${name} verified ${before} -> ${count(bot,name)}`);
-      const dropped=bot.nearestEntity?.(e=>e?.position&&(e.name==='item'||e.type==='other')&&e.position.distanceTo(around)<6);
-      if(dropped?.position && bot.entity.position.distanceTo(dropped.position)>1.5)
-        await move(dropped.position,1,epoch,3300).catch(()=>{});
-      await delay(300);
+      if(count(bot,name)>before)
+        return observed(true,`${name} verified ${before} -> ${count(bot,name)}`);
+      const dropped=bot.nearestEntity?.(entity=>entity?.position &&
+        (entity.name==='item'||entity.type==='other') &&
+        entity.position.distanceTo(around)<8);
+      if(dropped?.position && bot.entity.position.distanceTo(dropped.position)>1.15){
+        const remaining=deadline-Date.now();
+        if(remaining>1200){
+          try {
+            await move(dropped.position,1,epoch,Math.min(14000,remaining-500));
+            last='Reached an item-drop route; inventory still unchanged';
+          } catch(error) {
+            check(epoch);
+            last='Drop route failed: '+String(error?.message||error).slice(0,90);
+          }
+        }
+      }
+      await delay(350);
     }
-    return observed(false,`${name} was not collected into inventory`);
+    return observed(false,`${name} dropped but not acquired into real inventory: ${last}`);
   }
   async function mineKnown(names,drop,toolNames,epoch,searchRadius=26,visibleOnly=false){
     // Restrict approach-face verification to the progression ores that can be

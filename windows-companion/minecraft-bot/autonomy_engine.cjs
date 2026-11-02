@@ -153,6 +153,19 @@ function decide(goal, world, failures={}, progress={}) {
   }
   if(goal==='guard')return world.ownerVisible?{kind:'follow',range:4,why:'Guard positioning'}:{kind:'wait',why:'Owner is not visible'};
   if(goal==='follow')return world.ownerVisible?{kind:'follow',range:3,why:'Stay near owner'}:{kind:'wait',why:'Owner not visible'};
+  if(goal==='survive'){
+    // Independent survival is not the owner-following companion mode.
+    // Advance through bounded real-game tool milestones, then scout safely;
+    // never treat an absent owner as an instruction to stop thinking.
+    const stone=decide('stone_age',world,failures,progress);
+    if(stone.kind!=='complete')return stone;
+    if(!inv.ironPickaxe){
+      const iron=decide('iron_age',world,failures,progress);
+      if(iron.kind!=='complete')return iron;
+    }
+    return {kind:'scout_survival',index:number(progress.steps),
+      why:'Basic survival equipment verified; explore independent safe loaded ground'};
+  }
   if(goal==='wood') {
     if(inv.logs>=4)return {kind:'complete',why:'Four logs verified in inventory'};
     return failures.collect_wood>=3?{kind:'blocked',why:'Wood unavailable after three attempts'}:{kind:'collect_wood',why:'Need four logs'};

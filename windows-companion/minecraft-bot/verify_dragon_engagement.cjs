@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+'use strict';
+const assert=require('node:assert/strict');
+const {WINDOW_MS,resetDragon,observeDragon,noteDragonAttack,acceptDragonDeath}=require('./dragon_engagement.cjs');
+let n=0;const ok=(x,m)=>{assert.ok(x,m);n++;};
+const s={},end='minecraft:the_end',e={id:7,name:'ender_dragon'};
+ok(!acceptDragonDeath(s,e,end,100),'Unknown Dragon cannot prove death');
+ok(observeDragon(s,e),'Observe Dragon');
+ok(!acceptDragonDeath(s,e,end,100),'Observation is not an attack');
+ok(!noteDragonAttack(s,{...e,id:8},100),'Wrong entity attack denied');
+ok(noteDragonAttack(s,e,100),'Engagement noted');
+ok(!acceptDragonDeath(s,{...e,id:8},end,200),'Unmatched death denied');
+ok(!acceptDragonDeath(s,e,'minecraft:overworld',200),'Wrong dimension denied');
+ok(!acceptDragonDeath(s,e,end,100+WINDOW_MS+1),'Stale fight denied');
+ok(!acceptDragonDeath(s,e,end,99),'Negative time denied');
+ok(acceptDragonDeath(s,e,end,200),'Matched observed combat-death chain');
+ok(s.dragonDied===true,'Only allowed death marks session');
+ok(observeDragon(s,{...e,id:9})&&!s.dragonDied&&!s.dragonAttempts,'New Dragon resets old proof');
+ok(!acceptDragonDeath(s,{...e,id:9},end,300),'Old attack does not transfer');
+resetDragon(s);
+ok(!s.dragonSeen&&!s.dragonDied&&s.dragonEntityId===null,'New mission discards stale fight');
+ok(!observeDragon(s,{id:7,name:'zombie'}),'Other entity denied');
+ok(!noteDragonAttack(s,e,999),'No unobserved attack accepted');
+console.log('DRAGON_ENGAGEMENT '+n+'/'+n+' PASS (client evidence only, not killer attribution)');

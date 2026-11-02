@@ -98,8 +98,11 @@ function lateGamePlan(world,progress={}){
     const materialUnits=uncraftedIngotCount*4;
     if(qty(i,'netherite_scrap')+qty(i,'ancient_debris')<materialUnits)
       return action('mine_ancient_debris','Collect only the remaining actual Ancient Debris for uncrafted upgrades');
-    if(qty(i,'gold_ingot')<materialUnits)
-      return action('collect_gold','Collect gold for only the remaining uncrafted Netherite ingots');
+    if(qty(i,'gold_ingot')<materialUnits){
+      if(qty(i,'gold_nugget')>=9 && !world.workbenchNearby && has(i,'crafting_table'))
+        return action('place_table','Place owned table to combine nine gold nuggets');
+      return action('collect_gold','Collect remaining gold for Netherite ingots');
+    }
     if(!(dragonFirst && dragonVictory) && qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8)
       return action('hunt_blazes','Locate Nether fortress and collect eight actual Blaze rods');
     if(!(dragonFirst && dragonVictory) && qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)
@@ -138,7 +141,15 @@ function lateGamePlan(world,progress={}){
       return action('smelt_resource','Smelt ancient debris into Netherite scrap',{input:'ancient_debris',output:'netherite_scrap'});
     }
     if(qty(i,'netherite_ingot')<missing.length){
-      if(qty(i,'netherite_scrap')>=4 && qty(i,'gold_ingot')>=4)return action('craft_netherite_ingot','Combine four scraps and four gold ingots');
+      if(qty(i,'netherite_scrap')>=4 && qty(i,'gold_ingot')>=4){
+        if(!world.workbenchNearby){
+          if(has(i,'crafting_table'))return action('place_table','Place owned 3x3 Netherite crafting workstation');
+          if(qty(i,'planks')>=4)return action('craft_table','Create Netherite crafting station from planks');
+          if(qty(i,'logs')>0)return action('craft_planks','Produce planks for Netherite crafting station');
+          return action('collect_wood','Gather wood for Netherite crafting station');
+        }
+        return action('craft_netherite_ingot','Use real 3x3 table to combine four scrap and four gold');
+      }
       return action('blocked','Insufficient actual Netherite materials after Nether return');
     }
     const templates=qty(i,'netherite_upgrade_smithing_template');

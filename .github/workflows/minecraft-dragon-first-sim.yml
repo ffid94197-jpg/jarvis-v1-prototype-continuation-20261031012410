@@ -1,15 +1,7 @@
 name: Minecraft Java survival-rule campaign (Dragon then Netherite)
+# Paused: GitHub Actions included minutes exhausted. This workflow is
+# manual-only; prefer local Windows test scripts (no GitHub-runner minutes).
 on:
-  push:
-    branches: [test/minecraft-dragon-first-netherite-sim-20261102]
-    paths:
-      - "windows-companion/minecraft-bot/**"
-      - ".github/workflows/minecraft-dragon-first-sim.yml"
-  pull_request:
-    branches: [fix/autonomy-durable-proof-and-corpus-20261102]
-    paths:
-      - "windows-companion/minecraft-bot/**"
-      - ".github/workflows/minecraft-dragon-first-sim.yml"
   workflow_dispatch:
 permissions:
   contents: read

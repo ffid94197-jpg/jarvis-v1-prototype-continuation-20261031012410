@@ -99,7 +99,11 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     smithingTableNearby,netherPortalNearby,strongholdPortalFrameNearby,strongholdMissingEyes,endPortalPresent,endPortalActivated,
     wornNetherite,wornDiamond,exitPortalPresent, dragonPresent:dragons.length>0,dragonId:dragons[0]?.id||null,
     dragonDeadObserved:dragonDead,crystalsNearby:crystals.length,
-    health:number(bot.health,20),hunger:number(bot.food,20),workbenchNearby,furnaceNearby,
+    health:number(bot.health,20),hunger:number(bot.food,20),workbenchNearby,
+     // Only the native Mineflayer runtime advertises physical workstation
+     // recovery; modeled worlds never claim this capability implicitly.
+     workbenchRecoverySupported:typeof bot.dig==='function' && typeof bot.canDigBlock==='function',
+     furnaceNearby,
     position:p?{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}:null,
     ownerVisible:!!owner,ownerDistance:p&&owner?Math.round(p.distanceTo(owner)):null,
     ownerPosition:owner?{x:Math.floor(owner.x),y:Math.floor(owner.y),z:Math.floor(owner.z)}:null,

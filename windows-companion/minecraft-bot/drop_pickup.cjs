@@ -69,9 +69,9 @@ async function collectObservedDrop({bot,origin,beforeCount,readCount,move,check,
    const drops=itemEntities(bot,origin,10).slice(0,8);
    const options=[],seen=new Set();
    for(const drop of drops){
-     for(const foot of pickupFootCandidates(bot,drop.position,Vec3)){
+     for(const [rank,foot] of pickupFootCandidates(bot,drop.position,Vec3).entries()){
        const key=foot.x+','+foot.y+','+foot.z;
-       if(!seen.has(key)){seen.add(key);options.push({foot,key});}
+       if(!seen.has(key)){seen.add(key);options.push({foot,key,rank});}
      }
    }
    // If no item entity is visible, Mineflayer may still deliver a delayed
@@ -79,14 +79,15 @@ async function collectObservedDrop({bot,origin,beforeCount,readCount,move,check,
    if(!drops.length && !footprintAttempted){
      // Try every safe stance near the actual mined block. A drop may be
      // delayed or not exposed as an entity even after block removal.
-     for(const foot of pickupFootCandidates(bot,origin,Vec3)){
+     for(const [rank,foot] of pickupFootCandidates(bot,origin,Vec3).entries()){
        const key=foot.x+','+foot.y+','+foot.z;
-       if(!seen.has(key)){seen.add(key);options.push({foot,key});}
+       if(!seen.has(key)){seen.add(key);options.push({foot,key,rank});}
      }
      footprintAttempted=true;
    }
    options.sort((a,b)=>
      (attempted.get(a.key)||0)-(attempted.get(b.key)||0) ||
+     (a.rank||0)-(b.rank||0) ||
      a.foot.distanceTo(origin)-b.foot.distanceTo(origin));
    const candidate=options[0],foot=candidate?.foot;
    if(!foot){

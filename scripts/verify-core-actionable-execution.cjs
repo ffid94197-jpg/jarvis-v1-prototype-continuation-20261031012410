@@ -124,8 +124,10 @@ async function executeTool(taskId, tool, decision) {
     const content = String(prepared.content ?? '');
     await fs.promises.mkdir(path.dirname(abs), { recursive: true });
     await fs.promises.writeFile(abs, content, 'utf8');
-    return { ok: true, detail: { path: prepared.relPath, bytes: Buffer.byteLength(content) },
-      evidence: `Wrote ${prepared.relPath} (${Buffer.byteLength(content)} bytes)` };
+    const readBack = await fs.promises.readFile(abs, 'utf8');
+    const verified = readBack === content;
+    return { ok: verified, tool, detail: { path: prepared.relPath, bytes: Buffer.byteLength(content), verified },
+      evidence: `Wrote ${prepared.relPath} and verified ${Buffer.byteLength(readBack)} bytes` };
   }
   if (tool === 'read_file') {
     const content = await fs.promises.readFile(abs, 'utf8');
@@ -184,13 +186,14 @@ const mocks = {
     isEffectfulToolInvocation: (tool) => tool === 'write_file',
     admitEffect: async (taskId, _planRevision, eff) => {
       const row = { taskId, tool: eff.tool, key: `${eff.tool}:${JSON.stringify(eff.args ?? {})}`,
+        argsJson: JSON.stringify(eff.args ?? {}), receiptJson: null,
         status: 'ADMITTED', effectId: `eff-${effectRows.length + 1}` };
       effectRows.push(row);
       return { kind: 'admitted', effectId: row.effectId };
     },
-    settleEffect: async (effectId, _receipt, status = 'SETTLED') => {
+    settleEffect: async (effectId, receipt, status = 'SETTLED') => {
       const row = effectRows.find((r) => r.effectId === effectId);
-      if (row) row.status = status;
+      if (row) { row.status = status; row.receiptJson = JSON.stringify(receipt); }
       return Boolean(row);
     },
   },

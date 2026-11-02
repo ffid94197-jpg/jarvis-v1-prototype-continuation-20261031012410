@@ -46,37 +46,54 @@ async function collectObservedDrop({bot,origin,beforeCount,readCount,move,check,
     typeof wait!=='function'||!origin||!Vec3)
    throw Error('Missing verifiable item pickup inputs');
  let last='No item entity observed near mined block';
- let triedGround=false;
+ const attempted=new Map();let footprintAttempted=false;
  while(now()<deadline){
    check();
    const count=readCount();
    if(count>beforeCount)return {ok:true,verified:true,
      detail:label+' server inventory '+beforeCount+' -> '+count};
-   const drops=itemEntities(bot,origin,10);
-   let foot=null;
-   if(drops.length){
-     foot=pickupFeet(bot,drops[0].position,Vec3);
-     if(!foot){last='Drop entity visible but no safe standable pickup foot position';}
-   }else if(!triedGround){
-     // Mineflayer can receive a spawned block drop late or not yet know its
-     // entity ID. Attempt a single safe walk to the observed log footprint.
-     foot=pickupFeet(bot,origin,Vec3);triedGround=true;
-     if(!foot)last='No safe approach to mined block footprint';
+   // No reliable vanilla item type is available in every Mineflayer entity
+   // version. Rotate among *all* nearby safe drop footprints, rather than
+   // following one unrelated or unreachable item for the whole budget.
+   const drops=itemEntities(bot,origin,10).slice(0,8);
+   const options=[],seen=new Set();
+   for(const drop of drops){
+     const foot=pickupFeet(bot,drop.position,Vec3);
+     if(!foot)continue;
+     const key=foot.x+','+foot.y+','+foot.z;
+     if(!seen.has(key)){seen.add(key);options.push({foot,key});}
    }
-   if(foot && bot.entity.position.distanceTo(foot.offset(.5,0,.5))>.6){
-     const remaining=deadline-now();
-     if(remaining>1500){
-       try{
-         const reached=await move(foot.offset(.5,0,.5),0,
-           Math.min(maxMoveMs,remaining-500));
-         check();
-         last=reached?'Arrived near pickup position; inventory pending':
-           'Navigation did not reach pickup position';
-       }catch(e){
-         check();
-         last='Pickup route failed: '+String(e?.message||e).slice(0,90);
+   // If no item entity is visible, Mineflayer may still deliver a delayed
+   // block drop. Try the actually observed mining footprint only once.
+   if(!drops.length && !footprintAttempted){
+     const foot=pickupFeet(bot,origin,Vec3);
+     footprintAttempted=true;
+     if(foot)options.push({foot,key:'footprint'});
+   }
+   options.sort((a,b)=>
+     (attempted.get(a.key)||0)-(attempted.get(b.key)||0) ||
+     a.foot.distanceTo(origin)-b.foot.distanceTo(origin));
+   const candidate=options[0],foot=candidate?.foot;
+   if(!foot){
+     last=drops.length?'Visible drops lack safe standable pickup positions':
+       'No observed drop or safe mining footprint';
+   }else{
+     attempted.set(candidate.key,(attempted.get(candidate.key)||0)+1);
+     const target=foot.offset(.5,0,.5);
+     if(bot.entity.position.distanceTo(target)>.6){
+       const remaining=deadline-now();
+       if(remaining>1500){
+         try{
+           const reached=await move(target,0,Math.min(maxMoveMs,remaining-500));
+           check();
+           last=reached?'Arrived near pickup position; inventory pending':
+             'Navigation did not reach pickup position';
+         }catch(e){
+           check();
+           last='Pickup route failed: '+String(e?.message||e).slice(0,90);
+         }
        }
-     }
+     }else last='At safe pickup footprint; awaiting actual inventory gain';
    }
    check();
    if(readCount()>beforeCount)return {ok:true,verified:true,

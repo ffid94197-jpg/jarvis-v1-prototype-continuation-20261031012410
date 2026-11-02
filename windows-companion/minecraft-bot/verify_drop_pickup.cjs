@@ -41,6 +41,28 @@ const mk=(type='dirt')=>{
  ok(!denied.ok&&!denied.verified,'Movement and dug block are never certified as inventory loot');
  ok(attempts<=4,'Pickup attempts are bounded');
  ok(pickupFeet(mk('lava'),origin,Vec3)===null,'Lava-only ground is unsafe for pickup navigation');
+ // A nearby unrelated/unreachable entity must not monopolize all pickup
+ // attempts. An independently observed inventory gain remains mandatory.
+ const multi=mk();
+ multi.entities={
+   1:{id:1,name:'item',position:new Vec3(1.5,64.2,.5)},
+   2:{id:2,name:'item',position:new Vec3(4.5,64.2,.5)}
+ };
+ let moves=[],multiNow=0,multiItems=0;
+ const alternate=await collectObservedDrop({
+   bot:multi,origin:new Vec3(2.5,64,.5),beforeCount:0,
+   readCount:()=>multiItems,
+   move:async p=>{
+     moves.push(p.x);
+     if(p.x>=4){multiItems=1;multi.entity.position=p.clone();return true;}
+     return false;
+   },
+   check:()=>{},wait:async()=>{multiNow+=350;},deadline:2300,now:()=>multiNow,Vec3
+ });
+ ok(alternate.ok&&alternate.verified&&multiItems===1,
+   'Alternate physical item location succeeds only after server inventory gain');
+ ok(moves.length>=2&&moves.some(x=>x<3)&&moves.some(x=>x>=4),
+   'Unreachable first drop does not starve a second safe pickup location');
  let cancelled=false;
  try{await collectObservedDrop({
    bot:mk(),origin,beforeCount:0,readCount:()=>0,

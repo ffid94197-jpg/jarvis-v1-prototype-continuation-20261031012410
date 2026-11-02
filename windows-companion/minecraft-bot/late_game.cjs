@@ -74,8 +74,8 @@ function lateGamePlan(world,progress={}){
   // A historical equip receipt is NOT proof that the armor is still worn.
   // Require the current server-observed equipment slots at final settlement.
   if(m.dragonKilled && m.exitPortalObserved && m.netheriteEquipped &&
-     (!dragonFirst || m.endReturned===true) &&
-     world.wornNetherite===true && dimension==='overworld')
+     (!dragonFirst || (m.endReturned===true && dimension==='overworld')) &&
+     world.wornNetherite===true)
     return action('complete','Actual Ender Dragon death, End return (when required), and currently worn full Netherite armor confirmed');
   if(dimension==='the_end'){
     if(!m.netheriteEquipped || world.wornNetherite!==true)

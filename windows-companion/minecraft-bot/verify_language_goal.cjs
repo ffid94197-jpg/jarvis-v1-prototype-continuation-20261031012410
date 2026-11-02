@@ -10,6 +10,8 @@ ok(validateCommand({command:'natural_goal',text:'follow',extra:1})!==null,'unexp
 ok(validateCommand({command:'natural_goal',text:'bad\ninput'})!==null,'control chars denied');
 ok(L.directIntent('Jarvis, follow me').command.command==='follow','natural follow');
 ok(L.directIntent('please protect me').command.goal==='guard','natural protect');
+ok(L.directIntent('Can you please protect me?').command.goal==='guard','polite voice protect');
+ok(L.directIntent('Could you craft 2 chests?').command.item==='chest','polite natural craft');
 ok(L.directIntent('mine 6 diamonds').command.resource==='diamond','natural gather');
 ok(L.directIntent('make 2 chests').command.item==='chest','natural craft');
 ok(L.directIntent('do not gather wood').ok===false,'negation fail closed');

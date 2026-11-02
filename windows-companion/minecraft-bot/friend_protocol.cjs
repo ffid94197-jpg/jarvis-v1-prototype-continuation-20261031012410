@@ -59,7 +59,7 @@ function validateCommand(input) {
     return validGoal && noUnrelatedParameters &&
       (['craft','equip'].includes(input.goal)||input.item===undefined) &&
       (input.goal==='equip'||input.destinationSlot===undefined) &&
-      (input.goal==='craft'||input.goal==='gather'||input.targetCount===undefined) &&
+      (['craft','gather','farm_wheat'].includes(input.goal)||input.targetCount===undefined) &&
       (input.goal==='build'||['block','axis','length'].every(k=>input[k]===undefined)) &&
       (input.goal==='farm_wheat'||['width','depth'].every(k=>input[k]===undefined)) &&
       (['build','farm_wheat'].includes(input.goal)||input.position===undefined) &&

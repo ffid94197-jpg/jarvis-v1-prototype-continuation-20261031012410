@@ -38,7 +38,8 @@ const count=(inv,name)=>Number.isFinite(inv?.raw?.[name])?Math.max(0,inv.raw[nam
 function generalPlan(world,progress={},delegate){
  const inv=world?.inventory||{};
  if(progress.goal==='equip'){
-  if(!validEquipSpec(progress))return act('blocked','Unsupported autonomous equipment goal');
+  if(!validEquipSpec({goal:'equip',item:progress.item,destination:progress.destination}))
+   return act('blocked','Unsupported autonomous equipment goal');
   if(world.equipped?.[progress.destination]===progress.item)
     return act('complete','Currently server-observed '+progress.item+' equipped in '+progress.destination);
   // The inventory digest can include items worn in other slots. This is an
@@ -47,7 +48,7 @@ function generalPlan(world,progress={},delegate){
   return act('equip_general','Equip exact owner-authorized item and verify physical slot',
     {item:progress.item,destination:progress.destination});
  }
- if(progress.goal!=='craft'||!validCraftSpec(progress))
+ if(progress.goal!=='craft'||!validCraftSpec({goal:'craft',item:progress.item,targetCount:progress.targetCount}))
   return act('blocked','Unsupported autonomous crafting goal');
  if(count(inv,progress.item)>=progress.targetCount)
   return act('complete','Server inventory confirms requested crafted item quantity');

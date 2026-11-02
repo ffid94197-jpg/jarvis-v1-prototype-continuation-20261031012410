@@ -1,0 +1,100 @@
+name: Minecraft Java vanilla survival live server smoke
+on:
+  push:
+    branches: [fix/minecraft-live-survival-bridge-20261102]
+    paths:
+      - "windows-companion/minecraft-bot/**"
+      - ".github/workflows/minecraft-real-java-survival-smoke.yml"
+  pull_request:
+    branches: [test/minecraft-dragon-first-netherite-sim-20261102]
+    paths:
+      - "windows-companion/minecraft-bot/**"
+      - ".github/workflows/minecraft-real-java-survival-smoke.yml"
+permissions:
+  contents: read
+jobs:
+  vanilla-java:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned Mineflayer dependency tree
+        run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
+      - name: Get official Mojang Minecraft Java 1.21.1 vanilla server
+        env:
+          MC_VERSION: "1.21.1"
+        run: |
+          python3 - <<'PY'
+          import os, json, urllib.request,hashlib
+          root='https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'
+          with urllib.request.urlopen(root,timeout=30) as res: manifest=json.load(res)
+          version=next((v for v in manifest['versions'] if v['id']==os.environ['MC_VERSION']),None)
+          if not version:raise RuntimeError('Specified vanilla Java version absent from Mojang manifest')
+          with urllib.request.urlopen(version['url'],timeout=30) as res: info=json.load(res)
+          item=info['downloads']['server']
+          with urllib.request.urlopen(item['url'],timeout=120) as res: data=res.read()
+          if hashlib.sha1(data).hexdigest().lower()!=item['sha1'].lower():raise RuntimeError('Official Mojang server SHA-1 mismatch')
+          os.makedirs('minecraft-live-ci',exist_ok=True)
+          with open('minecraft-live-ci/server.jar','wb') as f:f.write(data)
+          print('MOJANG_VANILLA_SERVER_VERIFIED version='+os.environ['MC_VERSION']+' bytes='+str(len(data)))
+          PY
+      - name: Start real survival Java server without admin commands
+        run: |
+          cd minecraft-live-ci
+          printf 'eula=true\n' > eula.txt
+          cat > server.properties <<'EOF'
+          online-mode=false
+          enforce-secure-profile=false
+          server-ip=127.0.0.1
+          server-port=25565
+          gamemode=survival
+          force-gamemode=true
+          difficulty=normal
+          hardcore=false
+          allow-flight=false
+          enable-command-block=false
+          enable-rcon=false
+          enable-query=false
+          max-players=2
+          spawn-protection=0
+          view-distance=8
+          simulation-distance=6
+          level-seed=20261102
+          level-type=minecraft:normal
+          pvp=false
+          white-list=false
+          EOF
+          nohup java -Xms512M -Xmx2500M -jar server.jar nogui > server.log 2>&1 &
+          echo $! > minecraft.pid
+          for i in $(seq 1 180); do
+            if grep -q 'Done (' server.log; then echo 'VANILLA_SERVER_STARTED'; exit 0; fi
+            if ! kill -0 "$(cat minecraft.pid)" 2>/dev/null; then cat server.log; exit 1; fi
+            sleep 1
+          done
+          cat server.log
+          echo 'Minecraft vanilla server did not start' >&2
+          exit 1
+      - name: Real server-backed empty-survival to wood mission
+        env:
+          JARVIS_MC_TEST_PORT: "25565"
+        run: node windows-companion/minecraft-bot/verify_real_java_server_wood.cjs
+      - name: Preserve game and companion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vanilla-java-survival-smoke-evidence
+          if-no-files-found: warn
+          path: minecraft-live-ci/server.log
+      - name: Stop Minecraft server
+        if: always()
+        run: |
+          if test -f minecraft-live-ci/minecraft.pid; then kill "$(cat minecraft-live-ci/minecraft.pid)" || true; fi

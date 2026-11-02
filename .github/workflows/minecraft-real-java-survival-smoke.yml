@@ -43,6 +43,7 @@ jobs:
           node windows-companion/minecraft-bot/verify_crafting_site.cjs
           node --check windows-companion/minecraft-bot/drop_pickup.cjs
           node windows-companion/minecraft-bot/verify_drop_pickup.cjs
+          node windows-companion/minecraft-bot/verify_wood_pickup_access.cjs
           node --check windows-companion/minecraft-bot/inventory_settlement.cjs
           node windows-companion/minecraft-bot/verify_inventory_settlement.cjs
       - name: Get official Mojang Minecraft Java 1.21.1 vanilla server

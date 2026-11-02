@@ -93,6 +93,12 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     if(dimension!=='overworld'){endPortalPresent=false;strongholdPortalFrameNearby=false;}
   }catch{}
   try{workbenchNearby=!!bot.findBlock?.({matching:block=>block?.name==='crafting_table',maxDistance:5});furnaceNearby=!!bot.findBlock?.({matching:block=>block?.name==='furnace',maxDistance:5});}catch{}
+  let workbenchRecoverySupported=false;
+  try {
+    const owned=bot.jarvisOwnedCraftingTablePos;
+    workbenchRecoverySupported=!!owned && bot.blockAt?.(owned)?.name==='crafting_table' &&
+      typeof bot.canDigBlock==='function';
+  } catch { /* missing/unloaded workstation never becomes an authorization */ }
   const dragons=Object.values(bot.entities||{}).filter(e=>e?.name==='ender_dragon' && e?.position);
   const crystals=Object.values(bot.entities||{}).filter(e=>e?.name==='end_crystal' && e?.position);
   return {joined:!!p,dimension:bot.game?.dimension||'minecraft:overworld',
@@ -102,10 +108,7 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     health:number(bot.health,20),hunger:number(bot.food,20),workbenchNearby,
      // Only the native Mineflayer runtime advertises physical workstation
      // recovery; modeled worlds never claim this capability implicitly.
-     workbenchRecoverySupported:!!bot.jarvisOwnedCraftingTablePos &&
-       !!bot.blockAt?.(bot.jarvisOwnedCraftingTablePos) &&
-       bot.blockAt(bot.jarvisOwnedCraftingTablePos).name==='crafting_table' &&
-       typeof bot.canDigBlock==='function',
+     workbenchRecoverySupported,
      furnaceNearby,
     position:p?{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}:null,
     ownerVisible:!!owner,ownerDistance:p&&owner?Math.round(p.distanceTo(owner)):null,

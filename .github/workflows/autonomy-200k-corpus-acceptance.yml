@@ -1,0 +1,77 @@
+name: JARVIS 200K corpus + Windows acceptance gates
+on:
+  workflow_dispatch:
+    inputs:
+      corpus_path:
+        description: Repository-relative JSONL corpus path
+        required: true
+        default: benchmarks/autonomy/internet-hard-200k.jsonl
+      expected_records:
+        description: Required number of original Internet-sourced prompts
+        required: true
+        default: "200000"
+permissions:
+  contents: read
+jobs:
+  corpus-and-regressions:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Validate exact Internet-original corpus
+        env:
+          CORPUS_PATH: ${{ inputs.corpus_path }}
+          EXPECTED_RECORDS: ${{ inputs.expected_records }}
+        run: |
+          if (!(Test-Path $env:CORPUS_PATH)) { throw "Corpus missing: $env:CORPUS_PATH. Do not substitute generated prompts." }
+          node scripts/autonomy/validate-internet-corpus.mjs --input "$env:CORPUS_PATH" --expected "$env:EXPECTED_RECORDS" --manifest artifacts/autonomy-corpus-manifest.json
+          if ($LASTEXITCODE -ne 0) { throw "Internet corpus provenance validation failed." }
+      - name: Install exact application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Native Windows and full TypeScript check
+        run: |
+          if ((node -p "process.platform") -ne "win32") { throw "Native Windows runner required." }
+          npx tsc --noEmit --incremental false
+          if ($LASTEXITCODE -ne 0) { throw "TypeScript failed." }
+      - name: Core autonomy and safety regression gates
+        run: |
+          $tests = @(
+            "test:core-actionable-execution",
+            "test:goal-loop-integration",
+            "test:autonomy-reliability",
+            "test:autonomy-tiers",
+            "test:outcome-honesty",
+            "test:model-error-status-precedence",
+            "test:path-containment",
+            "test:core-guardian-laya-boundaries",
+            "test:windows-policy",
+            "test:full-desktop-offline",
+            "test:native-desktop-offline",
+            "test:agent-tools-offline",
+            "test:minecraft-pathfinder-lifecycle"
+          )
+          foreach ($test in $tests) {
+            Write-Output "RUNNING $test"
+            npm.cmd run $test
+            if ($LASTEXITCODE -ne 0) { throw "FAILED $test" }
+          }
+      - name: Production build
+        run: |
+          npm.cmd run build
+          if ($LASTEXITCODE -ne 0) { throw "Production build failed." }
+      - name: Upload immutable acceptance manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-200k-corpus-and-windows-evidence
+          path: |
+            artifacts/autonomy-corpus-manifest.json
+            *.log
+          if-no-files-found: warn

@@ -255,6 +255,15 @@ function decide(goal, world, failures={}, progress={}) {
     // wooden pickaxe (3 planks, 2 sticks, placed table).
     if(goal==='tools') {
       if(inv.woodenPickaxe)return {kind:'complete',why:'Wooden pickaxe verified in inventory'};
+      // Secure the TOTAL 2x2/3x3 recipe budget BEFORE consuming the first log:
+      // 4 planks for table, 3 for pickaxe, 2 planks for sticks (unless already
+      // owned). Converting a single log too early stranded the live bot atop
+      // trees with planks/sticks but no new reachable wood.
+      const requiredPlanks=3+(inv.sticks>=2?0:2)+((inv.table||world.workbenchNearby)?0:4);
+      const availablePlanks=(inv.planks||0)+4*(inv.logs||0);
+      if(availablePlanks<requiredPlanks)
+        return failures.collect_wood>=3?{kind:'blocked',why:'Insufficient reachable wood for full wooden-tool recipe budget'}:
+          {kind:'collect_wood',why:'Reserve wood for whole pickaxe/sticks/workstation recipe before crafting'};
       if(inv.sticks<2 && inv.planks>=2)return {kind:'craft_sticks',why:'Produce two pickaxe sticks'};
       if(!inv.table && !world.workbenchNearby && inv.planks>=4)return {kind:'craft_table',why:'Build crafting table'};
       if((inv.table || world.workbenchNearby) && inv.planks>=3 && inv.sticks>=2) {

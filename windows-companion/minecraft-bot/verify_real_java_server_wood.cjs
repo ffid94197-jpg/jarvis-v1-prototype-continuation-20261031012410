@@ -46,6 +46,9 @@ async function main(){
  try{
   for(let i=0;i<120 && !joined && !exit;i++)await wait(1000);
   assert(joined,'Mineflayer never spawned as a real Java server player. '+JSON.stringify(output.slice(-15)));
+  const survival=await command({command:'status'});
+  assert(survival.ok && JSON.parse(survival.status).gameMode==='survival',
+    'Minecraft Java server did not confirm SURVIVAL gamemode: '+JSON.stringify(survival));
   const pre=await command({command:'inventory'});
   assert(pre.ok&&pre.status==='empty','Survival world must begin with genuinely empty inventory. Got '+JSON.stringify(pre));
   const state=await command({command:'observe'});

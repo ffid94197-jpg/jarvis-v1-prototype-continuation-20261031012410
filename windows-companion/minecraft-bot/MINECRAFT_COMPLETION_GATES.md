@@ -1,0 +1,38 @@
+# Minecraft JARVIS — code-only completion gate
+
+**Status:** DEVELOPMENT IN PROGRESS; NOT 100% IMPLEMENTATION-READY; NOT LIVE-CERTIFIED.
+**Track:** Isolated GLM prototype feature branch and draft PR #8 only, not production PC Work JARVIS.
+**Owner constraint:** Do not start/rerun/schedule/enable GitHub Actions workflows. Do not consume GitHub-hosted runner minutes. Run tests locally on the owner's PC when authorized.
+
+## Scope of currently implemented campaign
+- One `dragon_then_netherite_run` goal from real empty Java survival inventory through wooden, stone, iron, diamond equipment, Nether/End access, witnessed Dragon death, witnessed actual End exit, five Netherite upgrades and currently equipped four Netherite armor slots and sword.
+- Pure planner and bounded action executor with real inventory/block/position/dimension/equipment proof, cancellation, time/step limits, and fail-closed decisions.
+- Continued code-only fixes: independent survival without visible owner; safer tree scouting and loot recovery; single-item furnace smelting with inventory receipt; safe furnace/workbench placement; dual-axis portal frame layout; template-chest retry integrity; End-return proof; Dragon/Nether threat avoidance; smithing result settlement.
+
+## Tests run without GitHub Actions in source-isolated JavaScript execution
+- `verify_progression.cjs`: PASS, updated rules including Dragon low-health retreat and independent wood scouting.
+- `verify_late_game.cjs`: PASS, 200,052 planner assertions including 100,000 random snapshots, **not 100,000 real games**.
+- `verify_late_skills.cjs`: PASS, 17/17 mocks (before the last smithing receipt/chest changes).
+- `verify_drop_pickup.cjs`: PASS 8/8.
+- `verify_crafting_site.cjs`: PASS 9/9.
+- `verify_inventory_settlement.cjs`: PASS 5/5.
+- `verify_wood_pickup_access.cjs`: PASS 3/3.
+- `verify_stone_access.cjs`: PASS 12/12.
+- `verify_portal_layout.cjs`: PASS 7/7.
+These use an isolated adapter for CommonJS, assertions and Vec3; **not a full Node installation or real Minecraft**.
+
+Run the actual Node offline gate on a development checkout (no hosted minutes):
+```powershell
+cd "D:\glm 5.3\GPT6_TEST\JARVIS_V1_GPT6_MINECRAFT_AUTONOMY_2026-10-28"
+# Select the real updated checkout containing windows-companion/minecraft-bot first.
+node windows-companion/minecraft-bot/run_offline_minecraft_gates.cjs
+```
+Do not assume this historical directory still contains the current GitHub branch; fetch/checkout before invoking.
+
+## NOT complete (must not be marked PASS)
+- Real Java Iron, diamond, Nether portal, Blaze/Ender supply, stronghold portal, Ender Dragon, End return, and post-Dragon equipped Netherite progression in a *single* uninterrupted actual survival mission.
+- Adaptation to arbitrary Minecraft maps/seeds, biome/resource scarcity, lava/loss/deaths, and diverse gameplay instructions; code has a finite allowlisted goal set, not an unlimited natural-language Minecraft planner.
+- Genuine manual-free long-horizon tool interaction and recovery across Minecraft server restarts and disconnects.
+- Independent end-to-end Node integration tests for latest code edits, followed later by live field tests on the user PC without GitHub Actions, if approved.
+
+**Acceptance invariant:** NEVER infer complete from source presence, a planning assertion, a sent action packet, or a simulated mission. Need actual ordered server-observed Dragon death → End exit → full Netherite armor equipped and Netherite sword, with no creative, teleport/admin cheat or manual gameplay.

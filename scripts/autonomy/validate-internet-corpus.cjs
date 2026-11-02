@@ -5,7 +5,7 @@
  * Strict validator for JARVIS's Internet-sourced autonomous task corpus.
  *
  * This validates provenance/shape/deduplication only. It does NOT execute tasks,
- * prove that source URLs contain the prompt, or establish agent success.
+ * prove that source URLs contain the prompt, establish licenses or agent success.\n * A claimed 200K corpus requires --source-manifest plus hash-pinned original\n * task snapshots; even these need independent upstream authenticity review.
  *
  * Usage:
  *   node scripts/autonomy/validate-internet-corpus.mjs \
@@ -24,6 +24,15 @@ function arg(name, fallback) {
 const input = path.resolve(arg('--input', 'benchmarks/autonomy/internet-hard-200k.jsonl'));
 const expected = Number(arg('--expected', '200000'));
 const manifestPath = path.resolve(arg('--manifest', 'artifacts/autonomy-corpus-manifest.json'));
+const sourceManifestArg = arg('--source-manifest', '');
+const sourceManifestPath = sourceManifestArg ? path.resolve(sourceManifestArg) : null;
+// A claimed 200K Internet-original corpus cannot be certified using metadata
+// written by the model itself. Exact upstream source snapshots are mandatory.
+if (expected >= 200000 && !sourceManifestPath) {
+  console.error('SOURCE_ATTESTATION_REQUIRED: provide a pinned upstream source-manifest and source snapshots');
+  process.exit(2);
+}
+
 const errors = [];
 const domains = new Map();
 const sources = new Map();
@@ -32,6 +41,59 @@ const promptHashes = new Set();
 const sourceRecordIds = new Set();
 const sha256 = value => crypto.createHash('sha256').update(value, 'utf8').digest('hex');
 const fail = (line, message) => { if (errors.length < 100) errors.push({ line, message }); };
+
+// Explicitly pinned source snapshots are distinct from candidate corpus rows.
+// This checks local upstream-ID and verbatim-text consistency; it does NOT
+// establish copyright permission, task difficulty or website authenticity.
+const attestedRows = new Map();
+let sourceManifestHash = null;
+if (sourceManifestPath) {
+  try {
+    const rawManifest = fs.readFileSync(sourceManifestPath);
+    sourceManifestHash = crypto.createHash('sha256').update(rawManifest).digest('hex');
+    const manifest = JSON.parse(rawManifest.toString('utf8'));
+    if (manifest.schema !== 'jarvis.autonomy.upstream-attestation.v1' ||
+        !Array.isArray(manifest.datasets) || manifest.datasets.length === 0)
+      throw new Error('invalid upstream attestation schema/datasets');
+    const root = fs.realpathSync(path.dirname(sourceManifestPath));
+    const names = new Set();
+    for (const ds of manifest.datasets) {
+      if (typeof ds.name !== 'string' || !ds.name ||
+          typeof ds.revision !== 'string' || !ds.revision ||
+          typeof ds.license_spdx !== 'string' || !ds.license_spdx ||
+          typeof ds.path !== 'string' || !/^[a-f0-9]{64}$/.test(ds.sha256 ?? '') ||
+          !Number.isSafeInteger(ds.records) || ds.records < 1)
+        throw new Error('incomplete dataset attestation');
+      if (names.has(ds.name)) throw new Error('duplicate attested source name');
+      names.add(ds.name);
+      const filePath = path.resolve(root, ds.path);
+      const actual = fs.realpathSync(filePath);
+      if (!actual.startsWith(root + path.sep) || !filePath.startsWith(root + path.sep))
+        throw new Error('upstream snapshot escapes attestation folder');
+      const bytes = fs.readFileSync(actual);
+      if (crypto.createHash('sha256').update(bytes).digest('hex') !== ds.sha256)
+        throw new Error('upstream snapshot digest mismatch: ' + ds.name);
+      let size = 0;
+      for (const line of bytes.toString('utf8').split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        const item = JSON.parse(line);
+        if (typeof item.record_id !== 'string' || !item.record_id ||
+            typeof item.prompt !== 'string' || !item.prompt ||
+            item.difficulty !== 'very_hard')
+          throw new Error('unusable attested record in ' + ds.name);
+        const key = ds.name + '\u0000' + item.record_id;
+        if (attestedRows.has(key)) throw new Error('duplicate attested record ' + key);
+        attestedRows.set(key, { prompt: item.prompt, revision: ds.revision, license: ds.license_spdx });
+        size++;
+      }
+      if (size !== ds.records) throw new Error('attested source record-count mismatch: ' + ds.name);
+    }
+  } catch (e) {
+    console.error('SOURCE_ATTESTATION_INVALID:', e instanceof Error ? e.message : String(e));
+    process.exit(2);
+  }
+}
+
 
 if (!Number.isSafeInteger(expected) || expected < 1) {
   console.error('Invalid --expected value');
@@ -89,6 +151,14 @@ for (let index = 0; index < lines.length; index++) {
     if (sourceRecordIds.has(sourceKey)) fail(lineNumber, 'duplicate upstream source record: ' + sourceKey);
     sourceRecordIds.add(sourceKey);
     sources.set(row.source.name, (sources.get(row.source.name) || 0) + 1);
+    if (sourceManifestPath) {
+      const upstream = attestedRows.get(row.source.name + '\u0000' + row.source.record_id);
+      if (!upstream) fail(lineNumber, 'source record absent from pinned upstream snapshot');
+      else if (upstream.prompt !== row.prompt ||
+               upstream.revision !== row.source.revision ||
+               upstream.license !== row.source.license_spdx)
+        fail(lineNumber, 'corpus record does not match pinned upstream source text/revision/license');
+    }
   }
 
   if (!row.environment || typeof row.environment !== 'object') fail(lineNumber, 'environment metadata missing');
@@ -134,6 +204,9 @@ const summary = {
   uniquePrompts: promptHashes.size,
   sourceRecords: sourceRecordIds.size,
   sha256: fileHash,
+  sourceManifestSha256: sourceManifestHash,
+  attestationRecordCount: attestedRows.size,
+  provenanceMode: sourceManifestPath ? 'pinned-local-snapshots' : 'unattested-metadata-only',
   domains: Object.fromEntries([...domains].sort()),
   sources: Object.fromEntries([...sources].sort()),
   errors: errors.length,
@@ -146,4 +219,4 @@ if (errors.length) {
   console.error('CORPUS VALIDATION FAILED. No records were counted as accepted.');
   process.exit(1);
 }
-console.log(`CORPUS VALIDATION PASSED: ${count} unique, very-hard, Internet-original task prompts.`);
+console.log(`CORPUS SHAPE VALIDATION PASSED: ${count} unique, self-labelled very-hard task records; upstream snapshots ${sourceManifestPath ? 'hash-matched' : 'NOT ATTESTED'}. No tasks executed or independently graded.`);

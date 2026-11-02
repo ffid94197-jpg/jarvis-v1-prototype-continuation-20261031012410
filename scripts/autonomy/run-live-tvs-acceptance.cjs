@@ -86,7 +86,7 @@ async function findProject(dir, depth = 0) {
     assert(process.platform === 'win32', 'This acceptance must run on native Windows.');
     assert(workspace && path.isAbsolute(workspace), 'Set JARVIS_AGENT_WORKSPACE to an absolute disposable workspace path.');
     await fsp.mkdir(workspace,{recursive:true});
-    const prompt = await fsp.readFile(promptPath,'utf8');
+    const prompt = (await fsp.readFile(promptPath,'utf8')).replace(/\\r\\n/g,'\\n');
     evidence.prompt = { source:'https://prompts.chat/prompts/cmuz5u62d0004l904ys2nmj7u_premium-tvs-motor-digital-showroom-website', characters:[...prompt].length, sha256:sha(prompt) };
     assert([...prompt].length === 3954, `Pinned TVS prompt character count mismatch: ${[...prompt].length}`);
 

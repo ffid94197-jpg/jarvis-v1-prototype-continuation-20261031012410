@@ -42,7 +42,7 @@ jobs:
           if (!$ready) { throw "Ollama server did not start." }
       - name: Pull and verify actual model
         env:
-          OLLAMA_MODEL: ${{ inputs.model }}
+          OLLAMA_MODEL: ${{ inputs.model || 'qwen2.5-coder:3b' }}
         run: |
           ollama pull $env:OLLAMA_MODEL
           if ($LASTEXITCODE -ne 0) { throw "Ollama model pull failed." }

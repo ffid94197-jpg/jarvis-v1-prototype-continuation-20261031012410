@@ -511,10 +511,14 @@ async function autoExecute(plan,epoch){
       const exposed=findExposedOre(bot,['iron_ore','deepslate_iron_ore'],24);
       const target=exposed?.block;
       if(!target)throw Error('No safely exposed iron ore in loaded chunks; request cave survey');
-      const p=target.position;await navigate(exposed.stance,1,epoch,14500);
+      const p=target.position;
+      const ironReached=await navigate(exposed.stance,1,epoch,14500);
+      if(!ironReached)return {ok:false,verified:false,detail:'Iron ore stance not reached; no ore claimed'};
       if(epoch!==actionEpoch)throw Error('Mining cancelled');
-      const live=bot.blockAt(p);if(!live || !['iron_ore','deepslate_iron_ore'].includes(live.name))throw Error('Ore moved or changed');
-      if(bot.entity.position.distanceTo(p)>5)throw Error('Iron ore not within reach');
+      const live=bot.blockAt(p);
+      if(!live || !['iron_ore','deepslate_iron_ore'].includes(live.name) ||
+        !bot.canDigBlock?.(live) || bot.entity.position.distanceTo(p)>5)
+        return {ok:false,verified:false,detail:'Iron ore no longer server-observed within real dig range'};
       const pick=bot.inventory.items().find(i=>['stone_pickaxe','iron_pickaxe'].includes(i.name));
       if(!pick)throw Error('Missing valid iron mining pickaxe');
       await bot.equip(pick,'hand');await bot.dig(live);
@@ -584,11 +588,13 @@ async function autoExecute(plan,epoch){
       const target=exposed?.block;
       if(!target)throw Error('No safely exposed diamond ore in loaded chunks; request cave survey');
       const p=target.position;
-      await navigate(exposed.stance,1,epoch,14500);
+      const diamondReached=await navigate(exposed.stance,1,epoch,14500);
+      if(!diamondReached)return {ok:false,verified:false,detail:'Diamond mining stance not reached; no resource claimed'};
       if(epoch!==actionEpoch)throw Error('Diamond mining cancelled');
       const live=bot.blockAt(p);
-      if(!live || !['diamond_ore','deepslate_diamond_ore'].includes(live.name))throw Error('Diamond ore changed');
-      if(bot.entity.position.distanceTo(p)>5)throw Error('Diamond ore out of reach');
+      if(!live || !['diamond_ore','deepslate_diamond_ore'].includes(live.name) ||
+        !bot.canDigBlock?.(live) || bot.entity.position.distanceTo(p)>5)
+        return {ok:false,verified:false,detail:'Diamond ore no longer within dig range or safe after route'};
       const pick=bot.inventory.items().find(i=>['diamond_pickaxe','iron_pickaxe'].includes(i.name));
       if(!pick)throw Error('Missing pickaxe');
       await bot.equip(pick,'hand');await bot.dig(live);

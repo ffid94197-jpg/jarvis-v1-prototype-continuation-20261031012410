@@ -5,6 +5,8 @@ on:
     paths:
       - "src/lib/agent/core/verifier.ts"
       - "src/lib/agent/core/loop.ts"
+      - "src/lib/agent/core/prompts.ts"
+      - "scripts/verify-file-catalog-routing.cjs"
       - "scripts/verify-core-actionable-execution.cjs"
       - "scripts/verify-task-outcome-honesty.cjs"
       - "scripts/verify-inventory-integrity.cjs"
@@ -58,6 +60,10 @@ jobs:
         run: |
           node scripts/verify-ci-project-build.cjs
           if ($LASTEXITCODE -ne 0) { throw "CI build authorization or output verification failed" }
+      - name: Verify task-specific model tool catalog
+        run: |
+          node scripts/verify-file-catalog-routing.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Planner capability routing regression failed" }
       - name: Guard against Core behavior regression
         run: |
           npm.cmd run test:core-actionable-execution

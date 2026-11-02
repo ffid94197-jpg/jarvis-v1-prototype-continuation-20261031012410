@@ -41,10 +41,30 @@ async function getJson(url, options = {}) {
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}: ${text.slice(0, 500)}`);
   return text ? JSON.parse(text) : {};
 }
+function isolatedBuildEnv(cwd) {
+  const env = {};
+  for (const key of ['PATH','SystemRoot','WINDIR','TEMP','TMP','USERPROFILE','APPDATA','LOCALAPPDATA']) {
+    if (process.env[key]) env[key] = process.env[key];
+  }
+  env.HOME = cwd;
+  env.CI = '1';
+  env.NODE_ENV = 'production';
+  env.GIT_TERMINAL_PROMPT = '0';
+  env.GIT_CONFIG_NOSYSTEM = '1';
+  env.npm_config_cache = path.join(cwd,'.npm-cache');
+  env.npm_config_audit = 'false';
+  env.npm_config_fund = 'false';
+  return env;
+}
 function run(command, args, cwd, timeout = 20 * 60_000) {
-  const r = spawnSync(command, args, { cwd, encoding: 'utf8', timeout, windowsHide: true, shell: true, maxBuffer: 16 * 1024 * 1024 });
+  const npmShim = /^(?:npm|npm\\.cmd)$/i.test(command);
+  const r = spawnSync(command, args, {
+    cwd, encoding: 'utf8', timeout, windowsHide: true,
+    // Only the fixed npm shim uses cmd.exe; Node/Vite binaries run with shell:false.
+    shell: npmShim, env: isolatedBuildEnv(cwd), maxBuffer: 16 * 1024 * 1024
+  });
   if (r.error) throw r.error;
-  if (r.status !== 0) throw new Error(`${command} ${args.join(' ')} failed (${r.status})\n${(r.stdout||'').slice(-4000)}\n${(r.stderr||'').slice(-4000)}`);
+  if (r.status !== 0) throw new Error(`${command} ${args.join(' ')} failed (${r.status})\\n${(r.stdout||'').slice(-4000)}\\n${(r.stderr||'').slice(-4000)}`);
   return { stdout: r.stdout, stderr: r.stderr };
 }
 async function findProject(dir, depth = 0) {
@@ -165,7 +185,7 @@ async function findProject(dir, depth = 0) {
     assert(fs.existsSync(path.join(project,'dist','index.html')),'Vite build did not produce dist/index.html.');
     evidence.build={status:'PASS',distIndexHtmlBytes:(await fsp.stat(path.join(project,'dist','index.html'))).size};
 
-    const preview=spawn(process.execPath,[viteCli,'preview','--host','127.0.0.1','--port','4173','--strictPort'],{cwd:project,stdio:'ignore',windowsHide:true});
+    const preview=spawn(process.execPath,[viteCli,'preview','--host','127.0.0.1','--port','4173','--strictPort'],{cwd:project,stdio:'ignore',windowsHide:true,env:isolatedBuildEnv(project)});
     try {
       let ok=false,lastError='';
       for(let i=0;i<60;i++){

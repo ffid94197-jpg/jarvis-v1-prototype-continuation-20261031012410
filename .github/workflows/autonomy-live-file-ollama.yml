@@ -1,5 +1,10 @@
 name: Prototype real Ollama Core file acceptance (native Windows)
 on:
+  pull_request:
+    branches: [fix/autonomy-artifact-receipt-20261102]
+    paths:
+      - ".github/workflows/autonomy-live-file-ollama.yml"
+      - "scripts/autonomy/run-live-ollama-file-task.cjs"
   push:
     branches: [fix/autonomy-durable-proof-and-corpus-20261102]
     paths:

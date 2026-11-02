@@ -2,9 +2,8 @@ name: One-shot Minecraft Java stone fix validation
 # Bounded, opt-in owner development continuation. Only creation of the
 # exact one-shot trigger file activates this workflow; code pushes do not.
 on:
-  push:
-    branches: [fix/minecraft-live-survival-bridge-20261102]
-    paths: [scripts/minecraft/one-shot-surface-handles-trigger.txt]
+  workflow_dispatch:
+# Surface-sticks Java test 41428325734 already launched; preserve Actions compute allowance.
 permissions:
   contents: read
 jobs:

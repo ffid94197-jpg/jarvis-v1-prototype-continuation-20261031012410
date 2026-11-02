@@ -10,7 +10,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Offline','Wood','Stone','Full')]
+    [ValidateSet('Offline','Code','Wood','Stone','Full')]
     [string]$Mode = 'Stone',
     [string]$OwnerName = '',
     [string]$HostAddress = '127.0.0.1',
@@ -31,7 +31,7 @@ if (-not (Test-Path (Join-Path $bot 'bot.cjs'))) {
 $node = Get-Command 'node.exe' -ErrorAction SilentlyContinue
 if (-not $node) { throw 'Install Node.js 22+ and ensure node.exe is on PATH.' }
 
-if ($Mode -ne 'Offline') {
+if ($Mode -notin @('Offline','Code')) {
     $hostOk = $HostAddress -eq 'localhost'
     if (-not $hostOk) {
         try {
@@ -67,6 +67,13 @@ try {
             Write-Host 'Installing pinned Mineflayer dependencies locally (once)...'
             & $npm.Source ci --prefix $bot --no-audit --no-fund
             if ($LASTEXITCODE -ne 0) { throw 'Local dependency installation failed.' }
+        }
+        if ($Mode -eq 'Code') {
+            Write-Host 'LOCAL ONLY: full Minecraft code regression; no vanilla Java server or hosted Actions.'
+            & $node.Source (Join-Path $bot 'run_offline_minecraft_gates.cjs')
+            if ($LASTEXITCODE -ne 0) { throw "Minecraft Code regression FAILED (exit code $LASTEXITCODE)." }
+            Write-Host 'Minecraft Code regression PASSED (offline only; real game still unverified).'
+            return
         }
         [Environment]::SetEnvironmentVariable('JARVIS_MINECRAFT_LAN_HOST', $HostAddress, 'Process')
         [Environment]::SetEnvironmentVariable('JARVIS_MINECRAFT_LAN_PORT', [string]$Port, 'Process')

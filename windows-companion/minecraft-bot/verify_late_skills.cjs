@@ -94,6 +94,18 @@ const ctx=createLateSkills({bot,navigate:async()=>true,craftNamed:async()=>{},ge
  check(!missingSupply.ok && unequipped===beforeMissing && slots[positions.head]===diamondHelmet,
     'Missing smithing materials must leave worn diamond armor untouched');
  bot.inventory.items=readyItems;
+ // A failed smithing window open must not strand armor in the backpack.
+ bot.inventory.items=()=>smithMaterial.filter(x=>
+   x.name!=='netherite_helmet' && x.name!=='diamond_helmet');
+ slots[positions.head]=diamondHelmet;
+ let windowFailure=false;
+ bot.openBlock=async()=>{throw Error('Simulated smithing window open failure');};
+ try{
+   await ctx.run({kind:'smith_netherite',item:'netherite_helmet',base:'diamond_helmet'},1);
+ }catch(e){windowFailure=/Simulated smithing window/.test(String(e));}
+ check(windowFailure && slots[positions.head]?.name==='diamond_helmet',
+   'A failing smithing GUI must restore diamond armor after verified unequip');
+ bot.inventory.items=readyItems;
  // The same worn base must never be removed outside the Overworld.
  bot.game.dimension='minecraft:the_nether';
  bot.inventory.items=()=>smithMaterial.filter(x=>x.name!=='netherite_helmet'&&x.name!=='diamond_helmet');

@@ -423,7 +423,8 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const workbench=lookup(bot,['smithing_table'],5);
     if(!workbench)return observed(false,'No smithing table in range');
     const names=['netherite_upgrade_smithing_template',plan.base,'netherite_ingot'];
-    let removedArmorSlot=null;
+    let removedArmorSlot=null,ui=null;
+    try{
     // Never remove worn armor unless all OTHER ingredients are already real.
     if(!item(bot,names[0])||!item(bot,names[2]))
       return observed(false,'Missing verified upgrade template or Netherite ingot; armor stays equipped');
@@ -445,16 +446,15 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       if(typeof bot.unequip!=='function')
         return observed(false,'Mineflayer armor unequip API unavailable');
       check(epoch);
-      await bot.unequip(slotName);
       removedArmorSlot=slotName;
+      await bot.unequip(slotName);
       check(epoch);
       if(bot.inventory.slots?.[slot]?.name===plan.base || !item(bot,plan.base))
         return observed(false,'Server did not confirm diamond armor returned to inventory');
     }
     if(names.some(n=>!item(bot,n)))return observed(false,'Missing real template/diamond base/netherite ingot');
     const before=count(bot,plan.item);
-    const ui=await bot.openBlock(workbench);
-    try{
+    ui=await bot.openBlock(workbench);
       // Vanilla 1.20+ smithing window: three inputs, output, player inventory.
       // Refuse to click any slots until server window layout is observed.
       const type=String(ui.type||'');
@@ -479,15 +479,16 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
         `Smithing result ${plan.item} inventory ${before} -> ${settled.after}`+
         (settled.ok?' (server observed)':' (input clicked; output not proven)'));
     }finally{
-      // Return any stranded input items to inventory when server permits.
-      for(let slot=0;slot<3;slot++){
-        if(ui.slots[slot]){
-          try{await bot.clickWindow(slot,0,1);}catch{}
+      // Cleanup also covers failed GUI opens and a failed inventory settle;
+      // previously the original diamond armor was left unequipped.
+      if(ui){
+        for(let slot=0;slot<3;slot++){
+          if(ui.slots?.[slot]){
+            try{await bot.clickWindow(slot,0,1);}catch{}
+          }
         }
+        try{await Promise.resolve(bot.closeWindow(ui));}catch{}
       }
-      // Mineflayer closeWindow() can return void, not a promise. Do not
-      // throw a TypeError in finally after an otherwise verified upgrade.
-      try{await Promise.resolve(bot.closeWindow(ui));}catch{ /* remote close may have raced */ }
       // The prior diamond armor is now in the backpack. Re-equip the
       // upgraded armor when smithing succeeded, otherwise restore diamond
       // armor, but only while the same owner-authorized action remains live.

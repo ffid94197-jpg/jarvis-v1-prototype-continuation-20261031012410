@@ -11,6 +11,54 @@ const has=(i,k)=>qty(i,k)>0;
 function lateGamePlan(world,progress={}){
   const i=world.inventory||{},m=progress.milestones||{};
   const dimension=String(world.dimension||'minecraft:overworld').replace(/^minecraft:/,'');
+  const dragonFirst=progress.goal==='dragon_then_netherite_run';
+  const dragonVictory=m.dragonKilled===true && m.exitPortalObserved===true;
+  // This separate user-authorized mission enforces a strict temporal order:
+  // dragon death and the End exit portal FIRST, full worn Netherite LAST.
+  // It never accepts entity disappearance or a planner receipt as proof.
+  if(dragonFirst && !dragonVictory){
+    if(dimension==='the_end'){
+      if(world.dragonDeadObserved===true && m.dragonSeen===true && world.exitPortalPresent===true)
+        return action('verify_dragon','Verify real dragon death event plus generated End exit portal');
+      if(world.dragonPresent){
+        if(!m.dragonSeen)return action('observe_dragon','Record live dragon entity before combat');
+        if(world.crystalsNearby>0)return action('destroy_end_crystal','Destroy actual healing crystals');
+        return action('fight_dragon','Damage observed dragon until death event',{dragonId:world.dragonId});
+      }
+      return action('search_dragon','Dragon absent but no death+portal proof; search rather than claim victory');
+    }
+    if(dimension==='the_nether'){
+      if(qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8)return action('hunt_blazes','Collect actual blaze rods');
+      if(qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)return action('hunt_endermen','Collect actual pearls');
+      return action('enter_overworld','Return from Nether to locate End portal');
+    }
+    if(dimension!=='overworld')return action('blocked','Unknown game dimension '+dimension);
+    if(!m.netherPortalBuilt && !world.netherPortalNearby){
+      if(qty(i,'obsidian')<14)return action('mine_obsidian','Collect actual obsidian');
+      if(!has(i,'flint_and_steel')){
+        if(!has(i,'flint'))return action('collect_flint','Mine gravel for flint');
+        if(!has(i,'iron_ingot'))return action('collect_iron','Smelt iron for flint and steel');
+        return action('craft_flint_steel','Craft a verified flint and steel');
+      }
+      return action('build_nether_portal','Build and ignite a verified obsidian portal');
+    }
+    if(qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8 ||
+       qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)
+      return action('enter_nether','Collect missing End progression drops');
+    if(!has(i,'bow') || qty(i,'arrow')<32)
+      return action('prepare_archery','Acquire bow and 32 actual arrows');
+    if(qty(i,'eye_of_ender')<12){
+      if(qty(i,'blaze_powder')<1)return action('craft_blaze_powder','Create blaze powder from real rods');
+      return action('craft_eyes','Create Eyes of Ender from observed ingredients');
+    }
+    if(world.endPortalPresent && world.endPortalActivated)return action('enter_end','Enter opened End portal');
+    if(world.strongholdPortalFrameNearby || world.endPortalPresent)
+      return action('activate_end_portal','Activate twelve observed stronghold portal frames');
+    return action('track_stronghold','Locate a real stronghold using Eyes of Ender');
+  }
+  if(dragonFirst && dragonVictory && dimension==='the_end')
+    return action('exit_end','Use the observed End exit portal to return to Overworld; dragon already verified');
+
   // Only an entityDead event observed after the live dragon was seen PLUS the
   // generated End portal may prove a kill; a disappearing entity cannot.
   // A historical equip receipt is NOT proof that the armor is still worn.

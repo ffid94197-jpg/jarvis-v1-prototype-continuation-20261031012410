@@ -18,6 +18,7 @@ const {confirmedMove}=require('./movement_proof.cjs');
 const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_navigation.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
+const {stoneProposal,excavationProposal}=require('./stone_access.cjs');
 const {stopPathfinder,clearStaleStop}=require('./pathfinder_lifecycle.cjs');
 // mineflayer-pathfinder needs up to thinkTimeout (5000ms default) just to
 // decide a route. A per-leg navigation budget below that expires while A* is
@@ -350,20 +351,48 @@ async function autoExecute(plan,epoch){
         'Verified safe '+plan.ore+' cave advance; no exposed ore found yet'};
     }
     case 'mine_cobblestone':{
-      if(!(before.inventory.woodenPickaxe||before.inventory.stonePickaxe))throw Error('Stone mining requires pickaxe');
-      const block=bot.findBlock({matching:b=>b && ['stone','cobblestone'].includes(b.name),maxDistance:16});
-      if(!block)throw Error('No safe stone within loaded search range');
-      const p=block.position;
-      await navigate(p,2,epoch,12000);
-      if(epoch!==actionEpoch)throw Error('Mining cancelled');
-      const live=bot.blockAt(p);
-      if(!live || !['stone','cobblestone'].includes(live.name))throw Error('Stone no longer present');
-      if(bot.entity.position.distanceTo(p)>5)throw Error('Stone out of reach');
-      const pick=bot.inventory.items().find(i=>['stone_pickaxe','wooden_pickaxe'].includes(i.name));
-      if(!pick)throw Error('Pickaxe missing');
-      await bot.equip(pick,'hand');await bot.dig(live);
-       return collectVerifiedDrop(p,before.inventory.cobblestone,
-         ()=>digest(bot,leader).inventory.cobblestone,epoch,'Cobblestone');
+      if(!(before.inventory.woodenPickaxe||before.inventory.stonePickaxe||
+         before.inventory.ironPickaxe||before.inventory.diamondPickaxe))
+        throw Error('Stone mining requires a real pickaxe');
+      const pick=bot.inventory.items().find(i=>
+        ['stone_pickaxe','wooden_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'].includes(i.name));
+      if(!pick)throw Error('Server inventory has no usable pickaxe');
+      const candidate=stoneProposal(bot,goals.GoalBlock);
+      if(!candidate){
+        // The old findBlock picked buried stone and retried impossible A*
+        // routes forever. Physically uncover nearby stone instead. No
+        // cobblestone is claimed unless inventory later increases.
+        const preparation=excavationProposal(bot);
+        if(!preparation)
+          return {ok:false,verified:false,detail:'No reachable exposed stone or safely excavatable adjacent soil'};
+        const prior=bot.blockAt(preparation.position);
+        if(!prior||!bot.canDigBlock?.(prior))
+          return {ok:false,verified:false,detail:'Proposed soil excavation became unsafe'};
+        await bot.equip(pick,'hand');
+        await bot.dig(prior);
+        if(epoch!==actionEpoch)throw Error('Stone excavation cancelled');
+        await pause(150);
+        const changed=bot.blockAt(preparation.position);
+        if(!changed||changed.name===prior.name||/lava|water/.test(changed.name))
+          return {ok:false,verified:false,detail:'Excavation did not safely change actual server block state'};
+        return {ok:true,verified:true,detail:'Server-confirmed preparatory soil excavation; stone still NOT collected'};
+      }
+      if(candidate.stance){
+        const stance=candidate.stance;
+        const reached=await navigate(new Vec3(stance.x+.5,stance.y,stance.z+.5),
+          1,epoch,stanceNavTimeoutMs());
+        if(!reached)return {ok:false,verified:false,detail:'Stone mining stance not physically reached'};
+      }
+      if(epoch!==actionEpoch)throw Error('Stone mining cancelled');
+      const live=bot.blockAt(candidate.position);
+      if(!live||!['stone','cobblestone'].includes(live.name)||
+         !isExposed(bot,live.position)||!bot.canDigBlock?.(live))
+        return {ok:false,verified:false,detail:'Selected stone is not exposed and within real mining reach'};
+      const beforeStone=before.inventory.cobblestone;
+      await bot.equip(pick,'hand');
+      await bot.dig(live);
+      return collectVerifiedDrop(candidate.position,beforeStone,
+        ()=>digest(bot,leader).inventory.cobblestone,epoch,'Cobblestone');
     }
     case 'mine_iron':{
       if(!before.inventory.stonePickaxe && !before.inventory.ironPickaxe)throw Error('Iron ore needs stone or better pickaxe');

@@ -198,7 +198,19 @@ class World {
     req(this.world().wornNetherite,'actual armor slots incomplete');
     this.armorEquipTick=this.ticks;evidence.proof='netherite_equipped';break;
    }
-   case 'obtain_food':dest('overworld');gain('cooked_beef',2);this.hunger=Math.min(20,this.hunger+5);break;
+   case 'obtain_food':
+    req(this.dimension!=='end','End island has no renewable food; carry sufficient supplies');
+    req(above('stone_sword')||above('diamond_sword')||above('netherite_sword'),'no weapon to hunt livestock');
+    if(this.dimension==='nether'){
+      // Java Nether: kill a naturally spawned Hoglin for raw porkchops, eat
+      // after a verified drop. It is edible raw, with less saturation.
+      gain('porkchop',2);this.take('porkchop');this.hunger=Math.min(20,this.hunger+3);
+      this.events.push(['hoglin_drop_and_eat',this.ticks]);
+    }else{
+      gain('beef',2);this.take('beef');this.hunger=Math.min(20,this.hunger+3);
+      this.events.push(['overworld_livestock_drop_and_eat',this.ticks]);
+    }
+    break;
    case 'explore':this.events.push(['explored',this.ticks]);break;
    case 'search_dragon':dest('end');this.events.push(['end_scout',this.ticks]);break;
    case 'wait':case 'idle':case 'blocked':throw Error('NON_ACTION '+type);

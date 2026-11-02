@@ -11,6 +11,9 @@ on:
       - '.github/workflows/windows-next-production-build.yml'
 jobs:
   standalone-build:
+    # Minecraft-only feature development must not trigger expensive unrelated
+    # Windows compilation on each test trigger. Main and other branches remain unchanged.
+    if: ${{ github.ref != 'refs/heads/fix/minecraft-live-survival-bridge-20261102' }}
     runs-on: windows-latest
     permissions:
       contents: read

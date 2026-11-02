@@ -41,8 +41,12 @@ function ok(value,label){assert.ok(value,label);passed++;console.log('PASS',labe
   const tool=compile('src/lib/agent/tools/ciProjectBuild.ts',{'../guardian/policy':policy});
 
   const audited=[];
+  let auditOffline=false;
   const guardian=compile('src/lib/agent/guardian/guardian.ts',{
-   '@/lib/db':{db:{auditLog:{create:async ({data})=>{audited.push(data);return {id:String(audited.length)};}}}},
+   '@/lib/db':{db:{auditLog:{create:async ({data})=>{
+    if(auditOffline)throw Error('offline');
+    audited.push(data);return {id:String(audited.length)};
+   }}}},
    '../windows/policy':{validateDesktopTool:()=>({ok:false,reason:'unavailable in isolated test'})},
    './policy':policy,
    '../tools/ciProjectBuild':tool,
@@ -57,6 +61,23 @@ function ok(value,label){assert.ok(value,label);passed++;console.log('PASS',labe
     'Guardian audit retains rejected traversal intent');
   admitted=await guardian.authorizeToolCall({taskId:'ci-test'},'ci_project_build',{project:'site',action:'build'});
   ok(admitted.verdict==='deny','CI build cannot be authorized without an authenticated owner');
+  auditOffline=true;
+  admitted=await guardian.authorizeToolCall({taskId:'ci-test',ownerId:'owner'},'ci_project_build',{project:'site',action:'build'});
+  ok(admitted.verdict==='deny','No CI tool authorization when durable Guardian audit is unavailable');
+  auditOffline=false;
+  const effects=compile('src/lib/agent/core/effects.ts',{
+    '@/lib/db':{db:{effectRecord:{updateMany:async()=>({count:1})}}},
+    '../guardian/policy':policy,
+    './faults':{injectedFault:()=>null},
+  });
+  ok(effects.isEffectfulToolInvocation('ci_project_build',{}),
+    'CI build is journal-before-effect, not an unaudited read');
+  const recovery=await effects.reconcileEffect('unsettled-ci-build',{
+    tool:'ci_project_build',args:{project:'site',action:'build'}
+  });
+  ok(recovery.kind==='effect_unknown',
+    'Uncertain CI build after crash cannot be auto-replayed or accepted');
+
   let d=await tool.prepareCIProjectBuild({project:'site',action:'build'});
   ok(d.ok===true,'fixed Vite build authorized in isolated runner');
   ok(d.prepared.rel==='site','Guardian normalized project path');

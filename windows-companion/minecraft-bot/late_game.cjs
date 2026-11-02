@@ -102,11 +102,13 @@ function lateGamePlan(world,progress={}){
     const materialUnits=uncraftedIngotCount*4;
     if(qty(i,'netherite_scrap')+qty(i,'ancient_debris')<materialUnits)
       return action('mine_ancient_debris','Collect only the remaining actual Ancient Debris for uncrafted upgrades');
-    if(qty(i,'gold_ingot')<materialUnits){
-      if(qty(i,'gold_nugget')>=9 && !world.workbenchNearby && has(i,'crafting_table'))
-        return action('place_table','Place owned table to combine nine gold nuggets');
-      return action('collect_gold','Collect remaining gold for Netherite ingots');
-    }
+    // Carry verified raw ore/nuggets home rather than being forced to
+    // smelt or craft in a dangerous Nether biome with no workstation.
+    const convertibleGold=qty(i,'gold_ingot')+qty(i,'raw_gold')+
+      Math.floor(qty(i,'gold_nugget')/9);
+    if(convertibleGold<materialUnits)
+      return action('collect_gold','Acquire '+(materialUnits-convertibleGold)+
+        ' additional real gold ingot equivalents');
     if(!(dragonFirst && dragonVictory) && qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8)
       return action('hunt_blazes','Locate Nether fortress and collect eight actual Blaze rods');
     if(!(dragonFirst && dragonVictory) && qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)
@@ -130,7 +132,8 @@ function lateGamePlan(world,progress={}){
     // Still missing actual loot? Go to Nether, don't fabricate anything.
     if(!has(i,'netherite_upgrade_smithing_template') ||
       qty(i,'ancient_debris')+qty(i,'netherite_scrap')+4*qty(i,'netherite_ingot') < 4*missing.length ||
-      qty(i,'gold_ingot')+4*qty(i,'netherite_ingot') < 4*missing.length ||
+      qty(i,'gold_ingot')+qty(i,'raw_gold')+Math.floor(qty(i,'gold_nugget')/9)+
+       4*qty(i,'netherite_ingot') < 4*missing.length ||
       (!(dragonFirst && dragonVictory) && (qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8 ||
       qty(i,'ender_pearl')+qty(i,'eye_of_ender')<16)))
       return action('enter_nether','Collect missing Netherite/End progression materials in Nether');
@@ -143,6 +146,32 @@ function lateGamePlan(world,progress={}){
       }
       if(!has(i,'coal') && !has(i,'charcoal') && qty(i,'planks')<1)return qty(i,'logs')>0?action('craft_planks','Convert existing logs to smelting fuel'):action('collect_wood','Gather fuel for smelting ancient debris');
       return action('smelt_resource','Smelt ancient debris into Netherite scrap',{input:'ancient_debris',output:'netherite_scrap'});
+    }
+    const uncraftedUpgrades=Math.max(0,missing.length-qty(i,'netherite_ingot'));
+    const neededGold=4*uncraftedUpgrades;
+    if(qty(i,'gold_ingot')<neededGold){
+      if(qty(i,'raw_gold')>0){
+        if(!world.furnaceNearby){
+          if(has(i,'furnace'))return action('place_furnace','Place owned gold-refining furnace');
+          if(qty(i,'cobblestone')<8)return action('mine_cobblestone','Acquire eight furnace stones');
+          if(!world.workbenchNearby)
+            return has(i,'crafting_table')?action('place_table','Place gold furnace workbench'):
+              action('craft_table','Create crafting station for furnace');
+          return action('craft_furnace','Craft a verified furnace for raw gold');
+        }
+        if(!has(i,'coal')&&!has(i,'charcoal')&&qty(i,'planks')<1)
+          return qty(i,'logs')>0?action('craft_planks','Convert wood into gold furnace fuel'):
+            action('collect_wood','Gather gold furnace fuel in Overworld');
+        return action('smelt_resource','Refine real raw gold into gold ingots',
+          {input:'raw_gold',output:'gold_ingot'});
+      }
+      if(qty(i,'gold_nugget')>=9){
+        if(!world.workbenchNearby)return has(i,'crafting_table')
+          ?action('place_table','Place gold ingot workstation'):
+            action('craft_table','Craft gold ingot workstation');
+        return action('collect_gold','Convert observed nine gold nuggets into a physical ingot');
+      }
+      return action('enter_nether','Still missing actual gold for Netherite upgrades');
     }
     if(qty(i,'netherite_ingot')<missing.length){
       if(qty(i,'netherite_scrap')>=4 && qty(i,'gold_ingot')>=4){

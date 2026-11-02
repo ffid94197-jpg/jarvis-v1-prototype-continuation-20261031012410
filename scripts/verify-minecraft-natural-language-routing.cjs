@@ -12,11 +12,11 @@ for(const s of [
  'Jarvis, can you mine diamonds in Minecraft?','Please build a small house in Minecraft',
  'Follow me and protect me in Minecraft','Collect 16 cobblestone using my wooden pickaxe',
  'I want to farm wheat in Minecraft','Find diamond ore in Minecraft','Trade with villagers in Minecraft',
- 'Jarvis, explore Minecraft caves','Can you gather ender pearls in Minecraft?','Can you guard me in Minecraft?'
+ 'Jarvis, explore Minecraft caves','Can you gather ender pearls in Minecraft?','Can you guard me in Minecraft?','Stop the Minecraft companion'
 ])ok(isMinecraftAiObjective(s),'natural language route: '+s);
 for(const s of [
  'Explain how to mine diamonds in Minecraft','How do I craft a sword in Minecraft?','Do not mine diamonds in Minecraft',
- 'Build me a house','Minecraft','Tell me about Ender pearls','What is the best Minecraft sword?'
+ 'Build me a house','Minecraft','Tell me about Ender pearls','What is the best Minecraft sword?','Do not stop the Minecraft companion'
 ])no(isMinecraftAiObjective(s),'do not dispatch: '+s);
 ok(isMinecraftObservationOnlyObjective('Observe my Minecraft inventory'),'read-only observation objective');
 no(isMinecraftObservationOnlyObjective('Observe and follow me in Minecraft'),'follow is an effect');

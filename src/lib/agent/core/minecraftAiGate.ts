@@ -55,13 +55,14 @@ export function isMinecraftAiObjective(objective:string):boolean {
   // "wood" requests, and never enable the game route without an action intent.
   const minecraftScope=/\b(?:minecraft|minecraft_companion_command|jarvisbuddy|ender dragon|netherite)\b/.test(s);
   const resourceScope=/\b(?:cobblestone|cobbled deepslate|stone pickaxe|wooden pickaxe|iron pickaxe|diamond pickaxe|ender pearls?|blaze rods?|ancient debris|diamond ore|iron ore|gold ore|redstone ore|end portal|nether portal|stronghold)\b/.test(s);
-  const actionGoal=/\b(?:play|gather|collect|craft|mine|dig|excavate|defeat|kill|beat|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|smelt|enchant|explore|travel|find|place|equip|fight|repair|use)\b/.test(s);
+  const actionGoal=/\b(?:play|gather|collect|craft|mine|dig|excavate|defeat|kill|beat|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|smelt|enchant|explore|travel|find|place|equip|fight|repair|use|stop|pause|cancel|halt)\b/.test(s);
   if (!(minecraftScope || resourceScope) || !actionGoal) return false;
   // Only reject a question/refusal when it is the request's intent. A valid
   // action goal often contains important restrictions such as "do not use
   // scripts" and "stop if blocked" later in the prompt; these must not
   // silently disable the entire AI planner.
   const lead=s.replace(/^jarvis(?:buddy)?[,:]?\s*/,'').replace(/^please\s+/,'');
+  if (/^(?:stop|pause|cancel|halt)\b/.test(lead) && minecraftScope) return true;
   if (/^(?:what|how|why|when|where|who|explain|describe|tell me|show me|is there)\b/.test(lead)) return false;
   if (/^(?:don't|do not|never|stop|pause|cancel)\b/.test(lead)) return false;
   if (/^i\s+(?:don't|do not|never)\s+want\b/.test(lead)) return false;
@@ -76,7 +77,7 @@ export function isMinecraftObservationOnlyObjective(objective:string):boolean {
   const primary=s.split(/\b(?:do not|don't|never|stop if|if blocked|if an action fails)\b/,1)[0];
   const observation=/\b(?:observe|inspect)\b/.test(primary) ||
     /\b(?:minecraft_companion_command)\b/.test(primary) && /\bobserve\b/.test(primary);
-  const effects=/\b(?:craft|mine|gather|collect|dig|place|navigate|build|defeat|kill|equip|play|survive|progress|follow|come|protect|guard|defend|farm|trade|smelt|enchant|explore|travel|find|fight|repair|use)\b/.test(primary);
+  const effects=/\b(?:craft|mine|gather|collect|dig|place|navigate|build|defeat|kill|equip|play|survive|progress|follow|come|protect|guard|defend|farm|trade|smelt|enchant|explore|travel|find|fight|repair|use|stop|pause|cancel|halt)\b/.test(primary);
   return observation && !effects;
 }
 

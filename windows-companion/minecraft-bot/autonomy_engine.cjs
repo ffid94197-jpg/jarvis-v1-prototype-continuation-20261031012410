@@ -74,6 +74,7 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     const idx=bot.getEquipmentDestSlot?.(slot);
     return Number.isInteger(idx) && bot.inventory?.slots?.[idx]?.name===name;
   });
+  const heldNetheriteSword=bot.heldItem?.name==='netherite_sword';
   const wornDiamond=[['head','diamond_helmet'],['torso','diamond_chestplate'],
     ['legs','diamond_leggings'],['feet','diamond_boots']].every(([slot,name])=>{
     const idx=bot.getEquipmentDestSlot?.(slot);
@@ -110,7 +111,7 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
   const crystals=Object.values(bot.entities||{}).filter(e=>e?.name==='end_crystal' && e?.position);
   return {joined:!!p,dimension:bot.game?.dimension||'minecraft:overworld',
     smithingTableNearby,netherPortalNearby,strongholdPortalFrameNearby,strongholdMissingEyes,endPortalPresent,endPortalActivated,
-    wornNetherite,wornDiamond,exitPortalPresent, dragonPresent:dragons.length>0,dragonId:dragons[0]?.id||null,
+    wornNetherite,wornDiamond,heldNetheriteSword,exitPortalPresent, dragonPresent:dragons.length>0,dragonId:dragons[0]?.id||null,
     dragonDeadObserved:dragonDead,crystalsNearby:crystals.length,
     health:number(bot.health,20),hunger:number(bot.food,20),workbenchNearby,
      // Only the native Mineflayer runtime advertises physical workstation

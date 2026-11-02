@@ -20,7 +20,8 @@ check(eyeCount({raw:{ender_eye:3,eye_of_ender:1}})===4,
 check(eyeCount({eye_of_ender:7})===7,'Historical normalized snapshots still supported');
 
 const diamond=Object.fromEntries(DIAMOND.map(n=>[n,1]));
-const actual=({raw={},world={},milestones={}})=>lateGamePlan(state(raw,{wornNetherite:milestones.netheriteEquipped===true,...world}),{milestones});
+const actual=({raw={},world={},milestones={}})=>lateGamePlan(state(raw,{wornNetherite:milestones.netheriteEquipped===true,
+ heldNetheriteSword:milestones.netheriteEquipped===true && raw.netherite_sword>0,...world}),{milestones});
 const expect=(params,kind)=>{const a=actual(params);check(a.kind===kind,`expected ${kind}, got ${JSON.stringify(a)}`);};
 const expectDragonFirst=(params,kind)=>{
  const a=lateGamePlan(state(params.raw,params.world),{goal:'dragon_then_netherite_run',milestones:{}});
@@ -85,15 +86,24 @@ const unprovenReturn=lateGamePlan(state(gear,{wornNetherite:true}),
  {goal:'dragon_then_netherite_run',milestones:completedDragonMilestones});
 check(unprovenReturn.kind==='blocked',
  'Dragon-first full victory must reject missing real End-to-Overworld return receipt');
-const provenReturn=lateGamePlan(state(gear,{wornNetherite:true}),
+const provenReturn=lateGamePlan(state(gear,{wornNetherite:true,heldNetheriteSword:true}),
  {goal:'dragon_then_netherite_run',
   milestones:{...completedDragonMilestones,endReturned:true}});
 check(provenReturn.kind==='complete',
  'Dragon death, observed End return and currently worn armor prove the required order');
-const legacyGoal=lateGamePlan(state(gear,{dimension:'minecraft:the_end',wornNetherite:true}),
+const legacyGoal=lateGamePlan(state(gear,{dimension:'minecraft:the_end',wornNetherite:true,heldNetheriteSword:true}),
  {goal:'netherite_dragon_run',milestones:completedDragonMilestones});
 check(legacyGoal.kind==='complete',
  'Gear-first legacy Dragon victory may still settle in the End, without spoofed post-Dragon return');
+const swordSwitched=lateGamePlan(state(gear,{dimension:'minecraft:the_end',wornNetherite:true,
+ heldNetheriteSword:false}),{goal:'netherite_dragon_run',milestones:completedDragonMilestones});
+check(swordSwitched.kind==='equip_netherite',
+ 'Victory refuses previously equipped but no-longer-held Netherite sword');
+const helmetStillWorn=lateGamePlan(state(gear,{wornNetherite:true,heldNetheriteSword:false}),
+ {goal:'dragon_then_netherite_run',
+  milestones:{...completedDragonMilestones,endReturned:true}});
+check(helmetStillWorn.kind==='equip_netherite',
+ 'Dragon-first final state also requires physically held Netherite sword');
 
 const partCrafted={...temp,netherite_scrap:16,gold_ingot:16,netherite_ingot:1};
 const partlyProvisioned=lateGamePlan(state(partCrafted,{dimension:'minecraft:the_nether'}),{milestones:{}});

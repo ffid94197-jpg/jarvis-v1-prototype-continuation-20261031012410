@@ -104,7 +104,8 @@ async function proof(){
  const observed=await send({command:'observe'});
  assert(observed.ok,'Final Minecraft inventory observation missing');
  const world=JSON.parse(observed.status);
- assert(world.joined===true && world.wornNetherite===true,'Server-observed armor slots not equipped');
+ assert(world.joined===true && world.wornNetherite===true && world.heldNetheriteSword===true,
+   'Final Java proof requires four worn Netherite armor pieces AND actively held Netherite sword');
  assert(String(world.dimension||'').replace(/^minecraft:/,'')==='overworld',
    'Bot must complete in actual Overworld after End return');
  const kill=evidence.events.find(e=>e.type==='dragon_death'&&e.dimension==='the_end');

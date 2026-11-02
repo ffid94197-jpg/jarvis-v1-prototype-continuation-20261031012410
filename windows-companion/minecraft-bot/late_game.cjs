@@ -116,10 +116,10 @@ function lateGamePlan(world,progress={}){
   // Require the current server-observed equipment slots at final settlement.
   if(m.dragonKilled && m.exitPortalObserved && m.netheriteEquipped &&
      (!dragonFirst || (m.endReturned===true && dimension==='overworld')) &&
-     world.wornNetherite===true)
+     world.wornNetherite===true && world.heldNetheriteSword===true)
     return action('complete','Actual Ender Dragon death, End return (when required), and currently worn full Netherite armor confirmed');
   if(dimension==='the_end'){
-    if(!m.netheriteEquipped || world.wornNetherite!==true)
+    if(!m.netheriteEquipped || world.wornNetherite!==true || world.heldNetheriteSword!==true)
       return action('equip_netherite','Reverify all worn armor slots and sword before End battle or victory');
     if(world.dragonDeadObserved && m.dragonSeen && world.exitPortalPresent)
       return action('verify_dragon','Verify server dragon death and End exit portal');
@@ -243,7 +243,7 @@ function lateGamePlan(world,progress={}){
     const idx=NETHERITE.findIndex(n=>!has(i,n));
     return action('smith_netherite','Upgrade diamond equipment using ingot and template at smithing table',{item:NETHERITE[idx],base:DIAMOND[idx]});
   }
-  if(!m.netheriteEquipped || world.wornNetherite!==true)
+  if(!m.netheriteEquipped || world.wornNetherite!==true || world.heldNetheriteSword!==true)
     return action('equip_netherite','Equip and reverify four Netherite armor slots and sword');
   // An activated portal requires no more Eyes. Still verify the bow.
   const alreadyOpen=world.endPortalPresent && world.endPortalActivated;

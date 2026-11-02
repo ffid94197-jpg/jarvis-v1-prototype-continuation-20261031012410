@@ -8,6 +8,11 @@ on:
       - "scripts/verify-inventory-integrity.cjs"
       - "scripts/autonomy/validate-internet-corpus.cjs"
       - "scripts/autonomy/verify-corpus-validator.cjs"
+      - "src/lib/agent/tools/ciProjectBuild.ts"
+      - "src/lib/agent/guardian/guardian.ts"
+      - "src/lib/agent/tools/executor.ts"
+      - "src/lib/agent/core/effects.ts"
+      - "scripts/verify-ci-project-build.cjs"
       - ".github/workflows/prototype-artifact-proof.yml"
   push:
     branches: [fix/autonomy-artifact-receipt-20261102, fix/autonomy-durable-proof-and-corpus-20261102]
@@ -53,6 +58,10 @@ jobs:
         run: |
           node scripts/autonomy/verify-corpus-validator.cjs
           if ($LASTEXITCODE -ne 0) { throw "Corpus provenance regression failed" }
+      - name: Verify scoped CI project build and fail-closed policy
+        run: |
+          node scripts/verify-ci-project-build.cjs
+          if ($LASTEXITCODE -ne 0) { throw "CI build authorization or output verification failed" }
       - name: Guard against Core behavior regression
         run: |
           npm.cmd run test:core-actionable-execution

@@ -75,7 +75,7 @@ function conciseStatus(){
   const p=bot.entity?.position;const owner=ownerEntity();
   const delta=p && owner?.position ? Math.round(p.distanceTo(owner.position)) : null;
   return JSON.stringify({mode,position:p?{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}:null,
-    ownerName:leader,botName:bot.username,ownerVisible:!!owner,ownerDistance:delta,health:bot.health,food:bot.food,
+    ownerName:leader,botName:bot.username,gameMode:bot.game?.gameMode||'unknown',ownerVisible:!!owner,ownerDistance:delta,health:bot.health,food:bot.food,
     inventory:inventorySummary(bot),autonomy:autopilot.status().status,
     autoGoal:autopilot.status().goal,autoSteps:autopilot.status().steps,lastAction}).slice(0,1500);
 }
@@ -528,6 +528,11 @@ async function action(q){
     case 'auto_status':return {ok:true,status:JSON.stringify(autopilot.status()).slice(0,1900)};
     case 'auto_stop':resumeAfterSpawn=false;setMode('stay');return {ok:true,status:'Autonomous gameplay stopped; movement cancelled'};
     case 'auto_goal':{
+      // The Dragon/Netherite acceptance path is survival-only. Never allow
+      // creative/spectator/adventure game modes to generate a fake victory.
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood'].includes(q.goal) &&
+         bot.game?.gameMode!=='survival')
+        return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an
       // already running owner-authorized goal. Explicit auto_stop is required.
       if(autopilot.status().status==='running')

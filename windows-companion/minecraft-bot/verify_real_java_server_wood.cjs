@@ -73,6 +73,29 @@ async function main(){
   const stopped=await command({command:'auto_stop'});
   assert(stopped.ok,'Owner cancellation not acknowledged');
   console.log('MINECRAFT_REAL_JAVA_WOOD_SMOKE PASS; server-backed independent bot joined, empty survival spawn and mined logs observed; elapsedMs='+String(Date.now()-initialAt));
+  if(process.env.JARVIS_MC_TEST_STONE==='1'){
+    const beginStone=await command({command:'auto_goal',goal:'stone_age',durationSeconds:600});
+    assert(beginStone.ok,'Live stone age mission not accepted');
+    let finalStone='',observedStone=null;
+    const stoneDeadline=Date.now()+8*60*1000;
+    while(Date.now()<stoneDeadline && !exit){
+      await wait(3000);
+      const observed=await command({command:'observe'});
+      if(observed.ok)try{observedStone=JSON.parse(observed.status);}catch{}
+      const progress=await command({command:'auto_status'});
+      if(progress.ok)finalStone=progress.status;
+      const raw=observedStone?.inventory?.raw||{};
+      if((raw.stone_pickaxe||0)>0 && (raw.stone_sword||0)>0)break;
+      let state;try{state=JSON.parse(finalStone)}catch{}
+      if(state && ['blocked','paused','complete'].includes(state.status))break;
+    }
+    const inventory=observedStone?.inventory?.raw||{};
+    assert((inventory.stone_pickaxe||0)>0 && (inventory.stone_sword||0)>0,
+      'Live stone crafting not verified; status='+finalStone+' observed='+JSON.stringify(observedStone));
+    const stopStone=await command({command:'auto_stop'});
+    assert(stopStone.ok,'Stone mission cancellation failed');
+    console.log('MINECRAFT_REAL_JAVA_STONE_AGE PASS; actual server-backed stone pickaxe+sword observed after real crafting');
+  }
   console.log('MINECRAFT_FULL_DRAGON_NETHERITE_NOT_ACCEPTED: no real game kill/equip proof');
  }catch(error){
   console.error('MINECRAFT_REAL_JAVA_WOOD_SMOKE FAIL '+String(error?.stack||error));

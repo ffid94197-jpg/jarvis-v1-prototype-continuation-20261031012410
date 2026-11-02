@@ -86,7 +86,8 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     strongholdPortalFrameNearby=nearby('end_portal_frame');endPortalPresent=nearby('end_portal');
     if(strongholdPortalFrameNearby && typeof bot.findBlocks==='function'){
       const frames=bot.findBlocks({matching:b=>b?.name==='end_portal_frame',maxDistance:32,count:12}) || [];
-      if(frames.length)strongholdMissingEyes=frames.reduce((n,p)=>{
+      // A partially loaded frame ring cannot prove the total missing-Eye count.
+      if(frames.length===12)strongholdMissingEyes=frames.reduce((n,p)=>{
         const frame=bot.blockAt?.(p);
         return n+(frame?.getProperties?.().eye===true?0:1);
       },0);

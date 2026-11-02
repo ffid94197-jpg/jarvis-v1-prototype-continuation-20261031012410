@@ -119,6 +119,14 @@ expect({raw:{...flightReady,ender_eye:6,blaze_powder:6,ender_pearl:6},
  milestones:{netheriteEquipped:true}},'craft_eyes');
 expect({raw:{...flightReady,eye_of_ender:16},milestones:{netheriteEquipped:true},world:{strongholdPortalFrameNearby:true}},'activate_end_portal');
 expect({raw:{...flightReady,eye_of_ender:16},milestones:{netheriteEquipped:true},world:{endPortalPresent:true,endPortalActivated:true}},'enter_end');
+// Gear-first with an already-open End portal does NOT need another Eye.
+expect({raw:flightReady,milestones:{netheriteEquipped:true},
+ world:{endPortalPresent:true,endPortalActivated:true}},'enter_end');
+expect({raw:{...flightReady,ender_eye:3},milestones:{netheriteEquipped:true},
+ world:{strongholdPortalFrameNearby:true,strongholdMissingEyes:3}},'activate_end_portal');
+expect({raw:{...flightReady,ender_eye:1,blaze_powder:2,ender_pearl:2},
+ milestones:{netheriteEquipped:true},
+ world:{strongholdPortalFrameNearby:true,strongholdMissingEyes:3}},'craft_eyes');
 const end={dimension:'minecraft:the_end',dragonPresent:true,dragonId:23,crystalsNearby:12};
 expect({raw:gear,world:end},'equip_netherite');
 expect({raw:gear,world:end,milestones:{netheriteEquipped:true}},'observe_dragon');

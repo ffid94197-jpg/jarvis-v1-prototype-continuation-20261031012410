@@ -227,21 +227,29 @@ function lateGamePlan(world,progress={}){
   }
   if(!m.netheriteEquipped || world.wornNetherite!==true)
     return action('equip_netherite','Equip and reverify four Netherite armor slots and sword');
-  if(eyeCount(i)+qty(i,'blaze_powder')+2*qty(i,'blaze_rod')<12 || qty(i,'ender_pearl')+eyeCount(i)<12)
+  // An activated portal requires no more Eyes. Still verify the bow.
+  const alreadyOpen=world.endPortalPresent && world.endPortalActivated;
+  const missingInFrames=world.strongholdPortalFrameNearby &&
+    Number.isInteger(world.strongholdMissingEyes) &&
+    world.strongholdMissingEyes>=0 && world.strongholdMissingEyes<=12
+    ?world.strongholdMissingEyes:12;
+  const neededEyes=world.strongholdPortalFrameNearby?missingInFrames:12;
+  if(!alreadyOpen &&
+    (eyeCount(i)+qty(i,'blaze_powder')+2*qty(i,'blaze_rod')<neededEyes ||
+      qty(i,'ender_pearl')+eyeCount(i)<neededEyes))
     return action('enter_nether','Obtain remaining blaze rods and pearls for Eyes of Ender');
   if(!has(i,'bow') || qty(i,'arrow')<32){
     if(!world.workbenchNearby && !has(i,'bow'))
-      return has(i,'crafting_table')?action('place_table','Place crafting station for bow'):action('craft_table','Craft bow workbench');
+      return has(i,'crafting_table')?action('place_table','Place crafting station for bow'):
+        action('craft_table','Craft bow workbench');
     return action('prepare_archery','Prepare physical bow and at least thirty-two arrows before dragon fight');
   }
-  if(eyeCount(i)<12){
+  if(alreadyOpen)return action('enter_end','Enter actual activated portal; verify End dimension');
+  if(eyeCount(i)<neededEyes){
     if(qty(i,'blaze_powder')<1)return action('craft_blaze_powder','Craft blaze powder from real rods');
     return action('craft_eyes','Craft Eye of Ender with pearl and powder');
   }
-  if(world.endPortalPresent){
-    if(world.endPortalActivated)return action('enter_end','Enter actual activated portal; verify End dimension');
-    return action('activate_end_portal','Fill observed End portal frames');
-  }
+  if(world.endPortalPresent)return action('activate_end_portal','Fill observed End portal frames');
   if(world.strongholdPortalFrameNearby)return action('activate_end_portal','Fill actual loaded End portal frames');
   return action('track_stronghold','Follow observed thrown-eye direction and search for stronghold');
 }

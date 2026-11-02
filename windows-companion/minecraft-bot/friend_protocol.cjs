@@ -3,7 +3,7 @@
 /** Pure command validation; identical contract for stdin and in-game chat. */
 const {RESOURCES}=require('./resource_goal.cjs');
 const {validSequence}=require('./mission_sequence.cjs');
-const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop']);
+const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop','auto_checkpoint','auto_resume']);
 function validateCommand(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return 'Invalid command';
   if (typeof input.command !== 'string') return 'Missing command';

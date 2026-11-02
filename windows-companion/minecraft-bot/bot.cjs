@@ -7,6 +7,8 @@
 const mineflayer = require('mineflayer');
 const readline = require('readline');
 const net = require('node:net');
+const path = require('node:path');
+const {createCheckpoint} = require('./mission_checkpoint.cjs');
 const {Vec3} = require('vec3');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {validateCommand, inventorySummary} = require('./friend_protocol.cjs');
@@ -52,6 +54,7 @@ let spawned=false, mode='follow', actionEpoch=0, followTimer, moveTimer, lastAct
 // Failed digging coordinates are quarantined until a meaningful position change.
 const failedDigTargets=new Map();
 const autopilot=createController({maxSeconds:43200,maxSteps:20000});
+const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-mission.json'),{host,port,owner:leader});
 let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const MOB_NAMES=new Set(['zombie','skeleton','spider','husk','drowned']);
@@ -89,7 +92,7 @@ function say(text){
   if(typeof text!=='string'||!text.trim())return;
   bot.chat(String(text).replace(/[\r\n]/g,' ').slice(0,120));
 }
-function setMode(next){halt();if(mode==='auto')autopilot.stop('Superseded by owner command');mode=next;lastAction='mode '+next;}
+function setMode(next){halt();if(mode==='auto'){autopilot.stop('Superseded by owner command');missionCheckpoint.clear();}mode=next;lastAction='mode '+next;}
 function doFollow(){
   const player=ownerEntity();
   if(player)bot.pathfinder.setGoal(new goals.GoalFollow(player,3),true);
@@ -744,12 +747,14 @@ async function autoTick(){
   // force the owner to reissue a high-level instruction. Continue only a
   // still-authorized long mission; blocked or stopped goals remain stopped.
   if(plan.kind==='idle' && autopilot.status().status==='expired' && autopilot.renewMission(21600)){
+    try{missionCheckpoint.save(autopilot.status());}catch{lastAction='Renewed mission checkpoint could not be saved';}
     lastAction='Mission time window renewed from live world; victory still unverified';
     return;
   }
   if(['complete','blocked','idle'].includes(plan.kind)){
     if(autopilot.status().status!=='running'){
       lastAction='auto '+autopilot.status().status+': '+autopilot.status().why;
+      missionCheckpoint.clear();
       mode='stay';halt();
     }
     return;
@@ -810,6 +815,28 @@ async function action(q){
       return {ok:true,status:projectWorld(snapshot,loadedTargets(bot),lastAction,mode)};
     }
     case 'auto_status':return {ok:true,status:JSON.stringify(autopilot.status()).slice(0,1900)};
+    case 'auto_checkpoint':{
+      const lease=missionCheckpoint.load();
+      return {ok:true,status:JSON.stringify(lease.ok?
+        {recoverable:true,goal:lease.spec.goal,secondsRemaining:lease.remainingSeconds}:
+        {recoverable:false,reason:lease.reason})};
+    }
+    case 'auto_resume':{
+      if(autopilot.status().status==='running')
+        return {ok:false,error:'Autonomous goal already running; resume refused'};
+      const lease=missionCheckpoint.load();
+      if(!lease.ok)return {ok:false,error:lease.reason};
+      if(bot.game?.gameMode!=='survival')return {ok:false,error:'Restart recovery requires real survival mode'};
+      try{
+        // A new owner/Guardian instruction is mandatory after process restart;
+        // no old witnessed Dragon death or crafting receipt is restored.
+        halt();deathsOnCurrentGoal=0;resumeAfterSpawn=false;
+        lateSkills.session.dragonSeen=false;lateSkills.session.dragonDied=false;
+        autopilot.start(lease.spec.goal,lease.remainingSeconds,lease.spec);
+        mode='auto';lastAction='Owner-confirmed restart recovery; milestones recheck live world';
+        return {ok:true,status:'Autonomous '+lease.spec.goal+' RESUMED from saved goal intent only; prior success proofs discarded'};
+      }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}
+    }
     case 'auto_stop':resumeAfterSpawn=false;setMode('stay');return {ok:true,status:'Autonomous gameplay stopped; movement cancelled'};
     case 'auto_goal':{
       // The Dragon/Netherite acceptance path is survival-only. Never allow
@@ -826,7 +853,8 @@ async function action(q){
        lateSkills.session.dragonSeen=false;
        lateSkills.session.dragonDied=false;
       try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),{resource:q.resource,targetCount:q.targetCount,destination:q.destination,arrivalRange:q.arrivalRange,steps:q.steps});lastAction='Autonomous '+st.goal+' STARTED';
-        return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; verify progress via auto_status'};
+        let saved=false;try{saved=missionCheckpoint.save(st);}catch{ /* Mission runs but restart recovery is unavailable. */ }
+        return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; '+(saved?'recoverable goal intent saved':'restart recovery unavailable')+'; verify progress via auto_status'};
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}
     }
     // General player primitives are owner-authorized, bounded and report observed outcomes.
@@ -1018,10 +1046,11 @@ bot.on('chat',(username,message)=>{
   if(!match)return;
   const cmd=match[1].toLowerCase();
   const normalized=cmd==='gather'?'collect_wood':cmd==='wait'?'stay':cmd;
-  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather [count resource], travel x y z, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_then_netherite_run|dragon_run|companion|explore|follow|guard], pause, observe, status, inventory');return;}
+  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather [count resource], travel x y z, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_then_netherite_run|dragon_run|companion|explore|follow|guard], pause, resume, observe, status, inventory');return;}
   if(cmd==='auto'||cmd==='goal') {const goal=(match[2]||'survive').trim().toLowerCase();
     action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_then_netherite_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
   if(cmd==='pause') {action({command:'auto_stop'}).then(r=>say(r.status||r.error));return;}
+  if(cmd==='resume') {action({command:'auto_resume'}).then(r=>say(r.status||r.error));return;}
   if(cmd==='travel' && match[2]){
     const parts=/^(-?\d+)\s+(-?\d+)\s+(-?\d+)$/.exec(match[2].trim());
     if(!parts){say('Use: jarvis travel 100 64 -50');return;}
@@ -1076,6 +1105,7 @@ bot.on('death',()=>{
     resumeAfterSpawn=deathsOnCurrentGoal<=3;
     autopilot.stop(resumeAfterSpawn?'Death: bounded autonomous respawn recovery pending':'Death retry budget exhausted');
   }
+  if(!resumeAfterSpawn)missionCheckpoint.clear();
   halt();mode=resumeAfterSpawn?'recover':'stay';
   lastAction=resumeAfterSpawn?'death observed: respawn and start again from actual remaining inventory':'bot died; recovery stopped';
 });
@@ -1089,4 +1119,4 @@ bot.on('spawn',()=>{
 bot.on('kicked',reason=>{process.stderr.write('Bot kicked: '+String(reason).slice(0,150)+'\n');process.exitCode=1;});
 bot.on('error',err=>{process.stderr.write('Bot error: '+String(err.code||'unknown')+'\n');process.exitCode=1;});
 bot.on('end',()=>{clearInterval(followTimer);halt();process.exit(process.exitCode||0);});
-process.on('SIGTERM',()=>{clearInterval(followTimer);if(mode==='auto')autopilot.stop('Operator stopped bot');halt();bot.quit('Operator stopped JARVIS friend');});
+process.on('SIGTERM',()=>{clearInterval(followTimer);if(mode==='auto')autopilot.stop('Operator stopped bot');missionCheckpoint.clear();halt();bot.quit('Operator stopped JARVIS friend');});

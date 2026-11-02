@@ -41,14 +41,14 @@ function surveyTargets(bot, origin, Vec3) {
   }
   return targets;
 }
-function rankLogs(positions, origin) {
+function rankLogs(positions, origin, eligible=()=>true) {
   if(!origin || !Array.isArray(positions))return [];
   const unique=new Set();
   return positions.filter(p=>{
     if(!p || ![p.x,p.y,p.z].every(Number.isFinite))return false;
     const key=`${p.x},${p.y},${p.z}`;
     if(unique.has(key) || Math.abs(p.y-origin.y)>12)return false;
-    unique.add(key);return true;
+    unique.add(key);return eligible(p)===true;
   }).sort((a,b)=>{
     const score=p=>Math.hypot(p.x-origin.x,p.z-origin.z)+Math.abs(p.y-origin.y)*2;
     return score(a)-score(b);

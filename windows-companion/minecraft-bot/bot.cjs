@@ -505,36 +505,53 @@ async function autoExecute(plan,epoch){
     case 'place_furnace':{
       const furnace=bot.inventory.items().find(i=>i.name==='furnace');
       if(!furnace)throw Error('No furnace');
-      const p=bot.entity.position;
-      for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1]]){
-        const ground=bot.blockAt(p.offset(dx,-1,dz));const space=bot.blockAt(p.offset(dx,0,dz));
-        if(!ground || ground.boundingBox==='empty'||space?.name!=='air')continue;
-        await bot.equip(furnace,'hand');await bot.placeBlock(ground,{x:0,y:1,z:0});
-        if(epoch!==actionEpoch)throw Error('Placement cancelled');
-        const observed=bot.blockAt(ground.position.offset(0,1,0));
-        return {ok:observed?.name==='furnace',verified:observed?.name==='furnace',detail:'Furnace observed after placement: '+(observed?.name||'missing')};
-      }
-      throw Error('No adjacent placement surface for furnace');
+      const site=findCraftingSite(bot);
+      if(!site)return {ok:false,verified:false,
+        detail:'No loaded safe furnace site; will not place over lava, occupied blocks, or unsupported ground'};
+      const ground=bot.blockAt(site.ground);
+      if(!ground || ground.boundingBox!=='block')return {ok:false,verified:false,detail:'Furnace floor changed'};
+      await bot.equip(furnace,'hand');
+      if(epoch!==actionEpoch)throw Error('Furnace placement cancelled');
+      await bot.placeBlock(ground,new Vec3(0,1,0));
+      if(epoch!==actionEpoch)throw Error('Furnace placement cancelled');
+      await pause(170);
+      const observed=bot.blockAt(site.target);
+      return {ok:observed?.name==='furnace',verified:observed?.name==='furnace',
+        detail:'Real furnace '+(observed?.name==='furnace'?'placed and server-observed':'placement unverified')};
     }
     case 'smelt_iron':{
       const block=bot.findBlock({matching:b=>b?.name==='furnace',maxDistance:5});
-      if(!block)throw Error('Furnace out of reach');
-      const raw=bot.inventory.items().find(i=>i.name==='raw_iron');
-      const fuel=bot.inventory.items().find(i=>i.name==='coal'||i.name.endsWith('_planks'));
-      if(!raw||!fuel)throw Error('Raw iron and compatible fuel required');
+      if(!block)throw Error('Furnace not observed in reach');
+      const beforeIron=before.inventory.ironIngot||0;
       const ui=await bot.openFurnace(block);
       try{
-        await ui.putFuel(fuel.type,null,1);await ui.putInput(raw.type,null,Math.min(raw.count,3));
-        for(let i=0;i<32;i++){
+        if(!ui.outputItem() && !ui.inputItem()){
+          const raw=bot.inventory.items().find(i=>i.name==='raw_iron');
+          if(!raw)return {ok:false,verified:false,detail:'No raw iron available; furnace has no observed pending input/output'};
+          // Commit exactly one raw item per action. The previous batch-of-3
+          // behavior left two untracked ingots in an unloaded furnace.
+          await ui.putInput(raw.type,null,1);
+        }
+        if(!ui.outputItem() && !ui.fuelItem()){
+          const fuel=bot.inventory.items().find(i=>i.name==='coal'||i.name==='charcoal'||i.name.endsWith('_planks'));
+          if(!fuel)return {ok:false,verified:false,detail:'No actual furnace fuel available'};
+          await ui.putFuel(fuel.type,null,1);
+        }
+        for(let i=0;i<55;i++){
           if(epoch!==actionEpoch)throw Error('Smelting cancelled');
-          await pause(500);
           if(ui.outputItem()?.name==='iron_ingot'){
             await ui.takeOutput();
-            const after=digest(bot,leader).inventory.ironIngot;
-            return {ok:after>before.inventory.ironIngot,verified:after>before.inventory.ironIngot,detail:'Iron ingots '+before.inventory.ironIngot+' -> '+after};
+            const proof=await waitForInventoryIncrease({
+              before:beforeIron,read:()=>digest(bot,leader).inventory.ironIngot||0,
+              check:()=>{if(epoch!==actionEpoch)throw Error('Smelting cancelled')},
+              wait:pause,deadline:Date.now()+3500
+            });
+            return {ok:proof.ok,verified:proof.ok,
+              detail:'Iron furnace output '+beforeIron+' -> '+proof.after+(proof.ok?' (real inventory)':' (unverified)')};
           }
+          await pause(400);
         }
-        return {ok:false,verified:false,detail:'Furnace produced no verified ingot within 16 seconds'};
+        return {ok:false,verified:false,detail:'No confirmed iron ingot output within bounded smelt window'};
       }finally{ui.close();}
     }
     case 'mine_diamond':{

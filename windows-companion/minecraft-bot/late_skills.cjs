@@ -83,19 +83,38 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
   async function smelt(input,output,epoch){
     const furnace=lookup(bot,['furnace','blast_furnace'],5);
     if(!furnace)return observed(false,'Furnace not loaded/in reach');
-    const material=item(bot,input);if(!material)return observed(false,'No '+input+' to smelt');
-    const fuel=bot.inventory.items().find(i=>['coal','charcoal','blaze_rod','oak_planks','spruce_planks','birch_planks','jungle_planks','acacia_planks','dark_oak_planks','mangrove_planks','cherry_planks','crimson_planks','warped_planks'].includes(i.name));
-    if(!fuel)return observed(false,'Furnace has no verified fuel');
-    const before=count(bot,output);const ui=await bot.openFurnace(furnace);
+    const before=count(bot,output);
+    const ui=await bot.openFurnace(furnace);
     try{
-      if(!ui.fuelItem())await ui.putFuel(fuel.type,null,Math.min(fuel.count,4));
-      if(!ui.inputItem())await ui.putInput(material.type,null,Math.min(material.count,8));
-      for(let j=0;j<95;j++){
-        check(epoch);await delay(350);
-        if(ui.outputItem()?.name===output){await ui.takeOutput();
-          return observed(count(bot,output)>before,`${output} count ${before} -> ${count(bot,output)}`);}
+      // Check existing furnace contents before taking more ingredients.
+      // One item at a time prevents a mission from abandoning a bulk input
+      // inside a furnace and repeatedly mining new raw resources.
+      if(!ui.outputItem() && !ui.inputItem()){
+        const material=item(bot,input);
+        if(!material)return observed(false,'No '+input+' in inventory or existing furnace input');
+        await ui.putInput(material.type,null,1);
       }
-      return observed(false,`No ${output} observed after 33 seconds`);
+      if(!ui.outputItem() && !ui.fuelItem()){
+        const fuel=bot.inventory.items().find(i=>
+          ['coal','charcoal','blaze_rod'].includes(i.name) || i.name.endsWith('_planks'));
+        if(!fuel)return observed(false,'No safe observed furnace fuel');
+        await ui.putFuel(fuel.type,null,1);
+      }
+      for(let j=0;j<65;j++){
+        check(epoch);
+        if(ui.outputItem()?.name===output){
+          await ui.takeOutput();
+          for(let attempt=0;attempt<18;attempt++){
+            check(epoch);
+            if(count(bot,output)>before)
+              return observed(true,`${output} real inventory ${before} -> ${count(bot,output)}`);
+            await delay(140);
+          }
+          return observed(false,`${output} output withdrawn but inventory receipt still unverified`);
+        }
+        await delay(360);
+      }
+      return observed(false,`No verified ${output} output in bounded furnace window`);
     }finally{ui.close();}
   }
   async function craft(name,epoch,tableName){

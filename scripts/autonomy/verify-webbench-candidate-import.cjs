@@ -6,7 +6,7 @@ const root=path.resolve(__dirname,'../..');
 const shards=[1,2,3,4].map(n=>path.join(root,`benchmarks/autonomy/candidates/webbench-open-candidate-${n}.jsonl`));
 const expected={total:2647,hard:61,easy:254,unrated:2332};
 const seenIds=new Set(),seenPrompts=new Set(),difficulty={};
-let total=0,failures=[];
+let total=0,failures=[],urlSchemes={http:0,https:0};
 for(const file of shards){
  if(!fs.existsSync(file)){failures.push('missing shard '+path.relative(root,file));continue;}
  const lines=fs.readFileSync(file,'utf8').split(/\r?\n/);
@@ -28,7 +28,7 @@ for(const file of shards){
 }
 if(total!==expected.total)failures.push(`expected ${expected.total} records, got ${total}`);
 for(const k of ['hard','easy','unrated'])if(difficulty[k]!==expected[k])failures.push(`difficulty ${k}: expected ${expected[k]}, got ${difficulty[k]}`);
-const report={total,uniqueIds:seenIds.size,uniquePrompts:seenPrompts.size,difficulty,acceptedInto200k:0,failures:failures.slice(0,50)};
+const report={total,uniqueIds:seenIds.size,uniquePrompts:seenPrompts.size,difficulty,urlSchemes,acceptedInto200k:0,failures:failures.slice(0,50)};
 console.log(JSON.stringify(report,null,2));
 if(failures.length){console.error('WEBBENCH CANDIDATE IMPORT VALIDATION FAILED');process.exitCode=1;}
 else console.log('WEBBENCH CANDIDATE IMPORT VALIDATION PASS (candidate-only; not part of accepted 200K corpus)');

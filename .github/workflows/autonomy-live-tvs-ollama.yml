@@ -41,6 +41,7 @@ jobs:
             if (Test-Path $candidate) { $env:PATH = (Split-Path $candidate) + ";" + $env:PATH; $ollama = Get-Command ollama.exe -ErrorAction SilentlyContinue }
           }
           if (!$ollama) { throw "Ollama CLI not found after installation." }
+          Add-Content -Path $env:GITHUB_PATH -Value (Split-Path $ollama.Source)
           Start-Process -FilePath $ollama.Source -ArgumentList "serve" -WindowStyle Hidden
           $ready = $false
           for ($i=0; $i -lt 60; $i++) {

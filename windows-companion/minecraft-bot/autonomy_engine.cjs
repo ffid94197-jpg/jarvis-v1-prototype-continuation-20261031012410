@@ -281,6 +281,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       if(outcome.proof==='end_exit_portal' ||
          (decision.kind==='verify_dragon' && outcome.proof==='dragon_victory'))
         state.milestones.exitPortalObserved=true;
+      if(decision.kind==='track_stronghold')state.milestones.strongholdSearchStarted=true;
       if(outcome.proof==='netherite_equipped')state.milestones.netheriteEquipped=true;
       if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':'mine_diamond']=0;}}
     else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;

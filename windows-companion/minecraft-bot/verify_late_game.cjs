@@ -31,6 +31,22 @@ const postDragonState=state(postDragonNether,{dimension:'minecraft:the_nether'})
 const postDragonAction=lateGamePlan(postDragonState,{goal:'dragon_then_netherite_run',milestones:postDragonMilestones});
 check(postDragonAction.kind==='enter_overworld',
  'Four upgraded pieces and last ingot must return home, not require another 20 Ancient Debris');
+const completedDragonMilestones={dragonKilled:true,exitPortalObserved:true,
+ netheriteEquipped:true};
+const unprovenReturn=lateGamePlan(state(gear,{wornNetherite:true}),
+ {goal:'dragon_then_netherite_run',milestones:completedDragonMilestones});
+check(unprovenReturn.kind==='blocked',
+ 'Dragon-first full victory must reject missing real End-to-Overworld return receipt');
+const provenReturn=lateGamePlan(state(gear,{wornNetherite:true}),
+ {goal:'dragon_then_netherite_run',
+  milestones:{...completedDragonMilestones,endReturned:true}});
+check(provenReturn.kind==='complete',
+ 'Dragon death, observed End return and currently worn armor prove the required order');
+const legacyGoal=lateGamePlan(state(gear,{dimension:'minecraft:the_end',wornNetherite:true}),
+ {goal:'netherite_dragon_run',milestones:completedDragonMilestones});
+check(legacyGoal.kind==='complete',
+ 'Gear-first legacy Dragon victory may still settle in the End, without spoofed post-Dragon return');
+
 const partCrafted={...temp,netherite_scrap:16,gold_ingot:16,netherite_ingot:1};
 const partlyProvisioned=lateGamePlan(state(partCrafted,{dimension:'minecraft:the_nether'}),{milestones:{}});
 check(partlyProvisioned.kind==='hunt_blazes',

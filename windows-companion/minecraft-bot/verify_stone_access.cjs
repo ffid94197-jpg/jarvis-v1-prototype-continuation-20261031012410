@@ -47,6 +47,15 @@ const selected=stoneProposal(f.bot,()=>null);
 check(selected!==null && selected.stance===null,
  'choose newly exposed stone in direct pickup/mine range without Pathfinder');
 check(selected.position.distanceTo(stone.position)<2,'select actual exposed stone, not hidden alternative');
+const blockedIndex=fixture();
+const localGround=new Vec3(1,63,0);
+blockedIndex.put(1,64,0,'air');
+blockedIndex.bot.findBlocks=()=>[]; // Simulate a saturated/broken distant index.
+const directlyObserved=stoneProposal(blockedIndex.bot,()=>null);
+check(directlyObserved?.reason==='observed_adjacent_stone' &&
+ directlyObserved.position.distanceTo(localGround)<.1,
+ 'fresh exposed stone next to player must be found even if findBlocks returns zero candidates');
+
 // A real open cliff may be 6 blocks away: canDigBlock is FALSE until
 // Pathfinder actually reaches the stance. The planner must not discard it.
 const remote=fixture();

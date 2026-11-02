@@ -14,8 +14,20 @@ const readline=require('node:readline');
 const crypto=require('node:crypto');
 const root=path.resolve(__dirname,'..','..');
 const botSource=path.join(__dirname,'bot.cjs');
-const host='127.0.0.1',port=Number(process.env.JARVIS_MC_TEST_PORT||25565);
-const owner='CIObserver';
+const {isIP}=require('node:net');
+const host=process.env.JARVIS_MINECRAFT_LAN_HOST||'127.0.0.1';
+const port=Number(process.env.JARVIS_MC_TEST_PORT||process.env.JARVIS_MINECRAFT_LAN_PORT||25565);
+const owner=process.env.JARVIS_MINECRAFT_PLAYER||'CIObserver';
+function privateHost(h) {
+ if(h==='localhost')return true;
+ if(isIP(h)!==4)return false;
+ const n=h.split('.').map(Number);
+ return n[0]===10||n[0]===127||(n[0]===192&&n[1]===168)||
+  (n[0]===172&&n[1]>=16&&n[1]<=31);
+}
+assert(privateHost(host),'Minecraft smoke requires approved loopback/private LAN host');
+assert(Number.isInteger(port)&&port>=1024&&port<=65535,'Invalid Minecraft server port');
+assert(/^[A-Za-z0-9_]{1,16}$/.test(owner) && owner.toLowerCase()!=='jarvisbuddy','Invalid owner name');
 const env={...process.env,JARVIS_MINECRAFT_LAN_HOST:host,
  JARVIS_MINECRAFT_LAN_PORT:String(port),JARVIS_MINECRAFT_PLAYER:owner};
 const output=[];

@@ -108,8 +108,12 @@ async function proof(){
  assert(String(world.dimension||'').replace(/^minecraft:/,'')==='overworld',
    'Bot must complete in actual Overworld after End return');
  const kill=evidence.events.find(e=>e.type==='dragon_death'&&e.dimension==='the_end');
- const equip=evidence.events.find(e=>e.type==='netherite_equipped'&&e.worn===true);
- assert(kill && equip && equip.at>kill.at,'Chronological live death and later armor-slot events missing');
+ const endExit=evidence.events.find(e=>e.type==='end_exit' && e.dimension==='overworld' &&
+   kill && e.at>kill.at);
+ const equip=evidence.events.find(e=>e.type==='netherite_equipped'&&e.worn===true &&
+   endExit && e.at>endExit.at);
+ assert(kill && endExit && equip,
+   'Require ordered server-observed Dragon death -> real End exit -> subsequent worn Netherite armor');
  evidence.final={world,mission:completed};
  evidence.verdict='PASS';
  console.log('MINECRAFT_REAL_JAVA_DRAGON_THEN_NETHERITE PASS: observed survival world, Dragon death, End portal and subsequent equipped full Netherite armor');

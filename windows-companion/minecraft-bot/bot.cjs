@@ -611,6 +611,14 @@ async function autoTick(){
     const result=await autoExecute(plan,epoch);
     if(epoch===actionEpoch && mode==='auto'){
       autopilot.record(plan,result);lastAction='auto '+plan.kind+': '+result.detail;
+      if(autopilot.status().goal==='dragon_then_netherite_run' &&
+         plan.kind==='exit_end' && result?.ok===true && result?.verified===true &&
+         result.proof==='end_return' &&
+         String(bot.game?.dimension||'').replace(/^minecraft:/,'')==='overworld' &&
+         lateSkills.session.dragonDied===true){
+        process.stdout.write('BOT_EVENT '+JSON.stringify({type:'end_exit',
+          at:Date.now(),dimension:'overworld',goal:autopilot.status().goal})+'\n');
+      }
       if(autopilot.status().goal==='dragon_then_netherite_run' && plan.kind==='equip_netherite' &&
          result?.ok===true && result?.verified===true && result?.proof==='netherite_equipped' &&
          digest(bot,leader).wornNetherite===true){

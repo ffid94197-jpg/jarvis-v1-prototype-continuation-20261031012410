@@ -595,6 +595,16 @@ async function autoTick(){
     const result=await autoExecute(plan,epoch);
     if(epoch===actionEpoch && mode==='auto'){
       autopilot.record(plan,result);lastAction='auto '+plan.kind+': '+result.detail;
+      if(process.env.JARVIS_MC_TRACE_AUTONOMY==='1'){
+        const snap=digest(bot,leader);
+        process.stdout.write('BOT_STEP '+JSON.stringify({
+          action:plan.kind,verified:result?.verified===true && result?.ok===true,
+          detail:String(result?.detail||'').slice(0,130),position:snap.position,
+          logs:snap.inventory.logs,cobblestone:snap.inventory.cobblestone,
+          woodenPickaxe:snap.inventory.woodenPickaxe,
+          stonePickaxe:snap.inventory.stonePickaxe,stoneSword:snap.inventory.stoneSword
+        })+'\n');
+      }
       if(autopilot.status().goal==='dragon_then_netherite_run' &&
          plan.kind==='exit_end' && result?.ok===true && result?.verified===true &&
          result.proof==='end_return' &&
@@ -615,6 +625,9 @@ async function autoTick(){
     if(epoch===actionEpoch && mode==='auto'){
       const detail=String(err.message||err).slice(0,120);
       autopilot.record(plan,{ok:false,verified:false,detail});lastAction='auto '+plan.kind+' failed: '+detail;
+      if(process.env.JARVIS_MC_TRACE_AUTONOMY==='1')
+        process.stdout.write('BOT_STEP '+JSON.stringify({action:plan.kind,verified:false,
+          error:detail,position:digest(bot,leader).position})+'\n');
     }
   }finally{autoBusy=false;}
 }

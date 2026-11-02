@@ -1,5 +1,12 @@
 name: JARVIS real Ollama TVS website acceptance (Windows)
 on:
+  push:
+    branches: [autonomy-100-percent-acceptance-20261102]
+    paths:
+      - ".github/workflows/autonomy-live-tvs-ollama.yml"
+      - "scripts/autonomy/run-live-tvs-acceptance.mjs"
+      - "benchmarks/autonomy/fixtures/tvs-motor-original-3954.txt"
+      - "src/lib/agent/core/modelDeadline.ts"
   workflow_dispatch:
     inputs:
       model:
@@ -54,7 +61,7 @@ jobs:
         env:
           JARVIS_MODEL_BACKEND: ollama
           JARVIS_OLLAMA_BASE_URL: http://127.0.0.1:11434
-          JARVIS_OLLAMA_MODEL: ${{ inputs.model }}
+          JARVIS_OLLAMA_MODEL: ${{ inputs.model || 'qwen2.5-coder:3b' }}
           JARVIS_MODEL_REQUEST_TIMEOUT_MS: "300000"
           JARVIS_AGENT_WORKSPACE: ${{ runner.temp }}\jarvis-tvs-workspace
           JARVIS_LIVE_EVIDENCE: ${{ runner.temp }}\jarvis-tvs-live-evidence.json

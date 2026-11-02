@@ -17,6 +17,7 @@ const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
 const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_navigation.cjs');
 const {collectObservedDrop}=require('./drop_pickup.cjs');
+const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
 const {stoneProposal,excavationProposal}=require('./stone_access.cjs');
@@ -236,9 +237,18 @@ async function craftNamed(name,count,epoch,table=null){
   const recipes=bot.recipesFor(item.id,null,1,table);
   if(!recipes?.length)throw Error('Required crafting ingredients or workstation unavailable');
   await bot.craft(recipes[0],count,table);
+  // The server can acknowledge a crafting operation before the inventory
+  // packet settles. Readback immediately after craft() incorrectly rejected
+  // real planks/sticks, then retried a spent log and deadlocked the mission.
   if(epoch!==actionEpoch)throw Error('Craft cancelled by owner');
-  const after=digest(bot,leader).inventory.raw[name]||0;
-  return {ok:after>before,verified:after>before,detail:`${name}: inventory ${before} -> ${after}`};
+  const result=await waitForInventoryIncrease({
+    before,read:()=>digest(bot,leader).inventory.raw[name]||0,
+    check:()=>{if(epoch!==actionEpoch)throw Error('Craft cancelled by owner')},
+    wait:pause,deadline:Date.now()+3500,
+  });
+  return {ok:result.ok,verified:result.ok,
+    detail:`${name}: inventory ${before} -> ${result.after}`+
+      (result.ok?' (server receipt)':' (recipe dispatched, result unverified)')};
 }
 const lateSkills=createLateSkills({bot,navigate,craftNamed,getEpoch:()=>actionEpoch,getOwner:()=>leader,digest,Vec3});
 async function collectVerifiedDrop(blockPosition,beforeCount,readCount,epoch,label){

@@ -3,12 +3,21 @@ name: Minecraft Java vanilla survival live server smoke
 # manual-only; prefer local Windows test scripts (no GitHub-runner minutes).
 on:
   workflow_dispatch:
+    inputs:
+      mission:
+        description: "Real Java survival acceptance gate (Stone first; Full only after earlier stages are ready)"
+        type: choice
+        required: true
+        default: Stone
+        options:
+          - Stone
+          - Full
 permissions:
   contents: read
 jobs:
   vanilla-java:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 325
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,18 +85,33 @@ jobs:
           cat server.log
           echo 'Minecraft vanilla server did not start' >&2
           exit 1
-      - name: Real server-backed empty-survival to wood mission
+      - name: Real survival wood and stone progression
+        if: ${{ inputs.mission == 'Stone' }}
+        timeout-minutes: 12
         env:
           JARVIS_MC_TEST_PORT: "25565"
           JARVIS_MC_TEST_STONE: "1"
         run: node windows-companion/minecraft-bot/verify_real_java_server_wood.cjs
+      - name: Real survival Dragon death then four equipped Netherite armor pieces
+        if: ${{ inputs.mission == 'Full' }}
+        timeout-minutes: 305
+        env:
+          JARVIS_MINECRAFT_LAN_HOST: "127.0.0.1"
+          JARVIS_MINECRAFT_LAN_PORT: "25565"
+          JARVIS_MINECRAFT_PLAYER: "CIObserver"
+          MINECRAFT_LIVE_ACCEPTANCE: "1"
+          JARVIS_MC_ACCEPTANCE_MS: "18000000"
+          JARVIS_MC_EVIDENCE_DIR: "minecraft-live-evidence"
+        run: node windows-companion/minecraft-bot/verify_real_java_full_campaign.cjs
       - name: Preserve game and companion evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: vanilla-java-survival-smoke-evidence
           if-no-files-found: warn
-          path: minecraft-live-ci/server.log
+          path: |
+            minecraft-live-ci/server.log
+            minecraft-live-evidence/minecraft-real-campaign-evidence.json
       - name: Stop Minecraft server
         if: always()
         run: |

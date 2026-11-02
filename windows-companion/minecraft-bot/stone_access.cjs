@@ -20,10 +20,31 @@ const OFFSETS=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1],
 const near=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 function stoneProposal(bot,GoalBlock,{radius=15,maxCandidates=192}={}){
  const origin=bot?.entity?.position;
- if(!origin||!bot.findBlocks||!bot.blockAt)return null;
+ if(!origin||typeof bot.blockAt!=='function')return null;
+ // First search the player's immediate physical reach, independently of
+ // findBlocks(). A packed cave can saturate Mineflayer's result limit with
+ // buried stone, even when one freshly exposed stone face is adjacent.
+ const local=[];
+ const x=Math.floor(origin.x),y=Math.floor(origin.y),z=Math.floor(origin.z);
+ for(let dy=-3;dy<=2;dy++)for(let dx=-3;dx<=3;dx++)for(let dz=-3;dz<=3;dz++){
+   const p=new Vec3(x+dx,y+dy,z+dz);
+   const distance=near(origin,{x:p.x+.5,y:p.y+.5,z:p.z+.5});
+   if(distance>4.3)continue;
+   local.push({p,distance});
+ }
+ local.sort((a,b)=>a.distance-b.distance);
+ for(const {p} of local){
+   const b=bot.blockAt(p);
+   if(!b||!STONE.has(b.name)||!isExposed(bot,b.position))continue;
+   if(bot.canDigBlock?.(b))
+     return {position:b.position,stance:null,reason:'observed_adjacent_stone'};
+   const stances=reachableStances(bot,b.position,GoalBlock,
+     {maxCandidates:4,routeTimeoutMs:90});
+   if(stances.length)return {position:b.position,stance:stances[0],reason:'adjacent_stance_proved'};
+ }
  // Filtering exposure *inside* findBlocks prevents its candidate limit from
  // being exhausted by hundreds of nearby fully buried stones.
- const candidates=bot.findBlocks({matching:b=>!!b&&STONE.has(b.name) &&
+ const candidates=bot.findBlocks?.({matching:b=>!!b&&STONE.has(b.name) &&
    isExposed(bot,b.position),maxDistance:radius,count:maxCandidates})||[];
  for(const pos of candidates) {
    const b=bot.blockAt(pos);

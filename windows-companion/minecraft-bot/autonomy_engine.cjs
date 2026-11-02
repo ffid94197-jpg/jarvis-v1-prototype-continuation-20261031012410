@@ -200,6 +200,15 @@ function decide(goal, world, failures={}, progress={}) {
           return {kind:'recover_table',why:'Carry crafting table before searching for distant iron'};
        return failures.mine_iron>=2?{kind:'survey_ore',ore:'iron',index:number(progress.steps),why:'Scout for new iron-bearing terrain'}:{kind:'mine_iron',why:'Find exposed iron ore with stone pickaxe'};
     }
+    // Reserve crafting handles BEFORE descending to mine stone. Wood can be
+    // unreachable from underground; delaying the three sticks until after
+    // collecting five cobblestone caused a real Java campaign to strand itself
+    // at Y=59 with stone but without materials for the pickaxe and sword.
+    if(inv.woodenPickaxe && !inv.stonePickaxe && inv.sticks<3){
+      if(inv.planks>=2)return {kind:'craft_sticks',why:'Reserve three stone-tool sticks before underground excavation'};
+      if(inv.logs>=1)return {kind:'craft_planks',why:'Create handle materials while wood is reachable at surface'};
+      return {kind:'collect_wood',why:'Gather stone-tool handle wood BEFORE mining underground'};
+    }
     // Never abandon the only crafting table when leaving its radius to mine
     // stone underground. Physically recover it while still in reach, then
     // place it near the crafting site after the cobblestone is collected.

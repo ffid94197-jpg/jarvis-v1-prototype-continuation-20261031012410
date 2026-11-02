@@ -1,0 +1,52 @@
+#!/usr/bin/env node
+'use strict';
+const assert=require('node:assert/strict');
+const {Vec3}=require('vec3');
+const {itemEntities,pickupFeet,collectObservedDrop}=require('./drop_pickup.cjs');
+let checks=0;
+function ok(cond,why){assert(cond,why);checks++;}
+const mk=(type='dirt')=>{
+ const bot={entity:{position:new Vec3(.5,64,.5)},entities:{},
+   blockAt(p){return {
+     name:p.y===63?type:'air',
+     boundingBox:p.y===63?'block':'empty',position:p.clone()
+   };}};
+ return bot;
+};
+(async()=>{
+ const origin=new Vec3(3,64,0);
+ const bot=mk();
+ bot.entities={1:{id:1,name:'item',position:new Vec3(3.5,64.2,.5)},
+   2:{id:2,name:'zombie',position:new Vec3(3.5,64.2,.5)}};
+ ok(itemEntities(bot,origin).length===1,'Only physical item-drop entities qualify');
+ const foot=pickupFeet(bot,bot.entities[1].position,Vec3);
+ ok(foot?.x===3&&foot?.y===64,'Find observed standable pickup location with solid safe floor');
+ let now=0,held=0,moved=0;
+ const acquired=await collectObservedDrop({
+   bot,origin,beforeCount:0,readCount:()=>held,
+   move:async(p,range)=>{
+     ok(range===0,'Pickup navigation demands precise floor reach');
+     moved++;bot.entity.position=p.clone();held=1;return true;
+   },
+   check:()=>{},wait:async()=>{now+=350},deadline:2000,now:()=>now,Vec3
+ });
+ ok(acquired.ok&&acquired.verified&&held===1&&moved===1,
+   'Real inventory delta is the sole pickup success proof');
+ let noLootTime=0,attempts=0;
+ const denied=await collectObservedDrop({
+   bot:mk(),origin,beforeCount:0,readCount:()=>0,
+   move:async()=>{attempts++;return true},check:()=>{},
+   wait:async()=>{noLootTime+=350},deadline:1100,now:()=>noLootTime,Vec3
+ });
+ ok(!denied.ok&&!denied.verified,'Movement and dug block are never certified as inventory loot');
+ ok(attempts<=4,'Pickup attempts are bounded');
+ ok(pickupFeet(mk('lava'),origin,Vec3)===null,'Lava-only ground is unsafe for pickup navigation');
+ let cancelled=false;
+ try{await collectObservedDrop({
+   bot:mk(),origin,beforeCount:0,readCount:()=>0,
+   move:async()=>true,check:()=>{throw Error('owner E-stop')},
+   wait:async()=>{},deadline:500,now:()=>0,Vec3
+ });}catch(e){cancelled=e.message==='owner E-stop';}
+ ok(cancelled,'Owner cancellation must immediately interrupt pickup recovery');
+ console.log('MINECRAFT_DROP_PICKUP '+checks+'/'+checks+' PASS (mock only; live survival still required)');
+})().catch(e=>{console.error(e);process.exitCode=1;});

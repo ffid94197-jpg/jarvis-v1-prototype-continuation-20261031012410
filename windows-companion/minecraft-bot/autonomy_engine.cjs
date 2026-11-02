@@ -102,7 +102,10 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     health:number(bot.health,20),hunger:number(bot.food,20),workbenchNearby,
      // Only the native Mineflayer runtime advertises physical workstation
      // recovery; modeled worlds never claim this capability implicitly.
-     workbenchRecoverySupported:typeof bot.dig==='function' && typeof bot.canDigBlock==='function',
+     workbenchRecoverySupported:!!bot.jarvisOwnedCraftingTablePos &&
+       !!bot.blockAt?.(bot.jarvisOwnedCraftingTablePos) &&
+       bot.blockAt(bot.jarvisOwnedCraftingTablePos).name==='crafting_table' &&
+       typeof bot.canDigBlock==='function',
      furnaceNearby,
     position:p?{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}:null,
     ownerVisible:!!owner,ownerDistance:p&&owner?Math.round(p.distanceTo(owner)):null,

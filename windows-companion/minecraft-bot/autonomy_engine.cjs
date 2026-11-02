@@ -186,8 +186,16 @@ function decide(goal, world, failures={}, progress={}) {
         if(!inv.coal && !inv.planks)return {kind:'craft_planks',why:'Produce furnace fuel'};
         return {kind:'smelt_iron',why:'Smelt raw iron with verified fuel and furnace'};
       }
-      return failures.mine_iron>=2?{kind:'survey_ore',ore:'iron',index:number(progress.steps),why:'Scout for new iron-bearing terrain'}:{kind:'mine_iron',why:'Find exposed iron ore with stone pickaxe'};
+      if(!inv.table && world.workbenchNearby && world.workbenchRecoverySupported===true)
+          return {kind:'recover_table',why:'Carry crafting table before searching for distant iron'};
+       return failures.mine_iron>=2?{kind:'survey_ore',ore:'iron',index:number(progress.steps),why:'Scout for new iron-bearing terrain'}:{kind:'mine_iron',why:'Find exposed iron ore with stone pickaxe'};
     }
+    // Never abandon the only crafting table when leaving its radius to mine
+    // stone underground. Physically recover it while still in reach, then
+    // place it near the crafting site after the cobblestone is collected.
+    if(inv.woodenPickaxe && !inv.stonePickaxe && inv.cobblestone<5 &&
+       !inv.table && world.workbenchNearby && world.workbenchRecoverySupported===true)
+      return {kind:'recover_table',why:'Carry the actual crafting table before excavating for stone'};
     if(!inv.woodenPickaxe && !inv.stonePickaxe){
       const base=decide('tools',world,failures,progress);
       return base.kind==='complete'?{kind:'blocked',why:'Pickaxe state inconsistent'}:base;

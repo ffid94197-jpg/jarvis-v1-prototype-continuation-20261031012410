@@ -198,6 +198,17 @@ function decide(goal, world, failures={}, progress={}) {
       }
       if(!inv.table && world.workbenchNearby && world.workbenchRecoverySupported===true)
           return {kind:'recover_table',why:'Carry crafting table before searching for distant iron'};
+       // Preflight the next long cave trip: two iron-pickaxe handles and
+       // furnace fuel must travel down with the bot, not be sought at Y<0.
+       if(!inv.ironPickaxe && !inv.rawIron && inv.ironIngot<3){
+         if(inv.sticks<2){
+           if(inv.planks>=2)return {kind:'craft_sticks',why:'Reserve iron handles before descending'};
+           if(inv.logs>=1)return {kind:'craft_planks',why:'Make iron handles while surface wood is available'};
+           return {kind:'collect_wood',why:'Acquire iron pickaxe handles before remote cave mining'};
+         }
+         if(!inv.coal && !inv.planks && !inv.logs)
+           return {kind:'collect_wood',why:'Reserve furnace fuel before iron expedition'};
+       }
        return failures.mine_iron>=2?{kind:'survey_ore',ore:'iron',index:number(progress.steps),why:'Scout for new iron-bearing terrain'}:{kind:'mine_iron',why:'Find exposed iron ore with stone pickaxe'};
     }
     // Reserve crafting handles BEFORE descending to mine stone. Wood can be

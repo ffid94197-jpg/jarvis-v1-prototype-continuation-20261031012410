@@ -1,0 +1,23 @@
+name: Minecraft Java vanilla survival live server smoke
+# Default-branch registration ONLY. The actual test definition lives on
+# fix/minecraft-live-survival-bridge-20261102. Explicit manual trigger.
+# No jobs execute on main; no source code or acceptance gates are merged.
+on:
+  workflow_dispatch:
+    inputs:
+      mission:
+        description: "Choose Stone first; Full tests actual Dragon then Netherite in vanilla survival"
+        type: choice
+        required: true
+        default: Stone
+        options:
+          - Stone
+          - Full
+permissions:
+  contents: read
+jobs:
+  select-isolated-test-branch:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Select fix/minecraft-live-survival-bridge-20261102, not main"

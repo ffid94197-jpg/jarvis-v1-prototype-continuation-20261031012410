@@ -504,6 +504,13 @@ async function autoTick(){
     const result=await autoExecute(plan,epoch);
     if(epoch===actionEpoch && mode==='auto'){
       autopilot.record(plan,result);lastAction='auto '+plan.kind+': '+result.detail;
+      if(autopilot.status().goal==='dragon_then_netherite_run' && plan.kind==='equip_netherite' &&
+         result?.ok===true && result?.verified===true && result?.proof==='netherite_equipped' &&
+         digest(bot,leader).wornNetherite===true){
+        process.stdout.write('BOT_EVENT '+JSON.stringify({type:'netherite_equipped',
+          at:Date.now(),worn:true,dimension:String(bot.game?.dimension||'').replace(/^minecraft:/,''),
+          goal:autopilot.status().goal})+'\n');
+      }
     }
   }catch(err){
     if(epoch===actionEpoch && mode==='auto'){
@@ -753,8 +760,13 @@ bot.on('entityDead',entity=>{
    // A death event is only admissible if the current mission observed a
    // Dragon in the End, and this is the same live encounter.
    const inEnd=String(bot.game?.dimension||'').replace(/^minecraft:/,'')==='the_end';
-   if(inEnd && entity?.name==='ender_dragon' && lateSkills.session.dragonSeen)
+   if(inEnd && entity?.name==='ender_dragon' && lateSkills.session.dragonSeen){
      lateSkills.session.dragonDied=true;
+     if(autopilot.status().goal==='dragon_then_netherite_run' && autopilot.status().status==='running')
+       process.stdout.write('BOT_EVENT '+JSON.stringify({type:'dragon_death',
+         at:Date.now(),dimension:'the_end',entityId:entity.id??null,
+         goal:autopilot.status().goal})+'\n');
+   }
  });
 bot.on('death',()=>{
   const active=mode==='auto' && autopilot.status().status==='running';

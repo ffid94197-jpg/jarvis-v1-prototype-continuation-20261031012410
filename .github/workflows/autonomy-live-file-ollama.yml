@@ -47,6 +47,10 @@ jobs:
           if (!$cli) { throw "Ollama not installed" }
           $exe=$cli.Source
           if (!$exe) { $exe=$cli.FullName }
+          if (!(Test-Path $exe)) { throw "Installed Ollama executable path invalid" }
+          $exe=(Resolve-Path $exe).Path
+          Add-Content -Path $env:GITHUB_PATH -Value (Split-Path -Parent $exe)
+          "OLLAMA_CLI=$exe" | Out-File $env:GITHUB_ENV -Append
           Start-Process -FilePath $exe -ArgumentList "serve" -WindowStyle Hidden
           $ready=$false
           for($i=0;$i -lt 60;$i++){
@@ -55,7 +59,8 @@ jobs:
           if (!$ready) { throw "Ollama server unreachable" }
       - name: Pull real local model
         run: |
-          ollama pull qwen2.5-coder:1.5b
+          if (!(Test-Path $env:OLLAMA_CLI)) { throw "Pinned Ollama CLI not found" }
+          & $env:OLLAMA_CLI pull qwen2.5-coder:1.5b
           if ($LASTEXITCODE -ne 0) { throw "Ollama model pull failed" }
       - name: Run genuine model-directed Core filesystem objective
         env:

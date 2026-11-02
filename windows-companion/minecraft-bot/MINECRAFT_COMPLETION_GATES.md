@@ -36,3 +36,11 @@ Do not assume this historical directory still contains the current GitHub branch
 - Independent end-to-end Node integration tests for latest code edits, followed later by live field tests on the user PC without GitHub Actions, if approved.
 
 **Acceptance invariant:** NEVER infer complete from source presence, a planning assertion, a sent action packet, or a simulated mission. Need actual ordered server-observed Dragon death → End exit → full Netherite armor equipped and Netherite sword, with no creative, teleport/admin cheat or manual gameplay.
+
+## Additional code-only autonomy expansion (no GitHub Actions)
+- Finite owner-authorized `gather` goal: `auto_goal` accepts `resource` and `targetCount` (1–64), validates the allowlist and executes prerequisite progression without a human reissuing each craft/mine command. Minecraft owner chat also supports `jarvis gather 16 cobblestone` and aliases like `diamonds`, `wood` and `stone`.
+- Supported target classes: logs, planks, sticks, cobblestone, raw iron, iron ingots, diamonds, obsidian, flint and netherrack. More resources and open-ended language are **not implemented**.
+- `resource_goal.cjs` is a read-only planner. The existing Guardian-bounded Minecraft action executor must still prove inventory changes before the resource goal reports success. It never guesses successful mining.
+- Nether, End and Overworld threat recognition now use the **same** hostile allowlist as the retreat executor. `retreat_access.cjs` selects only observed solid-ground escape positions that increase separation, and the executor requires actual movement before success.
+- Added `verify_resource_goal.cjs` (31/31 offline assertions) and `verify_retreat_access.cjs` (6/6 offline geometry assertions) to the local-only runner. Source-isolated testing passed those, the progression checks, `verify_late_game.cjs` (200,052 assertions) and `verify_late_skills.cjs` (17/17 mocks). **No GitHub Actions workflows executed.**
+- These tests are not a substitute for production Node/Mineflayer integration, a real multi-hour Java game or an arbitrary Minecraft instruction benchmark. Do not claim 100% universal autonomy or that live testing is the sole possible remaining work.

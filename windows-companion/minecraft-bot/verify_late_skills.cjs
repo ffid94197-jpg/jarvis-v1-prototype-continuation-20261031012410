@@ -80,6 +80,15 @@ const ctx=createLateSkills({bot,navigate:async()=>true,craftNamed:async()=>{},ge
  check(unequipped===1 && slots[positions.head]===null &&
     smithMaterial.some(x=>x.name==='netherite_helmet'),
     'Verified unequip + real smithing output; no second guessed armor piece');
+ // A missing Netherite ingot must NOT cause the bot to strip armor.
+ const readyItems=bot.inventory.items;
+ bot.inventory.items=()=>smithMaterial.filter(x=>x.name!=='netherite_ingot'&&x.name!=='netherite_helmet');
+ slots[positions.head]=diamondHelmet;
+ const beforeMissing=unequipped;
+ const missingSupply=await ctx.run({kind:'smith_netherite',item:'netherite_helmet',base:'diamond_helmet'},1);
+ check(!missingSupply.ok && unequipped===beforeMissing && slots[positions.head]===diamondHelmet,
+    'Missing smithing materials must leave worn diamond armor untouched');
+ bot.inventory.items=readyItems;
  // The same worn base must never be removed outside the Overworld.
  bot.game.dimension='minecraft:the_nether';
  bot.inventory.items=()=>smithMaterial.filter(x=>x.name!=='netherite_helmet'&&x.name!=='diamond_helmet');

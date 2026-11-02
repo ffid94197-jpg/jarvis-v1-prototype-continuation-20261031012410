@@ -48,12 +48,12 @@ function lateGamePlan(world,progress={}){
     // Once portal frames are found, require 12 at hand for an empty frame ring.
     const availableEyes=qty(i,'eye_of_ender')+
       Math.min(qty(i,'ender_pearl'),qty(i,'blaze_powder')+2*qty(i,'blaze_rod'));
-    const minEyes=world.strongholdPortalFrameNearby || world.endPortalPresent ? 12 : 16;
+    const minEyes=world.strongholdPortalFrameNearby || world.endPortalPresent || m.strongholdSearchStarted ? 12 : 16;
     if(availableEyes<minEyes)
       return action('enter_nether','Replenish real Eye of Ender ingredients');
     if(!has(i,'bow') || qty(i,'arrow')<32)
       return action('prepare_archery','Acquire bow and 32 actual arrows');
-    if(qty(i,'eye_of_ender')<12){
+    if(qty(i,'eye_of_ender')<minEyes && !world.strongholdPortalFrameNearby){
       if(qty(i,'blaze_powder')<1)return action('craft_blaze_powder','Create blaze powder from real rods');
       return action('craft_eyes','Create Eyes of Ender from observed ingredients');
     }

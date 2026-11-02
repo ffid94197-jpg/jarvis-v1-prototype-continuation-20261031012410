@@ -17,6 +17,15 @@ const cases=[
  ['done',w({stonePickaxe:1,stoneSword:1}),'complete']
 ];
 for(const [label,state,expected] of cases)assert.equal(decide('stone_age',state).kind,expected,label);
+assert.equal(decide('tools',w({logs:1})).kind,'collect_wood',
+ 'Do not convert first log before total wooden-tool recipe materials secured');
+assert.equal(decide('tools',w({logs:2})).kind,'collect_wood',
+ 'Two logs are insufficient for table, pickaxe and sticks');
+assert.equal(decide('tools',w({logs:3})).kind,'craft_planks',
+ 'Three logs satisfy complete wooden-tool recipe budget and permit crafting');
+assert.equal(decide('tools',w({planks:3,sticks:2,table:1})).kind,'place_table',
+ 'Already banked handles/table remove redundant raw timber requirement');
+
 const undergroundNoHandles=w({woodenPickaxe:1,cobblestone:5,table:1});
 assert.equal(decide('stone_age',undergroundNoHandles).kind,'collect_wood',
  'past stranding is not a victory; record missing handles instead of falsely crafting');

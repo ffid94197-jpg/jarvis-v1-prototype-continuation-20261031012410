@@ -107,6 +107,28 @@ async function main(){
     const stopStone=await command({command:'auto_stop'});
     assert(stopStone.ok,'Stone mission cancellation failed');
     console.log('MINECRAFT_REAL_JAVA_STONE_AGE PASS; actual server-backed stone pickaxe+sword observed after real crafting');
+    if(process.env.JARVIS_MC_TEST_IRON==='1'){
+      const iron=await command({command:'auto_goal',goal:'iron_age',durationSeconds:1200});
+      assert(iron.ok,'Actual Iron Age goal was rejected by owner command validator');
+      let ironStatus='',ironWorld=null;
+      const ironDeadline=Date.now()+13*60*1000;
+      while(Date.now()<ironDeadline && !exit){
+        await wait(3000);
+        const data=await command({command:'observe'});
+        if(data.ok)try{ironWorld=JSON.parse(data.status);}catch{}
+        const latest=await command({command:'auto_status'});
+        if(latest.ok)ironStatus=latest.status;
+        if((ironWorld?.inventory?.raw?.iron_pickaxe||0)>0)break;
+        let status;try{status=JSON.parse(ironStatus)}catch{}
+        if(status && ['blocked','paused','expired','complete'].includes(status.status))break;
+      }
+      assert((ironWorld?.inventory?.raw?.iron_pickaxe||0)>0,
+        'Server-owned iron pickaxe not observed; mission='+ironStatus+
+        ' actualInventory='+JSON.stringify(ironWorld?.inventory?.raw||{}));
+      const endIron=await command({command:'auto_stop'});
+      assert(endIron.ok,'Iron goal termination did not settle');
+      console.log('MINECRAFT_REAL_JAVA_IRON_AGE PASS; real mined and smelted iron crafted into observed iron pickaxe');
+    }
   }
   console.log('MINECRAFT_FULL_DRAGON_NETHERITE_NOT_ACCEPTED: no real game kill/equip proof');
  }catch(error){

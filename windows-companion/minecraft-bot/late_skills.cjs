@@ -478,12 +478,12 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       case 'smelt_resource':return smelt(plan.input,plan.output,epoch);
       case 'collect_gold':{
         if(count(bot,'raw_gold')>0)return smelt('raw_gold','gold_ingot',epoch);
-        if(count(bot,'gold_nugget')>=9)return craft('gold_ingot',epoch);
+        if(count(bot,'gold_nugget')>=9)return craft('gold_ingot',epoch,'crafting_table');
         const ore=lookup(bot,['nether_gold_ore','gold_ore','deepslate_gold_ore'],27);
         if(!ore)return walkScout(epoch,'gold ore');
         return mineKnown([ore.name],ore.name==='nether_gold_ore'?'gold_nugget':'raw_gold',['iron_pickaxe','diamond_pickaxe','netherite_pickaxe'],epoch);
       }
-      case 'craft_netherite_ingot':return craft('netherite_ingot',epoch);
+      case 'craft_netherite_ingot':return craft('netherite_ingot',epoch,'crafting_table');
       case 'loot_bastion_template':return findTemplate(epoch);
       case 'collect_template_materials':{
         if(count(bot,'netherrack')<1){

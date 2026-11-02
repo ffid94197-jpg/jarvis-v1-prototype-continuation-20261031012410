@@ -107,7 +107,7 @@ export async function executeCIProjectBuild(
    try {
      child=execFile(binary,args,{
        cwd:prepared.abs,env,encoding:"utf8",shell:install,
-       timeout:timeoutMs,maxBuffer:65536,windowsHide:true,
+       timeout:timeoutMs+10000,maxBuffer:65536,windowsHide:true,
      },async(error,stdout,stderr)=>{
        if(watchdog)clearInterval(watchdog);
        if(hardDeadline)clearTimeout(hardDeadline);

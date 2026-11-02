@@ -398,6 +398,7 @@ async function autoExecute(plan,epoch){
         const prior=bot.blockAt(preparation.position);
         if(!prior||!bot.canDigBlock?.(prior))
           return {ok:false,verified:false,detail:'Proposed soil excavation became unsafe'};
+        const beforeStone=before.inventory.cobblestone;
         await bot.equip(pick,'hand');
         await bot.dig(prior);
         if(epoch!==actionEpoch)throw Error('Stone excavation cancelled');
@@ -405,7 +406,10 @@ async function autoExecute(plan,epoch){
         const changed=bot.blockAt(preparation.position);
         if(!changed||changed.name===prior.name||/lava|water/.test(changed.name))
           return {ok:false,verified:false,detail:'Excavation did not safely change actual server block state'};
-        return {ok:true,verified:true,detail:'Server-confirmed preparatory soil excavation; stone still NOT collected'};
+        if(['stone','cobblestone'].includes(prior.name))
+          return collectVerifiedDrop(preparation.position,beforeStone,
+            ()=>digest(bot,leader).inventory.cobblestone,epoch,'Excavated cobblestone');
+        return {ok:true,verified:true,detail:'Server-confirmed safe preparatory excavation; no stone drop claimed'};
       }
       if(candidate.stance){
         const stance=candidate.stance;

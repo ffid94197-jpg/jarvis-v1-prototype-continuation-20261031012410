@@ -47,6 +47,15 @@ const selected=stoneProposal(f.bot,()=>null);
 check(selected!==null && selected.stance===null,
  'choose newly exposed stone in direct pickup/mine range without Pathfinder');
 check(selected.position.distanceTo(stone.position)<2,'select actual exposed stone, not hidden alternative');
+// A real open cliff may be 6 blocks away: canDigBlock is FALSE until
+// Pathfinder actually reaches the stance. The planner must not discard it.
+const remote=fixture();
+remote.put(5,64,0,'air');
+remote.bot.pathfinder={movements:{},getPathTo:()=>({status:'success',path:[{x:1,y:65,z:0}]})};
+const distant=stoneProposal(remote.bot,class GoalBlock{constructor(x,y,z){Object.assign(this,{x,y,z});}});
+check(distant?.reason==='route_proved','route-proof permits exposed stone beyond current mining reach');
+check(remote.bot.canDigBlock(remote.bot.blockAt(distant.position))===false,
+ 'remote route candidate is NOT falsely claimed in immediate dig range');
 // A cave surface with no permissible dig operation is never accepted.
 f.bot.canDigBlock=()=>false;
 check(stoneProposal(f.bot,()=>null)===null,'server cannot-dig denial preserved');

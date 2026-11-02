@@ -21,7 +21,7 @@ const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
 const {stoneProposal,excavationProposal}=require('./stone_access.cjs');
-const {findCraftingSite}=require('./crafting_site.cjs');
+const {findCraftingSite,findCarvableCraftingAlcove}=require('./crafting_site.cjs');
 const {stopPathfinder,clearStaleStop}=require('./pathfinder_lifecycle.cjs');
 // mineflayer-pathfinder needs up to thinkTimeout (5000ms default) just to
 // decide a route. A per-leg navigation budget below that expires while A* is
@@ -547,6 +547,30 @@ async function autoExecute(plan,epoch){
       if(!tableItem)throw Error('Crafting table not in inventory');
       const site=findCraftingSite(bot);
       if(!site){
+        // Underground, a narrow mined shaft can have no adjacent air cell.
+        // Create one tiny safe alcove without digging the player's own floor
+        // or anybody's placed workstations; observe the real block changes.
+        const alcove=findCarvableCraftingAlcove(bot);
+        if(alcove){
+          const pick=bot.inventory.items().find(i=>/_pickaxe$/.test(i.name));
+          if(!pick)return {ok:false,verified:false,detail:'No pickaxe to prepare underground table site'};
+          await bot.equip(pick,'hand');
+          for(const p of alcove.blocks){
+            if(epoch!==actionEpoch)throw Error('Crafting-site excavation cancelled');
+            const block=bot.blockAt(p);
+            if(!block||!bot.canDigBlock?.(block)||
+              !['stone','cobblestone','dirt','grass_block','coarse_dirt',
+               'rooted_dirt','gravel','sand','granite','andesite','diorite',
+               'tuff','deepslate','cobbled_deepslate'].includes(block.name))
+              return {ok:false,verified:false,detail:'Crafting-site block changed or cannot be safely dug'};
+            await bot.dig(block);
+            if(epoch!==actionEpoch)throw Error('Crafting-site excavation cancelled');
+            await pause(100);
+            if(bot.blockAt(p)?.boundingBox!=='empty')
+              return {ok:false,verified:false,detail:'Crafting-site excavation not confirmed by server'};
+          }
+          return {ok:true,verified:true,detail:'Verified adjacent underground crafting alcove cleared, table still NOT placed'};
+        }
         // A tree canopy or uneven surface can surround the player. Relocate
         // to a safe, server-confirmed clearing; do not retry four bad blocks.
         return scoutStoneSite(epoch);

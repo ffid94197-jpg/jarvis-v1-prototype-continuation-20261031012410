@@ -40,7 +40,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Corpus validator self-test failed." }
       - name: Install exact application dependencies
         run: npm ci --no-audit --no-fund
-      - name: Install Minecraft bot test dependencies\n        run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund\n      - name: Native Windows and full TypeScript check
+      - name: Install Minecraft bot test dependencies
+        run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
+      - name: Native Windows and full TypeScript check
         run: |
           if ((node -p "process.platform") -ne "win32") { throw "Native Windows runner required." }
           npx tsc --noEmit --incremental false

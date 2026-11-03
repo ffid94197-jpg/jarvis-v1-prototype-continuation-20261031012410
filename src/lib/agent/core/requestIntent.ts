@@ -80,6 +80,18 @@ const CHITCHAT =
 const ACTION_VERB =
   /\b(?:do|perform|complete|finish|handle|carry\s+out|open|close|launch|start|stop|restart|reboot|shutdown|kill|terminate|resume|pause|suspend|enable|disable|activate|deactivate|toggle|switch|turn\s+(?:on|off|up|down)|connect|disconnect|pair|unpair|join|leave|mute|unmute|silence|print|lock|unlock|delete|remove|erase|rename|move|copy|cut|paste|create|make|write|save|send|submit|post|share|upload|download|fetch|install|uninstall|update|upgrade|patch|run|execute|invoke|build|compile|deploy|release|publish|schedule|cancel|abort|retry|mine|dig|craft|smelt|collect|gather|farm|harvest|chop|fish|hunt|defeat|attack|fight|breed|tame|equip|unequip|place|break|consume|trade|buy|purchase|sell|pay|order|book|reserve|call|dial|text|message|email|mail|notify|alert|remind|record|capture|screenshot|film|scan|search|find|locate|focus|click|tap|press|type|enter|input|scroll|swipe|drag|drop|select|choose|pick|set|change|adjust|increase|decrease|raise|lower|configure|setup|organize|sort|clean|clear|empty|backup|restore|migrate|sync|merge|split|edit|modify|fix|repair|refactor|implement|develop|automate|monitor|watch|play|stream|listen|analyze|analyse|review|validate|verify|test|check)\b/i;
 
+/** Text-only drafting is a direct answer, unless the request also asks for delivery or an external side effect. */
+const PLAIN_TEXT_REQUEST_PREFIX =
+  /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+|kindly\s+|jarvis[,!:\s]+)?/i;
+const PLAIN_TEXT_OUTPUT =
+  /^(?:write|draft|compose|generate)\s+(?:me\s+)?(?:a|an|the|some)\s+(?:poem|story|email|message|essay|description|summary|snippet|example|paragraph|reply)\b/i;
+const EXTERNAL_DELIVERY =
+  /\b(?:to (?:a|the) file|on disk|send|publish|deploy|save|upload|email it)\b/i;
+function isPlainTextGenerationRequest(raw: string): boolean {
+  const body = raw.trim().replace(PLAIN_TEXT_REQUEST_PREFIX, "").trim();
+  return PLAIN_TEXT_OUTPUT.test(body) && !EXTERNAL_DELIVERY.test(body);
+}
+
 /** Polite questions can still be requests to act ("Can you complete it?"). */
 const POLITE_REQUEST_PREFIX =
   /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?help\s+me\s+(?:to\s+)?|(?:can|could|would|will)\s+you\s+(?:please\s+)?)/i;
@@ -133,6 +145,12 @@ export function classifyRequestIntent(objective: string): RequestClassification 
       kind: "actionable",
       reason: `objective exceeds ${MAX_CONVERSATIONAL_LENGTH} characters, so it is treated as a task specification`,
     };
+  }
+
+  // Pure drafting is a direct conversational output, not an external effect.
+  // Requests to save, send, publish or upload the draft still go through Guardian.
+  if (isPlainTextGenerationRequest(raw)) {
+    return { kind: "conversational", reason: "plain text generation can be answered directly without external effects" };
   }
 
   // 1. Existing guards keep full precedence — nothing they caught is loosened.

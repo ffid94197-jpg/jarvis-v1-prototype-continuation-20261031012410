@@ -45,7 +45,8 @@ const mocks={'vec3':{Vec3:class {constructor(x,y,z){Object.assign(this,{x,y,z});
 let nextTimer=0;
 const fakeTimers={setTimeout(fn){return ++nextTimer;},clearTimeout(){},setInterval(fn){return ++nextTimer;},clearInterval(){}};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'bot.cjs'),'utf8'),{
- require:mod=>mocks[mod]||require(mod),process:{env:{JARVIS_MINECRAFT_LAN_PORT:'51234',JARVIS_MINECRAFT_PLAYER:'Owner'},
+ require:mod=>mocks[mod]||require(mod),
+ __dirname:fs.mkdtempSync(path.join(require('node:os').tmpdir(),'jarvis-mc-bot-fixture-')),process:{env:{JARVIS_MINECRAFT_LAN_PORT:'51234',JARVIS_MINECRAFT_PLAYER:'Owner'},
  stdout:{write:s=>output.push(s)},stderr:{write:s=>output.push(s)},on(){}},
  console,Buffer,setTimeout:fakeTimers.setTimeout,clearTimeout:fakeTimers.clearTimeout,
  setInterval:fakeTimers.setInterval,clearInterval:fakeTimers.clearInterval,

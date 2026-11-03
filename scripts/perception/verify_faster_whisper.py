@@ -116,8 +116,11 @@ def run():
         incomplete=root/'incomplete-tokenizer';incomplete.mkdir()
         (incomplete/'model.bin').write_bytes(b'local-model-fixture')
         (incomplete/'config.json').write_text('{}',encoding='utf8')
-        check('Missing tokenizer is rejected before any remote tokenizer fallback',
-              lambda: must_fail({'JARVIS_FASTER_WHISPER_MODEL_DIR':str(incomplete)}))
+        forbidden=types.SimpleNamespace(WhisperModel=lambda *args,**kwargs:
+            (_ for _ in ()).throw(AssertionError('remote/model loader must not be reached')))
+        with mock.patch.dict(sys.modules,{'faster_whisper':forbidden}):
+            check('Missing tokenizer is rejected before any remote tokenizer fallback',
+                  lambda: must_fail({'JARVIS_FASTER_WHISPER_MODEL_DIR':str(incomplete)}))
         check('Unsupported device is rejected',lambda:must_fail({'JARVIS_FASTER_WHISPER_DEVICE':'remote'}))
         check('Invalid compute type is rejected',lambda:must_fail({'JARVIS_FASTER_WHISPER_COMPUTE_TYPE':'float16'}))
         check('Invalid CPU thread budget is rejected',lambda:must_fail({'JARVIS_FASTER_WHISPER_CPU_THREADS':'99'}))

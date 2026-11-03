@@ -293,7 +293,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:"Exact-window input requires a fresh PID and cuaWindowId from the latest CUA observation."};
     if (tool === "windows_desktop_type") {
       if (typeof args.text !== "string" || args.text.length < 1 || args.text.length > 400 ||
-          /[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/.test(args.text))
+          /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(args.text))
         return {ok:false,reason:"Text must be 1–400 characters without control bytes."};
       return {ok:true,prepared:{operation:"desktop_type",text:args.text,
         ...(hasCuaWindowTarget ? {pid:args.pid as number,cuaWindowId:args.cuaWindowId as string}:{})}};

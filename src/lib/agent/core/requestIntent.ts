@@ -78,7 +78,21 @@ const CHITCHAT =
  * "requires evidence" rather than a fabricated success.
  */
 const ACTION_VERB =
-  /\b(?:open|close|launch|start|stop|restart|reboot|shutdown|kill|terminate|resume|pause|suspend|enable|disable|activate|deactivate|toggle|switch|turn\s+(?:on|off|up|down)|connect|disconnect|pair|unpair|join|leave|mute|unmute|silence|print|lock|unlock|delete|remove|erase|rename|move|copy|cut|paste|create|make|write|save|send|submit|post|share|upload|download|fetch|install|uninstall|update|upgrade|patch|run|execute|invoke|build|compile|deploy|release|publish|schedule|cancel|abort|retry|mine|dig|craft|smelt|collect|gather|farm|harvest|chop|fish|hunt|defeat|attack|fight|breed|tame|equip|unequip|place|break|consume|trade|buy|purchase|sell|pay|order|book|reserve|call|dial|text|message|email|mail|notify|alert|remind|record|capture|screenshot|film|scan|search|find|locate|focus|click|tap|press|type|enter|input|scroll|swipe|drag|drop|select|choose|pick|set|change|adjust|increase|decrease|raise|lower|configure|setup|organize|sort|clean|clear|empty|backup|restore|migrate|sync|merge|split|edit|modify|fix|repair|refactor|implement|develop|automate|monitor|watch|play|stream|listen|analyze|analyse|review|validate|verify|test|check)\b/i;
+  /\b(?:do|perform|complete|finish|handle|carry\s+out|open|close|launch|start|stop|restart|reboot|shutdown|kill|terminate|resume|pause|suspend|enable|disable|activate|deactivate|toggle|switch|turn\s+(?:on|off|up|down)|connect|disconnect|pair|unpair|join|leave|mute|unmute|silence|print|lock|unlock|delete|remove|erase|rename|move|copy|cut|paste|create|make|write|save|send|submit|post|share|upload|download|fetch|install|uninstall|update|upgrade|patch|run|execute|invoke|build|compile|deploy|release|publish|schedule|cancel|abort|retry|mine|dig|craft|smelt|collect|gather|farm|harvest|chop|fish|hunt|defeat|attack|fight|breed|tame|equip|unequip|place|break|consume|trade|buy|purchase|sell|pay|order|book|reserve|call|dial|text|message|email|mail|notify|alert|remind|record|capture|screenshot|film|scan|search|find|locate|focus|click|tap|press|type|enter|input|scroll|swipe|drag|drop|select|choose|pick|set|change|adjust|increase|decrease|raise|lower|configure|setup|organize|sort|clean|clear|empty|backup|restore|migrate|sync|merge|split|edit|modify|fix|repair|refactor|implement|develop|automate|monitor|watch|play|stream|listen|analyze|analyse|review|validate|verify|test|check)\b/i;
+
+/** Polite questions can still be requests to act ("Can you complete it?"). */
+const POLITE_REQUEST_PREFIX =
+  /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?help\s+me\s+(?:to\s+)?|(?:can|could|would|will)\s+you\s+(?:please\s+)?)/i;
+function isPoliteActionRequest(s: string): boolean {
+  const match = s.match(POLITE_REQUEST_PREFIX);
+  if (!match) return false;
+  const firstWords = s.slice(match[0].length).match(/^([a-z]+(?:\s+[a-z]+)?)/i)?.[1] ?? "";
+  return ACTION_VERB.test(firstWords);
+}
+
+/** Short follow-up imperatives otherwise resemble the "Do you ...?" question lead. */
+const BARE_DO_COMMAND =
+  /^do\s+(?:it|this|that|the\s+(?:remaining|rest|work|task))\b/i;
 
 /** Leading politeness / wake-address, which carries no intent of its own. */
 const ADDRESS_PREFIX =
@@ -141,6 +155,13 @@ export function classifyRequestIntent(objective: string): RequestClassification 
   // ("good, now open chrome" is a command, not a pleasantry).
   if ((SOCIAL_LEAD.test(asked) || GRATITUDE_LEAD.test(asked)) && !ACTION_VERB.test(asked)) {
     return { kind: "conversational", reason: "greeting or acknowledgement with no actionable request" };
+  }
+
+  // A polite interrogative with an action verb is still an instruction.
+  // Explanation/knowledge questions ("Can you explain how to...?", "Do you know
+  // how to...?") do not match this first-verb check and remain conversational.
+  if (isPoliteActionRequest(asked) || BARE_DO_COMMAND.test(asked)) {
+    return { kind: "actionable", reason: "polite or short imperative request asks JARVIS to perform an action" };
   }
 
   // 2c. Short remark containing no doing-verb at all.

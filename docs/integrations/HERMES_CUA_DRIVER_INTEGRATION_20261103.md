@@ -8,7 +8,8 @@ Cua Driver project through its optional in-process Python SDK, so the existing
 JARVIS companion owns execution without launching a second agent or MCP
 server. This is a transport/lifecycle adaptation, not a copy of Hermes's
 process manager or permission UI. JARVIS does not import the Hermes Agent
-runtime, planner, model routing, credentials, or independent agent loop.
+runtime, planner, model routing, credentials, or independent agent loop. CUA telemetry is forcibly disabled by the JARVIS
+adapter rather than inherited from the parent process environment.
 
 The upstream PyPI 0.38.0 release advertises Windows x64 and ARM64 wheels but
 does not publish PyPI provenance attestations. JARVIS therefore pins the
@@ -109,7 +110,9 @@ separately with windows_desktop_observe and a harmless test application.
 - Use windows_desktop_click with elementToken, pid, cuaWindowId and button.
 - Element tokens are single-use, expire after 25 seconds, and a new
   observation invalidates all previous tokens. Never reuse them.
-- After an outcome-unknown response, observe before any retry.
+- After an outcome-unknown response, observe before any retry. The unknown
+  effect latch is cleared only after a healthy, complete accessibility snapshot;
+  failed, degraded or truncated observations keep mutations blocked.
 - A Cua action receipt is not proof that the user's larger task completed.
   Use the existing independent JARVIS verifier.
 

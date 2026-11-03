@@ -96,6 +96,8 @@ function check(value, label) {
   check(source.includes('Build cancelled during file snapshot') &&
     source.includes('Build cancelled during artifact hashing'),
     'cancellation is checked during staging and artifact verification');
+  check(source.includes('copied.directories !== stats.directories'),
+    'host artifact copy is compared for file, directory and byte counts');
 
   const previous = process.env.JARVIS_LOCAL_PROJECT_BUILD_ENABLED;
   process.env.JARVIS_LOCAL_PROJECT_BUILD_ENABLED = '0';

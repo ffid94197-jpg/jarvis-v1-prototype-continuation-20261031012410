@@ -10,8 +10,10 @@
 export const TOOL_CATALOG_JSON = `AVAILABLE TOOLS (execute real actions; arguments are JSON objects):
 - create_folder   {"path": "<workspace-relative path>"}          — create a directory (recursive)
 - write_file      {"path": "<workspace-relative path>", "content": "<text>"} — write a UTF-8 text file
+- edit_file       {"path":"src/demo.ts","expectedSha256":"<64 hex from untruncated read_file>","oldText":"const a = 1;","newText":"const a = 2;"} — OpenHands-inspired targeted source edit. Requires an observed FULL read_file SHA-256 and exactly one match; Guardian scope and readback enforced; stale, missing, ambiguous, or unsafe edits fail closed. Never guess hashes or repeat uncertain effects.
 - read_file       {"path": "<workspace-relative path>"}          — read a file's exact contents
 - list_dir        {"path": "<workspace-relative path>"}          — list a directory's entries
+- memory_recall   {"query":"preferred coding editor","limit":3} — read-only Mem0-inspired recall of up to five OWNER_EXPLICIT, CLOUD_APPROVED memory records scoped to the authenticated owner. Requires operator's JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED=1 opt-in. Only call when the owner explicitly requests or authorizes recalling saved information. LOCAL_PRIVATE memory is NEVER returned to the model. These records are owner-supplied, not independently verified, and might be outdated.
 - run_command     {"command": "<one of: pwd,date,whoami,node,bun,echo,ls,cat,wc>", "args": ["..."]} — run an allowlisted read-only command
 - windows_open_url       {"url": "https://www.youtube.com"} — open a public HTTPS site in the Windows companion's controlled Chromium browser (Windows local mode only)
 - windows_open_settings {"page":"home"} — open REAL Windows Settings using a fixed ms-settings: URI. Other pages: display, sound, network, wifi, bluetooth, apps, updates, privacy, storage, power, accounts, personalization, time. NEVER substitute File Explorer for Settings.

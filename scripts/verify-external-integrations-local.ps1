@@ -13,6 +13,8 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 }
 $cases = @(
   @{Name='Memory contracts'; Exec='node'; Args=@('scripts/verify-memory-contracts.cjs')},
+  @{Name='Native code edit'; Exec='node'; Args=@('scripts/verify-native-code-edit.cjs')},
+  @{Name='Opt-in memory recall'; Exec='node'; Args=@('scripts/verify-native-memory-recall.cjs')},
   @{Name='Owner memory route'; Exec='node'; Args=@('scripts/verify-memory-route.cjs')},
   @{Name='MCP/skills adoption'; Exec='node'; Args=@('scripts/adoption/verify-adoption.mjs')},
   @{Name='Long-run checkpoint'; Exec='node'; Args=@('scripts/longrun/verify-longrun.mjs')},

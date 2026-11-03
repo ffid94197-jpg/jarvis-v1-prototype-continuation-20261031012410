@@ -61,3 +61,50 @@ The new tools still require `JARVIS_WINDOWS_AGENT_ENABLED=1`, local-dev session 
 - `windows_native_action` invokes/focuses inspected controls or sets bounded text with exact UIA readback when supported. For complex tasks, inspect again after any navigation and verify external effects.
 
 These new tools require the same explicit local desktop-control flag and existing Guardian/audit pipeline. UIA may not expose custom game GUIs, protected desktops or certain Chrome content. Mouse/keyboard + the continuous screen-vision loop remain available as fallbacks. Real laptop tests are mandatory.
+
+## Native coding edit — November 3, 2026
+
+The OpenHands-inspired source-edit slice now exposes `edit_file` as a
+first-class **JARVIS Core + Guardian** tool, not as a separate agent.
+
+- `read_file` returns `sha256` only for a *full untruncated* file read.
+- `edit_file` accepts `path`, `expectedSha256`, `oldText` and `newText`.
+- Guardian requires a workspace-relative path, audited authorization, a full
+  64-character lowercase SHA-256 and fragments of at most 1500 UTF-8 bytes.
+- The executor requires an existing regular UTF-8 file, a digest match, and
+  exactly one occurrence of `oldText`; it stages into a same-directory
+  temporary file, rechecks the source digest before rename, and verifies
+  the result by reading back the file.
+- Every call is durably admitted before file modification; crash-interrupted
+  edits are conservatively `EFFECT_UNKNOWN` and **never automatically retried**.
+- No new shell, repository-wide permissions, external OpenHands executor,
+  GitHub Actions dependency or full coding-agent certification.
+- Focused regression command: `node scripts/verify-native-code-edit.cjs`.
+
+**Important:** the rename is not a cross-process filesystem transaction.
+Changes by uncooperative external writers can still race; real Windows,
+permissions, file-locking, model and release behavior remain unverified.
+
+## Owner-approved memory recall (November 3, 2026)
+
+`memory_recall` is a **read-only JARVIS Core tool**, not a separate Mem0
+agent. Owner-managed memory remains stored in JARVIS's existing local database.
+
+- Disabled by default. The owner must intentionally set
+  `JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED=1` on the **trusted JARVIS server**
+  before the planner can request memory in an explicitly requested task.
+- Guardian validates the authenticated owner context, query bounds, and
+  maximum five results. The model cannot choose a different owner ID.
+- Executor additionally enforces `dataClass=CLOUD_APPROVED`,
+  `principalId=authenticated owner`, and `deletedAt=null` in Prisma
+  **before** returning any record. `LOCAL_PRIVATE` memories never enter
+  model-visible tool results. No automatic private-memory import, embeddings,
+  or cloud storage.
+- Records are explicitly marked as owner-reported and not independently
+  verified; no personal memory is promoted to Guardian authority.
+- Focused opt-in/cross-owner mock contract:
+  `node scripts/verify-native-memory-recall.cjs`.
+
+This is still an owner-requested memory retrieval capability, not the full
+Mem0 embedding or consolidation platform. End-to-end Prisma/provider privacy
+acceptance is required before production use.

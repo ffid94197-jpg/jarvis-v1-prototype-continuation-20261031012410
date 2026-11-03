@@ -40,6 +40,9 @@ optional input/accessibility backend, not another agent.
 - A timeout after dispatch is marked outcome-unknown. A second mutation is
   blocked until the previous call settles and a fresh desktop observation is
   performed.
+- The existing Ctrl+Shift+F12 emergency-stop monitor requests CUA session end
+  so held input is released; companion shutdown also ends the session before
+  shutting down the SDK.
 - Existing Win32/UIA, screen-watch and Minecraft paths remain available as
   fallback or separate execution paths.
 

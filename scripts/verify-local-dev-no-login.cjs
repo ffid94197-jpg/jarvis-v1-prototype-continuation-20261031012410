@@ -116,6 +116,12 @@ function request(headers={},token=null){
     const plannerOptOut = localBootstrap.localDevEnvironment({NODE_ENV:'development',JARVIS_GOAL_PLANNER_ENABLED:'0'});
     assert.equal(plannerOptOut.JARVIS_GOAL_PLANNER_ENABLED,'0');
     pass('explicit local dev planner opt-out is preserved');
+    const localLauncher = fs.readFileSync(path.join(root,'scripts/start-local-no-login.mjs'),'utf8');
+    assert.match(localLauncher,/localDevEnvironment\(process\.env\)/);
+    pass('standard local launcher propagates the advisory planner default');
+    const windowsLauncher = fs.readFileSync(path.join(root,'scripts/start-windows-agent.mjs'),'utf8');
+    assert.match(windowsLauncher,/localDevEnvironment\(process\.env\)/);
+    pass('Windows companion launcher propagates the advisory planner default');
     console.log(`LOCAL_DEV_NO_LOGIN: ${passed} PASS (mock database and HTTP route, not Windows integration)`);
   } finally { restoreEnv(); }
 })().catch(err=>{console.error(err);process.exitCode=1});

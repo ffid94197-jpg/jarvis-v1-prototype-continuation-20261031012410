@@ -57,12 +57,13 @@ def ranked_control_indices(rows, query, limit=65):
     for index, row in enumerate(rows[:450]):
         if not isinstance(row, dict) or row.get('password') or not row.get('enabled'):
             continue
-        observed = ' '.join(str(row.get(key) or '')[:110]
-                            for key in ('name', 'automationId')).casefold().strip()
+        name = str(row.get('name') or '')[:110].casefold().strip()
+        automation_id = str(row.get('automationId') or '')[:110].casefold().strip()
+        observed = (name + ' ' + automation_id).strip()
         if not observed:
             continue
         pieces = set(re.findall(r'[^\W\d_]+', observed, flags=re.UNICODE))
-        exact = any(w == observed for w in keywords)
+        exact = any(w == name or w == automation_id for w in keywords)
         matched = sum(1 for w in keywords if w in pieces or
                       (len(w) >= 4 and w in observed))
         if not matched:

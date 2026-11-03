@@ -70,6 +70,11 @@ export function localDevEnvironment(input=process.env) {
     JARVIS_PUBLIC_ORIGIN:'http://127.0.0.1:3000',
     JARVIS_LOCAL_DEV_NO_LOGIN:'1',
     JARVIS_LOCAL_DEV_BIND:'127.0.0.1',
+    // The long-horizon planner is advisory only; Guardian still authorizes
+    // every effect. Enable it by default in this loopback-only dev bootstrap,
+    // while preserving an explicit operator opt-out with value "0".
+    JARVIS_GOAL_PLANNER_ENABLED: typeof input.JARVIS_GOAL_PLANNER_ENABLED === 'string'
+      ? input.JARVIS_GOAL_PLANNER_ENABLED : '1',
   };
 }
 

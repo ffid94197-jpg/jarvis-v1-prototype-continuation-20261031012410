@@ -92,7 +92,7 @@ def _action_record(result: Any) -> dict[str, Any]:
             "detail": str(getattr(item, "detail", "") or "")[:240],
         })
     return {
-        "ok": error is None and effect != "refused",
+        "ok": error is None and effect in ("confirmed", "partial", "unverifiable"),
         "verified": effect == "confirmed",
         "effect": effect,
         "route": _name(getattr(result, "route", "unknown")),

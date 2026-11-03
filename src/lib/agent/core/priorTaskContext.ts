@@ -21,7 +21,9 @@ export function selectPriorTask(objective: string, tasks: PriorTaskSnapshot[]): 
  const matches=tasks.slice(0,20).filter(t=>{
   if(!t || typeof t.id!=="string" || typeof t.objective!=="string" || !t.objective.trim())return false;
   const prev=(t.objective.toLowerCase().match(TOPIC)||[]).map(x=>x.toLowerCase());
-  return !topics.size || prev.some(x=>topics.has(x));
+  // A Minecraft continuation may refer to Dragon/Netherite progress without repeating the word Minecraft.
+  const gameAlias=topics.has("minecraft") && /\b(?:minecraft|ender\s+dragon|netherite|mineflayer|stronghold|survival\s+campaign)\b/i.test(t.objective);
+  return !topics.size || prev.some(x=>topics.has(x)) || gameAlias;
  });
  if(/\binventory\b/i.test(objective)){
    // Prefer the actual owner-supplied price/quantity specification over newer

@@ -27,7 +27,7 @@ The comparison is against the current `main` content and the canonical PR #23 he
 
 - PR #22 is closed as superseded by PR #23.
 - PR #24 is closed as a duplicate/smaller Hermes CUA implementation; its capability slice is represented in PR #23.
-- PR #23 is the single canonical integration candidate. It is still a draft and is not merged.
+- PR #23 was merged into `main` as `a2c7cb3cd8e2159524a0da958d17b197aacd667f`. The merge consolidated the selected native integrations; it did not certify live acceptance.
 
 ## Hermes-derived CUA changes now in the canonical candidate
 
@@ -50,9 +50,9 @@ Additional fail-closed safeguards added during this reconciliation:
 - No full local TypeScript/Node/PowerShell acceptance has been run on the consolidated head.
 - Real Minecraft Java Dragon defeat, End return and full Netherite equipment remain NOT ACCEPTED.
 - The 200,000 Internet-original prompt corpus and live-model execution programme remain NOT ACCEPTED.
-- The CI-only project-build adapter described above remains intentionally deferred, not merged.
+- The old CI-only project-build adapter remains intentionally unmerged. The new Windows Sandbox local replacement is in a separate feature branch and is not yet merged.
 - This reconciliation is not a release certification and does not justify marking the autonomous layer 100%.
 
 ## Next gate
 
-Run `scripts/verify-external-integrations-local.ps1` on the isolated Prototype JARVIS Windows checkout, then run the CUA SDK preflight and harmless Notepad/Explorer/browser acceptance. Preserve the opt-in default and keep PR #23 unmerged until these local results and the required integration/security review are recorded.
+Run `npm run test:local-project-build-offline` and `npm run test:local-project-build-windows-live` on the owner Windows PC, then run the existing external-integration and CUA local acceptance. Keep the local build feature opt-in and do not claim product acceptance from static checks alone.

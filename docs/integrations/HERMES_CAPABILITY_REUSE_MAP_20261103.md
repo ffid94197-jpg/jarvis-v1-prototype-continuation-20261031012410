@@ -53,6 +53,24 @@ JARVIS already has a Playwright-based browser path, Guardian policy, URL
 validation and network-egress controls. Hermes browser tools should not become
 a second browser controller.
 
+## Capabilities Hermes does not replace
+
+### Minecraft gameplay
+
+Hermes is not a native Minecraft Java gameplay engine and does not satisfy
+JARVIS's empty-survival-to-Netherite-and-Dragon acceptance requirement. Keep
+the existing JARVIS Mineflayer/MCP companion and custom goal planner. The
+remaining work is gameplay intelligence, robust recovery and real Java-server
+acceptance; do not replace it with generic desktop clicking.
+
+### 200,000 Internet-original evaluation corpus
+
+Hermes does not provide the required 200,000-source-attested, difficult
+Internet-original prompt corpus or its independent result-verification
+pipeline. This remains a separate build-from-scratch evaluation project.
+Generated benchmark instances and model-generated instructions do not count
+toward the Internet-original target.
+
 ## Remaining candidate requiring JARVIS-native engineering
 
 ### Delegated subtasks / subagents

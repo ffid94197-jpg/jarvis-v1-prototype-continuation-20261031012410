@@ -48,8 +48,9 @@ Supported artifact markers are .next/BUILD_ID, dist/index.html, build/index.html
 
 ## Verification
 
-Offline contracts (no Windows Sandbox launch, no GitHub Actions):
+TypeScript check and offline contracts (no Windows Sandbox launch, no GitHub Actions):
 
+npm run typecheck
 npm run test:local-project-build-offline
 
 Real owner-PC fixture acceptance (starts and shuts down a disposable Windows Sandbox, uses a no-dependency fixture, does not build the owner’s application):

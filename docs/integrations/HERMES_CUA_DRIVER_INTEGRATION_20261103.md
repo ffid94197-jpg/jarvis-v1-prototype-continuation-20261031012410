@@ -52,7 +52,8 @@ optional input/accessibility backend, not another agent.
   native window ID and snapshot-scoped element token. Raw text-field values,
   screenshots and unredacted accessibility markdown are not forwarded.
 - Exact-window background element-token clicks.
-- Exact-window background text input and key chords when PID/window ID are supplied.
+- Exact-window-targeted text input and key chords when PID/window ID are supplied;
+  the CUA receipt reports whether the selected route was background or foreground.
 - Primary-desktop coordinate clicks, pointer movement, and foreground text/key input.
 - Existing Win32 window enumeration/focus and scrolling remain on the legacy
   backend; this integration does not silently replace those paths.

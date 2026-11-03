@@ -2,7 +2,7 @@
 
 ## Scope
 
-Prototype JARVIS only. No changes to PC Work JARVIS or repository `main`. Work is isolated on `autonomy-100-percent-acceptance-20261102`.
+Historical snapshot from 2026-11-02. This blocker report and its acceptance documentation are now preserved on Prototype JARVIS `main`; the branch name below is historical. Runtime changes described here are not all integrated or accepted. The primary PC Work JARVIS remains separate and untouched.
 
 ## Verified current implementation facts
 

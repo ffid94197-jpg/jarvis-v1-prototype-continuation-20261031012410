@@ -96,8 +96,9 @@ separately with windows_desktop_observe and a harmless test application.
 
 - Run windows_desktop_observe before selecting controls. It lists visible
   windows and takes one accessibility snapshot of the current foreground
-  window. observedWindow.selectionReason reports whether the foreground title
-  matched or the first-visible fallback was used.
+  window. If the foreground window cannot be identified or is not present in
+  the bounded visible-window list, observation fails closed; it never silently
+  selects the first visible window.
 - To inspect a different window, pass its PID and cuaWindowId from
   visibleWindows to windows_desktop_observe. The returned observedWindow then
   reports selectionReason "explicit-window". Only one window is snapshotted

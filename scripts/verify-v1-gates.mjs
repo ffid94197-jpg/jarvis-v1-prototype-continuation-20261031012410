@@ -107,6 +107,7 @@ const checks=[
  ['LOCAL-DEV-NO-LOGIN',['scripts/verify-local-dev-no-login.cjs']],
  ['INVENTORY-INTEGRITY',['scripts/verify-inventory-integrity.cjs']],
  ['NATIVE-CODE-EDIT',['scripts/verify-native-code-edit.cjs']],
+ ['CUA-DRIVER-OFFLINE',['scripts/verify-cua-driver-offline.mjs']],
  ['NATIVE-MEMORY-RECALL',['scripts/verify-native-memory-recall.cjs']],
  ['CORPUS-VALIDATOR',['scripts/autonomy/verify-corpus-validator.cjs']],
  ['WEBBENCH-CANDIDATE-IMPORT',['scripts/autonomy/verify-webbench-candidate-import.cjs']],

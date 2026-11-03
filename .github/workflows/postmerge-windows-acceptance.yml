@@ -57,7 +57,9 @@ jobs:
           python -m pip install -r windows-companion/requirements.txt
           if ($LASTEXITCODE -ne 0) { throw "Windows companion Python dependency installation failed" }
       - name: Clean full TypeScript compilation
+        continue-on-error: true
         run: |
+          $PSNativeCommandUseErrorActionPreference=$false
           New-Item -ItemType Directory -Force artifacts/postmerge-windows | Out-Null
           npx.cmd tsc --noEmit --incremental false *> artifacts/postmerge-windows/typecheck.log
           $code=$LASTEXITCODE
@@ -65,14 +67,18 @@ jobs:
           Get-Content artifacts/postmerge-windows/typecheck.log -Tail 50
           Write-Output "TYPECHECK_EXIT=$code"
       - name: Execute Core, intelligence, integrations and Minecraft offline battery
+        continue-on-error: true
         run: |
+          $PSNativeCommandUseErrorActionPreference=$false
           node scripts/acceptance/postmerge-windows-battery.cjs *> artifacts/postmerge-windows/battery-console.log
           $code=$LASTEXITCODE
           Set-Content artifacts/postmerge-windows/battery.exitcode $code
           Get-Content artifacts/postmerge-windows/battery-console.log -Tail 110
           Write-Output "OFFLINE_BATTERY_EXIT=$code"
       - name: Production build and artifact checks
+        continue-on-error: true
         run: |
+          $PSNativeCommandUseErrorActionPreference=$false
           $env:NODE_ENV='production'
           npm.cmd run build *> artifacts/postmerge-windows/build.log
           $code=$LASTEXITCODE
@@ -84,9 +90,9 @@ jobs:
           $failed=@()
           foreach ($gate in @('typecheck','battery','build')) {
             $name="artifacts/postmerge-windows/$gate.exitcode"
-            if (!(Test-Path $name)) { $failed += "$gate:missing"; continue }
+            if (!(Test-Path $name)) { $failed += "${gate}:missing"; continue }
             $code=(Get-Content $name -Raw).Trim()
-            if ($code -ne '0') { $failed += "$gate:$code" }
+            if ($code -ne '0') { $failed += "${gate}:$code" }
           }
           if ($failed.Count -gt 0) { throw "POSTMERGE_WINDOWS_ACCEPTANCE_FAILED: $($failed -join ', ')" }
           Write-Output 'POSTMERGE_WINDOWS_OFFLINE_ACCEPTANCE_PASS - NOT full V1 or real-model/game acceptance'

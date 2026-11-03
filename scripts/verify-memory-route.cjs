@@ -13,7 +13,11 @@ let memory=[],world=[];let nextId=0;let currentRole='OWNER';let currentPrincipal
 function mapped(obj){return {...obj,id:obj.id||'id000000'+(++nextId),createdAt:new Date(),updatedAt:new Date(),observedAt:new Date()}}
 const db={
  jarvisMemory:{
-   findMany:async ({where,take})=>memory.filter(r=>r.principalId===where.principalId&&!r.deletedAt).slice(0,take),
+   findMany:async ({where,take})=>memory.filter(r=>r.principalId===where.principalId&&!r.deletedAt &&
+       (!where.OR || where.OR.some(predicate=>
+         (predicate.key?.contains && r.key.includes(predicate.key.contains)) ||
+         (predicate.content?.contains && r.content.includes(predicate.content.contains))
+       ))).slice(0,take),
    upsert:async ({where,create,update})=>{let row=memory.find(x=>x.key===where.principalId_key.key&&x.principalId===where.principalId_key.principalId);if(row){row={...row,...update,version:row.version+1};memory=memory.map(x=>x.id===row.id?row:x)}else{row=mapped({...create,version:0});memory.push(row)}return row},
    updateMany:async ({where,data})=>{let found=memory.filter(x=>x.principalId===where.principalId&&x.id===where.id&&!x.deletedAt);found.forEach(x=>{x.deletedAt=data.deletedAt;x.version++});return {count:found.length}},
  },
@@ -41,7 +45,29 @@ async function run(){let n=0;const test=async(name,fn)=>{await fn();console.log(
  await test('device caller denied',async()=>{currentRole='DEVICE';const r=await GET(request('http://localhost/api/jarvis/memory'));assert.equal(r.status,403);currentRole='OWNER'});
  await test('foreign-origin mutation denied',async()=>{originAllowed=false;const r=await POST(request('http://localhost/api/jarvis/memory',{kind:'memory',key:'x',content:'x'}));assert.equal(r.status,403);originAllowed=true});
  await test('cross-owner memory isolated',async()=>{currentPrincipal='owner2';const r=await GET(request('http://localhost/api/jarvis/memory?kind=memory'));assert.equal((await r.json()).records.length,0);currentPrincipal='owner1'});
- await test('fake verified observation denied',async()=>{const r=await POST(request('http://localhost/api/jarvis/memory',{kind:'world',subject:'f',predicate:'exists',value:'yes',source:'VERIFIED_TOOL'}));assert.equal(r.status,400)});
+ await test('memory search finds old owner records beyond 500 recent unrelated entries',async()=>{
+   const snapshot=memory;
+   memory=[{principalId:'owner1',key:'old.preference',content:'raretrace target'}].concat(
+     Array.from({length:620},(_,i)=>({principalId:'owner1',key:'new'+i,content:'unrelated'}))
+   );
+   const r=await GET(request('http://localhost/api/jarvis/memory?kind=memory&query=raretrace'));
+   const body=await r.json();
+   assert.equal(body.records.length,1);
+   assert.equal(body.records[0].key,'old.preference');
+   assert.equal(body.searchTruncated,false);
+   memory=snapshot;
+ });
+ await test('memory search is denied to non-owner accounts',async()=>{
+   currentPrincipal='owner2';
+   const r=await GET(request('http://localhost/api/jarvis/memory?kind=memory&query=project'));
+   assert.equal((await r.json()).records.length,0);
+   currentPrincipal='owner1';
+ });
+ await test('invalid memory search rejects control characters',async()=>{
+   const r=await GET(request('http://localhost/api/jarvis/memory?kind=memory&query=abc%0Adef'));
+   assert.equal(r.status,400);
+ });
+  await test('fake verified observation denied',async()=>{const r=await POST(request('http://localhost/api/jarvis/memory',{kind:'world',subject:'f',predicate:'exists',value:'yes',source:'VERIFIED_TOOL'}));assert.equal(r.status,400)});
  await test('owner-reported observation created with unverified provenance',async()=>{const r=await POST(request('http://localhost/api/jarvis/memory',{kind:'world',subject:'app',predicate:'open',value:'yes'}));assert.equal(r.status,201);assert.equal(world[0].source,'USER_REPORTED')});
  await test('foreign-owner deletion does not leak record',async()=>{currentPrincipal='owner2';const r=await DELETE(request('http://localhost/api/jarvis/memory',{kind:'memory',id:memory[0].id}));assert.equal(r.status,404);currentPrincipal='owner1'});
  await test('owner can retract observation',async()=>{const r=await DELETE(request('http://localhost/api/jarvis/memory',{kind:'observation',id:world[0].id}));assert.equal(r.status,200);assert(world[0].retractedAt)});

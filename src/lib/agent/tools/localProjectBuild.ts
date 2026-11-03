@@ -542,42 +542,45 @@ export async function executeLocalProjectBuild(
     const wsbPath = path.join(stageRoot, "jarvis-project-build.wsb");
     await fs.writeFile(wsbPath, wsb, { encoding: "utf8", flag: "wx" });
 
-    const launch = await new Promise<{
+    let resolveLaunch!: (value: {
       error: Error | null; code: number | null; stdout: string; stderr: string;
-    }>((resolve) => {
-      child = execFile(prepared.sandboxExeAbs, [wsbPath], {
-        cwd: workspaceReal,
-        env: sandboxEnvironment(),
-        shell: false,
-        windowsHide: false,
-        timeout: 0,
-        maxBuffer: 64 * 1024,
-        encoding: "utf8",
-      }, (error, stdout, stderr) => {
-        childClosed = true;
-        childError = error ?? null;
-        childCode = typeof (error as any)?.code === "number" ? (error as any).code :
-          error ? 1 : 0;
-        resolve({
-          error: error ?? null,
-          code: childCode,
-          stdout: String(stdout || "").slice(-2000),
-          stderr: String(stderr || "").slice(-2000),
-        });
+    }) => void;
+    const launchPromise = new Promise<{
+      error: Error | null; code: number | null; stdout: string; stderr: string;
+    }>((resolve) => { resolveLaunch = resolve; });
+    const launchedChild = execFile(prepared.sandboxExeAbs, [wsbPath], {
+      cwd: workspaceReal,
+      env: sandboxEnvironment(),
+      shell: false,
+      windowsHide: false,
+      timeout: 0,
+      maxBuffer: 64 * 1024,
+      encoding: "utf8",
+    }, (error, stdout, stderr) => {
+      childClosed = true;
+      childError = error ?? null;
+      childCode = typeof (error as any)?.code === "number" ? (error as any).code :
+        error ? 1 : 0;
+      resolveLaunch({
+        error: error ?? null,
+        code: childCode,
+        stdout: String(stdout || "").slice(-2000),
+        stderr: String(stderr || "").slice(-2000),
       });
-      register(child);
     });
+    child = launchedChild;
+    register(launchedChild);
 
     const startedAt = Date.now();
     let quotaFailure = "";
     while (!childClosed) {
       if (isCancelled()) {
-        await terminateSandbox(child);
+        await terminateSandbox(launchedChild);
         break;
       }
       if (Date.now() - startedAt > MAX_RUN_MS) {
         quotaFailure = "Windows Sandbox build exceeded the 22-minute deadline";
-        await terminateSandbox(child);
+        await terminateSandbox(launchedChild);
         break;
       }
       try {
@@ -586,12 +589,12 @@ export async function executeLocalProjectBuild(
         });
         if (current.bytes > MAX_OUTPUT_BYTES || current.files > MAX_OUTPUT_FILES) {
           quotaFailure = "Sandbox output quota exceeded";
-          await terminateSandbox(child);
+          await terminateSandbox(launchedChild);
           break;
         }
       } catch (error) {
         quotaFailure = error instanceof Error ? error.message : "Invalid sandbox output";
-        await terminateSandbox(child);
+        await terminateSandbox(launchedChild);
         break;
       }
       await delay(750);
@@ -608,6 +611,7 @@ export async function executeLocalProjectBuild(
         error: "Sandbox process remains active after termination request; close Windows Sandbox manually. Do not blindly retry.",
       };
     }
+    const launch = await launchPromise;
     if (isCancelled()) {
       return { ok: false, tool, evidence: "Windows Sandbox process exited after cancellation", error: "Build cancelled" };
     }

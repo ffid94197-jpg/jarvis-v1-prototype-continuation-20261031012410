@@ -221,6 +221,7 @@ async function fixture({stuck=false,armNavTimeout=false,noRoute=false,onlyRouteT
   };
   vm.runInNewContext(source,{
     require:name=>mocks[name]||require(name),
+    __dirname:fs.mkdtempSync(path.join(require('node:os').tmpdir(),'jarvis-mc-path-fixture-')),
     process:{env:{JARVIS_MINECRAFT_LAN_PORT:'54321',JARVIS_MINECRAFT_PLAYER:'Owner'},
       stdout:{write:x=>output.push(x)},stderr:{write:x=>output.push(x)},on(){},exit(){}},
     console,Buffer,setTimeout:timerShim,clearTimeout(){},setInterval(){},clearInterval(){}

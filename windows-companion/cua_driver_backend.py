@@ -225,12 +225,12 @@ class CuaDriverBackend:
             ListWindowsInput(pid=None, on_screen_only=True)
         )
         windows = list(getattr(listed, "windows", None) or [])[:5]
-        records = [
-            _window_record(window)
-            for window in windows
+        valid_windows = [
+            window for window in windows
             if type(getattr(window, "pid", None)) is int
             and type(getattr(window, "window_id", None)) is int
         ]
+        records = [_window_record(window) for window in valid_windows]
         if not records:
             raise ValueError("No visible Windows targets were found in the interactive session.")
 
@@ -242,7 +242,7 @@ class CuaDriverBackend:
                 raise ValueError("Exact-window observation requires PID and CUA window ID.")
             target_window = next(
                 (
-                    window for window in windows
+                    window for window in valid_windows
                     if getattr(window, "pid", None) == pid
                     and str(getattr(window, "window_id", "")) == raw_window_id
                 ),
@@ -255,13 +255,13 @@ class CuaDriverBackend:
             if foreground_title:
                 target_window = next(
                     (
-                        window for window in windows
-                        if str(getattr(window, "title", "") or "").strip().casefold()
+                        window for window in valid_windows
+                        if str(getattr(window, "title", "") or "")[:100].strip().casefold()
                         == foreground_title
                     ),
                     None,
                 )
-            target_window = target_window or windows[0]
+            target_window = target_window or valid_windows[0]
 
         pid = getattr(target_window, "pid", None)
         window_id = getattr(target_window, "window_id", None)

@@ -79,6 +79,7 @@ command.
 
 - [faster-whisper 1.2.1 on PyPI](https://pypi.org/project/faster-whisper/1.2.1/) — package metadata, Python requirement and MIT code license.
 - [Official faster-whisper README](https://github.com/SYSTRAN/faster-whisper#readme) — CTranslate2, CUDA 12/cuBLAS and cuDNN 9 requirements.
+- [Pinned v1.2.1 constructor](https://github.com/SYSTRAN/faster-whisper/blob/v1.2.1/faster_whisper/transcribe.py) — confirms the remote tokenizer fallback when `tokenizer.json` is absent.
 
 A successful dependency wheel check is not a transcription acceptance. Real
 local model loading, accuracy, latency and Windows microphone input remain

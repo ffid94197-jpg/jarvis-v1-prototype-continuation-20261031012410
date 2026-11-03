@@ -84,6 +84,11 @@ function check(value, label) {
   check(guest.includes("'run', 'build'"), 'only declared npm build script executed');
   check(guest.includes('Get-TreeStats') && guest.includes('2147483648'), 'guest worktree size/file quota enforced');
   check(guest.includes('Stop-Tree') && guest.includes('shutdown.exe'), 'guest process tree and VM shutdown handled');
+  check(source.includes('MAX_ARTIFACT_BYTES = 512') && source.includes('MAX_OUTPUT_BYTES = 520'),
+    'artifact quota leaves bounded room for host result metadata');
+  check(source.includes('Build cancelled during file snapshot') &&
+    source.includes('Build cancelled during artifact hashing'),
+    'cancellation is checked during staging and artifact verification');
 
   const previous = process.env.JARVIS_LOCAL_PROJECT_BUILD_ENABLED;
   process.env.JARVIS_LOCAL_PROJECT_BUILD_ENABLED = '0';

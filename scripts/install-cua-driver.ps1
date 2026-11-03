@@ -1,7 +1,8 @@
 param(
-  [string]$PythonPath = "python"
+  [string]$PythonPath = $env:JARVIS_PYTHON
 )
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($PythonPath)) { $PythonPath = "python" }
 $root = Split-Path -Parent $PSScriptRoot
 $requirements = Join-Path $root "windows-companion\requirements-cua.txt"
 if ($env:OS -ne "Windows_NT") { throw "Cua Driver installation is Windows-only." }

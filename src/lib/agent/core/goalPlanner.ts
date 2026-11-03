@@ -29,6 +29,7 @@ export function requiresExternalActionEvidence(objective: string): boolean {
   const s=objective.trim().replace(/^(?:please\s+|jarvis[,!: ]+)+/i,'');
   if (!s || s.length>5000) return false;
   if (/^(?:what|why|who|when|where|how|explain|describe|tell me|can you explain|give me|summarize|translate|compare|what is|which is)\b/i.test(s)) return false;
+  if (/^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:do|complete|finish|continue|resume|keep\s+going|carry\s+on)(?:\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task|where\s+we\s+left(?:\s+off)?|from\s+(?:the\s+)?(?:last|latest)\s+checkpoint))?\b/i.test(s)) return true;
   // Plain text generation can be answered in a conversation; delivering a
   // file, sending content, or changing the outside world cannot.
   if (/^(?:write|draft|compose|generate)\s+(?:me\s+)?(?:a|an|the|some)\s+(?:poem|story|email|message|essay|description|summary|snippet|example|paragraph|reply)\b/i.test(s)
@@ -41,7 +42,10 @@ export function requiresExternalActionEvidence(objective: string): boolean {
 
 export function requiresGoalPlan(objective: string): boolean {
   const s = objective.trim();
-  if (s.length < 12 || s.length > 5000 || /^(what|why|explain|tell me|how do|how to)\b/i.test(s)) return false;
+  if (s.length > 5000 || /^(what|why|explain|tell me|how do|how to)\b/i.test(s)) return false;
+  const continuation = /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:do|complete|finish|continue|resume|keep\s+going|carry\s+on)(?:\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task|where\s+we\s+left(?:\s+off)?|from\s+(?:the\s+)?(?:last|latest)\s+checkpoint))?\b/i.test(s);
+  if (continuation) return true;
+  if (s.length < 12) return false;
   return /\b(autonom(?:ous|ously)|end.to.end|from scratch|entire|complete (?:the |a )?(?:mission|project|workflow)|full (?:netherite|minecraft)|defeat (?:the )?ender dragon|netherite|stronghold|multi.step|long.running|research and (?:build|implement))\b/i.test(s) || (requiresExternalActionEvidence(s) && /\b(?:and|then|after|before|next|first|finally|,|three tasks|multiple steps)\b/i.test(s));
 }
 

@@ -150,7 +150,7 @@ def check_cua_coordinates(op, info):
     """Reject primary-display CUA coordinates outside the actual display."""
     if not isinstance(op,dict) or op.get('operation') not in ('desktop_click','desktop_move'):
         return None
-    if 'elementToken' in op:
+    if op.get('operation') == 'desktop_click' and 'elementToken' in op:
         return None
     width=info.get('width') if isinstance(info,dict) else None
     height=info.get('height') if isinstance(info,dict) else None

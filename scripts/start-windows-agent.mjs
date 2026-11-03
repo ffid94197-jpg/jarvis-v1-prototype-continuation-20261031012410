@@ -36,6 +36,13 @@ for(const key of ['JARVIS_WINDOWS_AGENT_ENABLED','JARVIS_WINDOWS_COMPANION_TOKEN
     'JARVIS_MINECRAFT_LAN_HOST','JARVIS_MINECRAFT_LAN_PORT','JARVIS_MINECRAFT_PLAYER', 'JARVIS_MINECRAFT_GAME_INPUT_ENABLED', 'JARVIS_BROWSER_AGENT_ENABLED', 'JARVIS_WINDOWS_UI_CONTROL_ENABLED', 'JARVIS_EXPERIMENTAL_DESKTOP_CONTROL']) {
   if(env[key]) desktopEnv[key]=env[key];
 }
+if (process.env.JARVIS_CUA_DRIVER_ENABLED === '1') {
+  if (desktopEnv.JARVIS_EXPERIMENTAL_DESKTOP_CONTROL !== '1') {
+    console.error('Cua Driver requires JARVIS_EXPERIMENTAL_DESKTOP_CONTROL=1.');
+    process.exit(1);
+  }
+  desktopEnv.JARVIS_CUA_DRIVER_ENABLED = '1';
+}
 const selectedMinecraftEngine = process.env.JARVIS_MINECRAFT_ENGINE;
 if (selectedMinecraftEngine !== undefined) {
   if (!['jarvis', 'mine-ai-mcp'].includes(selectedMinecraftEngine)) {

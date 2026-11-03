@@ -16,7 +16,8 @@ const publicIps=['8.8.8.8','1.1.1.1','2606:4700:4700::1111'];
 const deniedIps=['127.0.0.1','10.1.0.1','172.16.0.1','192.168.0.1',
  '100.64.0.1','169.254.0.5','198.18.1.2','203.0.113.9',
  '192.0.2.50','0.0.0.0','224.0.0.1','255.255.255.255',
- '::1','fc00::1','fe80::1','2001:db8::1','::ffff:127.0.0.1'];
+ '::1','fc00::1','fe80::1','2001:db8::1','2002:c0a8:0101::1',
+ '2001:0000::1','::ffff:127.0.0.1'];
 for(const ip of publicIps)test(isPublicMcpAddress(ip),'public IP '+ip);
 for(const ip of deniedIps)test(!isPublicMcpAddress(ip),'private/reserved IP '+ip);
 

@@ -2,6 +2,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 const root=path.join(__dirname,'..');
+const languageGoal=require(path.join(root,'windows-companion/minecraft-bot/language_goal.cjs'));
 const source=fs.readFileSync(path.join(root,'src/lib/agent/core/minecraftAiGate.ts'),'utf8');
 const transpile=(file,text)=>{
  const result=ts.transpileModule(text,{reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
@@ -27,6 +28,12 @@ const chatWake=/^(?:hey\\s+)?jarvis(?:buddy)?[,: ]+(.+)$/i;
 for(const message of ['jarvis complete it fully','hey jarvis, complete it fully','jarvisbuddy: gather 16 cobblestone','hey jarvisbuddy, explore the cave'])
  ok(chatWake.test(message),'owner Minecraft chat wake prefix: '+message);
 const no=(v,label)=>{assert.equal(v,false,label);checks++;};
+for(const phrase of ['continue','resume the previous mission','continue the current Netherite run','keep going from the latest checkpoint','can you resume the previous mission?']){
+ const intent=languageGoal.directIntent(phrase);
+ ok(intent?.ok===true && intent.command.command==='auto_resume','Minecraft continuation maps to saved-mission resume: '+phrase);
+}
+no(languageGoal.directIntent('continue to build a house')?.command?.command==='auto_resume',
+ 'a new gameplay objective is not misread as resuming a saved mission');
 for(const s of [
  'Jarvis, can you mine diamonds in Minecraft?','Please build a small house in Minecraft',
  'Follow me and protect me in Minecraft','Collect 16 cobblestone using my wooden pickaxe',
@@ -56,6 +63,23 @@ for(const [objective,wanted] of expected){
  const actual=singleInventoryResourceGoal(objective);
  ok(JSON.stringify(actual)===JSON.stringify(wanted),'bounded single-resource predicate '+objective);
 }
+const resumeGate=new MinecraftAiGate('Continue the current Netherite run');
+const resumeWorld={joined:true,busy:false,position:{x:0,y:64,z:0},health:20,hunger:20,
+ inventory:{logs:0,raw:{wooden_pickaxe:1}},nearbyBlocks:[]};
+resumeGate.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(resumeWorld)}});
+ok(resumeGate.check('minecraft_companion_command',{command:'auto_resume'}).ok,
+ 'owner continuation permits bounded saved-mission resume after fresh observation');
+no(resumeGate.check('minecraft_companion_command',{command:'auto_resume',goal:'dragon_run'}).ok,
+ 'model cannot override saved mission goal during resume');
+resumeGate.record('minecraft_companion_command',{command:'auto_resume'},{ok:true});
+no(resumeGate.check('minecraft_companion_command',{command:'auto_resume'}).ok,
+ 'resume consumes freshness and requires a new observation');
+const unrelatedResumeGate=new MinecraftAiGate('Open Chrome');
+unrelatedResumeGate.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(resumeWorld)}});
+no(unrelatedResumeGate.check('minecraft_companion_command',{command:'auto_resume'}).ok,
+ 'unrelated objective cannot invoke Minecraft mission resume');
 const resourceGate=new MinecraftAiGate('Mine six diamonds in Minecraft');
 const resourceScene={joined:true,busy:false,position:{x:0,y:64,z:0},health:20,hunger:20,
  inventory:{logs:0,raw:{diamond:5}},nearbyBlocks:[]};

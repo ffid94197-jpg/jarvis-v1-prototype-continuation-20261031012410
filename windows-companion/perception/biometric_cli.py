@@ -145,12 +145,12 @@ def active_stt_engine():
 @lru_cache(maxsize=1)
 def _faster_whisper_model(model_path,device,compute_type,cpu_threads):
     """Load only a preinstalled local CTranslate2 model; never fetch from a hub."""
-    from faster_whisper import WhisperModel
     model=Path(model_path).resolve()
     if not model.is_dir() or not (model/'model.bin').is_file():
         raise RuntimeError('FASTER_WHISPER_MODEL_MISSING: Configure a local CTranslate2 model directory.')
     if not (model/'config.json').is_file():
         raise RuntimeError('FASTER_WHISPER_MODEL_INVALID: Local model config is missing.')
+    from faster_whisper import WhisperModel
     return WhisperModel(str(model),device=device,compute_type=compute_type,
                         cpu_threads=cpu_threads,num_workers=1,
                         local_files_only=True)

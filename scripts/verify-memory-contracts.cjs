@@ -33,7 +33,7 @@ test('list default',()=>assert.equal(boundedListLimit('bad'),20));
 test('Mem0-style local memory query bounded',()=>assert.equal(parseOwnerMemoryQuery('  video editor  '),'video editor'));
 test('Memory search refuses oversized and control-character queries',()=>{
   rejects(()=>parseOwnerMemoryQuery('x'.repeat(161)));
-  rejects(()=>parseOwnerMemoryQuery('private\\nquery'));
+  rejects(()=>parseOwnerMemoryQuery('private'+String.fromCharCode(10)+'query'));
 });
 test('Rank only actually supplied owner memory records, never invent',()=>{
   const rows=[{key:'general',content:'nothing here'},{key:'video.editor',content:'Use Paint for images'},

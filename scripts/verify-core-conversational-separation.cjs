@@ -122,6 +122,8 @@ const ACTIONABLE = [
   'can you help me complete it?',
   'could you please finish this?',
   'can you open chrome?',
+  'hey jarvis, complete it fully',
+  'hey jarvis, can you open chrome?',
   'can you write this to a file?',
   'could you please save this on disk?',
   'can you write me a poem and share it?',
@@ -133,6 +135,7 @@ for (const objective of ACTIONABLE) {
 // Direct drafting stays conversational, but external delivery is an effect.
 ok(requiresExternalActionEvidence('write me a poem') === false, 'plain poem drafting does not require external-effect proof');
 ok(requiresExternalActionEvidence('can you write me a poem?') === false, 'polite plain drafting does not require external-effect proof');
+ok(requiresExternalActionEvidence('hey jarvis, write me a poem') === false, 'wake-name plain drafting does not require external-effect proof');
 ok(requiresExternalActionEvidence('can you write me a poem and share it?') === true, 'sharing a draft requires independent effect proof');
 ok(requiresExternalActionEvidence('can you write this to a file?') === true, 'writing to a file requires independent effect proof');
 ok(requiresExternalActionEvidence('can you send this email?') === true, 'sending a message requires independent effect proof');
@@ -144,7 +147,8 @@ const FOLLOW_UPS = [
   'complete it fully', 'finish it', 'do it', 'do the remaining',
   'can you complete it?', 'can you do it?', 'can you help me complete it?',
   'could you please finish this?', 'continue', 'resume from the latest checkpoint',
-  'keep going', 'carry on', 'can you continue?'
+  'keep going', 'carry on', 'can you continue?',
+  'hey jarvis, complete it fully', 'hey jarvis, continue'
 ];
 for (const objective of FOLLOW_UPS) {
   ok(classifyRequestIntent(objective).kind === 'actionable',
@@ -170,6 +174,10 @@ ok(priorTaskContext('complete it fully', priorCandidates).includes('UNTRUSTED DA
   'recovered task text remains explicitly untrusted and cannot authorize actions');
 ok(needsPriorTaskContext('how do I open Chrome?') === false,
   'educational how-to question does not hydrate a previous task');
+ok(needsPriorTaskContext('hey jarvis, complete it fully') === true,
+  'wake-name completion follow-up recovers the prior task');
+ok(needsPriorTaskContext('hey jarvis, how do I open Chrome?') === false,
+  'wake-name educational question does not hydrate a previous task');
 
 // BIDIRECTIONAL PROOF that this test is load-bearing. The legacy guard was a
 // denylist: for the objectives below BOTH legacy classifiers return false, so
@@ -214,6 +222,8 @@ const CONVERSATIONAL = [
   'do you know how to make a cake?',
   'can you explain how to create a folder?',
   'can you tell me how to open chrome?',
+  'hey jarvis, write me a poem',
+  'hey jarvis, can you tell me how to open chrome?',
   'write me a poem',
   'can you write me a poem?',
   'could you please draft an email?',

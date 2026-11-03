@@ -228,3 +228,12 @@ runner. No test run or live owner-PC/model acceptance is claimed in this branch.
   parsing; source wiring for Guardian/executor/opt-in and local runner was
   inspected. These checks do **not** substitute for executing the Windows
   acceptance runner or real Prisma/model inference.
+
+- Closed an upstream faster-whisper offline fallback: if a local CTranslate2
+  folder omits `tokenizer.json`, the library can call
+  `Tokenizer.from_pretrained("openai/whisper-tiny")`; the model's
+  `local_files_only=True` flag does not guard that local-directory tokenizer
+  fallback. The JARVIS loader now requires `tokenizer.json` before importing
+  the optional runtime and has a regression fixture for the missing-tokenizer
+  case. The exact upstream behavior is visible in the official
+  [faster-whisper constructor](https://github.com/SYSTRAN/faster-whisper/blob/master/faster_whisper/transcribe.py).

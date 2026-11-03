@@ -124,6 +124,7 @@ const ACTIONABLE = [
   'can you open chrome?',
   'can you write this to a file?',
   'could you please save this on disk?',
+  'can you write me a poem and share it?',
 ];
 for (const objective of ACTIONABLE) {
   const r = classifyRequestIntent(objective);

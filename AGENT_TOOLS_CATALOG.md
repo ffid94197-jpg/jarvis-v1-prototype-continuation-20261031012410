@@ -57,7 +57,7 @@ The new tools still require `JARVIS_WINDOWS_AGENT_ENABLED=1`, local-dev session 
 ## Native Windows control tools (NEW)
 
 - `windows_native_open_url` opens public HTTPS links in the user-selected **default Windows browser**, not a separate Playwright Chromium session.
-- `windows_native_inspect` enumerates actual foreground app accessibility controls through Windows UI Automation (UIA), returning short-lived opaque element IDs and screen bounds.
+- `windows_native_inspect` enumerates actual foreground app accessibility controls through Windows UI Automation (UIA), returning short-lived opaque element IDs and screen bounds. Optional `{"query":"Save"}` uses a pinned MIT UFO²-derived **read-only lexical control filter** over actual foreground UIA candidates. No matching control → no actionable elementId. This does not invoke UFO² HostAgent/AppAgents or bypass Guardian.
 - `windows_native_action` invokes/focuses inspected controls or sets bounded text with exact UIA readback when supported. For complex tasks, inspect again after any navigation and verify external effects.
 
 These new tools require the same explicit local desktop-control flag and existing Guardian/audit pipeline. UIA may not expose custom game GUIs, protected desktops or certain Chrome content. Mouse/keyboard + the continuous screen-vision loop remain available as fallbacks. Real laptop tests are mandatory.

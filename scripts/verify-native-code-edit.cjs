@@ -28,6 +28,11 @@ function load(rel,mocks={}) {
 }
 const policy=load('src/lib/agent/guardian/policy.ts');
 const edits=load('src/lib/agent/tools/edit.ts',{'../guardian/policy':policy});
+const effects=load('src/lib/agent/core/effects.ts',{
+  '@/lib/db':{db:{}},
+  '../guardian/policy':policy,
+  './faults':{injectedFault:()=>null},
+});
 let audited=[];
 const guardian=load('src/lib/agent/guardian/guardian.ts',{
   '@/lib/db':{db:{auditLog:{create:async ({data})=>{audited.push(data);return {id:'record'}}}}},
@@ -42,6 +47,10 @@ function digest(t){return crypto.createHash('sha256').update(t,'utf8').digest('h
 async function run() {
  await check('Target edit is a real known Guardian tool',async()=>{
    assert.ok(guardian.GUARDIAN_KNOWN_TOOLS.includes('edit_file'));
+ });
+ await check('Edit is admitted as a durable effect, never an untracked write',async()=>{
+   assert.equal(effects.isEffectfulToolInvocation('edit_file',
+     {path:'source.ts',expectedSha256:'a'.repeat(64)}),true);
  });
  const file=path.join(workspace,'source.ts');
  await fsp.writeFile(file,'const answer = 41;\n');

@@ -81,8 +81,10 @@ class World {
    endPortalPresent:this.endPortal && this.dimension==='overworld',
    endPortalActivated:this.endPortal && this.dimension==='overworld',
    strongholdPortalFrameNearby:this.stronghold && this.dimension==='overworld',
-   wornNetherite:Object.entries(GEAR_SLOTS).every(([gear,slot])=>this.equipment[slot]===gear) &&
-     this.equipment.hand==='netherite_sword',
+   // Match real Mineflayer digest: armor slots and held weapon are SEPARATE
+   // independently observed predicates. Backpack ownership is not equipment.
+   wornNetherite:Object.entries(GEAR_SLOTS).every(([gear,slot])=>this.equipment[slot]===gear),
+   heldNetheriteSword:this.equipment.hand==='netherite_sword',
    wornDiamond:Object.values(GEAR_SLOTS).every(slot=>this.equipment[slot]==='diamond_'+
      (slot==='head'?'helmet':slot==='torso'?'chestplate':slot==='legs'?'leggings':'boots')),
    dragonPresent:this.dimension==='end'&&this.dragonPresent,
@@ -266,7 +268,8 @@ function run(seed,options={}){
  assert(w.events.some(e=>e[0]==='dragon_death_event'),'no simulated HP=0 Dragon death event');
  assert(w.events.some(e=>e[0]==='end_exit'),'no simulated return through End exit portal');
  assert.equal(w.dragonHP,0);assert.equal(w.crystals,0);
- assert.equal(w.world().wornNetherite,true,'all four current armor slots plus weapon must be equipped');
+ assert.equal(w.world().wornNetherite,true,'all four current armor slots must be equipped');
+ assert.equal(w.world().heldNetheriteSword,true,'Netherite sword must be actually held');
  assert.equal(w.dimension,'overworld','completed mission must return to Overworld');
  assert.equal(w.portalEyesInserted,12,'twelve actual Eyes inserted before End entry');
  assert(w.ledger.some(e=>e.kind==='smith_netherite'),'no actual recipe-backed netherite smithing');
@@ -279,6 +282,7 @@ function negatives(){
  assert.throws(()=>w.execute({kind:'smith_netherite',item:'netherite_helmet',base:'diamond_helmet'},c.status()),/WORLD_PRECONDITION/);
  w.inv.netherite_helmet=1;w.inv.netherite_chestplate=1;w.inv.netherite_leggings=1;w.inv.netherite_boots=1;w.inv.netherite_sword=1;
  assert.equal(w.world().wornNetherite,false,'backpack armor is never worn');
+ assert.equal(w.world().heldNetheriteSword,false,'backpack sword is never held');
  c.record({kind:'verify_dragon'},{ok:true,verified:false,proof:'dragon_victory'});
  assert.notEqual(c.status().milestones.dragonKilled,true,'unverified game event cannot kill dragon');
  assert.equal(validateCommand({command:'auto_goal',goal:GOAL,durationSeconds:43200}),null,'new goal command accepted');

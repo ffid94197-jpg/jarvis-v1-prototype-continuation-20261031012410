@@ -78,9 +78,10 @@ def run():
                 captured['transcribe'].get('beam_size')==1 and
                 captured['transcribe'].get('vad_filter') is True and
                 captured['transcribe'].get('condition_on_previous_text') is False else None)
-        check('Runtime reports the selected engine honestly',
-              lambda: (_ for _ in ()).throw(AssertionError()) if
-                backend.active_stt_engine()!='faster-whisper' else None)
+        with mock.patch.dict(os.environ,env,clear=False):
+            check('Runtime reports the selected engine honestly',
+                  lambda: (_ for _ in ()).throw(AssertionError()) if
+                    backend.active_stt_engine()!='faster-whisper' else None)
 
         def must_fail(changes):
             env2={**env,**changes}

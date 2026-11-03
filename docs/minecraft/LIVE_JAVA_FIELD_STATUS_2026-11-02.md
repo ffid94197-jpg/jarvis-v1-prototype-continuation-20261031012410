@@ -4,7 +4,7 @@
 
 **FULL DRAGON-FIRST → FULL NETHERITE JAVA SURVIVAL: NOT ACCEPTED.**
 
-This patch does not modify the primary PC Work JARVIS; all changes remain on an isolated prototype draft PR.
+This is a historical field-status snapshot. The local acceptance runner and evidence documentation are now included on Prototype JARVIS `main`; this does not certify the runtime or merge unaccepted Minecraft changes. The primary PC Work JARVIS remains separate and untouched.
 
 ## Grounded real Java server evidence
 

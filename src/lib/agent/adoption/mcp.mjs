@@ -67,8 +67,10 @@ export async function pinnedPublicHttpsPost(url,headers,requestBody){
   let settled=false;
   const fail=(message,status=502)=>{if(settled)return;settled=true;reject(new AdoptionError(message,status));};
   const req=https.request(url,{
-   method:'POST',headers,servername:url.hostname,
-   timeout:10000,maxHeaderSize:8192,
+   method:'POST',headers,servername:url.hostname,rejectUnauthorized:true,
+   // Disable cross-module keep-alive reuse; every request gets a freshly
+   // DNS-validated, explicitly pinned socket.
+   agent:false,timeout:10000,maxHeaderSize:8192,
    lookup:(hostname,options,callback)=>callback(null,selected.address,selected.family)
   },response=>{
    if(settled){response.resume();return;}

@@ -256,8 +256,9 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     if (tool === "windows_desktop_click" && args.elementToken !== undefined) {
       if (process.env.JARVIS_CUA_DRIVER_ENABLED !== "1")
         return {ok:false,reason:"Snapshot element clicks require the explicit JARVIS_CUA_DRIVER_ENABLED=1 opt-in."};
-      if (!Number.isInteger(args.pid) || (args.pid as number) <= 0 ||
+      if (!Number.isInteger(args.pid) || (args.pid as number) <= 0 || (args.pid as number) >= 2**32 ||
           typeof args.cuaWindowId !== "string" || !/^[0-9]{1,20}$/.test(args.cuaWindowId) ||
+          BigInt(args.cuaWindowId) <= 0n || BigInt(args.cuaWindowId) > 18446744073709551615n ||
           typeof args.elementToken !== "string" || !/^[A-Za-z0-9:_-]{1,128}$/.test(args.elementToken) ||
           !["left","right","double"].includes(String(args.button ?? "left")))
         return {ok:false,reason:"Use a fresh elementToken, PID and cuaWindowId from the same windows_desktop_observe result."};

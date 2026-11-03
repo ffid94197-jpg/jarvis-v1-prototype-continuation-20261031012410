@@ -96,7 +96,7 @@
 |---|---|---|
 | Piper `jarvis-high.onnx` | KEEP | Owner-selected British English local TTS; do not replace it. |
 | Vosk | KEEP / fallback | Existing offline STT backend. |
-| faster-whisper | HYBRID — next implementation | Add optional local-only STT backend with no-download model loading; Vosk remains default/fallback. |
+| faster-whisper | HYBRID — native adapter merged in this branch | Optional local-only STT backend; explicit local model path, no hub downloads, bounded PCM, Vosk remains default. | Optional package/model weights and Windows/CUDA quality/latency acceptance still pending. |
 | whisper.cpp | REFERENCE-ONLY | Alternative local Whisper runtime; avoid installing a third STT engine before comparative benchmark. |
 | Pipecat | REFERENCE-ONLY | Realtime pipeline patterns; current local browser/sidecar voice path is sufficient for V1. |
 | LiveKit | DEFER | Remote/mobile realtime transport only when that product scope is activated. |

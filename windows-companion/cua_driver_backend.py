@@ -78,7 +78,10 @@ def _element_record(element: Any, pid: int, window_id: int, tokens_usable: bool)
         "actions": list(getattr(element, "actions", None) or [])[:8],
     }
     token = getattr(element, "element_token", None)
-    if tokens_usable and isinstance(token, str) and token:
+    if (
+        tokens_usable and isinstance(token, str)
+        and re.fullmatch(r"[A-Za-z0-9:_-]{1,128}", token) is not None
+    ):
         row["elementToken"] = token
     return row
 

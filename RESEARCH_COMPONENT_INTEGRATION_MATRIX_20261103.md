@@ -55,8 +55,8 @@
 | Candidate | Decision | Native use / reason |
 |---|---|---|
 | Mem0 | HYBRID — partial | Existing owner-only store, explicit LOCAL_PRIVATE/CLOUD_APPROVED classification and opt-in recall. |
-| PropMem / MemEval | HYBRID | Atomic facts/provenance and memory-task evaluation are useful; preserve JARVIS schema and add deterministic retrieval benchmark, not a second memory database. |
-| Graphiti | HYBRID / REFERENCE | JARVIS world observations already have subject-predicate-value, provenance, confidence, observed/expiry/retraction timestamps. Borrow temporal fact semantics; do not deploy its unauthenticated reference servers or a separate graph database without a need. |
+| PropMem / MemEval | HYBRID — partial native patterns | Atomic facts/provenance and a deterministic lexical retrieval benchmark are represented by JARVIS's existing owner store, temporal World Model, and new multi-signal ranking. | Full proposition extraction and benchmark corpus still pending; no second memory database. |
+| Graphiti | HYBRID — native temporal recall merged in branch | JARVIS world observations have subject-predicate-value, provenance, confidence, observed/expiry/retraction timestamps; new owner-consented `world_recall` filters expired/retracted rows before ranking. | No Graphiti graph database/runtime; real Prisma acceptance pending. |
 | Letta | REFERENCE-ONLY | Study memory reflection/sleep; no autonomous promotion of private or model-inferred facts into owner memory. |
 | SimpleMem family | HYBRID | Borrow bounded multi-signal retrieval/ranking; embeddings and consolidation require benchmark and explicit privacy handling. |
 | Hindsight | REFERENCE-ONLY | Study episodic/semantic reflection and temporal retrieval; do not create a parallel memory authority/store. |
@@ -117,7 +117,7 @@
 ## Current closure priorities
 
 1. Add the optional faster-whisper backend while keeping Vosk as default and Piper unchanged.
-2. Strengthen Mem0/PropMem/SimpleMem-inspired lexical retrieval using deterministic ranking and a small golden retrieval benchmark.
+2. Strengthen Mem0/PropMem/SimpleMem-inspired lexical retrieval using deterministic ranking and a small golden retrieval benchmark; the native ranking and temporal World Model recall are now implemented, while the full benchmark corpus remains open.
 3. Run the existing Windows-local integration acceptance command on the owner PC; install no models automatically.
 4. After real PC acceptance, decide whether NeMo/Prompt Guard, OPA, sandboxing, OTel, vector search or remote realtime transport earns a measured integration.
 5. Do not import full external agent runtimes simply to make the matrix look complete.

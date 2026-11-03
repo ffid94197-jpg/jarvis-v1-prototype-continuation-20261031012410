@@ -1,5 +1,7 @@
 # JARVIS Autonomous Layer — Final Acceptance Programme
 
+**Repository note (2026-11-03):** This acceptance programme and its corpus validator are now tracked on Prototype JARVIS `main`. The branch/PR identifiers below are historical provenance references, not the current base. The 200,000-record corpus and six-milestone acceptance remain **OPEN / NOT ACCEPTED**.
+
 **Status:** OPEN / NOT ACCEPTED  
 **Base:** PR #4 head `fe6ea4461571684aa57941afa128152c42dfc66f`  
 **Branch:** `autonomy-100-percent-acceptance-20261102`  

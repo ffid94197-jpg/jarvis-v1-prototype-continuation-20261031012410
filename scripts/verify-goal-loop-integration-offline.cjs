@@ -20,7 +20,7 @@ const mocks={
  './prompts':{PLANNER_SYSTEM_PROMPT:'Only authorized tools',FINAL_REPORT_INSTRUCTION:'ground report',plannerUserPrompt:x=>x,sanitizeFinalReport:x=>x,enforceJarvisIdentity:t=>({text:t,corrected:false,detected:null}),JARVIS_IDENTITY_CONTRACT:'test contract'},
  './taskState':{transitionTask:async(id,to)=>{task.status=to;return {ok:true}}},
  './effects':{admitEffect:async()=>{throw Error('unexpected effect')},canonicalKey:()=>'',EFFECTFUL_TOOLS:new Set(),STEP_SCOPED_EFFECTS:new Set(),isEffectfulToolInvocation:()=>false},
- './verifier':{arbitrateCompletion:async()=>({verdict:'partial',predicateLines:['No live Minecraft win proof']})},
+ './verifier':{arbitrateCompletion:async()=>({verdict:'partial',predicateLines:['No live Minecraft win proof'],predicates:[]})},
  './autonomyGate':{AutonomyGate:class {completionWarning(){return null}observe(){return {stalled:false,guidance:''}}},REPEATABLE_INPUT_TOOLS:new Set(),desktopObjectiveRequiresActions:()=>false},
  './observation':{compactToolObservation:()=>'{"ok":true}'},'./goalPlanner':planModule,
  '../models/layaRouter':{selectTaskModel:async()=>({pinnedId:'local-test',source:'unit',privacy:'local',category:'game',modelId:'fixture'})},

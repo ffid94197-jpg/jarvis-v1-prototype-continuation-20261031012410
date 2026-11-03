@@ -49,7 +49,8 @@ class CuaDriverOfflineTests(unittest.TestCase):
         }
         self.assertTrue(_valid_element_target(valid))
         for key, value in (
-            ("pid", True), ("pid", -1), ("cuaWindowId", "../9001"),
+            ("pid", True), ("pid", -1), ("pid", 2**32), ("cuaWindowId", "../9001"),
+            ("cuaWindowId", "18446744073709551616"),
             ("elementToken", "stale token"), ("elementToken", "x" * 129),
         ):
             bad = dict(valid)

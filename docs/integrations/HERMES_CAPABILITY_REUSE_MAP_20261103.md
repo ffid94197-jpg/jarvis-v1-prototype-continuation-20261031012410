@@ -8,9 +8,11 @@ b2ca2c87716b67ddcbc27193a3ad946f41244714.
 
 ### Computer use — Cua Driver
 
-Hermes computer-use uses the Cua Driver backend. JARVIS now has an optional
-adapter for the same Cua Driver Python SDK inside its existing Windows
-companion. It does not start a Hermes agent or import Hermes model/tool loops.
+Hermes computer-use manages the Cua Driver native binary through a
+stdio-MCP transport. JARVIS now has an optional adapter for the same upstream
+Cua Driver project through its Python SDK inside the existing Windows
+companion. This intentionally changes the transport/lifecycle: no Hermes
+agent, no separate MCP server, and no imported Hermes model/tool loop.
 
 Status: code added on the stacked Hermes integration branch; local offline and
 real Windows acceptance are still required.

@@ -115,6 +115,26 @@ class CuaDriverOfflineTests(unittest.TestCase):
             else:
                 os.environ["JARVIS_CUA_DRIVER_ENABLED"] = old
 
+    def test_exact_window_observation_requires_complete_cua_target(self):
+        old = os.environ.get("JARVIS_CUA_DRIVER_ENABLED")
+        try:
+            os.environ["JARVIS_CUA_DRIVER_ENABLED"] = "1"
+            self.assertIsNone(check_input({
+                "operation": "desktop_observe", "pid": 42, "cuaWindowId": "9001"
+            }))
+            self.assertIsNotNone(check_input({
+                "operation": "desktop_observe", "pid": 42
+            }))
+            os.environ["JARVIS_CUA_DRIVER_ENABLED"] = "0"
+            self.assertIsNotNone(check_input({
+                "operation": "desktop_observe", "pid": 42, "cuaWindowId": "9001"
+            }))
+        finally:
+            if old is None:
+                os.environ.pop("JARVIS_CUA_DRIVER_ENABLED", None)
+            else:
+                os.environ["JARVIS_CUA_DRIVER_ENABLED"] = old
+
     def test_exact_window_type_and_keys_require_complete_cua_target(self):
         old = os.environ.get("JARVIS_CUA_DRIVER_ENABLED")
         try:

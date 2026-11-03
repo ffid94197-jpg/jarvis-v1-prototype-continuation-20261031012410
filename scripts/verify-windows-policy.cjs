@@ -91,6 +91,29 @@ assert(make({...base,JARVIS_MINECRAFT_LAN_HOST:'10.0.0.9'})('minecraft_companion
   'minecraft_companion_stop stays available with a non-loopback host');
 assert(!decide('windows_delete_all_files',{}).ok,'unknown tool denied');
 
+// Cua Driver element clicks must be bound to one exact observed window and
+// retain the existing explicit desktop-control opt-in.
+const cuaDecide = make({...base,JARVIS_EXPERIMENTAL_DESKTOP_CONTROL:'1'});
+const cuaElementArgs = {
+  pid:4242,cuaWindowId:'987654321',elementToken:'s0000002a:3',button:'left',
+};
+const cuaElement = cuaDecide('windows_desktop_click',cuaElementArgs);
+assert(cuaElement.ok && cuaElement.prepared.operation === 'desktop_click' &&
+  cuaElement.prepared.pid === 4242 && cuaElement.prepared.cuaWindowId === '987654321' &&
+  cuaElement.prepared.elementToken === 's0000002a:3',
+  'fresh CUA element click is Guardian-prepared with exact PID/window/token');
+for (const bad of [
+  {...cuaElementArgs,pid:0},
+  {...cuaElementArgs,pid:true},
+  {...cuaElementArgs,cuaWindowId:'../987654321'},
+  {...cuaElementArgs,elementToken:'stale token'},
+  {...cuaElementArgs,elementToken:'x'.repeat(129)},
+]) assert(!cuaDecide('windows_desktop_click',bad).ok,'malformed CUA element target denied');
+assert(!make(base)('windows_desktop_click',cuaElementArgs).ok,
+  'CUA element click still requires experimental desktop-control opt-in');
+assert(cuaDecide('windows_desktop_click',{x:200,y:150,button:'left'}).ok,
+  'legacy coordinate click remains supported with CUA opt-in');
+
 assert(decide('windows_browser_search',{query:'MrBeast oldest video'}).ok,'bounded web search accepted');
 assert(!decide('windows_browser_search',{query:'\nsecret'}).ok,'control characters rejected from search');
 assert(!decide('windows_browser_search',{query:'X'.repeat(300)}).ok,'large web search rejected');

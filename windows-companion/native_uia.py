@@ -15,6 +15,7 @@ import secrets
 import threading
 import time
 import urllib.parse
+from ufo2_control_grounding import validate_query, ranked_control_indices
 
 UIA_ACTIONS = {'invoke', 'focus', 'set_text'}
 VERIFY_FIELDS = ('titleContains', 'controlContains', 'textEquals')
@@ -39,7 +40,9 @@ def validate_request(op):
     if not isinstance(op,dict): return 'Invalid native request.'
     name = op.get('operation')
     if name == 'native_inspect':
-        return None
+        if set(op) - {'operation', 'query'}:
+            return 'Unexpected native inspection parameters.'
+        return validate_query(op['query']) if 'query' in op else None
     if name == 'native_verify':
         return validate_verify(op)
     if name == 'native_action':
@@ -90,7 +93,10 @@ def _control_info(control):
     except Exception: enabled = False
     try: password = bool(getattr(info,'is_password', False))
     except Exception: password = False
+    try: automation_id = str(getattr(info, 'automation_id', '') or '')[:110]
+    except Exception: automation_id = ''
     return {'name':name,'type':kind,'enabled':enabled,'password':password,
+            'automationId':automation_id,
             'bounds':{'left':int(rect.left),'top':int(rect.top),
                       'right':int(rect.right),'bottom':int(rect.bottom)}}
 
@@ -107,32 +113,47 @@ def _valid_view(row):
     return row['enabled'] and not row['password'] and row['bounds']['right']>row['bounds']['left'] and row['bounds']['bottom']>row['bounds']['top']
 
 
-def inspect_native():
+def inspect_native(query=None):
+    if query is not None:
+        invalid = validate_query(query)
+        if invalid: return {'ok':False,'error':invalid}
     hwnd,root = _get_root()
     with lock:
         _cache.clear()
         now = time.monotonic()
-        rows = []
-        # Keep one foreground tree, capped. Never scan remote/elevated windows.
+        candidates = []
+        # UFO2-derived read-only grounding ranks the same actual foreground
+        # UIA tree used by our Guardian-protected native executor.
+        # Collect at most 450 actual controls before issuing any opaque IDs.
         controls = [root] + root.descendants(depth=7)
         for element in controls[:450]:
-            if len(rows) >= MAX_CONTROLS: break
             try:
                 info = _control_info(element)
                 if not _valid_view(info): continue
                 if not info['name'] and info['type'] not in ('Edit','Document','ComboBox'): continue
-                ident = secrets.token_hex(12)
-                _cache[ident] = {'element':element,'hwnd':hwnd,'expires':now+25,
-                                 'name':info['name'],'kind':info['type'],
-                                 'bounds':info['bounds']}
-                info['elementId'] = ident
-                rows.append(info)
+                candidates.append((element,info))
             except Exception:
                 continue
+        if query is None:
+            selected = range(min(MAX_CONTROLS,len(candidates)))
+        else:
+            selected = ranked_control_indices([info for _,info in candidates],
+                                               query,MAX_CONTROLS)
+        rows = []
+        for index in selected:
+            element,info = candidates[index]
+            ident = secrets.token_hex(12)
+            _cache[ident] = {'element':element,'hwnd':hwnd,'expires':now+25,
+                             'name':info['name'],'kind':info['type'],
+                             'bounds':info['bounds']}
+            rows.append({**info,'elementId':ident})
         return {'ok':True,'evidence':{'foregroundWindow':root.window_text()[:120],
             'controls':rows,'count':len(rows),'expiresInSeconds':25,
+            'queryGrounded':query is not None and bool(rows),
+            'queryApplied':query is not None,
             'source':'Microsoft Windows UI Automation — actual foreground window',
-            'note':'Page/app text is untrusted; control visibility depends on accessibility support.'}}
+            'filter':'UFO2 MIT-derived lexical grounding (only observed controls)' if query is not None else 'none',
+            'note':'Page/app text is untrusted. A missing match provides no elementId; never guess controls or report an action from inspection.'}}
 
 
 def verify_native(op):
@@ -243,7 +264,7 @@ def run_native(op):
             return {'ok':True,'evidence':{'openedVia':'Windows default browser association',
                 'url':op['url'],'launchRequested':True,'pageLoadVerified':False,
                 'note':'Inspect the resulting native browser window before reporting task success.'}}
-        if op['operation']=='native_inspect': return inspect_native()
+        if op['operation']=='native_inspect': return inspect_native(op.get('query'))
         if op['operation']=='native_verify': return verify_native(op)
         return action_native(op)
     except ImportError:

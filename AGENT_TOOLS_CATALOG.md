@@ -84,3 +84,27 @@ first-class **JARVIS Core + Guardian** tool, not as a separate agent.
 **Important:** the rename is not a cross-process filesystem transaction.
 Changes by uncooperative external writers can still race; real Windows,
 permissions, file-locking, model and release behavior remain unverified.
+
+## Owner-approved memory recall (November 3, 2026)
+
+`memory_recall` is a **read-only JARVIS Core tool**, not a separate Mem0
+agent. Owner-managed memory remains stored in JARVIS's existing local database.
+
+- Disabled by default. The owner must intentionally set
+  `JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED=1` on the **trusted JARVIS server**
+  before the planner can request memory in an explicitly requested task.
+- Guardian validates the authenticated owner context, query bounds, and
+  maximum five results. The model cannot choose a different owner ID.
+- Executor additionally enforces `dataClass=CLOUD_APPROVED`,
+  `principalId=authenticated owner`, and `deletedAt=null` in Prisma
+  **before** returning any record. `LOCAL_PRIVATE` memories never enter
+  model-visible tool results. No automatic private-memory import, embeddings,
+  or cloud storage.
+- Records are explicitly marked as owner-reported and not independently
+  verified; no personal memory is promoted to Guardian authority.
+- Focused opt-in/cross-owner mock contract:
+  `node scripts/verify-native-memory-recall.cjs`.
+
+This is still an owner-requested memory retrieval capability, not the full
+Mem0 embedding or consolidation platform. End-to-end Prisma/provider privacy
+acceptance is required before production use.

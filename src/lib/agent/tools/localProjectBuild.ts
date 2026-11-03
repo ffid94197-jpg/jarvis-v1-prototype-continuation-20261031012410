@@ -25,7 +25,6 @@ const ENABLE_FLAG = "JARVIS_LOCAL_PROJECT_BUILD_ENABLED";
 const MAX_SOURCE_BYTES = 256 * 1024 * 1024;
 const MAX_CACHE_BYTES = 1024 * 1024 * 1024;
 const MAX_RUNTIME_BYTES = 128 * 1024 * 1024;
-const MAX_WORK_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 512 * 1024 * 1024;
 const MAX_FILES = 50_000;
 const MAX_OUTPUT_FILES = 25_000;
@@ -287,7 +286,7 @@ async function measureDirectory(root: string, limits: TreeLimits): Promise<TreeS
   async function visit(dir: string, relative: string): Promise<void> {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (!safeEntryName(entry.name)) throw new Error("Unsafe output filename");
+      if (!isSafeSandboxEntryName(entry.name)) throw new Error("Unsafe output filename");
       const childRel = relative ? relative + "/" + entry.name : entry.name;
       const child = path.join(dir, entry.name);
       const st = await fs.lstat(child);
@@ -489,7 +488,6 @@ export async function executeLocalProjectBuild(
   let stageRoot = "";
   let child: ChildProcess | undefined;
   let childClosed = false;
-  let childError: Error | null = null;
   let childCode: number | null = null;
   let keepStage = false;
   const runId = randomUUID();
@@ -558,7 +556,6 @@ export async function executeLocalProjectBuild(
       encoding: "utf8",
     }, (error, stdout, stderr) => {
       childClosed = true;
-      childError = error ?? null;
       childCode = typeof (error as any)?.code === "number" ? (error as any).code :
         error ? 1 : 0;
       resolveLaunch({
@@ -653,6 +650,8 @@ export async function executeLocalProjectBuild(
       artifactManifestSha256: artifact.sha256,
       packageJsonSha256: prepared.packageJsonSha256,
       packageLockSha256: prepared.packageLockSha256,
+      sourceSnapshotFiles: sourceStats.files,
+      sourceSnapshotBytes: sourceStats.bytes,
       completedAt: new Date().toISOString(),
     };
     await fs.writeFile(path.join(runRoot, "build-receipt.json"), JSON.stringify(receipt, null, 2) + "\n", {
@@ -672,6 +671,8 @@ export async function executeLocalProjectBuild(
         artifactManifestSha256: artifact.sha256,
         packageJsonSha256: prepared.packageJsonSha256,
         packageLockSha256: prepared.packageLockSha256,
+        sourceSnapshotFiles: sourceStats.files,
+        sourceSnapshotBytes: sourceStats.bytes,
         sandboxed: true,
         networkDisabled: true,
       },

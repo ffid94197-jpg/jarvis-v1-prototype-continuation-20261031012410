@@ -77,6 +77,15 @@ class CuaDriverOfflineTests(unittest.TestCase):
         )
         self.assertFalse(_action_record(result)["ok"])
 
+    def test_suspected_noop_is_not_success(self):
+        result = SimpleNamespace(
+            effect=SimpleNamespace(name="SUSPECTED_NOOP"),
+            error=None, route=SimpleNamespace(name="ACCESSIBILITY"),
+            delivery=SimpleNamespace(name="BACKGROUND"),
+            summary="no effect observed", evidence=[], hint="observe",
+        )
+        self.assertFalse(_action_record(result)["ok"])
+
     def test_guardian_companion_accepts_only_fresh_target_shape(self):
         old = os.environ.get("JARVIS_CUA_DRIVER_ENABLED")
         try:

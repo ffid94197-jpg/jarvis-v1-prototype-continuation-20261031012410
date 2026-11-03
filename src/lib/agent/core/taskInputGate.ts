@@ -1,4 +1,5 @@
 import {parseInventorySource} from "./inventoryIntegrity";
+import {needsPriorTaskContext} from "./priorTaskContext";
 export type PreparedObjective=
  | {ok:true;objective:string;inventoryRows:number}
  | {ok:false;status:400|413|422;code:string;message:string;inventoryRows:number};
@@ -15,7 +16,7 @@ export function prepareTaskObjective(input:unknown):PreparedObjective{
   &&/\b(?:csv|spreadsheet)\b/i.test(objective)
   &&/(?:\b(?:report|summary)\b|[_-](?:report|summary)\.(?:txt|md)\b)/i.test(objective);
  const original=/\boriginal\s+(?:inventory|product)\s+(?:data|list)\b/i.test(objective);
- if(deliverables&&original&&!source)
+ if(deliverables&&original&&!source&&!needsPriorTaskContext(objective))
   return {ok:false,status:422,code:"INVENTORY_SOURCE_UNAVAILABLE",
     message:"Original inventory source not fully parsed; no task started",inventoryRows:0};
  return {ok:true,objective,inventoryRows};

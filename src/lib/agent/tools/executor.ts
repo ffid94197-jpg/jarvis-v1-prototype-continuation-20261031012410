@@ -267,6 +267,7 @@ export async function executeTool(
     desktop?: DesktopPrepared;
     integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;arguments?:Record<string,unknown>};
     memory?: {ownerId:string;query:string;limit:number};
+    world?: {ownerId:string;query:string;limit:number};
   };
   switch (tool) {
     case "memory_recall": {

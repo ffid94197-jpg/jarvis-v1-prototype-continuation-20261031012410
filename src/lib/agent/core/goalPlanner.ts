@@ -33,9 +33,10 @@ export function requiresExternalActionEvidence(objective: string): boolean {
   if (/^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:(?:do|complete|finish)\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task)\b|(?:continue|resume|keep\s+going|carry\s+on)\b)/i.test(s)) return true;
   // Plain text generation can be answered in a conversation; delivering a
   // file, sending content, or changing the outside world cannot.
-  if (/^(?:write|draft|compose|generate)\s+(?:me\s+)?(?:a|an|the|some)\s+(?:poem|story|email|message|essay|description|summary|snippet|example|paragraph|reply)\b/i.test(s)
-       && !/\b(?:to (?:a|the) file|on disk|send|publish|deploy|save|upload|email it)\b/i.test(s)) return false;
-  if (/\b(?:research|inspect|investigate|analy[sz]e|implement|develop|refactor|configure|setup|set up|install|organize|finish|validate|review|prepare|migrate|run (?:ci|tests?|commands?|the server)|build|deploy|launch|publish|submit|upload|download|schedule|repair|fix|modify|update|create|delete|rename|move|open|click|type|navigate|play|craft|mine|collect|gather|defeat|obtain|equip|automate|execute)\b/i.test(s)) return true;
+  const plainTextBody = s.replace(/^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|))?/i, '');
+  if (/^(?:write|draft|compose|generate)\s+(?:me\s+)?(?:a|an|the|some)\s+(?:poem|story|email|message|essay|description|summary|snippet|example|paragraph|reply)\b/i.test(plainTextBody)
+       && !/\b(?:to (?:a|the) file|on disk|send|publish|deploy|save|upload|share|post|submit|print|attach|export|deliver|sync|email it)\b/i.test(plainTextBody)) return false;
+  if (/\b(?:write|draft|compose|generate|send|share|post|print|attach|export|deliver|sync|research|inspect|investigate|analy[sz]e|implement|develop|refactor|configure|setup|set up|install|organize|finish|validate|review|prepare|migrate|run (?:ci|tests?|commands?|the server)|build|deploy|launch|publish|submit|upload|download|schedule|repair|fix|modify|update|create|delete|rename|move|open|click|type|navigate|play|craft|mine|collect|gather|defeat|obtain|equip|automate|execute)\b/i.test(s)) return true;
   if (/\b(?:end.to.end|from scratch|autonomously|complete (?:the|a|these|three|all) (?:tasks?|mission|workflow|project)|multi.step|long.running)\b/i.test(s)) return true;
   return false;
 }

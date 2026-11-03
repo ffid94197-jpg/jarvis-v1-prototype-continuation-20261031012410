@@ -1,6 +1,6 @@
 # Minecraft Dragon-first → post-game Netherite simulation acceptance
 
-Date: 2026-11-02. Scope: JARVIS **Prototype** only; no change to the primary PC Work JARVIS.
+Date: 2026-11-02. Historical model evidence now preserved on Prototype JARVIS `main`. Scope: JARVIS **Prototype** only; no change to the primary PC Work JARVIS. The model is not Minecraft Java and does not constitute live acceptance.
 
 ## User-ordered success contract
 1. Start from a simulated Java survival player with **zero inventory items**, health and hunger.

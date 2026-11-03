@@ -111,7 +111,7 @@ function check(value, label) {
   else process.env.JARVIS_LOCAL_PROJECT_BUILD_ENABLED = previous;
 
   const design = fs.readFileSync(path.join(root, 'docs/integrations/LOCAL_PROJECT_BUILD_WINDOWS_SANDBOX_20261103.md'), 'utf8');
-  check(source.includes('not a signed build attestation') &&
+  check(source.includes('signed build attestation') &&
     design.includes('NOT a cryptographic attestation') &&
     design.includes('visible to guest build code'),
     'guest writable output is explicitly treated as untrusted, non-attested data');

@@ -19,8 +19,9 @@ function redactAll(value,depth=0){
 }
 function redactText(value){
  return value
+  .replace(/(Authorization\s*:\s*)[^\r\n]+/gi,'$1[redacted]')
   .replace(/(Bearer\s+)[a-z0-9._~+/-]{6,}/gi,'$1[redacted]')
-  .replace(/((?:api[_-]?key|access[_-]?token|password|secret|authorization)\s*[:=]\s*)[^\s,;}]+/gi,'$1[redacted]');
+  .replace(/((?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*)[^\s,;}]+/gi,'$1[redacted]');
 }
 export function redactUntrustedToolData(value,depth=0) {
  if(depth>12)return '[redacted]';

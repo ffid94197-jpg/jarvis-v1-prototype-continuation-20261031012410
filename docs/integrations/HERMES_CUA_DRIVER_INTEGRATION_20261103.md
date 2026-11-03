@@ -78,7 +78,8 @@ separately with windows_desktop_observe and a harmless test application.
 - Prefer an elementToken from the latest snapshot, paired with that row's PID
   and cuaWindowId, over guessed coordinates.
 - Use windows_desktop_click with elementToken, pid, cuaWindowId and button.
-- A new observation invalidates previous element tokens. Never reuse them.
+- Element tokens are single-use, expire after 25 seconds, and a new
+  observation invalidates all previous tokens. Never reuse them.
 - After an outcome-unknown response, observe before any retry.
 - A Cua action receipt is not proof that the user's larger task completed.
   Use the existing independent JARVIS verifier.

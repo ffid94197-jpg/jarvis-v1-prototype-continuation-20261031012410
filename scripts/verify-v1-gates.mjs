@@ -100,6 +100,15 @@ const checks=[
  // pauses durably and RESUMES from the persisted offset, and cancellation stops
  // execution without ever emitting a completed final event.
  ['AUTONOMY-RELIABILITY',['scripts/verify-autonomy-reliability.cjs']],
+ // Additional native features and source-integrity gates. These must run in the same
+ // local acceptance battery; isolated helper checks are not release certification.
+ ['AUTONOMY-DEEP-WINDOWS',['scripts/verify-autonomy-deep-windows.cjs']],
+ ['INVENTORY-INTEGRITY',['scripts/verify-inventory-integrity.cjs']],
+ ['NATIVE-CODE-EDIT',['scripts/verify-native-code-edit.cjs']],
+ ['NATIVE-MEMORY-RECALL',['scripts/verify-native-memory-recall.cjs']],
+ ['CORPUS-VALIDATOR',['scripts/autonomy/verify-corpus-validator.cjs']],
+ ['WEBBENCH-CANDIDATE-IMPORT',['scripts/autonomy/verify-webbench-candidate-import.cjs']],
+ ['WINDOWS-AGENT-ARENA-CANDIDATE',['scripts/autonomy/verify-windows-agent-arena-candidate.cjs']],
  ['MINECRAFT-EFFECT-IDENTITY',['scripts/verify-minecraft-effect-identity.cjs']],
  ['MINECRAFT-OWNER-IDENTITY',['windows-companion/minecraft-bot/verify_owner_identity_offline.cjs']],
  ['MINECRAFT-FRIEND-FIXTURE',['windows-companion/minecraft-bot/verify_friend_offline.cjs']],

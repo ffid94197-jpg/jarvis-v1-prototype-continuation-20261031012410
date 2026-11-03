@@ -13,6 +13,7 @@ import {
   requireOwnedTask,
   type AuthContext,
 } from "@/lib/agent/auth/session";
+import { prepareTaskObjective } from "@/lib/agent/core/taskInputGate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,10 +86,11 @@ export async function POST(req: NextRequest) {
     }
   } else {
     // ——— NEW task: the SERVER derives ownership ———
-    if (typeof body.objective !== "string" || body.objective.trim().length === 0) {
-      return Response.json({ error: "objective is required." }, { status: 400 });
+    const prepared = prepareTaskObjective(body.objective);
+    if (!prepared.ok) {
+      return Response.json({ error: prepared.message, code: prepared.code }, { status: prepared.status });
     }
-    objective = body.objective.trim().slice(0, 2000);
+    objective = prepared.objective;
     budget =
       typeof body.stepBudget === "number" && body.stepBudget > 0
         ? Math.min(Math.floor(body.stepBudget), process.env.JARVIS_EXPERIMENTAL_DESKTOP_CONTROL === "1" ? 48 : 24)

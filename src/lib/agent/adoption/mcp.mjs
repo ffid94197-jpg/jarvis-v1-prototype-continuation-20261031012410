@@ -28,10 +28,14 @@ export function isPublicMcpAddress(address){
  if(kind===6){
   const s=address.toLowerCase();
   if(s.includes('.')||s.startsWith('::ffff:'))return false;
-  const first=Number.parseInt(s.split(':')[0],16);
-  // Global-unicast only, except known special and documentation prefixes.
+  const [major,minor='0']=s.split(':');
+  const first=Number.parseInt(major,16);
+  const second=Number.parseInt(minor||'0',16);
+  // Global unicast only, excluding 6to4, Teredo and documentation ranges.
+  // Legacy tunnels can conceal a private IPv4 endpoint.
   return first>=0x2000&&first<=0x3fff &&
-    !s.startsWith('2001:db8:') && !s.startsWith('2001:0:');
+    first!==0x2002 &&
+    !(first===0x2001&&(second===0||second===0xdb8||second===0x10));
  }
  return false;
 }

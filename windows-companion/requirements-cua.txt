@@ -1,0 +1,5 @@
+# PyPI 0.38.0 wheels; hashes copied from the release file metadata.
+# This package declares no runtime Python dependencies.
+cua-driver==0.38.0 \
+    --hash=sha256:30e6fe57c70bbf5ed910268affce7e72c82a7d2469201c27432ad33d5487f258 \
+    --hash=sha256:739ada22c90828a567768e782d2ce9defb4f20e8345310474526896120da3d15

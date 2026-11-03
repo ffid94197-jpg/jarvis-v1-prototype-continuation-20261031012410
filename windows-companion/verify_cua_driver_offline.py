@@ -234,6 +234,13 @@ class CuaDriverOfflineTests(unittest.TestCase):
             self.assertEqual(second["observedWindow"]["selectionReason"], "explicit-window")
             self.assertEqual(backend._driver.snapshots, 2)
             self.assertNotIn(first_token, backend._tokens)
+
+            # Never silently inspect the first visible window when the actual
+            # foreground window cannot be identified or is absent from the list.
+            with self.assertRaisesRegex(ValueError, "Foreground window"):
+                asyncio.run(backend._observe({}))
+            with self.assertRaisesRegex(ValueError, "current foreground window"):
+                asyncio.run(backend._observe({"_foregroundTitle": "Not visible"}))
         finally:
             if old_module is None:
                 sys.modules.pop("cua_driver", None)

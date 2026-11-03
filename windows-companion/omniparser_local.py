@@ -10,8 +10,8 @@ import base64
 import http.client
 import io
 import json
+import math
 import os
-import re
 
 def normalize_detection_rows(data):
     if not isinstance(data, dict): return []
@@ -22,7 +22,7 @@ def normalize_detection_rows(data):
         if not isinstance(item,dict):continue
         box=item.get('bbox')
         if not isinstance(box,(tuple,list)) or len(box)!=4 or not all(
-            type(n) in (int,float) and 0<=n<=1 for n in box):
+            type(n) in (int,float) and math.isfinite(n) and 0<=n<=1 for n in box):
             continue
         if box[2]<=box[0] or box[3]<=box[1]:continue
         label=str(item.get('content',''))[:140]
@@ -60,7 +60,7 @@ def inspect_live_screen():
         if len(png)>2_000_000:
             return {'ok':False,'reason':'Private screen image exceeds local inference size limit'}
         payload=json.dumps({'image_base64':base64.b64encode(png).decode('ascii')}).encode('utf8')
-        conn=http.client.HTTPConnection('127.0.0.1',int(port),timeout=5)
+        conn=http.client.HTTPConnection('127.0.0.1',int(port),timeout=50)
         try:
             conn.request('POST','/parse',body=payload,headers={
                 'Content-Type':'application/json',

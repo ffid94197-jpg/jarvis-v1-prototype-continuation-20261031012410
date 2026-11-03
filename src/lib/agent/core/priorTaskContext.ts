@@ -5,7 +5,7 @@
  * Never silently hydrate previous requests into unrelated model calls.
  */
 export interface PriorTaskSnapshot { id: string; objective: string; createdAt?: Date | string; }
-const REFERENCE = /\b(?:previous|prior|earlier|original|last)\b.{0,85}\b(?:task|request|instruction|analysis|report|inventory|file|project|output|work)\b|\b(?:audit|compare|review|correct|repair|check|verify)\b.{0,90}\b(?:previous|earlier|original|prior)\b/i;
+const REFERENCE = /\b(?:previous|prior|earlier|last)\b.{0,85}\b(?:task|request|instruction|analysis|report|inventory|file|project|output|work)\b|\b(?:audit|compare|review|correct|repair|check|verify)\b.{0,90}\b(?:previous|earlier|original|prior)\b/i;
 const TOPIC = /\b(?:inventory|spreadsheet|report|document|minecraft|website|video|photo|image|app|code|budget|invoice|resume|email|file)\b/gi;
 export function needsPriorTaskContext(objective: string): boolean {
  return typeof objective === "string" && objective.length < 5000 && REFERENCE.test(objective);

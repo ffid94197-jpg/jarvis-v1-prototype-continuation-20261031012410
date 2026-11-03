@@ -85,7 +85,11 @@ function check(value, label) {
     guest.indexOf("$env:NODE_ENV = 'production'") > guest.indexOf("'ci', '--include=dev'"),
     'development dependencies installed before production build environment');
   check(guest.includes("'run', 'build'"), 'only declared npm build script executed');
-  check(guest.includes('Get-TreeStats') && guest.includes('2147483648'), 'guest worktree size/file quota enforced');
+  check(guest.includes('Get-TreeStats') && guest.includes('2147483648') &&
+    guest.includes('$directories.Count -gt 50000') && guest.includes('$stats.directories -gt 25000'),
+    'guest worktree and artifact file/directory quotas enforced');
+  check(source.includes('bounded directory quota') && source.includes('directories: number'),
+    'host source and output traversal enforce directory quotas');
   check(guest.includes('Stop-Tree') && guest.includes('shutdown.exe'), 'guest process tree and VM shutdown handled');
   check(source.includes('MAX_ARTIFACT_BYTES = 512') && source.includes('MAX_OUTPUT_BYTES = 520'),
     'artifact quota leaves bounded room for host result metadata');

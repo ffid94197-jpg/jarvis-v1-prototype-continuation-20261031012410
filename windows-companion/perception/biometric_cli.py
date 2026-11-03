@@ -135,7 +135,7 @@ def voice_vector(pcm):
 
 
 def active_stt_engine():
-    """Selected local speech engine. Vosk remains the default and fallback."""
+    """Selected local speech engine. Vosk remains the default; no silent engine fallback."""
     selected=os.environ.get('JARVIS_STT_ENGINE','vosk').strip().lower()
     if selected not in ('vosk','faster-whisper'):
         raise RuntimeError('STT_ENGINE_INVALID: Select vosk or faster-whisper.')

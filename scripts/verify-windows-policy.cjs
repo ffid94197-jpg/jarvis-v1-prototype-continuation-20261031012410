@@ -106,6 +106,8 @@ for (const bad of [
   {...cuaElementArgs,pid:0},
   {...cuaElementArgs,pid:true},
   {...cuaElementArgs,pid:2**32},
+  {...cuaElementArgs,cuaWindowId:'0'},
+  {...cuaElementArgs,cuaWindowId:'0987654321'},
   {...cuaElementArgs,cuaWindowId:'../987654321'},
   {...cuaElementArgs,cuaWindowId:'18446744073709551616'},
   {...cuaElementArgs,elementToken:'stale token'},

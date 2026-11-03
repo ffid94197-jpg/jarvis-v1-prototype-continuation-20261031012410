@@ -16,6 +16,35 @@
 | ClawBench | 283 task definitions | Browser workflows and saved traces | Apache-2.0 is reported for the task catalog. Verify each upstream source and whether task text can be redistributed. |
 | Odysseys2 | 100 tasks | Real user web requests with 982 rubric checks | Excellent long-horizon/human-request cases. Verify task-download license before import. |
 
+## Additional candidates reviewed — 2026-11-03
+
+| Source | Reported size | License / access | Strict 200K disposition |
+|---|---:|---|---|
+| ToolBench | 126,486 instruction instances | Repository declares Apache-2.0, but the maintainers state the data is automatically generated with the OpenAI API and intended for research/education; the API collection originates from RapidAPI. | **Exclude from `internet_original`** because prompts are model-generated, not original Internet-authored task instructions. It may be a separately labelled derived/tool-use stress set only after RapidAPI terms and commercial-use restrictions are reviewed. |
+| WorkArena-L1 / WorkArena++ | 19,912 unique instances from 33 atomic task definitions; 682 compositional WorkArena++ tasks | WorkArena instance data is gated on Hugging Face; access requires an individual request and acceptance of the dataset terms. | Do not count the 19,912 parameterized instances as 19,912 original prompts. Candidate only: review the 33 atomic and 682 compositional task definitions, request access, and verify task-text redistribution rights plus independent evaluators. |
+| AppWorld | 585 tasks (417 challenge, 168 normal) | Apache-2.0 for public portions; task/app/API-specific protected content is distributed in encrypted bundles, and redistribution of protected material or derivatives must remain encrypted. | Strong API/tool-use evaluation candidate. Do not copy protected task text, APIs, solutions or tests into plaintext corpus snapshots. Requires a compatible encrypted evaluation path and task-level difficulty review. |
+| Terminal-Bench 2.0 | Fewer than 1,000 tasks | Apache-2.0 dataset card; each task is packaged with an instruction, Docker environment and test script. | Strong independently-verifiable terminal/coding candidate. Pin the official revision and count only exact source tasks marked `very_hard`; no generated variants. |
+| SWE-bench | 2,294 instances; 500 Verified | Dataset combines GitHub issues and repository test environments. Underlying issue text and repository assets have per-repository provenance/rights; do not assume one blanket redistribution license. | Strong software-engineering candidate with fail-to-pass tests. Start with Verified, then review each source repository and exact issue record before importing verbatim text. |
+| AssistantBench | 214 tasks | BrowserGym lists it as a supported benchmark; its dataset card reports Apache-2.0. | Candidate for live-web research tasks; verify the exact official split, task difficulty and independent grader before counting. |
+| BrowserGym ecosystem | Includes WebArena (812), VisualWebArena (910), WorkArena, AssistantBench, WebLINX, OpenApps, TimeWarp and Knows | BrowserGym is an environment/framework; each benchmark package has separate data, setup, license and access requirements. | Treat as an integration framework, not one additive dataset. Do not sum overlapping task families or count demonstrations/traces as independently verifiable task instructions. |
+
+### Large-corpus feasibility finding
+
+The largest superficially attractive source, ToolBench, is explicitly model-generated and therefore fails this programme's `internet_original` rule. WorkArena's large L1 number is a count of instances drawn from 33 task definitions and its instance data is gated; parameterized instances do not become new original prompts. AppWorld's protected task material must remain encrypted. These sources can improve separate stress/evaluation tracks, but they do not justify claiming 200,000 original, very-hard, redistributable tasks.
+
+**Current verdict remains: 200K corpus NOT assembled and NOT run.** No source count is added until exact upstream snapshots, rights, verbatim prompt hashes, `very_hard` labels, safe environments and independent verifiers are all reviewed. Never relax these rules to reach the number.
+
+### Additional source links
+
+- ToolBench: https://github.com/OpenBMB/ToolBench
+- WorkArena: https://github.com/ServiceNow/WorkArena
+- WorkArena gated instances: https://huggingface.co/datasets/ServiceNow/WorkArena-Instances
+- AppWorld: https://github.com/StonyBrookNLP/appworld
+- Terminal-Bench: https://github.com/laude-institute/terminal-bench
+- Terminal-Bench 2.0 dataset card: https://huggingface.co/datasets/harborframework/terminal-bench-2.0
+- SWE-bench datasets: https://github.com/SWE-bench/SWE-bench/blob/main/docs/guides/datasets.md
+- BrowserGym: https://github.com/ServiceNow/BrowserGym
+
 ## What the numbers mean
 
 The candidate sources above are measured in thousands, not 200,000. Some counts overlap, some include non-hard tasks, and some are encrypted or license-restricted. Summing the row counts would be dishonest. A strict 200,000-record Internet-original corpus cannot be claimed until the source records are downloaded from authorized upstream locations, deduplicated and provenance-verified.

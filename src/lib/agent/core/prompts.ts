@@ -38,7 +38,7 @@ export const TOOL_CATALOG_JSON = `AVAILABLE TOOLS (execute real actions; argumen
 - windows_desktop_state {} — current foreground window and desktop resolution (experimental full-control mode).
 - windows_desktop_observe {} — RECOMMENDED FIRST: one current live Windows scene snapshot with visible windows and accessibility controls. When Cua Driver is enabled, controls include role, label, bounds, elementToken, pid and cuaWindowId. Prefer element-token clicks over guessed coordinates.
 - windows_desktop_click {"elementToken":"<fresh token>","pid":1234,"cuaWindowId":"5678","button":"left"} — exact-window background click using a token from the latest CUA observation. The token is invalid after a new observation or expiry; use all three identifiers from the same control row. Coordinate clicks remain supported.
-- If a CUA action reports outcomeUnknown, run windows_desktop_observe before retrying. Never blindly repeat a timed-out mutation.
+- If a CUA action reports outcomeUnknown, unverifiable or suspected_noop, run windows_desktop_observe before retrying. Never blindly repeat a timed-out or uncertain mutation.
 - windows_native_verify {"titleContains":"Settings"} — independently check ONE live foreground UI condition. Alternative args: {"controlContains":"Search"} or {"textEquals":"exact text"}. Never infer verification from action dispatch. Verify after native app interaction.
 - windows_desktop_windows {} — list visible Windows application windows and short-lived focus tokens.
 - windows_desktop_focus {"windowId":"<from list>"} — bring a previously inspected window to front.

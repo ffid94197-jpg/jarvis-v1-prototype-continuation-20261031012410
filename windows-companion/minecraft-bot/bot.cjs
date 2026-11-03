@@ -1208,9 +1208,9 @@ function naturalChat(text){
 bot.on('chat',(username,message)=>{
   if(username!==leader || !spawned || typeof message!=='string')return;
   const trimmed=message.trim();
-  const match=/^jarvis(?:buddy)?[,: ]+([a-z_]+)(?:\s+(.+))?$/i.exec(trimmed);
+  const match=/^(?:hey\s+)?jarvis(?:buddy)?[,: ]+([a-z_]+)(?:\s+(.+))?$/i.exec(trimmed);
   if(!match){
-    const natural=/^jarvis(?:buddy)?[,: ]+(.+)$/i.exec(trimmed);
+    const natural=/^(?:hey\s+)?jarvis(?:buddy)?[,: ]+(.+)$/i.exec(trimmed);
     if(natural)naturalChat(natural[1]);
     return;
   }

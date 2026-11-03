@@ -39,10 +39,89 @@ const codeHash=createHash('sha256').update(readFileSync(join(root,'src','lib','a
 const checks=[
  ['CORE-OUTCOME-HONESTY',['scripts/verify-task-outcome-honesty.cjs']],
  ['CORE-GAME-ACTION-GATE',['scripts/verify-core-goal-action-gate.cjs']],
+ // Conversational vs actionable separation, operator-facing JARVIS identity, and
+ // Windows companion gate diagnosability. Guards the fabricated-success class
+ // where an actionable objective settled `completed` after zero tool calls.
+ ['CORE-CONVERSATIONAL-SEPARATION',['scripts/verify-core-conversational-separation.cjs']],
+ ['MINECRAFT-NATURAL-LANGUAGE',['scripts/verify-minecraft-natural-language-routing.cjs']],
+ // One launcher authorization context must satisfy BOTH the startup preflight
+ // and the runtime companion gate. Guards the observed defect where an
+ // owner-authorized minecraft_companion_join was denied three times because the
+ // plain local-dev launcher supplied the session contract but not the companion
+ // agent flag and token. Proves the repair without lowering any gate.
+ ['COMPANION-LAUNCHER-AUTHORIZATION',['scripts/verify-companion-launcher-authorization.mjs']],
+ // Owner autonomy tiers (Part 2). Proves the tier is genuinely consumed by the
+ // task route, the Core loop and GoalProgressWatchdog (not a decorative toggle),
+ // that the default tier is byte-for-byte non-regressive, and that the profile
+ // can carry NO permission: absolute ceilings hold, the anti-spin repeat limit
+ // is identical at every tier, and a memory row not stamped OWNER_EXPLICIT is
+ // ignored so untrusted text cannot raise JARVIS's own autonomy.
+ ['AUTONOMY-TIERS',['scripts/verify-autonomy-tiers.cjs']],
+ // FIX 1: an authoritative numeric HTTP status must outrank provider message
+ // text. Guards the misclassification where 401 + "quota exceeded" became
+ // MODEL_RATE_LIMITED — which is retryable and a failover candidate, so a
+ // credential fault caused retries, backend switching and a "try again later"
+ // report instead of "fix your API key". Includes the six independent
+ // reproduction cases and 20,000 seeded adversarial iterations.
+ ['MODEL-ERROR-STATUS-PRECEDENCE',['scripts/verify-model-error-status-precedence.cjs']],
+ // FIX 2: JARVIS product identity vs accurate provider disclosure. Guards the
+ // owner-observed leak where "hi" answered "Hello! I am GLM — a large language
+ // model developed by Zhipu AI." Covers three root causes: the identity guard
+ // defeating itself on compound self-identification, the identity contract
+ // reaching the default Z.ai backend and local Ollama as prior ASSISTANT output
+ // instead of a system message, and the guard over-reaching into legitimate
+ // factual discussion of third-party models. Disclosure is preserved, not
+ // suppressed. Includes 4,000 seeded adversarial sentences in both directions.
+ ['JARVIS-IDENTITY-DISCLOSURE',['scripts/verify-jarvis-identity-disclosure.cjs']],
+ // FIX 3: Core must perform REAL actions for actionable objectives. Drives
+ // runTask behaviourally against the REAL completion verifier and a REAL
+ // temporary filesystem (not source contracts), covering the owner-observed
+ // dead end where a premature completion proposal ended the task instead of
+ // triggering bounded replanning. Proves the create-file / read-back /
+ // verify-contents / report-success acceptance path, that a wrong result is NOT
+ // reported as success, recovery from a transient tool failure, and that a
+ // Guardian denial never executes and is bounded.
+ ['CORE-ACTIONABLE-EXECUTION',['scripts/verify-core-actionable-execution.cjs']],
+ // Repaired and newly wired: this functional Core-interaction harness had rotted
+ // silently because it threw on any unmocked specifier and was never registered
+ // in package.json, so no battery caught it.
+ ['GOAL-LOOP-INTEGRATION',['scripts/verify-goal-loop-integration-offline.cjs']],
+ // FIX 4: the Windows companion / Minecraft authorization workflow. Drives the
+ // REAL Guardian gate for the exact tool the owner saw denied
+ // (minecraft_companion_join) on a simulated win32 realm, proves every missing or
+ // unsafe precondition is diagnosed by NAME, that the single supported workflow
+ // reaches NEXUS + Core + companion + Minecraft bridge, and that the bridge
+ // receives no secrets. Also pins the newly enforced host/port/player
+ // constraints and their agreement with the startup preflight.
+ ['COMPANION-BRIDGE-WORKFLOW',['scripts/verify-companion-bridge-workflow.cjs']],
+ // FIX 5: autonomy reliability under real fault conditions. Drives runTask with
+ // the REAL modelErrors classifier so FIX 1's decisions are exercised end to end:
+ // a transient provider timeout is retried, a credential failure is attempted
+ // exactly once and never echoed, a rate limit is retried, budget exhaustion
+ // pauses durably and RESUMES from the persisted offset, and cancellation stops
+ // execution without ever emitting a completed final event.
+ ['AUTONOMY-RELIABILITY',['scripts/verify-autonomy-reliability.cjs']],
+ // Additional native features and source-integrity gates. These must run in the same
+ // local acceptance battery; isolated helper checks are not release certification.
+ ['AUTONOMY-DEEP-WINDOWS',['scripts/verify-autonomy-deep-windows.cjs']],
+ ['LOCAL-DEV-NO-LOGIN',['scripts/verify-local-dev-no-login.cjs']],
+ ['INVENTORY-INTEGRITY',['scripts/verify-inventory-integrity.cjs']],
+ ['NATIVE-CODE-EDIT',['scripts/verify-native-code-edit.cjs']],
+ ['CUA-DRIVER-OFFLINE',['scripts/verify-cua-driver-offline.mjs']],
+ ['NATIVE-MEMORY-RECALL',['scripts/verify-native-memory-recall.cjs']],
+ ['CORPUS-VALIDATOR',['scripts/autonomy/verify-corpus-validator.cjs']],
+ ['WEBBENCH-CANDIDATE-IMPORT',['scripts/autonomy/verify-webbench-candidate-import.cjs']],
+ ['WINDOWS-AGENT-ARENA-CANDIDATE',['scripts/autonomy/verify-windows-agent-arena-candidate.cjs']],
  ['MINECRAFT-EFFECT-IDENTITY',['scripts/verify-minecraft-effect-identity.cjs']],
  ['MINECRAFT-OWNER-IDENTITY',['windows-companion/minecraft-bot/verify_owner_identity_offline.cjs']],
  ['MINECRAFT-FRIEND-FIXTURE',['windows-companion/minecraft-bot/verify_friend_offline.cjs']],
  ['MINECRAFT-PATHFINDER-FIXTURE',['windows-companion/minecraft-bot/verify_pathfinder_regression_offline.cjs']],
+ // High-fidelity replica of the mineflayer-pathfinder 2.4.5 cancellation state
+ // machine, driving the REAL lib/goto.js and lib/goals.js. Guards the sticky
+ // stopPathing latch defect that killed the first navigation of every manual
+ // action and blocked the one-cobblestone live milestone.
+ ['MINECRAFT-PATHFINDER-LIFECYCLE',['windows-companion/minecraft-bot/verify_pathfinder_lifecycle_offline.cjs']],
+ ['MINECRAFT-MCP-BRIDGE-E2E',['windows-companion/minecraft-bot/verify_mine_ai_mcp_live_bridge.cjs']],
 ];
 const offline=[];
 for(const [id,args] of checks){

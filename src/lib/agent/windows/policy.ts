@@ -17,6 +17,9 @@ export interface DesktopPrepared {
   pages?: number;
   appId?: string;
   windowId?: string;
+  pid?: number;
+  cuaWindowId?: string;
+  elementToken?: string;
   x?: number;
   y?: number;
   button?: "left" | "right" | "double";
@@ -225,7 +228,16 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         return {ok:false,reason:"UI expectation must contain 2–160 printable characters."};
       return {ok:true,prepared:{operation:"native_verify",[key]:value}};
     }
-    if (tool === "windows_desktop_observe") return {ok:true,prepared:{operation:"desktop_observe"}};
+    if (tool === "windows_desktop_observe") {
+      const hasTarget = args.pid !== undefined || args.cuaWindowId !== undefined;
+      if (hasTarget && (process.env.JARVIS_CUA_DRIVER_ENABLED !== "1" ||
+          !Number.isInteger(args.pid) || (args.pid as number) <= 0 || (args.pid as number) >= 2**32 ||
+          typeof args.cuaWindowId !== "string" || !/^[1-9][0-9]{0,19}$/.test(args.cuaWindowId) ||
+          (args.cuaWindowId.length === 20 && args.cuaWindowId > "18446744073709551615")))
+        return {ok:false,reason:"Exact-window observation requires a fresh PID and cuaWindowId from the latest CUA window list."};
+      return {ok:true,prepared:{operation:"desktop_observe",
+        ...(hasTarget ? {pid:args.pid as number,cuaWindowId:args.cuaWindowId as string}:{})}};
+    }
     if (tool === "windows_native_action") {
       if (typeof args.elementId !== "string" || !/^[a-f0-9]{24}$/.test(args.elementId) ||
           !["invoke","focus","set_text"].includes(String(args.action)))
@@ -250,6 +262,19 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         return {ok:false,reason:"Use a fresh windowId from windows_desktop_windows."};
       return {ok:true,prepared:{operation:"desktop_focus",windowId:args.windowId}};
     }
+    if (tool === "windows_desktop_click" && args.elementToken !== undefined) {
+      if (process.env.JARVIS_CUA_DRIVER_ENABLED !== "1")
+        return {ok:false,reason:"Snapshot element clicks require the explicit JARVIS_CUA_DRIVER_ENABLED=1 opt-in."};
+      if (!Number.isInteger(args.pid) || (args.pid as number) <= 0 || (args.pid as number) >= 2**32 ||
+          typeof args.cuaWindowId !== "string" || !/^[1-9][0-9]{0,19}$/.test(args.cuaWindowId) ||
+          (args.cuaWindowId.length === 20 && args.cuaWindowId > "18446744073709551615") ||
+          typeof args.elementToken !== "string" || !/^[A-Za-z0-9:_-]{1,128}$/.test(args.elementToken) ||
+          !["left","right","double"].includes(String(args.button ?? "left")))
+        return {ok:false,reason:"Use a fresh elementToken, PID and cuaWindowId from the same windows_desktop_observe result."};
+      return {ok:true,prepared:{operation:"desktop_click",pid:args.pid as number,
+        cuaWindowId:args.cuaWindowId,elementToken:args.elementToken,
+        button:(args.button ?? "left") as "left"|"right"|"double"}};
+    }
     if (tool === "windows_desktop_click" || tool === "windows_desktop_move") {
       if (!Number.isInteger(args.x) || !Number.isInteger(args.y) ||
           (args.x as number) < 0 || (args.y as number) < 0 ||
@@ -260,18 +285,26 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         x:args.x as number,y:args.y as number,
         ...(tool === "windows_desktop_click" ? {button:args.button as "left"|"right"|"double"}: {})}};
     }
+    const hasCuaWindowTarget = args.pid !== undefined || args.cuaWindowId !== undefined;
+    if (hasCuaWindowTarget && (process.env.JARVIS_CUA_DRIVER_ENABLED !== "1" ||
+        !Number.isInteger(args.pid) || (args.pid as number) <= 0 || (args.pid as number) >= 2**32 ||
+        typeof args.cuaWindowId !== "string" || !/^[1-9][0-9]{0,19}$/.test(args.cuaWindowId) ||
+          (args.cuaWindowId.length === 20 && args.cuaWindowId > "18446744073709551615")))
+      return {ok:false,reason:"Exact-window input requires a fresh PID and cuaWindowId from the latest CUA observation."};
     if (tool === "windows_desktop_type") {
       if (typeof args.text !== "string" || args.text.length < 1 || args.text.length > 400 ||
-          /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(args.text))
+          /[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/.test(args.text))
         return {ok:false,reason:"Text must be 1–400 characters without control bytes."};
-      return {ok:true,prepared:{operation:"desktop_type",text:args.text}};
+      return {ok:true,prepared:{operation:"desktop_type",text:args.text,
+        ...(hasCuaWindowTarget ? {pid:args.pid as number,cuaWindowId:args.cuaWindowId as string}:{})}};
     }
     if (tool === "windows_desktop_keys") {
       const allowed = new Set(["enter","esc","tab","space","backspace","delete","up","down","left","right","home","end","ctrl","alt","shift","win","a","c","v","x","s","f","r","t","w","d","e","n","p","z","y","f4"]);
       if (!Array.isArray(args.keys) || args.keys.length < 1 || args.keys.length > 4 ||
           !args.keys.every(k => typeof k === "string" && allowed.has(k)))
         return {ok:false,reason:"Use 1–4 documented keys; no arbitrary key scan codes."};
-      return {ok:true,prepared:{operation:"desktop_keys",keys:args.keys as string[]}};
+      return {ok:true,prepared:{operation:"desktop_keys",keys:args.keys as string[],
+        ...(hasCuaWindowTarget ? {pid:args.pid as number,cuaWindowId:args.cuaWindowId as string}:{})}};
     }
     if (tool === "windows_desktop_scroll") {
       if (!Number.isInteger(args.amount) || Math.abs(args.amount as number) > 5 || args.amount === 0)

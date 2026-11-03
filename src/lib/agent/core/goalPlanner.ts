@@ -26,22 +26,28 @@ export const MAX_GOALS = 8;
  * This is NOT an authorization to run tools or a substitute for a real verifier.
  */
 export function requiresExternalActionEvidence(objective: string): boolean {
-  const s=objective.trim().replace(/^(?:please\s+|jarvis[,!: ]+)+/i,'');
+  const s=objective.trim().replace(/^(?:please\s+|(?:hey\s+)?jarvis[,!: ]+)+/i,'');
   if (!s || s.length>5000) return false;
-  if (/^(?:what|why|who|when|where|how|explain|describe|tell me|can you explain|give me|summarize|translate|compare|what is|which is)\b/i.test(s)) return false;
+  if (/^(?:what|why|who|when|where|how|explain|describe|tell me|give me|summarize|translate|compare|what is|which is)\b/i.test(s) ||
+      /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:explain|describe|tell me how|show me how|teach me how|walk me through|give me instructions|tell me about)\b/i.test(s)) return false;
+  if (/^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:(?:do|complete|finish)\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task)\b|(?:continue|resume|keep\s+going|carry\s+on)\b)/i.test(s)) return true;
   // Plain text generation can be answered in a conversation; delivering a
   // file, sending content, or changing the outside world cannot.
-  if (/^(?:write|draft|compose|generate)\s+(?:me\s+)?(?:a|an|the|some)\s+(?:poem|story|email|message|essay|description|summary|snippet|example|paragraph|reply)\b/i.test(s)
-       && !/\b(?:to (?:a|the) file|on disk|send|publish|deploy|save|upload|email it)\b/i.test(s)) return false;
-  if (/\b(?:research|inspect|investigate|analy[sz]e|implement|develop|refactor|configure|setup|set up|install|organize|finish|validate|review|prepare|migrate|run (?:ci|tests?|commands?|the server)|build|deploy|launch|publish|submit|upload|download|schedule|repair|fix|modify|update|create|delete|rename|move|open|click|type|navigate|play|craft|mine|collect|gather|defeat|obtain|equip|automate|execute)\b/i.test(s)) return true;
+  const plainTextBody = s.replace(/^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|))?/i, '');
+  if (/^(?:write|draft|compose|generate)\s+(?:me\s+)?(?:a|an|the|some)\s+(?:poem|story|email|message|essay|description|summary|snippet|example|paragraph|reply)\b/i.test(plainTextBody)
+       && !/\b(?:to (?:a|the) file|on disk|send|publish|deploy|save|upload|share|post|submit|print|attach|export|deliver|sync|email it)\b/i.test(plainTextBody)) return false;
+  if (/\b(?:write|draft|compose|generate|send|share|post|print|attach|export|deliver|sync|research|inspect|investigate|analy[sz]e|implement|develop|refactor|configure|setup|set up|install|organize|finish|validate|review|prepare|migrate|run (?:ci|tests?|commands?|the server)|build|deploy|launch|publish|submit|upload|download|schedule|repair|fix|modify|update|create|delete|rename|move|open|click|type|navigate|play|craft|mine|collect|gather|defeat|obtain|equip|automate|execute)\b/i.test(s)) return true;
   if (/\b(?:end.to.end|from scratch|autonomously|complete (?:the|a|these|three|all) (?:tasks?|mission|workflow|project)|multi.step|long.running)\b/i.test(s)) return true;
   return false;
 }
 
 
 export function requiresGoalPlan(objective: string): boolean {
-  const s = objective.trim();
-  if (s.length < 12 || s.length > 5000 || /^(what|why|explain|tell me|how do|how to)\b/i.test(s)) return false;
+  const s = objective.trim().replace(/^(?:please\s+|(?:hey\s+)?jarvis[,!: ]+)+/i, '');
+  if (s.length > 5000 || /^(what|why|explain|tell me|how do|how to)\b/i.test(s)) return false;
+  const continuation = /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:(?:do|complete|finish)\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task)\b|(?:continue|resume|keep\s+going|carry\s+on)\b)/i.test(s);
+  if (continuation) return true;
+  if (s.length < 12) return false;
   return /\b(autonom(?:ous|ously)|end.to.end|from scratch|entire|complete (?:the |a )?(?:mission|project|workflow)|full (?:netherite|minecraft)|defeat (?:the )?ender dragon|netherite|stronghold|multi.step|long.running|research and (?:build|implement))\b/i.test(s) || (requiresExternalActionEvidence(s) && /\b(?:and|then|after|before|next|first|finally|,|three tasks|multiple steps)\b/i.test(s));
 }
 
@@ -111,18 +117,46 @@ function privateFingerprint(s: string): string {
   // A hashed fingerprint, never raw tool arguments/error text.
   return createHash('sha256').update(s).digest('hex');
 }
+/**
+ * Absolute DURABILITY bound on persisted in-scope replans. This must stay at
+ * least as large as the most permissive autonomy tier so that a tier downgrade
+ * can never make a legitimately persisted checkpoint unloadable — durability
+ * bounds and policy bounds are different things.
+ */
+export const GOAL_WATCHDOG_MAX_REVISIONS = 4;
+/**
+ * Default in-scope replan budget. This is the pre-tier behaviour (a hardcoded
+ * `revisions >= 2`), kept as the default so constructing a watchdog without an
+ * owner profile changes nothing.
+ */
+export const DEFAULT_GOAL_REPLAN_BUDGET = 2;
+export type GoalWatchdogLimits = { replanBudget?: number };
+
 export class GoalProgressWatchdog {
   private lastFailureKey='';
   private failures=0;
   private revisions=0;
   private pendingReplan=false;
-  constructor(saved?: unknown) {
+  /**
+   * How many times the Core may replan within scope before declaring the
+   * objective blocked. Supplied by the owner autonomy tier (Part 2); clamped to
+   * GOAL_WATCHDOG_MAX_REVISIONS so no setting can exceed the absolute bound.
+   * Raising it does NOT authorize anything — every replanned action is still
+   * individually authorized by Guardian.
+   */
+  private readonly maxRevisions: number;
+  constructor(saved?: unknown, limits?: GoalWatchdogLimits) {
+    const requested = typeof limits?.replanBudget === 'number' && Number.isFinite(limits.replanBudget)
+      ? Math.trunc(limits.replanBudget) : DEFAULT_GOAL_REPLAN_BUDGET;
+    this.maxRevisions = Number.isFinite(requested)
+      ? Math.max(0, Math.min(GOAL_WATCHDOG_MAX_REVISIONS, requested))
+      : DEFAULT_GOAL_REPLAN_BUDGET;
     if (saved === undefined) return;
     if (!isObj(saved) || saved.schemaVersion!==1 ||
         typeof saved.lastFailureHash!=='string' ||
         !/^(?:[0-9a-f]{64})?$/.test(saved.lastFailureHash) ||
         !Number.isInteger(saved.failures) || (saved.failures as number)<0 || (saved.failures as number)>2 ||
-        !Number.isInteger(saved.revisions) || (saved.revisions as number)<0 || (saved.revisions as number)>2 ||
+        !Number.isInteger(saved.revisions) || (saved.revisions as number)<0 || (saved.revisions as number)>GOAL_WATCHDOG_MAX_REVISIONS ||
         typeof saved.pendingReplan!=='boolean') {
       throw new Error('Invalid durable autonomous watchdog state');
     }
@@ -131,6 +165,8 @@ export class GoalProgressWatchdog {
     this.revisions=saved.revisions as number;
     this.pendingReplan=saved.pendingReplan;
   }
+  /** The replan budget actually in force, for honest NEXUS reporting. */
+  get replanBudget(){return this.maxRevisions;}
   snapshot():GoalWatchdogSnapshot {
     return {schemaVersion:1,lastFailureHash:this.lastFailureKey,failures:this.failures,revisions:this.revisions,pendingReplan:this.pendingReplan};
   }
@@ -141,9 +177,11 @@ export class GoalProgressWatchdog {
     const key=privateFingerprint(tool+'|'+JSON.stringify(args)+'|'+String(receipt.error??'').slice(0,160));
     this.failures=key===this.lastFailureKey?this.failures+1:1;
     this.lastFailureKey=key;
+    // Identical-failure threshold is a fixed safety property (mirrors
+    // REPEAT_LIMIT_ALL_TIERS) and is deliberately NOT tier-tunable.
     if (this.failures < 3) return 'continue';
     this.failures=0;
-    if (this.revisions>=2) return 'blocked';
+    if (this.revisions>=this.maxRevisions) return 'blocked';
     this.revisions++;
     this.pendingReplan=true;
     return 'replan';

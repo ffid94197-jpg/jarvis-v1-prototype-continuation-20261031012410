@@ -1,0 +1,42 @@
+name: JARVIS inventory integrity targeted Windows acceptance
+on:
+  push:
+    branches: [fix/inventory-integrity-20261031, validation/inventory-consolidation-20261031]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  integrity:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - name: Consolidated Windows inventory and planner simulation
+        run: |
+          if ((node -p "process.platform") -ne "win32") { throw "Native Windows required" }
+          node scripts/verify-inventory-consolidation-windows.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Consolidated simulation FAILED" }
+      - name: Inventory source, write guard and real-temp-file verifier regressions
+        run: |
+          if ((node -p "process.platform") -ne "win32") { throw "Native Windows required" }
+          node scripts/verify-inventory-integrity.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Inventory integrity failed" }
+      - name: Source retrieval and Guardian continuity
+        run: |
+          node scripts/verify-prior-task-recovery.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Original-source retrieval failed" }
+          node scripts/verify-goal-loop-integration-offline.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Core regression" }
+          node scripts/verify-path-containment.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Guardian path regression" }
+      - name: TypeScript compiler
+        run: |
+          npx tsc --noEmit --incremental false
+          if ($LASTEXITCODE -ne 0) { throw "TypeScript compiler failed" }

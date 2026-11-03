@@ -98,3 +98,7 @@ __pycache__/
 *.old
 *.sse.txt
 worklog.md
+
+# Owner-private Minecraft survival intent lease (never publish coordinates/owner)
+**/.jarvis-minecraft-mission.json
+**/.jarvis-minecraft-mission.json.*.tmp

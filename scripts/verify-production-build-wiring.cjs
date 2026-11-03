@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 /** Source contract test only; this does NOT compile Next. */
 const fs=require('node:fs'); const path=require('node:path');
-const app=path.resolve(__dirname,'..');const bundle=path.resolve(app,'..');
+const app=path.resolve(__dirname,'..');
+// The release scripts historically lived one level ABOVE the app in the owner's
+// Windows layout (...\JARVIS-V1-Developer\app), so they were never committed and
+// this gate could not run from the repository alone. They are now committed at
+// the repo root as well; accept either location, preferring the repository.
+const bundle=[app,path.resolve(app,'..')].find(dir=>fs.existsSync(path.join(dir,'BUILD_JARVIS_PRODUCTION.ps1')));
+if(!bundle)throw Error('BUILD_JARVIS_PRODUCTION.ps1 not found in the repository root or its parent directory');
 const pkg=JSON.parse(fs.readFileSync(path.join(app,'package.json'),'utf8'));
 const build=fs.readFileSync(path.join(bundle,'BUILD_JARVIS_PRODUCTION.ps1'),'utf8');
 const install=fs.readFileSync(path.join(bundle,'INSTALL_JARVIS_V1.ps1'),'utf8');

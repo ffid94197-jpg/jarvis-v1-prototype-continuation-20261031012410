@@ -1,0 +1,35 @@
+name: Minecraft Java survival-rule campaign (Dragon then Netherite)
+# Paused: GitHub Actions included minutes exhausted. This workflow is
+# manual-only; prefer local Windows test scripts (no GitHub-runner minutes).
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  survival-model:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Existing progression and late-game contracts
+        shell: bash
+        run: |
+          node windows-companion/minecraft-bot/verify_progression.cjs
+          node windows-companion/minecraft-bot/verify_late_game.cjs
+      - name: Actual planner versus independent survival world model
+        shell: bash
+        env:
+          JARVIS_MC_SIM_SEEDS: "1000"
+        run: node windows-companion/minecraft-bot/verify_java_survival_campaign.cjs
+      - name: Live-skill mocked protocol regressions (not a Minecraft server)
+        shell: bash
+        run: node windows-companion/minecraft-bot/verify_late_skills.cjs

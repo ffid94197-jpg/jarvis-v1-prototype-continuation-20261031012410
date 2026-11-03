@@ -10,9 +10,96 @@ export interface ModelMessage {
   role: "user" | "assistant";
   content: string;
 }
+
+/**
+ * Advisory-provider provenance.
+ *
+ * JARVIS Core owns the product identity; a provider adapter supplies
+ * intelligence and reports WHICH intelligence it supplied. Before this existed
+ * the bridge exposed only complete()/report(), so neither the Core nor the
+ * operator could learn which provider was actually serving a task. That is why
+ * a greeting was answered by the base model's own self-description ("I am GLM —
+ * developed by Zhipu AI"): nothing told the model it was speaking as JARVIS,
+ * and nothing let JARVIS disclose its real provider accurately when asked.
+ *
+ * These fields are metadata, never authority. They cannot authorize a tool,
+ * alter routing, or prove a result. They must never contain an API key.
+ */
+export interface ModelIdentity {
+  /** Adapter kind: "zai" | "ollama" | "openai-compatible" | "profile". */
+  backend: string;
+  /** Human-readable provider label, e.g. "Z.ai", "Ollama (local)", profile label. */
+  provider: string;
+  /** Actual configured model id, or an explicit "not specified" — never invented. */
+  modelId: string;
+  /** True when the endpoint is loopback-only. */
+  local: boolean;
+  /** Endpoint host, for operator diagnostics. Never includes credentials. */
+  host?: string;
+}
+
 export interface ModelBridge {
   complete(messages: ModelMessage[]): Promise<string>;
   report(messages: ModelMessage[], onDelta: (delta: string) => void): Promise<string>;
+  /**
+   * Which advisory provider is CURRENTLY serving. Declared as a getter-capable
+   * optional property so a failover wrapper can report the backend it actually
+   * switched to, instead of the one it started with.
+   */
+  readonly identity?: ModelIdentity;
+}
+
+/**
+ * Fold JARVIS's leading instruction messages into ONE real `system` message.
+ *
+ * ROOT CAUSE THIS FIXES (FIX 2). JARVIS Core encodes the planner contract, the
+ * extension catalogue, the LAYA advisory and the JARVIS identity contract as
+ * `role: "assistant"` messages, because the internal `ModelMessage` type only
+ * allows "user" | "assistant". The OpenAI-compatible adapter already converted
+ * that preface into a proper `system` message and the Anthropic adapter already
+ * hoisted it into the top-level `system` field — but the Z.ai SDK bridge (the
+ * DEFAULT backend, `JARVIS_MODEL_BACKEND=zai`) and the local Ollama bridge
+ * passed the roles straight through. Those providers therefore received the
+ * JARVIS identity contract as PRIOR ASSISTANT OUTPUT rather than as a system
+ * instruction, which is precisely why the base model felt free to answer a
+ * greeting with "I am GLM — a large language model developed by Zhipu AI": on
+ * the default path the instruction carried no system authority at all.
+ *
+ * Safety rules, unchanged from the original compatible-adapter implementation:
+ * only the assistant-only preface BEFORE the first user message is folded; later
+ * assistant turns are real dialogue history and are left alone; user text is
+ * never moved into system; a request with no user message is rejected.
+ */
+export function normalizeSystemInstructions(
+  messages: ModelMessage[],
+): Array<{ role: "system" | "user" | "assistant"; content: string }> {
+  const firstUser = messages.findIndex((m) => m.role === "user");
+  if (firstUser < 0) throw new Error("Model request missing user message.");
+  const prefix = messages.slice(0, firstUser);
+  if (prefix.some((m) => m.role !== "assistant")) throw new Error("Unexpected model instruction roles.");
+  const rest = messages.slice(firstUser).map((m) => ({ role: m.role, content: m.content }));
+  if (!prefix.length) return rest;
+  const instructions = prefix.map((m) => m.content).filter(Boolean).join("\n\n");
+  return instructions ? [{ role: "system", content: instructions }, ...rest] : rest;
+}
+
+/**
+ * Render the honest disclosure line the Core injects into the planner context.
+ * Deterministic and secret-free: it never emits an API key, and it says so
+ * explicitly when a model id was not configured rather than guessing one.
+ */
+export function modelIdentityContext(identity?: ModelIdentity): string {
+  if (!identity) {
+    return "CURRENT ADVISORY PROVIDER: unavailable (no bridge identity was reported). If asked which model is in use, say that JARVIS could not confirm the active provider rather than naming one.";
+  }
+  const parts = [
+    `backend=${identity.backend}`,
+    `provider="${identity.provider}"`,
+    `model="${identity.modelId}"`,
+    `scope=${identity.local ? "local loopback" : "cloud"}`,
+  ];
+  if (identity.host) parts.push(`host=${identity.host}`);
+  return `CURRENT ADVISORY PROVIDER (accurate disclosure metadata — this is NOT your identity): ${parts.join(" ")}`;
 }
 
 import { modelRequestDeadlineMs } from "./modelDeadline";
@@ -50,13 +137,22 @@ function checkHttpStatus(response: Response) {
 
 function createOllamaBridge(): ModelBridge {
   const settings = resolveOllamaSettings();
+  // Ollama's /api/chat honours role:"system", so the identity contract must be
+  // delivered there rather than as a prior assistant turn.
   const body = (messages: ModelMessage[], stream: boolean, json: boolean) => JSON.stringify({
     model: settings.model,
-    messages,
+    messages: normalizeSystemInstructions(messages),
     stream,
     ...(json ? { format: "json" } : {}),
   });
   return {
+    identity: {
+      backend: "ollama",
+      provider: "Ollama (local loopback)",
+      modelId: settings.model,
+      local: true,
+      host: new URL(settings.url).host,
+    },
     async complete(messages) {
       const response = await fetch(settings.url, {
         method: "POST",
@@ -121,9 +217,22 @@ async function createZaiBridge(): Promise<ModelBridge> {
   const { default: ZAI } = await import("z-ai-web-dev-sdk");
   const client = await ZAI.create();
   return {
+    // The Z.ai SDK selects the concrete model itself; this call passes no model
+    // id, so the honest disclosure is that it was not specified by JARVIS.
+    // Never invent a version number here.
+    identity: {
+      backend: "zai",
+      provider: "Z.ai",
+      modelId: process.env.JARVIS_ZAI_MODEL?.trim() || "not specified (selected by the Z.ai SDK)",
+      local: false,
+    },
     async complete(messages) {
       const r = await client.chat.completions.create({
-        messages: messages.map(m => ({role: m.role, content: m.content})),
+        // The Z.ai SDK speaks the OpenAI chat schema, which distinguishes a system
+        // instruction from prior assistant output. Sending the JARVIS identity
+        // contract as "assistant" is what let the base model answer a greeting
+        // with its own vendor identity.
+        messages: normalizeSystemInstructions(messages),
         thinking: { type: "disabled" },
       });
       const text = r?.choices?.[0]?.message?.content;
@@ -132,7 +241,11 @@ async function createZaiBridge(): Promise<ModelBridge> {
     },
     async report(messages, onDelta) {
       const chunks = await client.chat.completions.create({
-        messages: messages.map(m => ({role: m.role, content: m.content})),
+        // The Z.ai SDK speaks the OpenAI chat schema, which distinguishes a system
+        // instruction from prior assistant output. Sending the JARVIS identity
+        // contract as "assistant" is what let the base model answer a greeting
+        // with its own vendor identity.
+        messages: normalizeSystemInstructions(messages),
         stream: true,
         thinking: { type: "disabled" },
       });

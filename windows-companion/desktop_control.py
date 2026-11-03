@@ -38,9 +38,27 @@ def is_enabled():
 def check_input(op):
     if not isinstance(op,dict): return 'Invalid desktop request.'
     name=op.get('operation')
-    if name in ('desktop_state','desktop_windows','desktop_observe'): return None
+    if name in ('desktop_state','desktop_windows'): return None
+    if name == 'desktop_observe':
+        if 'pid' in op or 'cuaWindowId' in op:
+            if (os.environ.get('JARVIS_CUA_DRIVER_ENABLED') != '1' or
+                type(op.get('pid')) is not int or not 0 < op['pid'] < 2**32 or
+                not isinstance(op.get('cuaWindowId'), str) or
+                not re.fullmatch(r'[1-9][0-9]{0,19}', op['cuaWindowId']) or
+                not 0 < int(op['cuaWindowId']) < 2**64):
+                return 'Invalid exact-window CUA observation target.'
+        return None
     if name=='desktop_focus':
         return None if isinstance(op.get('windowId'),str) and re.fullmatch(r'[a-f0-9]{24}',op['windowId']) else 'Use a fresh windowId.'
+    if name == 'desktop_click' and 'elementToken' in op:
+        if (os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1' and
+            type(op.get('pid')) is int and 0 < op['pid'] < 2**32 and
+            isinstance(op.get('cuaWindowId'), str) and re.fullmatch(r'[1-9][0-9]{0,19}', op['cuaWindowId']) and
+            0 < int(op['cuaWindowId']) < 2**64 and
+            isinstance(op.get('elementToken'), str) and re.fullmatch(r'[A-Za-z0-9:_-]{1,128}', op['elementToken']) and
+            op.get('button', 'left') in ('left','right','double')):
+            return None
+        return 'Invalid or incomplete CUA element target.'
     if name in ('desktop_move','desktop_click'):
         if any(type(op.get(k)) is not int or not 0<=op[k]<16000 for k in ('x','y')):
             return 'Invalid screen coordinates.'
@@ -50,9 +68,16 @@ def check_input(op):
     if name=='minecraft_input':
         return None if op.get('action') in ('forward','back','left','right','jump','sneak','attack','use','inventory') and \
             type(op.get('durationMs')) is int and 100 <= op['durationMs'] <= 1500 else 'Invalid bounded Minecraft input.'
+    if name in ('desktop_type','desktop_keys') and os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1':
+        if ('pid' not in op or 'cuaWindowId' not in op or
+            type(op.get('pid')) is not int or not 0 < op['pid'] < 2**32 or
+            not isinstance(op.get('cuaWindowId'), str) or
+            not re.fullmatch(r'[1-9][0-9]{0,19}', op['cuaWindowId']) or
+            not 0 < int(op['cuaWindowId']) < 2**64):
+            return 'CUA text and key input require the exact freshly observed PID and window ID.'
     if name=='desktop_type':
         s=op.get('text')
-        return None if isinstance(s,str) and 1<=len(s)<=400 and not any(ord(c)<32 and c not in '\t\n\r' for c in s) else 'Invalid text.'
+        return None if isinstance(s,str) and 1<=len(s)<=400 and not any(ord(c)<32 and c not in '\\t\\n\\r' for c in s) else 'Invalid text.'
     if name=='desktop_keys':
         seq=op.get('keys')
         return None if isinstance(seq,list) and 1<=len(seq)<=4 and all(isinstance(k,str) and k in KEYS for k in seq) else 'Invalid key combination.'
@@ -96,10 +121,18 @@ def screen_info():
     user=ctypes.windll.user32
     user.GetForegroundWindow.restype=wintypes.HWND
     user.GetWindowTextW.argtypes=[wintypes.HWND,wintypes.LPWSTR,ctypes.c_int]
+    user.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
+    user.GetWindowThreadProcessId.restype=wintypes.DWORD
     w,h=int(user.GetSystemMetrics(0)),int(user.GetSystemMetrics(1))
     title=''
+    foreground_pid=0
+    foreground_window_id=0
     hwnd=user.GetForegroundWindow()
     if hwnd:
+        foreground_window_id=int(hwnd)
+        pid=wintypes.DWORD()
+        user.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
+        foreground_pid=int(pid.value)
         buf=ctypes.create_unicode_buffer(150)
         user.GetWindowTextW(hwnd,buf,len(buf))
         title=buf.value[:100]
@@ -107,8 +140,25 @@ def screen_info():
     cursor=None
     if user.GetCursorPos(ctypes.byref(point)):
         cursor={'x':point.x,'y':point.y}
-    return {'width':w,'height':h,'foregroundTitle':title,'cursor':cursor,
-        'emergencyStopLatched':_stopped.is_set(),'scope':'Primary Windows desktop; interactive user session only'}
+    return {'width':w,'height':h,'foregroundTitle':title,
+        'foregroundPid':foreground_pid,'foregroundWindowId':str(foreground_window_id),
+        'cursor':cursor,'emergencyStopLatched':_stopped.is_set(),
+        'scope':'Primary Windows desktop; interactive user session only'}
+
+
+def check_cua_coordinates(op, info):
+    """Reject primary-display CUA coordinates outside the actual display."""
+    if not isinstance(op,dict) or op.get('operation') not in ('desktop_click','desktop_move'):
+        return None
+    if op.get('operation') == 'desktop_click' and 'elementToken' in op:
+        return None
+    width=info.get('width') if isinstance(info,dict) else None
+    height=info.get('height') if isinstance(info,dict) else None
+    x,y=op.get('x'),op.get('y')
+    if (type(width) is not int or width<=0 or type(height) is not int or height<=0 or
+        type(x) is not int or type(y) is not int or x<0 or y<0 or x>=width or y>=height):
+        return 'CUA coordinates are outside the actual primary display bounds.'
+    return None
 
 
 def observe_desktop():
@@ -142,15 +192,25 @@ def observe_desktop():
 
 def emergency_monitor():
     if os.name!='nt':return
+    def release_cua_session():
+        if os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1':
+            try:
+                from cua_driver_backend import emergency_stop
+                emergency_stop()
+            except Exception:
+                pass
     try:
         user=ctypes.windll.user32
         while True:
             # 0x11 Ctrl, 0x10 Shift, 0x7B F12
             if all(user.GetAsyncKeyState(k)&0x8000 for k in (0x11,0x10,0x7B)):
                 _stopped.set()
+                release_cua_session()
+                return
             time.sleep(.08)
     except Exception:
         _stopped.set() # if input-safety monitor failed, don't continue blindly
+        release_cua_session()
 
 
 def all_windows():
@@ -219,6 +279,34 @@ def run_action(op):
     bad=check_input(op)
     if bad:return fail(bad)
     if _stopped.is_set():return fail('Emergency stop engaged; restart JARVIS to reset.')
+    name=op.get('operation')
+    if os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1' and name in (
+        'desktop_observe','desktop_click','desktop_move','desktop_type','desktop_keys'
+    ):
+        with _lock:
+            if _stopped.is_set():return fail('Emergency stop engaged.')
+            try:
+                from cua_driver_backend import run_action as run_cua_action
+                scene_info=None
+                if name in ('desktop_click','desktop_move') and 'elementToken' not in op:
+                    scene_info=screen_info()
+                    bounds_error=check_cua_coordinates(op,scene_info)
+                    if bounds_error:return fail(bounds_error)
+                if name == 'desktop_observe':
+                    scene_info=screen_info()
+                    op=dict(op)
+                    op['_foregroundPid']=scene_info.get('foregroundPid',0)
+                    op['_foregroundWindowId']=scene_info.get('foregroundWindowId','')
+                    op['_foregroundTitle']=scene_info.get('foregroundTitle','')
+                receipt=run_cua_action(op)
+                if name == 'desktop_observe' and receipt.get('ok') and isinstance(receipt.get('evidence'),dict):
+                    if scene_info is not None:
+                        receipt['evidence']['screenInfo']=scene_info
+                    else:
+                        receipt['evidence']['screenInfoUnavailable']=True
+                return receipt
+            except Exception as exc:
+                return fail('Cua Driver dispatch failed safely: '+type(exc).__name__)
     with _lock:
         if _stopped.is_set():return fail('Emergency stop engaged.')
         try:

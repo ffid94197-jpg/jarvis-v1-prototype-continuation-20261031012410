@@ -18,9 +18,14 @@ export const metadata: Metadata = {
   description:
     "A JARVIS-style holographic orb console rebuilt from the original Ultron source. Three.js orb, hand-gesture tracking, and an AI assistant.",
   keywords: ["JARVIS", "ULTRON", "Three.js", "holographic orb", "AI assistant", "Next.js"],
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
+  // No `icons` entry on purpose. This previously pointed the browser tab at
+  // https://z-cdn.chatglm.cn/z-ai/static/logo.svg — third-party GLM/Z.ai
+  // scaffold branding left over in the JARVIS shell. That mislabelled the
+  // product in the tab and made a loopback-only development console issue a
+  // request to a foreign CDN on every load (an offline-build and privacy
+  // liability). The owner should supply a JARVIS/ULTRON-derived icon under
+  // public/ and reference it here; note that public/logo.svg is ALSO the Z.ai
+  // "Z" mark and must not be reused as the JARVIS icon.
 };
 
 export default function RootLayout({

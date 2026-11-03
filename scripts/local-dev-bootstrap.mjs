@@ -4,8 +4,62 @@
  * and never skip a failed Prisma initialization while starting the UI.
  */
 import {spawnSync} from 'node:child_process';
+import {randomBytes} from 'node:crypto';
 import {existsSync} from 'node:fs';
 import {join} from 'node:path';
+
+/** Minimum companion token length enforced by src/lib/agent/windows/policy.ts. */
+export const COMPANION_TOKEN_MIN_LENGTH = 32;
+
+/** Environment keys that mean the operator intends to use companion features. */
+const COMPANION_FEATURE_FLAGS = [
+  'JARVIS_WINDOWS_AGENT_ENABLED',
+  'JARVIS_MINECRAFT_LAN_ENABLED',
+  'JARVIS_SCREEN_WATCH_ENABLED',
+  'JARVIS_BROWSER_AGENT_ENABLED',
+  'JARVIS_WINDOWS_UI_CONTROL_ENABLED',
+  'JARVIS_EXPERIMENTAL_DESKTOP_CONTROL',
+];
+
+/**
+ * True when the operator has configured any Windows-companion capability.
+ * Used to stop the plain UI launcher from silently starting a session in which
+ * every companion tool is denied.
+ */
+export function companionFeatureRequested(env = process.env) {
+  if (COMPANION_FEATURE_FLAGS.some((key) => env[key] === '1')) return true;
+  const token = typeof env.JARVIS_WINDOWS_COMPANION_TOKEN === 'string' ? env.JARVIS_WINDOWS_COMPANION_TOKEN : '';
+  return token.length >= COMPANION_TOKEN_MIN_LENGTH;
+}
+
+/**
+ * Single source of truth for the Windows companion authorization context.
+ *
+ * ROOT CAUSE THIS FIXES: the runtime gate in src/lib/agent/windows/policy.ts
+ * requires JARVIS_WINDOWS_AGENT_ENABLED=1 and a >=32-character
+ * JARVIS_WINDOWS_COMPANION_TOKEN *in addition to* the loopback development
+ * contract that src/lib/agent/auth/session.ts checks. Only
+ * start-windows-agent.mjs supplied them. So an owner who launched with
+ * `npm run dev` / `dev:no-login` got a fully authenticated NEXUS session
+ * (HTTP 200 from the local auth endpoint) in which EVERY companion tool —
+ * including an otherwise authorized minecraft_companion_join — was permanently
+ * denied. Two launchers produced two different authorization contexts and
+ * nothing told the operator which one they were in.
+ *
+ * This weakens nothing. The token is generated fresh per launch when the
+ * operator has not pinned one, it is never derived from model output, and the
+ * loopback/origin/development contract is unchanged.
+ */
+export function companionAuthorizationContext(env = process.env) {
+  const existing = typeof env.JARVIS_WINDOWS_COMPANION_TOKEN === 'string'
+    ? env.JARVIS_WINDOWS_COMPANION_TOKEN.trim() : '';
+  return {
+    JARVIS_WINDOWS_AGENT_ENABLED: '1',
+    JARVIS_WINDOWS_COMPANION_TOKEN: existing.length >= COMPANION_TOKEN_MIN_LENGTH
+      ? existing
+      : randomBytes(48).toString('hex'),
+  };
+}
 
 export function localDevEnvironment(input=process.env) {
   if(input.NODE_ENV==='production') throw Error('Refusing passwordless development in production');
@@ -16,6 +70,11 @@ export function localDevEnvironment(input=process.env) {
     JARVIS_PUBLIC_ORIGIN:'http://127.0.0.1:3000',
     JARVIS_LOCAL_DEV_NO_LOGIN:'1',
     JARVIS_LOCAL_DEV_BIND:'127.0.0.1',
+    // The long-horizon planner is advisory only; Guardian still authorizes
+    // every effect. Enable it by default in this loopback-only dev bootstrap,
+    // while preserving an explicit operator opt-out with value "0".
+    JARVIS_GOAL_PLANNER_ENABLED: typeof input.JARVIS_GOAL_PLANNER_ENABLED === 'string'
+      ? input.JARVIS_GOAL_PLANNER_ENABLED : '1',
   };
 }
 

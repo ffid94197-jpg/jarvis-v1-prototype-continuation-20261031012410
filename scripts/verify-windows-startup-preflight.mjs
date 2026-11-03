@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import net from 'node:net';
 import {validateLocalWindowsEnvironment,assertPortAvailable,assertWindowsServicesFree} from './windows-startup-preflight.mjs';
 
+// A COMPLETE valid launcher environment, matching what start-windows-agent.mjs
+// actually builds: the isolated localhost dev config plus the two companion
+// preconditions the runtime gate also enforces.
 const baseline={NODE_ENV:'development',JARVIS_LOCAL_DEV_NO_LOGIN:'1',
  JARVIS_LOCAL_DEV_BIND:'127.0.0.1',JARVIS_PUBLIC_ORIGIN:'http://127.0.0.1:3000',
- DATABASE_URL:'file:./jarvis-local-minecraft-test.db',JARVIS_MINECRAFT_LAN_ENABLED:'0'};
+ DATABASE_URL:'file:./jarvis-local-minecraft-test.db',JARVIS_MINECRAFT_LAN_ENABLED:'0',
+ JARVIS_WINDOWS_AGENT_ENABLED:'1',JARVIS_WINDOWS_COMPANION_TOKEN:'a'.repeat(64)};
 let checked=0;
 function accepted(env){assert.equal(validateLocalWindowsEnvironment({...baseline,...env}),true);checked++;}
 function denied(env){assert.throws(()=>validateLocalWindowsEnvironment({...baseline,...env}));checked++;}
@@ -13,6 +17,21 @@ for(const [name,value] of [
  ['NODE_ENV','production'],['JARVIS_LOCAL_DEV_NO_LOGIN','0'],
  ['JARVIS_LOCAL_DEV_BIND','0.0.0.0'],['JARVIS_PUBLIC_ORIGIN','http://localhost:3000'],
  ['DATABASE_URL','file:./production.db']])denied({[name]:value});
+// Companion preconditions must fail at STARTUP, not as a mid-task Guardian
+// denial. These are the conditions that made an authorized
+// minecraft_companion_join look like a policy rejection.
+denied({JARVIS_WINDOWS_AGENT_ENABLED:'0'});
+denied({JARVIS_WINDOWS_AGENT_ENABLED:undefined});
+denied({JARVIS_WINDOWS_COMPANION_TOKEN:'a'.repeat(31)});
+denied({JARVIS_WINDOWS_COMPANION_TOKEN:''});
+denied({JARVIS_WINDOWS_COMPANION_TOKEN:undefined});
+accepted({JARVIS_WINDOWS_COMPANION_TOKEN:'a'.repeat(32)});
+// Half-configured Minecraft: LAN variables present but the enable flag absent.
+denied({JARVIS_MINECRAFT_LAN_ENABLED:'0',JARVIS_MINECRAFT_LAN_PORT:'54321'});
+denied({JARVIS_MINECRAFT_LAN_ENABLED:undefined,JARVIS_MINECRAFT_PLAYER:'ActualOwner'});
+denied({JARVIS_MINECRAFT_LAN_ENABLED:'0',JARVIS_MINECRAFT_LAN_HOST:'127.0.0.1',JARVIS_MINECRAFT_PLAYER:'ActualOwner'});
+// An explicitly disabled Minecraft with no LAN variables is a valid non-Minecraft session.
+accepted({JARVIS_MINECRAFT_LAN_ENABLED:'0'});
 const mc={JARVIS_MINECRAFT_LAN_ENABLED:'1',JARVIS_MINECRAFT_LAN_PORT:'54321',
  JARVIS_MINECRAFT_LAN_HOST:'127.0.0.1',JARVIS_MINECRAFT_PLAYER:'ActualOwner'};
 accepted(mc);

@@ -27,20 +27,37 @@ const containment = {
     return {ok:real === base || real.startsWith(base + path.sep)};
   },
 };
-function loadVerifier() {
-  const file = path.join(root, 'src/lib/agent/core/verifier.ts');
-  const output = ts.transpileModule(fs.readFileSync(file,'utf8'), {
-    fileName:file,
+function loadTsModule(file, cache = new Map()) {
+  const absolute = path.resolve(file);
+  if (cache.has(absolute)) return cache.get(absolute).exports;
+  const mod = {exports:{}};
+  cache.set(absolute, mod);
+  const output = ts.transpileModule(fs.readFileSync(absolute,'utf8'), {
+    fileName:absolute,
     compilerOptions:{ target:ts.ScriptTarget.ES2022, module:ts.ModuleKind.CommonJS, esModuleInterop:true },
   }).outputText;
-  const mod = {exports:{}};
-  const mockRequire = (name) => name === '@/lib/db' ? {db} :
-    name === '../guardian/policy' ? containment : require(name);
+  const mockRequire = (name) => {
+    if (name === '@/lib/db') return {db};
+    if (name === '../guardian/policy') return containment;
+    if (name.startsWith('.')) {
+      const base = path.resolve(path.dirname(absolute), name);
+      for (const candidate of [base+'.ts', path.join(base,'index.ts')]) {
+        if (fs.existsSync(candidate)) return loadTsModule(candidate, cache);
+      }
+    }
+    return require(name);
+  };
   new Function('require','module','exports',output)(mockRequire,mod,mod.exports);
   return mod.exports;
 }
+function loadVerifier() {
+  return loadTsModule(path.join(root, 'src/lib/agent/core/verifier.ts'));
+}
 const {arbitrateCompletion} = loadVerifier();
-const ack = (tool,detail) => ({status:'SETTLED',tool,receiptJson:JSON.stringify({ok:true,tool,detail})});
+const ack = (tool,detail,args) => ({status:'SETTLED',tool,argsJson:JSON.stringify(args ?? {}),
+  receiptJson:JSON.stringify({ok:true,tool,detail})});
+const writeAck = (rel,content) => ack('write_file',{path:rel,verified:true},{path:rel,content});
+const folderAck = rel => ack('create_folder',{path:rel,isDirectory:true},{path:rel});
 let checks = 0;
 async function check(label,objective,toolAssisted,rows,expected,contains) {
   effectRows = rows;
@@ -75,34 +92,52 @@ async function main() {
   fs.writeFileSync(path.join(workspace,'jarvis_routine_probe.txt'),'JARVIS_ROUTINE_PASS');
   const directRoutine = 'Create jarvis_routine_probe.txt inside my authorized workspace, write exactly JARVIS_ROUTINE_PASS, then read it back and verify the contents.';
   await check('natural routine wording independently verifies exact content', directRoutine, true,
-    [ack('write_file',{verified:true})],'verified',/exact content/);
+    [writeAck('jarvis_routine_probe.txt','JARVIS_ROUTINE_PASS')],'verified',/exact content/);
   const {taskPrompt,makePlan} = await import('../src/lib/agent/longrun/planner.mjs');
   const plan = makePlan(directRoutine);
   await check('background strategy wrapper preserves verifiable file objective',taskPrompt(plan,0,0,directRoutine),true,
-    [ack('write_file',{verified:true})],'verified',/VERDICT: VERIFIED/);
+    [writeAck('jarvis_routine_probe.txt','JARVIS_ROUTINE_PASS')],'verified',/VERDICT: VERIFIED/);
   fs.writeFileSync(path.join(workspace,'jarvis_routine_probe.txt'),'WRONG_DATA');
   await check('background routine mismatched content stays unverified',taskPrompt(plan,0,0,directRoutine),true,
-    [ack('write_file',{verified:true})],'partial',/content mismatch/);
+    [writeAck('jarvis_routine_probe.txt','JARVIS_ROUTINE_PASS')],'partial',/content mismatch/);
   fs.writeFileSync(path.join(workspace,'jarvis_routine_probe.txt'),'JARVIS_ROUTINE_PASS');
   await check('background routine unknown effect cannot verify',taskPrompt(plan,0,0,directRoutine),true,
-    [ack('write_file',{verified:true}),{status:'EFFECT_UNKNOWN'}],'effect_unknown');
+    [writeAck('jarvis_routine_probe.txt','JARVIS_ROUTINE_PASS'),{status:'EFFECT_UNKNOWN'}],'effect_unknown');
   await check('background routine failed effect cannot verify',taskPrompt(plan,0,0,directRoutine),true,
-    [ack('write_file',{verified:true}),{status:'FAILED'}],'partial');
+    [writeAck('jarvis_routine_probe.txt','JARVIS_ROUTINE_PASS'),{status:'FAILED'}],'partial');
   await check('read-only check does not become a create predicate', 'Read jarvis_routine_probe.txt; do not modify it.', true,
     [ack('read_file',{content:'JARVIS_ROUTINE_PASS'})],'partial',/UNVERIFIED OUTCOME/);
   fs.writeFileSync(path.join(workspace,'other.txt'),'JARVIS_ROUTINE_PASS');
   await check('ambiguous multi-file exact write is not verified','Create jarvis_routine_probe.txt and other.txt, write exactly JARVIS_ROUTINE_PASS',true,
-    [ack('write_file',{verified:true})],'partial',/UNVERIFIED OUTCOME/);
+    [writeAck('jarvis_routine_probe.txt','JARVIS_ROUTINE_PASS')],'partial',/UNVERIFIED OUTCOME/);
   fs.writeFileSync(path.join(workspace,'sample.txt'),'expected');
   await check('real file content matches completion predicate','Create file sample.txt containing "expected"',true,
-    [ack('write_file',{verified:true})],'verified',/VERDICT: VERIFIED/);
+    [writeAck('sample.txt','expected')],'verified',/VERDICT: VERIFIED/);
   await check('failed side effect prevents full success despite matching file','Create file sample.txt containing "expected"',true,
-    [ack('write_file',{verified:true}),{status:'FAILED',tool:'create_folder'}],'partial',/VERDICT: PARTIAL/);
+    [writeAck('sample.txt','expected'),{status:'FAILED',tool:'create_folder'}],'partial',/VERDICT: PARTIAL/);
   await check('uncertain effect blocks otherwise matching file','Create file sample.txt containing "expected"',true,
-    [ack('write_file',{verified:true}),{status:'EFFECT_UNKNOWN'}],'effect_unknown');
+    [writeAck('sample.txt','expected'),{status:'EFFECT_UNKNOWN'}],'effect_unknown');
   await check('wrong file content does not become verified','Create file sample.txt containing "different"',true,
-    [ack('write_file',{verified:true})],'partial',/content mismatch/);
+    [writeAck('sample.txt','expected')],'partial',/content mismatch/);
   await check('nonexistent artifact fails','Create file absent.txt',true,[],'failed');
+  await check('stale existing file is not a new completion',
+    'Create file sample.txt containing "expected"',true,[],'partial',/missing matching verified SETTLED effect/);
+  await check('different file effect is not sufficient',
+    'Create file sample.txt containing "expected"',true,
+    [writeAck('other.txt','expected')],'partial',/missing matching verified SETTLED effect/);
+  await check('write without verified receipt is not sufficient',
+    'Create file sample.txt containing "expected"',true,
+    [ack('write_file',{path:'sample.txt',verified:false},{path:'sample.txt',content:'expected'})],
+    'partial',/missing matching verified SETTLED effect/);
+  fs.mkdirSync(path.join(workspace,'existing'),{recursive:true});
+  await check('stale folder is not proof of new folder creation',
+    'Create a folder existing',true,[],'partial',/missing matching verified SETTLED effect/);
+  await check('current-task verified folder passes',
+    'Create a folder existing',true,[folderAck('existing')],'verified',/VERDICT: VERIFIED/);
+  await check('incorrect receipt target is not evidence',
+    'Create file sample.txt containing "expected"',true,
+    [ack('write_file',{path:'other.txt',verified:true},{path:'sample.txt',content:'expected'})],
+    'partial',/missing matching verified SETTLED effect/);
   console.log(`CORE_OUTCOME_HONESTY ${checks}/${checks} PASS (isolated/mock DB and actual temporary filesystem)`);
  } finally { fs.rmSync(workspace,{recursive:true,force:true}); }
 }

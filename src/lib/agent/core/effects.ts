@@ -19,7 +19,7 @@ import { db } from "@/lib/db";
 import { resolveScopedPath, assertWithinRoot } from "../guardian/policy";
 import { injectedFault } from "./faults";
 
-export const EFFECTFUL_TOOLS = new Set(["create_folder", "write_file", "edit_file", "windows_open_url", "windows_open_app", "windows_open_settings", "windows_youtube_oldest", "minecraft_companion_join", "minecraft_companion_stop", "windows_browser_search", "windows_browser_click_link", "windows_browser_fill_search", "windows_browser_scroll", "windows_focus_app", "windows_launch_installed", "windows_native_open_url", "windows_native_action", "windows_desktop_focus", "windows_desktop_click", "windows_desktop_move", "windows_desktop_type", "windows_desktop_keys", "windows_desktop_scroll", "minecraft_companion_command", "windows_minecraft_input", "adoption_stage_github", "adoption_mcp_call"]);
+export const EFFECTFUL_TOOLS = new Set(["create_folder", "write_file", "windows_open_url", "windows_open_app", "windows_open_settings", "windows_youtube_oldest", "minecraft_companion_join", "minecraft_companion_stop", "windows_browser_search", "windows_browser_click_link", "windows_browser_fill_search", "windows_browser_scroll", "windows_focus_app", "windows_launch_installed", "windows_native_open_url", "windows_native_action", "windows_desktop_focus", "windows_desktop_click", "windows_desktop_move", "windows_desktop_type", "windows_desktop_keys", "windows_desktop_scroll", "minecraft_companion_command", "windows_minecraft_input", "adoption_stage_github", "adoption_mcp_call", "ci_project_build"]);
 
 /** Read-only Minecraft observations must be executed again on each request.
  * Treating `status`/`auto_status` as a durable effect previously returned stale
@@ -153,11 +153,6 @@ export async function reconcileEffect(
   | { kind: "verified"; detail: Record<string, unknown> }
   | { kind: "effect_unknown"; reason: string }
 > {
-  // The edit_file primitive is journaled BEFORE a disk mutation. Its
-  // admitted arguments do not contain the original entire file, so after a
-  // crash a current hash alone cannot prove whether this edit occurred or
-  // whether another editor changed the file. Never blindly replay it.
-  // Operator reconciliation must inspect the file and authorize a NEW edit.
   // Anything without a deterministic observation mechanism is permanently
   // uncertain. Do not reinterpret arbitrary external tool arguments as paths.
   if (eff.tool !== "create_folder" && eff.tool !== "write_file") {

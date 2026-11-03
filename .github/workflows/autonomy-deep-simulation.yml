@@ -1,0 +1,49 @@
+name: JARVIS Deep Autonomy Native Windows Simulation
+on:
+  push:
+    branches: [test/autonomy-deep-sim-20261031]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deep-autonomy:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Native Windows and clean TypeScript
+        run: |
+          if ((node -p "process.platform") -ne "win32") { throw "Windows host required" }
+          if (Test-Path tsconfig.tsbuildinfo) { Remove-Item tsconfig.tsbuildinfo }
+          npx tsc --noEmit --incremental false
+          if ($LASTEXITCODE -ne 0) { throw "TypeScript failed" }
+      - name: Deep real-Core autonomy lifecycles
+        env:
+          JARVIS_DEEP_SEED: '20261031'
+          JARVIS_DEEP_ROUNDS: '320'
+          JARVIS_DEEP_RESULT: jarvis-autonomy-deep-results.json
+        run: |
+          node scripts/verify-autonomy-deep-windows.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Autonomy simulation failed" }
+      - name: Independent companion and goal tests
+        run: |
+          foreach ($test in @('test:goal-loop-integration','test:core-actionable-execution','test:autonomy-tiers','test:longrun-offline','test:core-guardian-laya-boundaries')) {
+            npm.cmd run $test
+            if ($LASTEXITCODE -ne 0) { throw "$test failed" }
+          }
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-autonomy-deep-evidence
+          path: jarvis-autonomy-deep-results.json
+          if-no-files-found: warn

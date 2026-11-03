@@ -1,0 +1,1 @@
+Bounded official Minecraft Java 1.21.1 Stone acceptance after updated planner regression: acquire 3 handle sticks before descent, collect 5 cobblestone, place crafting table and verify stone pickaxe plus sword. No full game claim.

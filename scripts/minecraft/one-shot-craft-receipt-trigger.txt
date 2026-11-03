@@ -1,0 +1,2 @@
+One bounded real Minecraft Java survival test: wood drop recovery, crafting table, plank/stick packet settlement, stone pickaxe and sword inventory acceptance.
+No Ender Dragon claims.

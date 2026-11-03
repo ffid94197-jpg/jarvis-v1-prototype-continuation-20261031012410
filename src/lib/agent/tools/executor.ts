@@ -289,7 +289,7 @@ export async function executeTool(
               {key:{contains:term}},{content:{contains:term}}
             ])},
           orderBy:{updatedAt:"desc"},take:500,
-          select:{key:true,content:true,source:true,version:true},
+          select:{key:true,content:true,source:true,version:true,updatedAt:true},
         });
         if(isCancelled())return {ok:false,tool,evidence:"",error:"memory recall cancelled"};
         const records=rankOwnerMemoryRows(candidates,query,limit).map(item=>({

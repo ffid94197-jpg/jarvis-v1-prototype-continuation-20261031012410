@@ -114,3 +114,24 @@ export function nextStrategyPath(goal, failedRouteIndex) {
   const selected=route.found?Number(route.edges[0]?.split(':')[1]):-1;
   return Number.isInteger(selected) && selected>=0?selected:null;
 }
+
+/** LangGraph-inspired checkpoint admissibility on JARVIS's EXISTING journal.
+ * There is no second graph executor or hidden re-run. This validates that the
+ * result being advanced belongs to the exact persisted routine attempt/cursor.
+ */
+export function advanceFromPersistedCheckpoint(plan, cursor, attempt) {
+  const good = v => typeof v==='string' && /^[A-Za-z0-9_-]{8,100}$/.test(v);
+  if (!Array.isArray(plan) || !plan.length || !cursor || !attempt ||
+      !good(cursor.taskId) || attempt.taskId!==cursor.taskId ||
+      attempt.routineId!==cursor.routineId ||
+      !Number.isInteger(cursor.stepIndex) || !Number.isInteger(cursor.routeIndex) ||
+      !Number.isInteger(attempt.stepIndex) || !Number.isInteger(attempt.routeIndex) ||
+      attempt.stepIndex!==cursor.stepIndex || attempt.routeIndex!==cursor.routeIndex ||
+      !plan[cursor.stepIndex]?.strategies?.[cursor.routeIndex] ||
+      attempt.outcome!==cursor.outcome) {
+    return {kind:'blocked',reason:'persisted_checkpoint_mismatch'};
+  }
+  // The DB attempt status and task status must agree. A model statement,
+  // successful tool dispatch or stale state alone cannot advance the cursor.
+  return nextAfterOutcome(plan,cursor.stepIndex,cursor.routeIndex,cursor.outcome);
+}

@@ -182,7 +182,7 @@ class World {
     evidence.proof='dragon_victory';this.dragonVictoryTick=this.ticks;break;
    case 'exit_end':
     dest('end');req(progress.milestones.dragonKilled===true && progress.milestones.exitPortalObserved===true && this.exitPortal,'not verified dragon win/exit portal');
-    this.dimension='overworld';this.workbench=above('crafting_table');this.furnace=above('furnace');this.events.push(['end_exit',this.ticks]);break;
+    this.dimension='overworld';this.workbench=above('crafting_table');this.furnace=above('furnace');this.events.push(['end_exit',this.ticks]);evidence.proof='end_return';break;
    case 'loot_bastion_template':
     dest('nether');this.bastionScout++;if(this.bastionScout>=2)gain('netherite_upgrade_smithing_template');break;
    case 'mine_ancient_debris':dest('nether');req(pick(),'diamond-grade pick required');gain('ancient_debris',1+Number(this.random()>.84));break;

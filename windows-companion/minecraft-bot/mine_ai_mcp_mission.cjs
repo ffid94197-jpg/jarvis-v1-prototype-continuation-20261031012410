@@ -8,6 +8,17 @@ const {decide,createController}=require('./autonomy_engine.cjs');
 const ARMOR={head:'netherite_helmet',torso:'netherite_chestplate',legs:'netherite_leggings',feet:'netherite_boots'};
 const LOGS=['oak_log','spruce_log','birch_log','dark_oak_log','jungle_log','acacia_log','mangrove_log','cherry_log','pale_oak_log'];
 const oreNames={iron:['iron_ore','deepslate_iron_ore'],diamond:['diamond_ore','deepslate_diamond_ore']};
+const NETHERITE_UPGRADES=Object.freeze({
+ netherite_helmet:'diamond_helmet',netherite_chestplate:'diamond_chestplate',
+ netherite_leggings:'diamond_leggings',netherite_boots:'diamond_boots',
+ netherite_sword:'diamond_sword'
+});
+/** Optional Mine AI MCP extension, NOT a capability provided by its published API.
+ * Never issue a crafting call as a surrogate for smithing. Require a host-advertised
+ * tool, exact approved vanilla recipe ingredients, and post-action inventory deltas.
+ */
+const SMITH_TOOL='smith_item';
+
 function observedWorld(s){
  if(!s || !Array.isArray(s.inventory?.stacks) || !s.vitals || !s.position || !s.dimension)throw Error('Incomplete MCP game observation');
  const raw={};const worn={};
@@ -39,6 +50,18 @@ function checkedOutcome(before,after,action,decision){
  if(action.state!=='settled')return {ok:false,verified:false,effectUnknown:true,detail:'Action still pending; cannot submit a replacement'};
  if(action.output?.result?.status!=='succeeded')return {ok:false,verified:false,detail:'Upstream settled '+String(action.output?.result?.status||'unknown')};
  const oldNames=new Map((before.inventory?.stacks||[]).map(x=>[x.name,inventoryCount(before,x.name)]));
+ if(decision.kind==='smith_netherite'){
+  const base=NETHERITE_UPGRADES[decision.item];
+  const beforeItem=inventoryCount(before,decision.item);
+  const verified=!!base && inventoryCount(after,decision.item)>beforeItem &&
+    inventoryCount(before,base)>inventoryCount(after,base) &&
+    inventoryCount(before,'netherite_ingot')>inventoryCount(after,'netherite_ingot') &&
+    inventoryCount(before,'netherite_upgrade_smithing_template')>inventoryCount(after,'netherite_upgrade_smithing_template');
+  return {ok:verified,verified,detail:verified?
+    'Observed Netherite upgrade item gain and consumption of diamond base, ingot and upgrade template':
+    'Smithing action settled but independently observed vanilla recipe effects were incomplete'};
+ }
+
  const newItems=(after.inventory?.stacks||[]).filter(x=>inventoryCount(after,x.name)>(oldNames.get(x.name)||0)).map(x=>x.name);
  const expected={
   collect_wood:n=>LOGS.includes(n),mine_cobblestone:n=>n==='cobblestone'||n==='cobbled_deepslate',
@@ -60,7 +83,7 @@ function checkedOutcome(before,after,action,decision){
  return {ok:gain,verified:gain,detail:gain?'MCP action succeeded and updated world was observed':'MCP settled but required world-state change was not observed'};
 }
 function craftItem(name,count=1){return {name:'craft_item',args:{items:[{item_name:name,count}]}};}
-function planAction(decision,before){
+function planAction(decision,before,availableTools=new Map()){
  const i=observedWorld(before).inventory;
  const collect=(names,count=1)=>({alternatives:names.map(block_name=>({name:'collect_block',args:{block_name,count}}))});
  switch(decision.kind){
@@ -91,7 +114,17 @@ function planAction(decision,before){
   case 'craft_flint_steel':return craftItem('flint_and_steel');
   case 'duplicate_template':return craftItem('netherite_upgrade_smithing_template',2);
   case 'craft_smithing_table':return craftItem('smithing_table');
-  case 'smith_netherite':return {blocked:'Mine AI MCP has no verified smithing-upgrade tool. The crafting API cannot substitute for a smithing table'};
+  case 'smith_netherite':{
+   const base=NETHERITE_UPGRADES[decision.item];
+   if(!base || decision.base!==base)return {blocked:'Invalid or mismatched vanilla Netherite smithing recipe'};
+   if(!availableTools.has(SMITH_TOOL))return {blocked:'Mine AI MCP host does not advertise a verified smith_item extension; vanilla smithing unavailable'};
+   if(inventoryCount(before,base)<1 || inventoryCount(before,'netherite_ingot')<1 ||
+      inventoryCount(before,'netherite_upgrade_smithing_template')<1)
+     return {blocked:'Missing server-observed diamond base, Netherite ingot or smithing upgrade template'};
+   return {name:SMITH_TOOL,args:{base_item_name:base,
+     template_item_name:'netherite_upgrade_smithing_template',
+     addition_item_name:'netherite_ingot',output_item_name:decision.item}};
+  }
   case 'equip_netherite':return {name:'equip',args:{items:Object.values(ARMOR).map(item_name=>({item_name}))}};
   case 'smelt_iron':return {name:'smelt_item',args:{item_name:'raw_iron',count:1,fuel_item_name:i.coal?'coal':Object.keys(i.raw).find(k=>k.endsWith('_planks')),temporary_workstation:true}};
   case 'smelt_resource':return {name:'smelt_item',args:{item_name:decision.input,count:1,fuel_item_name:i.coal?'coal':Object.keys(i.raw).find(k=>k.endsWith('_planks')),temporary_workstation:true}};
@@ -117,7 +150,7 @@ class GroundedMcpMission{
       : {kind:'collect_wood',why:'Gather logs for missing crafting table planks'};
   }
   if(['idle','blocked','complete','wait'].includes(decision.kind))return {decision,status:this.status(),verified:false,reason:'No physical action occurred'};
-  const mapping=planAction(decision,before);
+  const mapping=planAction(decision,before,this.client.tools);
   if(mapping.blocked){this.controller.stop(mapping.blocked);return {decision,status:this.status(),verified:false,reason:mapping.blocked};}
   const attempts=mapping.alternatives||[mapping];let outcome=null,lastError='';
   for(const action of attempts){

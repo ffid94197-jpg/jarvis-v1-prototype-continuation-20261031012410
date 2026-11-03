@@ -461,19 +461,111 @@ def validate_action(body):
         if os.environ.get('JARVIS_MINECRAFT_LAN_ENABLED') != '1':
             return 'Minecraft LAN integration is not enabled.'
         if body.get('command') not in ('follow','stop','jump','move','look','status','come','stay','guard','collect_wood','inventory','say','observe','auto_goal','auto_status','auto_stop',
-            'inspect_block','navigate','dig_block','equip_item','craft_item','place_block','interact_block','interact_entity','use_item'):
+            'inspect_block','navigate','dig_block','equip_item','craft_item','place_block','interact_block','interact_entity','use_item','natural_goal','auto_checkpoint','auto_resume'):
             return 'Unsupported Minecraft command.'
-        if body.get('command') == 'auto_goal' and (body.get('goal') not in ('survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','netherite_dragon_run','companion') or
-            (body.get('durationSeconds') is not None and (type(body['durationSeconds']) is not int or not 10 <= body['durationSeconds'] <= 43200))):
-            return 'Invalid autonomous Minecraft objective or duration.'
         # The Python Guardian side of the bridge validates the same bounded
         # primitives as friend_protocol.cjs. All keys remain allowlisted.
         def mc_position(value):
-            return (isinstance(value,dict) and all(type(value.get(k)) is int and
-                abs(value[k]) <= 30000000 for k in ('x','y','z')))
+            return (type(value) is dict and set(value) == {'x','y','z'} and
+                all(type(value.get(k)) is int and abs(value[k]) <= 30000000
+                for k in ('x','y','z')))
         def mc_item(value):
             return isinstance(value,str) and re.fullmatch(r'[a-z0-9_]{1,64}',value) is not None
+        def bounded_int(value,low,high):
+            return type(value) is int and low <= value <= high
+        def minecraft_goal(record,step=False):
+            if type(record) is not dict or type(record.get('goal')) is not str:
+                return False
+            goal=record['goal']
+            fixed={'survive','wood','tools','explore','follow','guard','stone_age','iron_age',
+                   'dragon_run','netherite_dragon_run','dragon_then_netherite_run','companion'}
+            fields={
+                'gather':{'resource','targetCount'},
+                'travel':{'destination','arrivalRange'},
+                'craft':{'item','targetCount'},
+                'equip':{'item',('destination' if step else 'destinationSlot')},
+                'build':{'position','block','axis','length'},
+                'farm_wheat':{'position','width','depth','targetCount'},
+                'sequence':{'steps'}
+            }
+            if goal in fixed:
+                extra=set()
+                if step and goal not in ('tools','stone_age','iron_age'):
+                    return False
+            else:
+                extra=fields.get(goal)
+                if extra is None or (step and goal=='sequence'):
+                    return False
+            allowed={'goal'} | extra | (set() if step else {'command','durationSeconds'})
+            if set(record) - allowed:
+                return False
+            if not step and record.get('command')!='auto_goal':
+                return False
+            if step and 'command' in record:
+                return False
+            if not step and 'durationSeconds' in record and not bounded_int(record['durationSeconds'],10,43200):
+                return False
+            if goal in fixed:
+                return True
+            if goal=='gather':
+                return type(record.get('resource')) is str and record['resource'] in {'logs','planks','sticks','cobblestone','raw_iron',
+                    'iron_ingot','diamond','obsidian','flint','netherrack'} and bounded_int(record.get('targetCount'),1,64)
+            if goal=='travel':
+                return mc_position(record.get('destination')) and bounded_int(record.get('arrivalRange'),1,8)
+            if goal=='craft':
+                return type(record.get('item')) is str and record['item'] in {'stick','crafting_table','chest','furnace',
+                    'ladder','bread','shield','torch'} and bounded_int(record.get('targetCount'),1,16)
+            if goal=='equip':
+                slots={
+                    'hand':{'wooden_pickaxe','stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe',
+                        'wooden_sword','stone_sword','iron_sword','diamond_sword','netherite_sword',
+                        'bow','crossbow','trident','shield','torch'},
+                    'head':{'leather_helmet','iron_helmet','golden_helmet','diamond_helmet','netherite_helmet','turtle_helmet'},
+                    'torso':{'leather_chestplate','iron_chestplate','golden_chestplate','diamond_chestplate','netherite_chestplate','elytra'},
+                    'legs':{'leather_leggings','iron_leggings','golden_leggings','diamond_leggings','netherite_leggings'},
+                    'feet':{'leather_boots','iron_boots','golden_boots','diamond_boots','netherite_boots'},
+                    'off-hand':{'shield','torch','totem_of_undying'}
+                }
+                slot=record.get('destination' if step else 'destinationSlot')
+                return type(slot) is str and type(record.get('item')) is str and record['item'] in slots.get(slot,set())
+            if goal=='build':
+                p=record.get('position')
+                axis=record.get('axis')
+                n=record.get('length')
+                if (not mc_position(p) or axis not in ('x+','x-','z+','z-') or
+                    not bounded_int(n,1,8) or
+                    (type(record.get('block')) is not str or record['block'] not in {'cobblestone','dirt','oak_planks','spruce_planks',
+                        'birch_planks','stone_bricks','netherrack'})):
+                    return False
+                dx=(1 if axis=='x+' else -1 if axis=='x-' else 0)
+                dz=(1 if axis=='z+' else -1 if axis=='z-' else 0)
+                return (-62 <= p['y'] <= 318 and abs(p['x'])<=29999984 and
+                    abs(p['z'])<=29999984 and abs(p['x']+dx*(n-1))<=29999984 and
+                    abs(p['z']+dz*(n-1))<=29999984)
+            if goal=='farm_wheat':
+                p=record.get('position')
+                w=record.get('width')
+                d=record.get('depth')
+                return (mc_position(p) and bounded_int(w,1,4) and bounded_int(d,1,4) and
+                    bounded_int(record.get('targetCount'),1,16) and -62 <= p['y'] <= 319 and
+                    -29999984 <= p['x'] <= 29999984 and -29999984 <= p['z'] <= 29999984 and
+                    p['x']+w-1 <= 29999984 and p['z']+d-1 <= 29999984)
+            if goal=='sequence':
+                steps=record.get('steps')
+                return type(steps) is list and 1 <= len(steps) <= 8 and all(minecraft_goal(s,True) for s in steps)
+            return False
         command=body.get('command')
+        if command == 'auto_goal':
+            goal_args={k:v for k,v in body.items() if k not in ('operation','taskId')}
+            if not minecraft_goal(goal_args):
+                return 'Invalid or unsupported bounded Minecraft goal; no game action authorized.'
+
+        if command == 'natural_goal':
+            text=body.get('text')
+            if (not isinstance(text,str) or not 1 <= len(text.strip()) <= 600 or
+                re.search(r'[\x00-\x1f\x7f]',text) or
+                set(body) - {'operation','taskId','command','text'}):
+                return 'Invalid natural-language Minecraft instruction.'
         if command == 'navigate' and (not mc_position(body.get('position')) or
             ('range' in body and (type(body['range']) is not int or not 1 <= body['range'] <= 8))):
             return 'Invalid bounded Minecraft navigation.'
@@ -611,6 +703,14 @@ def minecraft_action(op):
             child_env.update({'JARVIS_MINECRAFT_LAN_PORT':os.environ.get('JARVIS_MINECRAFT_LAN_PORT',''),
                               'JARVIS_MINECRAFT_LAN_HOST':os.environ.get('JARVIS_MINECRAFT_LAN_HOST','127.0.0.1'),
                               'JARVIS_MINECRAFT_PLAYER':os.environ.get('JARVIS_MINECRAFT_PLAYER','')})
+            # Only the already-selected LOCAL JARVIS inference provider may be
+            # handed to the JARVIS-native language adapter. No BYOK/cloud
+            # credentials, tokens or provider configuration are copied.
+            if engine == 'jarvis' and os.environ.get('JARVIS_MODEL_BACKEND') == 'ollama':
+                child_env['JARVIS_MODEL_BACKEND']='ollama'
+                for key in ('JARVIS_OLLAMA_MODEL','JARVIS_OLLAMA_BASE_URL'):
+                    if key in os.environ:
+                        child_env[key]=os.environ[key]
             bot_proc = subprocess.Popen(['node', str(script)],cwd=str(script.parent), shell=False,
                                          env=child_env,stdin=subprocess.PIPE,
                                          stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
@@ -653,11 +753,13 @@ def minecraft_command(body):
         with bot_ack_lock:bot_ack_waiters[request_id]=pending
         try:
             message={k:v for k,v in body.items() if k in ('command','directionInput','durationMs','text','goal','durationSeconds',
-                                                       'position','range','item','destination','count','reference','face','entityId','hand')}
+                                                       'position','range','item','destination','count','reference','face','entityId','hand',
+                                                       'resource','targetCount','arrivalRange','steps','block','axis','length',
+                                                       'width','depth','destinationSlot')}
             message['id']=request_id
             bot_proc.stdin.write(json.dumps(message)+'\n')
             bot_proc.stdin.flush()
-            if not pending['event'].wait(8):
+            if not pending['event'].wait(16 if body.get('command') == 'natural_goal' else 8):
                 return {'ok':False,'error':'Minecraft bot did not acknowledge action within deadline; outcome unknown.'}
             ack=pending['result']
             if not ack.get('ok'):

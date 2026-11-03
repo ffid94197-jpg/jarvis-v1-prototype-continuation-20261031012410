@@ -21,7 +21,9 @@ async def main() -> int:
         return 2
 
     import cua_driver
-    if getattr(cua_driver, "__version__", None) != "0.38.0":
+    from importlib.metadata import version as package_version
+    sdk_version = package_version("cua-driver")
+    if sdk_version != "0.38.0":
         print("CUA_WINDOWS_PREFLIGHT_FAIL: expected cua-driver 0.38.0.")
         return 2
 
@@ -85,7 +87,7 @@ async def main() -> int:
                 })
 
         print(json.dumps({
-            "sdkVersion": cua_driver.__version__,
+            "sdkVersion": sdk_version,
             "visibleWindowsChecked": len(rows),
             "healthyAccessibilitySnapshots": healthy,
             "windows": rows,

@@ -93,7 +93,9 @@ for(let i=0;i<unique.length;i++){
 }
 const failures=rows.filter(x=>x.status!=='PASS');
 const summary={schema:'jarvis.postmerge.windows.offline.v1',startedAt:started,finishedAt:new Date().toISOString(),
-  platform:process.platform,githubSha:process.env.GITHUB_SHA||'unknown',
+  platform:process.platform,nodeVersion:process.version,architecture:process.arch,
+  githubSha:process.env.GITHUB_SHA||'unknown',
+  packageLockSha256:sha256(fs.readFileSync(path.join(root,'package-lock.json'))),
   source:'actual merged Prototype JARVIS checkout',
   total:rows.length,passed:rows.length-failures.length,failed:failures.length,
   status:failures.length?'FAIL':'PASS',cases:rows,

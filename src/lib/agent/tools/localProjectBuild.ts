@@ -476,7 +476,8 @@ async function copyVerifiedArtifact(
   const copied = await treeCopy(source, destination, {
     maxBytes: MAX_ARTIFACT_BYTES, maxFiles: MAX_ARTIFACT_FILES,
   }, undefined, isCancelled);
-  if (copied.files !== stats.files || copied.bytes !== stats.bytes) {
+  if (copied.files !== stats.files || copied.directories !== stats.directories ||
+      copied.bytes !== stats.bytes) {
     throw new Error("Build artifact changed during host-side verification");
   }
   const digest = createHash("sha256");

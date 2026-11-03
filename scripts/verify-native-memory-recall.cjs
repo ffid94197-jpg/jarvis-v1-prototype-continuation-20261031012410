@@ -122,9 +122,42 @@ const before=process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED;
      assert.ok(!all.includes(secret),secret);
    assert.equal(r.detail.classification,'CLOUD_APPROVED');
  });
+ let worldPrepared;
+ await verify('World recall is bound to authenticated owner and bounded query',async()=>{
+   assert.equal((await guardian.authorizeToolCall({taskId:'t'},
+     'world_recall',{query:'office door'})).verdict,'deny');
+   const x=await guardian.authorizeToolCall({taskId:'t',ownerId:'owner-A'},
+     'world_recall',{query:'office door',limit:3});
+   assert.equal(x.verdict,'allow');
+   assert.equal(x.prepared.world.ownerId,'owner-A');
+   worldPrepared=x;
+   for(const input of [
+     {query:'office door',ownerId:'owner-B'},
+     {query:'office door',limit:6},
+     {query:'office\\ndoor'}
+   ]) assert.equal((await guardian.authorizeToolCall(
+     {taskId:'t',ownerId:'owner-A'},'world_recall',input)).verdict,'deny');
+ });
+ await verify('World recall filters foreign, expired and retracted observations',async()=>{
+   const r=await executor.executeTool('t','world_recall',worldPrepared);
+   assert.equal(r.ok,true);
+   assert.equal(r.detail.records.length,1);
+   assert.equal(r.detail.records[0].value,'closed');
+   assert.equal(r.detail.records[0].source,'USER_REPORTED');
+   assert.equal(r.detail.records[0].authority,'context_only');
+   assert.equal(r.detail.records[0].neverAuthorizesActions,true);
+   const all=JSON.stringify(r);
+   for(const secret of ['other owner secret','was open','retracted state'])
+     assert.ok(!all.includes(secret),secret);
+ });
+ await verify('World recall remains context-only and cancellation-safe',async()=>{
+   assert.equal((await executor.executeTool('t','world_recall',worldPrepared,()=>true)).ok,false);
+   assert.equal(JSON.stringify(worldPrepared).includes('owner-B'),false);
+ });
  await verify('Disabling recall between authorization and execution blocks it',async()=>{
    delete process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED;
    assert.equal((await executor.executeTool('t','memory_recall',prepared)).ok,false);
+   assert.equal((await executor.executeTool('t','world_recall',worldPrepared)).ok,false);
  });
  await verify('Cancellation prevents retrieval',async()=>{
    process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED='1';

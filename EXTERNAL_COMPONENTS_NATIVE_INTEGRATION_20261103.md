@@ -109,3 +109,19 @@ Guardian path predicate. The complete test-suite, live database,
 LLM-driven coding task and owner Windows environment have NOT been
 verified. This does not equal full OpenHands SDK integration.
 
+## November 3 owner memory bridge continuation
+
+Added a **native read-only `memory_recall`** call in Core and Guardian.
+Its only input is an owner-intent search query and limit <=5. The server
+operator must explicitly enable `JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED=1`,
+and the authenticated owner is injected by Guardian rather than trusted from
+the model. The executor filters `principalId`, `deletedAt=null`, and
+`dataClass=CLOUD_APPROVED` at the database level; `LOCAL_PRIVATE` is never
+returned to the model. Output carries unverified owner-provenance labels and
+a bounded content preview.
+
+A focused mocked security suite
+`node scripts/verify-native-memory-recall.cjs` covers disabled-by-default,
+owner isolation, data-class denial, forged owner, cancellation, and audit
+redaction. Actual owner Windows/Prisma/provider execution is not certified.
+This is a capability slice, **not full Mem0 SDK/runtime**.

@@ -99,7 +99,6 @@ const ACTIONABLE = [
   'restart the companion bot',
   'enable the screen capture',
   'switch to the other window',
-  'print that document',
   'lock the workstation',
   'send that to my email',
   'set the volume to zero',
@@ -212,7 +211,7 @@ for (const objective of PREVIOUSLY_SLIPPING) {
     `new classifier DOES catch ${JSON.stringify(objective)}`);
 }
 // And the legacy guard must not have been weakened to achieve that.
-for (const objective of ['join my minecraft world', 'defeat the ender dragon', 'Open Windows Settings']) {
+for (const objective of ['join my minecraft world', 'defeat the ender dragon', 'Open Windows Settings', 'print that document']) {
   ok(desktopObjectiveRequiresActions(objective) === true,
     `legacy denylist still catches ${JSON.stringify(objective)} (not weakened)`);
 }

@@ -46,7 +46,9 @@ def check(result, note):
     print('PASS', note)
 
 try:
-    png=base64.b64encode(b'\x89PNG\r\n\x1a\n' + bytes(32)).decode('ascii')
+    header=(b'\x89PNG\r\n\x1a\n' + (13).to_bytes(4,'big') + b'IHDR' +
+            (1).to_bytes(4,'big') + (1).to_bytes(4,'big') + b'\x08\x02\x00\x00\x00' + bytes(4))
+    png=base64.b64encode(header).decode('ascii')
     check(validate_image_request({'image_base64':png}) == png,
           'actual bounded local PNG accepted')
     status,result=send('/parse',{'image_base64':png},token)
@@ -60,6 +62,12 @@ try:
     check(status==400 and parser.calls==1,'external screenshot URLs not allowed')
     status,_=send('/parse',{'image_base64':'not-encoded'},token)
     check(status==400 and parser.calls==1,'malformed image never reaches model')
+    huge=(b'\x89PNG\r\n\x1a\n' + (13).to_bytes(4,'big') + b'IHDR' +
+          (50000).to_bytes(4,'big') + (50000).to_bytes(4,'big') +
+          b'\x08\x02\x00\x00\x00' + bytes(4))
+    status,_=send('/parse',{'image_base64':base64.b64encode(huge).decode('ascii')},token)
+    check(status==400 and parser.calls==1,'decompression-bomb dimensions denied')
+
     try:
         validate_image_request({'image_base64':png,'command':'click'})
         raise AssertionError('Unexpected effect parameter accepted')

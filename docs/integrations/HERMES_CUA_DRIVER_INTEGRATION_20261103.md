@@ -34,7 +34,8 @@ optional input/accessibility backend, not another agent.
 - Structured control records with role, label, value, bounds, enabled state,
   PID, native window ID and snapshot-scoped element token.
 - Exact-window background element-token clicks.
-- Primary-desktop coordinate clicks, pointer movement, text input and key chords.
+- Exact-window background text input and key chords when PID/window ID are supplied.
+- Primary-desktop coordinate clicks, pointer movement, and foreground text/key input.
 - Existing Win32 window enumeration/focus and scrolling remain on the legacy
   backend; this integration does not silently replace those paths.
 - Structured action receipts distinguish refused, partial, unverifiable and

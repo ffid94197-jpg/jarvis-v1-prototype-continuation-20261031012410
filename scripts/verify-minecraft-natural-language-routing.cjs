@@ -24,7 +24,7 @@ for(const s of [
  'Jarvis, can you mine diamonds in Minecraft?','Please build a small house in Minecraft',
  'Follow me and protect me in Minecraft','Collect 16 cobblestone using my wooden pickaxe',
  'I want to farm wheat in Minecraft','Find diamond ore in Minecraft','Trade with villagers in Minecraft',
- 'Jarvis, explore Minecraft caves','Can you gather ender pearls in Minecraft?','Can you guard me in Minecraft?','Stop the Minecraft companion'
+ 'Jarvis, explore Minecraft caves','Can you gather ender pearls in Minecraft?','Can you guard me in Minecraft?','In Minecraft, wear an iron helmet','Stop the Minecraft companion'
 ])ok(isMinecraftAiObjective(s),'natural language route: '+s);
 for(const s of [
  'Explain how to mine diamonds in Minecraft','How do I craft a sword in Minecraft?','Do not mine diamonds in Minecraft',
@@ -127,6 +127,12 @@ survival.record('minecraft_companion_command',{command:'observe'},
  status:JSON.stringify({...nativeWorld,health:5})}});
 ok(survival.check('minecraft_companion_command',
  {command:'auto_goal',goal:'survive'}).ok,'Owner-authorized survival recovery permitted when injured');
+
+const wearable=new MinecraftAiGate('In Minecraft, wear an iron helmet');
+wearable.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(wearable.check('minecraft_companion_command',{command:'auto_goal',goal:'equip',
+ item:'iron_helmet',destinationSlot:'head'}).ok,'wear phrasing maps to owner-requested equip goal');
 
 const incoming=new MinecraftAiGate('Jarvis, can you defeat the Ender Dragon in Minecraft?');
 incoming.record('minecraft_companion_command',{command:'observe'},

@@ -245,7 +245,13 @@ def run_action(op):
             if _stopped.is_set():return fail('Emergency stop engaged.')
             try:
                 from cua_driver_backend import run_action as run_cua_action
-                return run_cua_action(op)
+                receipt=run_cua_action(op)
+                if name == 'desktop_observe' and receipt.get('ok') and isinstance(receipt.get('evidence'),dict):
+                    try:
+                        receipt['evidence']['screenInfo']=screen_info()
+                    except Exception:
+                        receipt['evidence']['screenInfoUnavailable']=True
+                return receipt
             except Exception as exc:
                 return fail('Cua Driver dispatch failed safely: '+type(exc).__name__)
     with _lock:

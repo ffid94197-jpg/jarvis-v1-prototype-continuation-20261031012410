@@ -10,6 +10,8 @@
  */
 
 import { execFile } from "child_process";
+import { createHash } from "node:crypto";
+import { editWorkspaceTextFile } from "./edit";
 import fs from "fs/promises";
 import {
   COMMAND_TIMEOUT_MS,
@@ -89,14 +91,16 @@ async function toolReadFile(
         ok: true,
         tool: "read_file",
         evidence: `read ${buf.byteLength} bytes from ${prepared.relPath} (truncated to ${MAX_READ_BYTES})`,
-        detail: { path: prepared.relPath, size: buf.byteLength, content: head },
+        detail: { path: prepared.relPath, size: buf.byteLength, content: head,
+        truncated:true },
       };
     }
     return {
       ok: true,
       tool: "read_file",
       evidence: `read ${buf.byteLength} bytes from ${prepared.relPath}`,
-      detail: { path: prepared.relPath, size: buf.byteLength, content: buf.toString("utf8") },
+      detail: { path: prepared.relPath, size: buf.byteLength, content: buf.toString("utf8"),
+        sha256:createHash("sha256").update(buf).digest("hex"),truncated:false },
     };
   } catch (err) {
     return {
@@ -253,6 +257,9 @@ export async function executeTool(
     path?: string;
     relPath?: string;
     content?: string;
+    expectedSha256?: string;
+    oldText?: string;
+    newText?: string;
     command?: string;
     args?: string[];
     desktop?: DesktopPrepared;
@@ -291,6 +298,17 @@ export async function executeTool(
       return toolCreateFolder(prepared);
     case "write_file":
       return toolWriteFile(prepared);
+    case "edit_file": {
+      if (!prepared.path || !prepared.relPath || !prepared.expectedSha256 ||
+          prepared.oldText===undefined || prepared.newText===undefined)
+        return {ok:false,tool,evidence:"",error:"Guardian-scoped edit arguments missing"};
+      const result=await editWorkspaceTextFile({
+        path:prepared.path,relPath:prepared.relPath,
+        expectedSha256:prepared.expectedSha256,
+        oldText:prepared.oldText,newText:prepared.newText
+      },isCancelled);
+      return {...result,tool};
+    }
     case "read_file":
       return toolReadFile(prepared);
     case "list_dir":

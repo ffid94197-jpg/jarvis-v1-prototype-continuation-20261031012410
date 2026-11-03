@@ -156,3 +156,30 @@ exercises public/private address policy, redaction and a mocked HTTPS
 socket-level DNS pin. Actual public network TLS, DNS infrastructure, Windows
 LPAC, full MCP SDK and production acceptance remain NOT VERIFIED. No new
 external agent is granted Core authority.
+
+## November 3 — recovered global component-harvest continuation
+
+The complete recovered candidate inventory and explicit KEEP / WRAP / HYBRID /
+REFERENCE-ONLY / DEFER / REJECT decision for each item is now recorded in
+`RESEARCH_COMPONENT_INTEGRATION_MATRIX_20261103.md`. It reconciles the seven
+shortlisted components with the broader archive inventory (Pydantic AI,
+Temporal, OPA, NeMo, Prompt Guard 2, memory candidates, visual computer-use
+systems, Stagehand, mini-SWE, E2B/Firecracker, realtime voice, STT, vision,
+Home Assistant, OTel, vector stores, source scanners and SBOM tools) and the
+earlier Minecraft/agent research (Hermes, Agent Zero, Voyager, SIMA 2,
+Gemini Argon and Deep Agents).
+
+Two further useful native behavior slices are being added in this continuation:
+
+- `faster-whisper` 1.2.1 (MIT code) is an optional local STT adapter. It requires
+  a separately installed compatible package and locally provisioned
+  CTranslate2 model; it uses `local_files_only=True`, bounded 16 kHz PCM and
+  no model download during a voice request. Vosk remains the default and
+  Piper remains the owner-selected TTS. Model-weight terms remain separate.
+- PropMem/SimpleMem-inspired retrieval improvements add normalized Unicode
+  tokens, exact phrase/key boosts, term coverage and bounded recency ranking
+  to the existing owner-scoped store. This remains deterministic lexical
+  retrieval, not an embedding or graph database.
+
+Focused local test sources are included in the existing Windows-only acceptance
+runner. No test run or live owner-PC/model acceptance is claimed in this branch.

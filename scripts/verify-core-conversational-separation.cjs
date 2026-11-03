@@ -217,7 +217,7 @@ const CONVERSATIONAL = [
   'write me a poem',
   'can you write me a poem?',
   'could you please draft an email?',
-  'can you generate a summary?'
+  'can you generate a summary?',
   'can you show me how to create a folder?',
   'could you please explain how to open chrome?',
   'how are you', 'what do you think about automation', 'tell me a joke',

@@ -12,6 +12,7 @@
 
 import { db } from "@/lib/db";
 import { validateDesktopTool, type DesktopPrepared } from "../windows/policy";
+import { prepareLocalProjectBuild, type LocalProjectBuildPrepared } from "../tools/localProjectBuild";
 import {
   assertWithinRoot,
   MAX_WRITE_BYTES,
@@ -34,6 +35,7 @@ export interface PreparedArgs {
   /** For multi-path tools (ls/cat/wc): guardian-approved absolute paths. */
   paths?: { abs: string; rel: string }[];
   desktop?: DesktopPrepared;
+  localProjectBuild?: LocalProjectBuildPrepared;
   integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;operation?:string;arguments?:Record<string,unknown>};
   memory?: {ownerId:string;query:string;limit:number};
   world?: {ownerId:string;query:string;limit:number};
@@ -55,6 +57,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "memory_recall",
   "world_recall",
   "run_command",
+  "local_project_build",
   "windows_open_url",
   "windows_open_app",
   "windows_open_settings",
@@ -316,6 +319,14 @@ export async function authorizeToolCall(
       case "minecraft_companion_stop": {
         const d = validateDesktopTool(tool, rawArgs);
         decision = d.ok ? {verdict:"allow",prepared:{desktop:d.prepared}} : deny(d.reason);
+        break;
+      }
+      case "local_project_build": {
+        if (!ctx.ownerId) { decision = deny("Authenticated owner required for local project build"); break; }
+        const p = await prepareLocalProjectBuild(rawArgs);
+        decision = p.ok && p.prepared
+          ? { verdict: "allow", prepared: { localProjectBuild: p.prepared } }
+          : deny(p.reason ?? "Local project build is not authorized");
         break;
       }
       case "run_command": {

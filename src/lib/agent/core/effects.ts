@@ -19,7 +19,7 @@ import { db } from "@/lib/db";
 import { resolveScopedPath, assertWithinRoot } from "../guardian/policy";
 import { injectedFault } from "./faults";
 
-export const EFFECTFUL_TOOLS = new Set(["create_folder", "write_file", "windows_open_url", "windows_open_app", "windows_open_settings", "windows_youtube_oldest", "minecraft_companion_join", "minecraft_companion_stop", "windows_browser_search", "windows_browser_click_link", "windows_browser_fill_search", "windows_browser_scroll", "windows_focus_app", "windows_launch_installed", "windows_native_open_url", "windows_native_action", "windows_desktop_focus", "windows_desktop_click", "windows_desktop_move", "windows_desktop_type", "windows_desktop_keys", "windows_desktop_scroll", "minecraft_companion_command", "windows_minecraft_input", "adoption_stage_github", "adoption_mcp_call", "ci_project_build"]);
+export const EFFECTFUL_TOOLS = new Set(["create_folder", "write_file", "windows_open_url", "windows_open_app", "windows_open_settings", "windows_youtube_oldest", "minecraft_companion_join", "minecraft_companion_stop", "windows_browser_search", "windows_browser_click_link", "windows_browser_fill_search", "windows_browser_scroll", "windows_focus_app", "windows_launch_installed", "windows_native_open_url", "windows_native_action", "windows_desktop_focus", "windows_desktop_click", "windows_desktop_move", "windows_desktop_type", "windows_desktop_keys", "windows_desktop_scroll", "minecraft_companion_command", "windows_minecraft_input", "adoption_stage_github", "adoption_mcp_call", "local_project_build"]);
 
 /** Read-only Minecraft observations must be executed again on each request.
  * Treating `status`/`auto_status` as a durable effect previously returned stale

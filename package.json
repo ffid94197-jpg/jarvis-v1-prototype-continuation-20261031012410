@@ -61,7 +61,9 @@
     "test:native-code-edit": "node scripts/verify-native-code-edit.cjs",
     "test:native-memory-recall": "node scripts/verify-native-memory-recall.cjs",
     "test:corpus-validator": "node scripts/autonomy/verify-corpus-validator.cjs",
-    "test:cua-driver-offline": "node scripts/verify-cua-driver-offline.mjs"
+    "test:cua-driver-offline": "node scripts/verify-cua-driver-offline.mjs",
+    "test:local-project-build-offline": "node scripts/verify-local-project-build.cjs",
+    "test:local-project-build-windows-live": "node scripts/verify-local-project-build-windows-live.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

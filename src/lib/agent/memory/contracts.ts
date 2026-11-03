@@ -81,20 +81,59 @@ export function parseOwnerMemoryQuery(input: unknown): string | null {
   }
   return input.trim();
 }
-export function rankOwnerMemoryRows<T extends {key:string;content:string}>(rows:T[],query:string,limit:number):T[] {
-  const phrase=query.toLocaleLowerCase("en-US");
-  const words=Array.from(new Set(phrase.match(/[a-z0-9_]+/g)??[])).slice(0,24);
-  if (!words.length) return [];
-  return rows.map((row,index)=>{
-    const key=row.key.toLocaleLowerCase("en-US");
-    const content=row.content.toLocaleLowerCase("en-US");
-    const all=key+" "+content;
-    const hits=words.reduce((n,w)=>n+Number(all.includes(w)),0);
-    const score=(key===phrase?100:0)+(key.includes(phrase)?40:0)+
-      (content.includes(phrase)?20:0)+hits*3;
-    return {row,index,score,hits};
-  }).filter(x=>x.hits>0).sort((a,b)=>b.score-a.score || a.index-b.index)
-    .slice(0,Math.min(Math.max(limit,1),100)).map(x=>x.row);
+/** Deterministic multi-signal retrieval adapted from PropMem/SimpleMem ideas.
+ * This is lexical ranking only: it does not claim semantic/vector search.
+ * Owner, deletion and data-class filters must be applied in Prisma BEFORE
+ * this function receives candidate rows.
+ */
+const MEMORY_STOPWORDS=new Set([
+  "a","an","and","are","as","at","be","by","for","from","how","i","in",
+  "is","it","me","my","of","on","or","the","to","was","what","when",
+  "where","which","with","you","your"
+]);
+function memoryTokens(value:string):string[] {
+  return (value.normalize("NFKC").toLocaleLowerCase("en-US")
+    .match(/[\p{L}\p{N}_]+/gu)??[]);
+}
+function memoryPhrase(value:string):string {
+  return memoryTokens(value).join(" ");
+}
+function memoryRecencyBonus(value:unknown):number {
+  const date=value instanceof Date?value:
+    typeof value==="string"?new Date(value):null;
+  if(!date || !Number.isFinite(date.getTime()))return 0;
+  const ageDays=Math.max(0,(Date.now()-date.getTime())/86_400_000);
+  return ageDays<=1?4:ageDays<=7?3:ageDays<=30?1:0;
+}
+export function rankOwnerMemoryRows<T extends {
+  key:string;content:string;updatedAt?:Date|string
+}>(rows:T[],query:string,limit:number):T[] {
+  const phrase=memoryPhrase(query);
+  const words=Array.from(new Set(memoryTokens(query)
+    .filter(w=>!MEMORY_STOPWORDS.has(w)))).slice(0,24);
+  if(!words.length)return [];
+  const scored=rows.map((row,index)=>{
+    const key=memoryPhrase(row.key);
+    const content=memoryPhrase(row.content);
+    const keyTokens=new Set(memoryTokens(row.key));
+    const contentTokens=new Set(memoryTokens(row.content));
+    const keyHits=words.filter(w=>keyTokens.has(w)).length;
+    const contentHits=words.filter(w=>contentTokens.has(w)).length;
+    const matched=keyHits+contentHits;
+    const keyCoverage=keyHits/words.length;
+    const contentCoverage=contentHits/words.length;
+    const exactKey=key===phrase;
+    const keyPhrase=key.includes(phrase);
+    const contentPhrase=content.includes(phrase);
+    const score=(exactKey?1000:0)+(keyPhrase?120:0)+
+      (contentPhrase?60:0)+keyCoverage*24+contentCoverage*12+
+      matched*2+memoryRecencyBonus(row.updatedAt);
+    return {row,index,score,matched};
+  });
+  const bounded=Number.isFinite(limit)?Math.min(Math.max(Math.floor(limit),1),100):20;
+  return scored.filter(x=>x.matched>0)
+    .sort((a,b)=>b.score-a.score||a.index-b.index)
+    .slice(0,bounded).map(x=>x.row);
 }
 export function boundedListLimit(input: unknown): number {
   const n = typeof input === "string" && /^\d+$/.test(input) ? Number(input) : 20;

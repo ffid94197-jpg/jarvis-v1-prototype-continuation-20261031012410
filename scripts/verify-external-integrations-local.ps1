@@ -21,6 +21,7 @@ $cases = @(
   @{Name='Long-run checkpoint'; Exec='node'; Args=@('scripts/longrun/verify-longrun.mjs')},
   @{Name='Browser companion'; Exec='python'; Args=@('windows-companion/verify_agent_tools_offline.py')},
   @{Name='OmniParser detection'; Exec='python'; Args=@('windows-companion/verify_omniparser_offline.py')},
+  @{Name='Optional faster-whisper adapter'; Exec='python'; Args=@('scripts/perception/verify_faster_whisper.py')},
   @{Name='OmniParser loopback'; Exec='python'; Args=@('windows-companion/verify_omniparser_loopback_offline.py')},
   @{Name='UIA wiring'; Exec='node'; Args=@('scripts/verify-native-tool-wiring.cjs')},
   @{Name='UIA mock'; Exec='python'; Args=@('windows-companion/verify_native_uia_offline.py')},

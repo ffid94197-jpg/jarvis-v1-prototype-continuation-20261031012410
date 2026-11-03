@@ -1,0 +1,4 @@
+# Optional advanced local speech recognition.
+# Install into the same isolated Windows Companion Python environment only
+# after verifying a compatible CTranslate2 wheel for that Python/Windows build.
+faster-whisper==1.2.1

@@ -134,7 +134,69 @@ def voice_vector(pcm):
     return (vector/length).astype('float32').tolist()
 
 
+def active_stt_engine():
+    """Selected local speech engine. Vosk remains the default; no silent engine fallback."""
+    selected=os.environ.get('JARVIS_STT_ENGINE','vosk').strip().lower()
+    if selected not in ('vosk','faster-whisper'):
+        raise RuntimeError('STT_ENGINE_INVALID: Select vosk or faster-whisper.')
+    return selected
+
+
+@lru_cache(maxsize=1)
+def _faster_whisper_model(model_path,device,compute_type,cpu_threads):
+    """Load only a preinstalled local CTranslate2 model; never fetch from a hub."""
+    model=Path(model_path).resolve()
+    if not model.is_dir() or not (model/'model.bin').is_file():
+        raise RuntimeError('FASTER_WHISPER_MODEL_MISSING: Configure a local CTranslate2 model directory.')
+    if not (model/'config.json').is_file():
+        raise RuntimeError('FASTER_WHISPER_MODEL_INVALID: Local model config is missing.')
+    from faster_whisper import WhisperModel
+    return WhisperModel(str(model),device=device,compute_type=compute_type,
+                        cpu_threads=cpu_threads,num_workers=1,
+                        local_files_only=True)
+
+
+def _transcribe_faster_whisper(pcm):
+    """Bounded local transcription. Caller already enforces mono 16kHz PCM and <=12s."""
+    import numpy as np
+    model_path=os.environ.get('JARVIS_FASTER_WHISPER_MODEL_DIR','').strip()
+    if not model_path:
+        raise RuntimeError('FASTER_WHISPER_MODEL_MISSING: Set JARVIS_FASTER_WHISPER_MODEL_DIR.')
+    device=os.environ.get('JARVIS_FASTER_WHISPER_DEVICE','cpu').strip().lower()
+    compute=os.environ.get('JARVIS_FASTER_WHISPER_COMPUTE_TYPE','int8' if device=='cpu' else 'float16').strip().lower()
+    if device not in ('cpu','cuda'):
+        raise RuntimeError('FASTER_WHISPER_DEVICE_INVALID: Select cpu or cuda.')
+    allowed={'cpu':('int8','int8_float32','float32'),
+             'cuda':('float16','int8_float16','int8_float32')}
+    if compute not in allowed[device]:
+        raise RuntimeError('FASTER_WHISPER_COMPUTE_INVALID: Unsupported device/compute type pair.')
+    try:
+        threads=int(os.environ.get('JARVIS_FASTER_WHISPER_CPU_THREADS','4'))
+    except ValueError:
+        raise RuntimeError('FASTER_WHISPER_THREADS_INVALID: Expected 1–16.')
+    if not 1<=threads<=16:
+        raise RuntimeError('FASTER_WHISPER_THREADS_INVALID: Expected 1–16.')
+    language=os.environ.get('JARVIS_STT_LANGUAGE','en').strip().lower()
+    if language!='auto' and not re.fullmatch(r'[a-z]{2,3}',language):
+        raise RuntimeError('STT_LANGUAGE_INVALID: Use a language code or auto.')
+    samples=np.frombuffer(pcm,dtype='<i2').astype(np.float32)/32768.0
+    if samples.size<1600 or samples.size>16000*12:
+        raise ValueError('Audio sample count outside the bounded 0.1–12 second range.')
+    model=_faster_whisper_model(str(Path(model_path).resolve()),device,compute,threads)
+    segments,_info=model.transcribe(
+        samples,language=None if language=='auto' else language,
+        beam_size=1,best_of=1,temperature=0,
+        condition_on_previous_text=False,vad_filter=True,
+        word_timestamps=False,
+    )
+    # The generator is consumed here, inside the request's bounded input scope.
+    return ' '.join(str(segment.text) for segment in segments).strip()[:1500]
+
+
 def transcribe_pcm(pcm):
+    engine=active_stt_engine()
+    if engine=='faster-whisper':
+        return _transcribe_faster_whisper(pcm)
     model_dir = Path(os.environ.get('JARVIS_PERCEPTION_MODELS', str(Path(__file__).resolve().parent / 'models')))
     model_path = model_dir / 'vosk-model-small-en-us-0.15'
     if not model_path.is_dir():
@@ -318,7 +380,7 @@ def handle(payload):
         return handle_voice(payload, owner)
     if action == 'voice_transcribe':
         transcript = transcribe_pcm(parse_audio(payload.get('audio')))
-        return {"ok": True, "transcript": transcript, "engine": "vosk-offline", "autoExecuted": False}
+        return {"ok": True, "transcript": transcript, "engine": "faster-whisper-local" if active_stt_engine() == "faster-whisper" else "vosk-offline", "autoExecuted": False}
     return fail('UNKNOWN_ACTION', 'Unsupported perception action.')
 
 

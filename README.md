@@ -1,3 +1,14 @@
+## External research integration status (2026-11-03)
+
+See [RESEARCH_COMPONENT_INTEGRATION_MATRIX_20261103.md](RESEARCH_COMPONENT_INTEGRATION_MATRIX_20261103.md)
+for the recovered component inventory and each KEEP / WRAP / HYBRID /
+REFERENCE-ONLY / DEFER / REJECT decision. Selected capabilities are native
+JARVIS subsystems; this is not a claim that every upstream framework/runtime
+or model weight has been installed or live-accepted.
+
+Optional local STT research adapter: [FASTER_WHISPER_LOCAL_STT.md](FASTER_WHISPER_LOCAL_STT.md).
+Vosk remains default; owner-selected Piper TTS is unchanged.
+
 ## New: Independent Minecraft LAN Gameplay Autonomy (2026-10-28)
 
 JarvisBuddy now has a bounded observe–decide–act–verify loop for wood gathering, basic crafting, owner-follow, defensive retreat, short exploration, and survival monitoring. See [`MINECRAFT_AUTONOMOUS_GAMEPLAY_GUIDE.md`](MINECRAFT_AUTONOMOUS_GAMEPLAY_GUIDE.md). **Not fully autonomous gameplay; live Minecraft testing pending.**

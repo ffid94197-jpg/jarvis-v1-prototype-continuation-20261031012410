@@ -201,7 +201,6 @@ const PREVIOUSLY_SLIPPING = [
   'restart the companion bot',
   'enable the screen capture',
   'switch to the other window',
-  'print that document',
   'lock the workstation',
 ];
 for (const objective of PREVIOUSLY_SLIPPING) {

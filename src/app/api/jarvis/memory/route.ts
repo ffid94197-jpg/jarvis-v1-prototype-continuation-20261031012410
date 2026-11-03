@@ -9,7 +9,7 @@ import { getAuthContext } from "@/lib/agent/auth/session";
 import { mutationOriginError } from "@/lib/agent/auth/origin";
 import {
   boundedListLimit, InputValidationError, parseDeleteInput,
-  parseMemoryInput, parseWorldInput,
+  parseMemoryInput, parseWorldInput, parseOwnerMemoryQuery, rankOwnerMemoryRows,
 } from "@/lib/agent/memory/contracts";
 
 export const runtime = "nodejs";
@@ -37,17 +37,27 @@ function safeError(error: unknown) {
 export async function GET(req: NextRequest) {
   const a = await owner(req, false);
   if (!a.ok) return a.response;
-  const kind = new URL(req.url).searchParams.get("kind") ?? "memory";
-  const limit = boundedListLimit(new URL(req.url).searchParams.get("limit"));
+  const params = new URL(req.url).searchParams;
+  const kind = params.get("kind") ?? "memory";
+  const limit = boundedListLimit(params.get("limit"));
+  let query: string | null;
+  try { query = parseOwnerMemoryQuery(params.get("query")); }
+  catch (e) { return safeError(e); }
+  if (query !== null && kind !== "memory") return deny(400,"Search is available for owner memory records only.");
   try {
     if (kind === "memory") {
       const rows = await db.jarvisMemory.findMany({
         where: { principalId: a.principalId, deletedAt: null },
-        orderBy: { updatedAt: "desc" }, take: limit,
+        orderBy: { updatedAt: "desc" }, take: query === null ? limit : 500,
         select: { id: true, key: true, content: true, dataClass: true, source: true,
           version: true, createdAt: true, updatedAt: true },
       });
-      return Response.json({ kind, records: rows }, { headers: { "Cache-Control": "no-store" } });
+      // Retrieval is strictly after principalId/deletion filtering in Prisma.
+      // No automatic model context injection, embeddings or cloud export.
+      return Response.json({ kind, records: query === null ? rows :
+        rankOwnerMemoryRows(rows,query,limit), searchApplied:query !== null,
+        retrievalSource:"owner_local_records" },
+        { headers: { "Cache-Control": "no-store" } });
     }
     if (kind === "world") {
       const rows = await db.jarvisWorldObservation.findMany({

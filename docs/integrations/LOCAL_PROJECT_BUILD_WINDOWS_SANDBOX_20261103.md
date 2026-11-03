@@ -32,7 +32,7 @@ This adapter is for the secondary Prototype JARVIS track only. It does not chang
    - Source, runtime and cache mapped read-only
    - Only one run-scoped output folder mapped writable
 6. Inside the disposable guest, JARVIS runs npm ci --offline --include=dev with NODE_ENV=development, then sets NODE_ENV=production and runs npm run build. No external network is available. Package lifecycle scripts and project build code execute only inside the guest.
-7. Guest and host quotas bound source size, npm cache size, runtime size, file counts, working-tree size, output size and elapsed time. Cancellation attempts to terminate the Windows Sandbox process tree. If shutdown cannot be confirmed, the result is outcomeUnknown and staging is retained rather than replayed.
+7. Guest and host quotas bound source size, npm cache size, runtime size, file and directory counts, working-tree size, output size and elapsed time. Cancellation attempts to terminate the Windows Sandbox process tree. If shutdown cannot be confirmed, the result is outcomeUnknown and staging is retained rather than replayed.
 8. The host rejects output reparse points and unsafe filenames, independently copies and hashes the artifact tree, and writes a host-generated build-receipt.json inside the project’s .jarvis-build-results/<runId>/ directory.
 
 Supported artifact markers are .next/BUILD_ID, dist/index.html, build/index.html, and out/index.html. A zero exit code without one of these markers is not a successful build.

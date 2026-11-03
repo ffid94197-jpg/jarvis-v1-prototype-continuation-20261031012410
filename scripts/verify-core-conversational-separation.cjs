@@ -152,7 +152,7 @@ const priorCandidates = [
 ];
 ok(selectPriorTask('complete it fully', priorCandidates)?.id === 'latest-jarvis',
   'unqualified completion follow-up resolves to the newest owner task');
-ok(selectPriorTask('complete the Minecraft work', [
+ok(selectPriorTask('complete the remaining Minecraft work', [
   { id: 'unrelated', objective: 'Prepare a spreadsheet report.' },
   { id: 'minecraft', objective: 'Defeat the Ender Dragon and equip full Netherite.' }
 ])?.id === 'minecraft', 'topic-specific continuation resolves to the matching owner task');

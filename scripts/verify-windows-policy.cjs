@@ -120,6 +120,15 @@ assert(!make({...base,JARVIS_EXPERIMENTAL_DESKTOP_CONTROL:'1'})('windows_desktop
 assert(cuaDecide('windows_desktop_click',{x:200,y:150,button:'left'}).ok,
   'legacy coordinate click remains supported with CUA opt-in');
 const cuaWindowTarget = {pid:4242,cuaWindowId:'987654321'};
+const cuaObserve = cuaDecide('windows_desktop_observe',cuaWindowTarget);
+assert(cuaObserve.ok && cuaObserve.prepared.pid === 4242 &&
+  cuaObserve.prepared.cuaWindowId === '987654321',
+  'exact-window CUA observation is Guardian-prepared');
+assert(cuaDecide('windows_desktop_observe',{}).ok,
+  'foreground CUA observation remains available');
+assert(!make({...base,JARVIS_EXPERIMENTAL_DESKTOP_CONTROL:'1'})(
+  'windows_desktop_observe',cuaWindowTarget).ok,
+  'exact-window CUA observation requires CUA opt-in');
 const backgroundType = cuaDecide('windows_desktop_type',{text:'hello',...cuaWindowTarget});
 assert(backgroundType.ok && backgroundType.prepared.pid === 4242 &&
   backgroundType.prepared.cuaWindowId === '987654321',

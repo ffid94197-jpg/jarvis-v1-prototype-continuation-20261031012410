@@ -289,7 +289,8 @@ class CuaDriverBackend:
             "controlCount": min(len(controls), 30),
             "note": (
                 "Element tokens are exact-window and snapshot scoped. Use the token, pid and "
-                "cuaWindowId from the same row. Tokens are single-use, expire after 25 seconds, ""and any new observation invalidates them. "
+                "cuaWindowId from the same row. Tokens are single-use and expire after 25 seconds. "
+                "Any new observation invalidates them. "
                 "A degraded or truncated tree does not expose clickable tokens."
             ),
         }

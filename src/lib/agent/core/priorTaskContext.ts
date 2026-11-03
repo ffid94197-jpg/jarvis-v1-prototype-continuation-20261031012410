@@ -6,9 +6,13 @@
  */
 export interface PriorTaskSnapshot { id: string; objective: string; createdAt?: Date | string; }
 const REFERENCE = /\b(?:previous|prior|earlier|original|last)\b.{0,85}\b(?:task|request|instruction|analysis|report|inventory|file|project|output|work)\b|\b(?:audit|compare|review|correct|repair|check|verify)\b.{0,90}\b(?:previous|earlier|original|prior)\b/i;
-const TOPIC = /\b(?:inventory|spreadsheet|report|document|minecraft|website|video|photo|image|app|code|budget|invoice|resume|email|file)\b/gi;
+// Short continuation commands ("complete it fully", "do the remaining",
+// "continue") are cross-task references, not self-contained new objectives.
+const FOLLOW_UP_REFERENCE =
+ /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:do|complete|finish|continue|resume|keep\s+going|carry\s+on)(?:\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task|where\s+we\s+left(?:\s+off)?|from\s+(?:the\s+)?(?:last|latest)\s+checkpoint))?\b/i;
+const TOPIC = /\b(?:jarvis|prototype|autonomy|windows|computer|agent|inventory|spreadsheet|report|document|minecraft|website|video|photo|image|app|code|budget|invoice|resume|email|file)\b/gi;
 export function needsPriorTaskContext(objective: string): boolean {
- return typeof objective === "string" && objective.length < 5000 && REFERENCE.test(objective);
+ return typeof objective === "string" && objective.length < 5000 && (REFERENCE.test(objective) || FOLLOW_UP_REFERENCE.test(objective.trim()));
 }
 export function selectPriorTask(objective: string, tasks: PriorTaskSnapshot[]): PriorTaskSnapshot | null {
  if(!needsPriorTaskContext(objective) || !Array.isArray(tasks)) return null;

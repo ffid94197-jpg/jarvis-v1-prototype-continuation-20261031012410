@@ -22,6 +22,7 @@ const ok=(v,label)=>{assert.equal(v,true,label);checks++;};
 const botSource=fs.readFileSync(path.join(root,'windows-companion/minecraft-bot/bot.cjs'),'utf8');
 ok(botSource.includes("const match=/^(?:hey\\s+)?jarvis(?:buddy)?"),'owner command parser accepts Hey Jarvis wake prefix');
 ok(botSource.includes("const natural=/^(?:hey\\s+)?jarvis(?:buddy)?"),'free-form owner chat accepts Hey Jarvis wake prefix');
+ok(botSource.includes('if(username!==leader || !spawned'),'wake-name chat remains restricted to the enrolled owner');
 const chatWake=/^(?:hey\\s+)?jarvis(?:buddy)?[,: ]+(.+)$/i;
 for(const message of ['jarvis complete it fully','hey jarvis, complete it fully','jarvisbuddy: gather 16 cobblestone','hey jarvisbuddy, explore the cave'])
  ok(chatWake.test(message),'owner Minecraft chat wake prefix: '+message);

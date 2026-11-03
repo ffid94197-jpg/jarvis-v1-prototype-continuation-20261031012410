@@ -14,6 +14,7 @@ const {Vec3} = require('vec3');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {validateCommand, inventorySummary} = require('./friend_protocol.cjs');
 const {goalSpecFromCommand}=require('./goal_dispatch.cjs');
+const {compactAutonomyStatus}=require('./status_receipt.cjs');
 const {interpretOwnerInstruction} = require('./language_goal.cjs');
 const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
@@ -965,7 +966,7 @@ async function action(q){
       // silently truncate a late-game observation and mislead the planner.
       return {ok:true,status:projectWorld(snapshot,loadedTargets(bot),lastAction,mode)};
     }
-    case 'auto_status':return {ok:true,status:JSON.stringify(autopilot.status()).slice(0,1900)};
+    case 'auto_status':return {ok:true,status:compactAutonomyStatus(autopilot.status())};
     case 'auto_checkpoint':{
       const lease=missionCheckpoint.load();
       return {ok:true,status:JSON.stringify(lease.ok?

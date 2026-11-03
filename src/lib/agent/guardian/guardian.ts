@@ -26,6 +26,9 @@ export interface PreparedArgs {
   path?: string;
   relPath?: string;
   content?: string;
+  expectedSha256?: string;
+  oldText?: string;
+  newText?: string;
   command?: string;
   args?: string[];
   /** For multi-path tools (ls/cat/wc): guardian-approved absolute paths. */
@@ -44,6 +47,7 @@ export interface GuardianDecision {
 export const GUARDIAN_KNOWN_TOOLS = [
   "create_folder",
   "write_file",
+  "edit_file",
   "read_file",
   "list_dir",
   "run_command",
@@ -201,6 +205,33 @@ export async function authorizeToolCall(
         break;
       }
 
+      case "edit_file": {
+        const expectedKeys=["path","expectedSha256","oldText","newText"];
+        if (Object.keys(rawArgs).some(k=>!expectedKeys.includes(k))) {
+          decision=deny("edit_file accepts only path, expectedSha256, oldText and newText");break;
+        }
+        const p=resolveScopedPath(rawArgs.path);
+        if (!p.ok || !p.abs || !p.rel) {
+          decision=deny(p.reason??"invalid scoped edit path");break;
+        }
+        const expected=rawArgs.expectedSha256, oldText=rawArgs.oldText, newText=rawArgs.newText;
+        if (typeof expected!=="string" || !/^[a-f0-9]{64}$/.test(expected) ||
+            typeof oldText!=="string" || !oldText.length ||
+            typeof newText!=="string" ||
+            /\0/.test(oldText) || /\0/.test(newText) ||
+            Buffer.byteLength(oldText,"utf8")>MAX_WRITE_BYTES ||
+            Buffer.byteLength(newText,"utf8")>MAX_WRITE_BYTES) {
+          decision=deny("edit_file requires a full SHA-256 and bounded UTF-8 replacement");break;
+        }
+        const within=await assertWithinRoot(p.abs);
+        if (!within.ok) {
+          decision=deny(within.reason??"edit target leaves workspace");break;
+        }
+        decision={verdict:"allow",prepared:{
+          path:p.abs,relPath:p.rel,expectedSha256:expected,oldText,newText
+        }};
+        break;
+      }
       case "windows_open_url":
       case "windows_open_app":
       case "windows_open_settings":

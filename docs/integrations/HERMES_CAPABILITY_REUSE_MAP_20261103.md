@@ -1,7 +1,7 @@
 # Hermes Agent capability reuse map for JARVIS Prototype
 
 Reviewed against Hermes Agent source revision
-74b2ed65e6564bfcafd29236e5fab2447a68fc76 and JARVIS integration base
+fd267bb3242a14c33d4899cffc60ee4be816f14d and JARVIS integration base
 b2ca2c87716b67ddcbc27193a3ad946f41244714.
 
 ## Directly adopted

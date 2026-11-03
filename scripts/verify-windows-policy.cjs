@@ -133,6 +133,13 @@ const backgroundType = cuaDecide('windows_desktop_type',{text:'hello',...cuaWind
 assert(backgroundType.ok && backgroundType.prepared.pid === 4242 &&
   backgroundType.prepared.cuaWindowId === '987654321',
   'exact-window background text input is Guardian-prepared');
+for (const byte of [0, 7, 11, 12, 31]) {
+  assert(!cuaDecide('windows_desktop_type',{
+    text:'prefix'+String.fromCharCode(byte)+'suffix',...cuaWindowTarget
+  }).ok,'Windows desktop input denies C0 control byte '+byte);
+}
+assert(cuaDecide('windows_desktop_type',{text:'Normal UTF-8 text',...cuaWindowTarget}).ok,
+  'Windows desktop input still allows ordinary text after regex repair');
 const backgroundKeys = cuaDecide('windows_desktop_keys',{keys:['ctrl','s'],...cuaWindowTarget});
 assert(backgroundKeys.ok && backgroundKeys.prepared.pid === 4242,
   'exact-window background keyboard input is Guardian-prepared');

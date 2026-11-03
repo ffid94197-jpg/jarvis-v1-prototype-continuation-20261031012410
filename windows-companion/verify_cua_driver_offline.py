@@ -112,6 +112,34 @@ class CuaDriverOfflineTests(unittest.TestCase):
             else:
                 os.environ["JARVIS_CUA_DRIVER_ENABLED"] = old
 
+    def test_exact_window_type_and_keys_require_complete_cua_target(self):
+        old = os.environ.get("JARVIS_CUA_DRIVER_ENABLED")
+        try:
+            os.environ["JARVIS_CUA_DRIVER_ENABLED"] = "1"
+            target = {"pid": 42, "cuaWindowId": "9001"}
+            self.assertIsNone(check_input({
+                "operation": "desktop_type", "text": "hello", **target
+            }))
+            self.assertIsNone(check_input({
+                "operation": "desktop_keys", "keys": ["ctrl", "s"], **target
+            }))
+            self.assertIsNotNone(check_input({
+                "operation": "desktop_type", "text": "hello", "pid": 42
+            }))
+            self.assertIsNotNone(check_input({
+                "operation": "desktop_keys", "keys": ["ctrl", "s"],
+                "cuaWindowId": "9001"
+            }))
+            os.environ["JARVIS_CUA_DRIVER_ENABLED"] = "0"
+            self.assertIsNotNone(check_input({
+                "operation": "desktop_type", "text": "hello", **target
+            }))
+        finally:
+            if old is None:
+                os.environ.pop("JARVIS_CUA_DRIVER_ENABLED", None)
+            else:
+                os.environ["JARVIS_CUA_DRIVER_ENABLED"] = old
+
     def test_backend_requires_both_explicit_opt_ins(self):
         backend = CuaDriverBackend()
         old_a = os.environ.get("JARVIS_EXPERIMENTAL_DESKTOP_CONTROL")

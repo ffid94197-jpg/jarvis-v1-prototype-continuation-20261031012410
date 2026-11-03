@@ -96,11 +96,13 @@ separately with windows_desktop_observe and a harmless test application.
 
 - Run windows_desktop_observe before selecting controls. It lists visible
   windows and takes one accessibility snapshot of the current foreground
-  window.
+  window. observedWindow.selectionReason reports whether the foreground title
+  matched or the first-visible fallback was used.
 - To inspect a different window, pass its PID and cuaWindowId from
-  visibleWindows to windows_desktop_observe. Only one window is snapshotted per
-  call so inspecting another window cannot invalidate tokens before they are
-  returned.
+  visibleWindows to windows_desktop_observe. The returned observedWindow then
+  reports selectionReason "explicit-window". Only one window is snapshotted
+  per call so inspecting another window cannot invalidate tokens before they
+  are returned.
 - Prefer an elementToken from the latest snapshot, paired with that row's PID
   and cuaWindowId, over guessed coordinates.
 - Use windows_desktop_click with elementToken, pid, cuaWindowId and button.

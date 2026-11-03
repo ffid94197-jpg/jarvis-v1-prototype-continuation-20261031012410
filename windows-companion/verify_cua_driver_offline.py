@@ -223,6 +223,7 @@ class CuaDriverOfflineTests(unittest.TestCase):
             first = asyncio.run(backend._observe({"_foregroundTitle": "Foreground"}))
             first_token = first["foregroundControls"][0]["elementToken"]
             self.assertEqual(first["observedWindow"]["pid"], 42)
+            self.assertEqual(first["observedWindow"]["selectionReason"], "foreground-title")
             self.assertEqual(backend._driver.snapshots, 1)
             self.assertIn(first_token, backend._tokens)
             self.assertNotIn("treeMarkdown", first["observedWindow"])
@@ -230,6 +231,7 @@ class CuaDriverOfflineTests(unittest.TestCase):
 
             second = asyncio.run(backend._observe({"pid": 41, "cuaWindowId": "401"}))
             self.assertEqual(second["observedWindow"]["pid"], 41)
+            self.assertEqual(second["observedWindow"]["selectionReason"], "explicit-window")
             self.assertEqual(backend._driver.snapshots, 2)
             self.assertNotIn(first_token, backend._tokens)
         finally:

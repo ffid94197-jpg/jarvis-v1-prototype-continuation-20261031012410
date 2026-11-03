@@ -235,7 +235,9 @@ class CuaDriverBackend:
             raise ValueError("No visible Windows targets were found in the interactive session.")
 
         target_window = None
+        selection_reason = "first-visible-fallback"
         if "pid" in op or "cuaWindowId" in op:
+            selection_reason = "explicit-window"
             pid = op.get("pid")
             raw_window_id = op.get("cuaWindowId")
             if type(pid) is not int or not isinstance(raw_window_id, str):
@@ -261,6 +263,8 @@ class CuaDriverBackend:
                     ),
                     None,
                 )
+                if target_window is not None:
+                    selection_reason = "foreground-title"
             target_window = target_window or valid_windows[0]
 
         pid = getattr(target_window, "pid", None)
@@ -273,6 +277,7 @@ class CuaDriverBackend:
         # could invalidate tokens from earlier windows before the model sees them.
         self._tokens.clear()
         record = _window_record(target_window)
+        record["selectionReason"] = selection_reason
         controls: list[dict[str, Any]] = []
         try:
             state = await self._driver.get_window_state(

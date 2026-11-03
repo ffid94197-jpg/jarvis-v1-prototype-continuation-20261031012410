@@ -263,25 +263,29 @@ class CuaDriverBackend:
             if target_window is None:
                 raise ValueError("The requested CUA window is no longer visible.")
         else:
-            foreground_title = str(op.get("_foregroundTitle", "") or "").strip().casefold()
-            if not foreground_title:
+            selection_reason = "foreground-identity"
+            pid = op.get("_foregroundPid")
+            raw_window_id = op.get("_foregroundWindowId")
+            if (type(pid) is not int or not 0 < pid < 2**32 or
+                not isinstance(raw_window_id, str) or
+                re.fullmatch(r"[1-9][0-9]{0,19}", raw_window_id) is None or
+                not 0 < int(raw_window_id) < 2**64):
                 raise ValueError(
-                    "Foreground window could not be identified; select an exact visible window."
+                    "Foreground PID/window identity is unavailable; refusing ambiguous title selection."
                 )
             target_window = next(
                 (
                     window for window in valid_windows
-                    if str(getattr(window, "title", "") or "")[:100].strip().casefold()
-                    == foreground_title
+                    if getattr(window, "pid", None) == pid
+                    and getattr(window, "window_id", None) == int(raw_window_id)
                 ),
                 None,
             )
             if target_window is None:
                 raise ValueError(
-                    "The current foreground window is not in the visible CUA window list; "
-                    "select an exact visible window."
+                    "The exact foreground PID/window is not in the visible CUA list; "
+                    "select a visible window explicitly."
                 )
-            selection_reason = "foreground-title"
 
         pid = getattr(target_window, "pid", None)
         window_id = getattr(target_window, "window_id", None)

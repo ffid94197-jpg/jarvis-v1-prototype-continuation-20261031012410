@@ -90,3 +90,22 @@ authority, and no completion proof is inferred from test fixtures.
 - Extended Minecraft unknown-seed live gameplay and Dragon/Netherite end-to-end Java LAN acceptance remain blocked. This integration work provides no evidence of Minecraft victory.
 
 **Verdict:** Selective component integration candidate with bounded code changes, **NOT FULL UPSTREAM MERGE**, **NOT V1 RELEASE ACCEPTED**. Only declare stronger outcomes after independent local/full-stack tests and actual Windows live acceptance.
+
+## November 3 coding-tool continuation
+
+Prototype JARVIS also gains a native **edit_file** primitive for bounded
+incremental source changes, inspired by OpenHands' verified coding workflows
+without importing a competing agent. The input requires a full observed
+read_file SHA-256 and exactly one matching snippet. Guardian authorizes
+workspace containment and audits, Core records the write intent in the
+durable effect admission table, and the executor stages, rechecks and
+reads back actual bytes. Crash-unknown edits never replay automatically.
+`node scripts/verify-native-code-edit.cjs` and the local Windows
+acceptance runner cover targeted regressions.
+
+The source-edit module passed **7 isolated real temporary-filesystem
+checks** in a Linux tool container using the exact module, with a mocked
+Guardian path predicate. The complete test-suite, live database,
+LLM-driven coding task and owner Windows environment have NOT been
+verified. This does not equal full OpenHands SDK integration.
+

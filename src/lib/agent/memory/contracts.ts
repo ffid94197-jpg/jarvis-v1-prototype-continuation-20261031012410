@@ -70,6 +70,32 @@ export function parseWorldInput(input: unknown, now = new Date()): WorldInput {
     expiresAt: new Date(now.getTime() + expiresInSeconds * 1000),
   };
 }
+/** Mem0-inspired retrieval over JARVIS's existing owner-scoped records.
+ * This never invokes a model, exports data, or labels memories as verified.
+ */
+export function parseOwnerMemoryQuery(input: unknown): string | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input !== "string" || input.trim().length < 2 ||
+      input.length > 160 || /[\u0000-\u001f\u007f]/.test(input)) {
+    throw new InputValidationError("Memory query must be 2–160 printable characters");
+  }
+  return input.trim();
+}
+export function rankOwnerMemoryRows<T extends {key:string;content:string}>(rows:T[],query:string,limit:number):T[] {
+  const phrase=query.toLocaleLowerCase("en-US");
+  const words=Array.from(new Set(phrase.match(/[a-z0-9_]+/g)??[])).slice(0,24);
+  if (!words.length) return [];
+  return rows.map((row,index)=>{
+    const key=row.key.toLocaleLowerCase("en-US");
+    const content=row.content.toLocaleLowerCase("en-US");
+    const all=key+" "+content;
+    const hits=words.reduce((n,w)=>n+Number(all.includes(w)),0);
+    const score=(key===phrase?100:0)+(key.includes(phrase)?40:0)+
+      (content.includes(phrase)?20:0)+hits*3;
+    return {row,index,score,hits};
+  }).filter(x=>x.hits>0).sort((a,b)=>b.score-a.score || a.index-b.index)
+    .slice(0,Math.min(Math.max(limit,1),100)).map(x=>x.row);
+}
 export function boundedListLimit(input: unknown): number {
   const n = typeof input === "string" && /^\d+$/.test(input) ? Number(input) : 20;
   return Number.isSafeInteger(n) && n >= 1 ? Math.min(n, 100) : 20;

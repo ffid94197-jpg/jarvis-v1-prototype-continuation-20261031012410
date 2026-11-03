@@ -32,7 +32,7 @@
     "worker:longrun": "bun --env-file=.env scripts/longrun/worker.ts",
     "test:longrun-offline": "node scripts/longrun/verify-longrun.mjs",
     "test:capability-discovery": "python scripts/capability/verify_discovery.py --rounds 12 --cases 2500 && node scripts/capability/verify_wiring.cjs && node scripts/capability/verify_direct_intent.cjs",
-    "test:adoption-offline": "node scripts/adoption/verify-adoption.mjs",
+    "test:adoption-offline": "node scripts/adoption/verify-adoption.mjs && node scripts/adoption/verify-mcp-pinned.mjs",
     "dev:authenticated": "next dev -p 3000",
     "test:nexus-settings": "node scripts/verify-nexus-settings.cjs && node scripts/verify-nexus-orb-navigation.cjs && node scripts/verify-nexus-ui-stress.cjs",
     "test:privacy-policy-offline": "node scripts/model-manager/verify-privacy-policy.cjs",

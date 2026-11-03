@@ -125,3 +125,34 @@ A focused mocked security suite
 owner isolation, data-class denial, forged owner, cancellation, and audit
 redaction. Actual owner Windows/Prisma/provider execution is not certified.
 This is a capability slice, **not full Mem0 SDK/runtime**.
+
+## November 3 connector security continuation
+
+The OpenHands-derived MCP redaction layer now recognizes common camelCase,
+snake_case and dashed API keys, session tokens, credentials and nested headers.
+Untrusted MCP error messages are no longer forwarded into the Core as
+error prose. This is a defensive filter, not a guarantee that arbitrary
+unstructured output contains no secrets.
+
+For external HTTPS MCP servers, the Node transport now resolves **all**
+A/AAAA answers, rejects restricted/reserved/loopback and tunneled prefixes,
+and pins a validated IP directly to each new non-pooled socket's DNS lookup.
+The original hostname remains the TLS SNI and certificate verification name.
+The address is validated again at connection time so DNS rebinding between
+discovery and actual tool call cannot redirect the request to private network
+services. Redirects, credential-bearing endpoint URLs and IP literals are
+rejected. Loopback-only HTTP MCP remains supported for user-controlled local
+test servers.
+
+Owner approval of third-party MCP code is not an OS sandbox. Therefore
+**stdio MCP subprocesses are disabled by default**; running a local package
+script requires an additional explicit
+`JARVIS_UNSANDBOXED_MCP_STDIO_ALLOWED=1` operator development opt-in on an
+isolated machine. This override is *not* an LPAC/Guardian confinement proof.
+External tools still require Guardian authorization and effect journaling.
+
+The focused test script `node scripts/adoption/verify-mcp-pinned.mjs`
+exercises public/private address policy, redaction and a mocked HTTPS
+socket-level DNS pin. Actual public network TLS, DNS infrastructure, Windows
+LPAC, full MCP SDK and production acceptance remain NOT VERIFIED. No new
+external agent is granted Core authority.

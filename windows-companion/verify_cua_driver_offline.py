@@ -340,6 +340,8 @@ class CuaDriverOfflineTests(unittest.TestCase):
             {"operation":"desktop_move","x":500,"y":1080},info))
         self.assertIsNone(check_cua_coordinates(
             {"operation":"desktop_click","elementToken":"s00000001:2"},info))
+        self.assertIsNotNone(check_cua_coordinates(
+            {"operation":"desktop_move","x":500,"y":1080,"elementToken":"ignored"},info))
 
     def test_backend_requires_both_explicit_opt_ins(self):
         backend = CuaDriverBackend()

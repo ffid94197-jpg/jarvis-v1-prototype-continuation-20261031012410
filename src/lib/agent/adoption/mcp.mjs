@@ -7,6 +7,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import dns from 'node:dns/promises';
 import {AdoptionError,get} from './registry.mjs';
+import {redactUntrustedToolData} from './redact.mjs';
 const MAX_REPLY=1024*1024;
 const PRIVATE=/^(?:10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1$|fc|fd|fe80:)/i;
 export async function checkEndpoint(url){const u=new URL(url);if(u.username||u.password||u.hash||u.search)throw new AdoptionError('Credentials/fragments in endpoint are forbidden');
@@ -111,7 +112,7 @@ export async function mcpOperation(owner,id,serverName,operation,name,args={}){
     if(!args||typeof args!=='object'||Array.isArray(args)||JSON.stringify(args).length>9000)throw new AdoptionError('Invalid tool arguments');
     // Enforce that the target is currently advertised, never call a guessed tool.
     const listed=await request('tools/list',{});if(!(listed?.tools||[]).some(t=>t.name===name))throw new AdoptionError('MCP tool is not currently advertised');
-    const result=await request('tools/call',{name,arguments:args});return {ok:result?.isError!==true,content:JSON.stringify(result?.content||[]).slice(0,5500),isError:result?.isError===true};
+    const result=await request('tools/call',{name,arguments:args});return {ok:result?.isError!==true,content:JSON.stringify(redactUntrustedToolData(result?.content||[])).slice(0,5500),isError:result?.isError===true};
   }
   if(operation==='list_resources'){const result=await request('resources/list',{});return {resources:(result?.resources||[]).slice(0,40).map(r=>({name:r.name,uri:r.uri,description:String(r.description||'').slice(0,200)}))};}
   if(operation==='list_prompts'){const result=await request('prompts/list',{});return {prompts:(result?.prompts||[]).slice(0,40).map(p=>({name:p.name,description:String(p.description||'').slice(0,200)}))};}

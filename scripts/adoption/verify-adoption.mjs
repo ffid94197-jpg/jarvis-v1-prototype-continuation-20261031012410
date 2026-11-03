@@ -7,7 +7,18 @@ const base=await fs.mkdtemp(path.join(os.tmpdir(),'jarvis-test-adoption-'));
 process.env.JARVIS_ADOPTION_ROOT=path.join(base,'registry');
 const {githubSpec,inspect,stageFromDirectory,stageRemote,list,get,update,activateSkill}=await import('../../src/lib/agent/adoption/registry.mjs');
 const {mcpOperation,checkEndpoint}=await import('../../src/lib/agent/adoption/mcp.mjs');
+const {redactUntrustedToolData}=await import('../../src/lib/agent/adoption/redact.mjs');
 let checks=0;const ok=(v,msg)=>{assert.ok(v,msg);checks++};
+const structured=redactUntrustedToolData({headers:{Authorization:'Bearer secret-123'},
+  output:{api_key:'top-secret',status:'ok',details:'Authorization: Bearer hidden-key'}});
+ok(structured.headers.Authorization==='[redacted]' &&
+  structured.output.api_key==='[redacted]' &&
+  structured.output.status==='ok' &&
+  !JSON.stringify(structured).includes('hidden-key'),
+  'OpenHands MIT-derived redaction removes credentials before model-visible MCP receipt');
+const openclaw=githubSpec('https://github.com/openclaw/openclaw/tree/main/skills/skill-creator');
+ok(openclaw.repo==='openclaw' && openclaw.subPath==='skills/skill-creator',
+  'OpenClaw pinned text-only skill URL is recognized for owner-approved staging');
 const fixture=path.join(base,'sample');await fs.mkdir(path.join(fixture,'skills','inspect'),{recursive:true});
 await fs.mkdir(path.join(fixture,'.claude-plugin'),{recursive:true});
 await fs.mkdir(path.join(fixture,'mcp'),{recursive:true});

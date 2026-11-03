@@ -161,7 +161,15 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         return {ok:false,reason:"Search query must be bounded printable text."};
       return {ok:true,prepared:{operation:"browser_search",query:args.query.trim()}};
     }
-    if (tool === "windows_browser_inspect") return {ok:true,prepared:{operation:"browser_inspect"}};
+    if (tool === "windows_browser_inspect") {
+      if (Object.keys(args).some(k => k !== "query"))
+        return {ok:false,reason:"Browser inspection accepts only an optional visible-control query."};
+      if (args.query === undefined) return {ok:true,prepared:{operation:"browser_inspect"}};
+      if (typeof args.query !== "string" || args.query.trim().length < 2 ||
+          args.query.length > 160 || /[\x00-\x1f\x7f]/.test(args.query))
+        return {ok:false,reason:"Browser control query must be 2–160 printable characters."};
+      return {ok:true,prepared:{operation:"browser_inspect",query:args.query.trim()}};
+    }
     if (tool === "windows_browser_read_page") return {ok:true,prepared:{operation:"browser_read_page"}};
     if (typeof args.pageToken !== "string" || !/^[a-f0-9]{24}$/.test(args.pageToken))
       return {ok:false,reason:"A fresh pageToken from windows_browser_inspect is required."};

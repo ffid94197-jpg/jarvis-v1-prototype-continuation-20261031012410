@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
-import {makePlan, nextAfterOutcome, nextSchedule, taskPrompt, findBoundedPath, nextStrategyPath, categoryOf} from '../../src/lib/agent/longrun/planner.mjs';
+import {makePlan, nextAfterOutcome, advanceFromPersistedCheckpoint, nextSchedule, taskPrompt, findBoundedPath, nextStrategyPath, categoryOf} from '../../src/lib/agent/longrun/planner.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 let checks=0;
 const check=(condition,msg)=>{assert.ok(condition,msg);checks++;};
@@ -32,6 +32,19 @@ throws(()=>makePlan('x',Array.from({length:9},(_,i)=>({goal:`g${i}`}))),'too man
 throws(()=>makePlan('x',[{goal:'hi',strategies:['']}]),'blank strategy');
 throws(()=>makePlan('x',[{goal:'hi',strategies:Array.from({length:5},()=> 'hi')}]),'too many strategies');
 const two=makePlan('task',['stage 1','stage 2']);
+const checkpoint={routineId:'routine_123456',taskId:'task_12345678',
+  stepIndex:0,routeIndex:0,outcome:'verified'};
+same(advanceFromPersistedCheckpoint(two,checkpoint,{...checkpoint}).kind,'advance',
+  'LangGraph-style committed checkpoint advances the correct task only');
+for (const mutation of [{taskId:'stale_12345678'}, {routineId:'other_12345678'},
+   {stepIndex:1},{routeIndex:1},{outcome:'completed'}]) {
+  same(advanceFromPersistedCheckpoint(two,checkpoint,{...checkpoint,...mutation}).kind,
+    'blocked','persisted checkpoint mismatch cannot advance another task');
+}
+same(advanceFromPersistedCheckpoint(two,{...checkpoint,outcome:'effect_unknown'},
+ {...checkpoint,outcome:'effect_unknown'}).kind,'blocked',
+ 'uncertain effect checkpoint cannot grant progress');
+
 same(nextAfterOutcome(two,0,0,'completed').stepIndex,1,'advance on verified completion');
 for(const outcome of ['partial','watchdog_pause'])same(nextAfterOutcome(two,0,0,outcome).kind,'retry_alternative');
 for(const mode of ['once','interval']){

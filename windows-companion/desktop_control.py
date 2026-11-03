@@ -126,11 +126,18 @@ def observe_desktop():
             limitation = 'Native accessibility inspection unavailable.'
     except Exception as exc:
         limitation = 'Native accessibility unavailable ('+type(exc).__name__+').'
+    # Optional screenshot inference stays local/opt-in and cannot grant
+    # action authority. It never produces reusable UIA element tokens.
+    omniparser=None
+    if os.environ.get('JARVIS_OMNIPARSER_ENABLED')=='1':
+        from omniparser_local import inspect_live_screen
+        omniparser=inspect_live_screen()
     return {'desktop':state, 'visibleWindows':windows.get('windows',[])[:35],
             'foregroundControls':controls, 'uiaLimitation':limitation,
             'source':'Current Windows desktop and accessibility tree',
-            'screenPixelsInterpreted':False,
-            'note':'Use opt-in screen vision for custom-rendered apps and games.'}
+            'screenPixelsInterpreted':bool(omniparser and omniparser.get('ok')),
+            'omniparser':omniparser,
+            'note':'OmniParser yields read-only visual hints, never proof or clickable authority.'}
 
 
 def emergency_monitor():

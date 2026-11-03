@@ -29,6 +29,12 @@ passes(check({'operation':'browser_search','query':'fun videos'}) is None,'gener
 passes(check({'operation':'browser_search','query':'\nsearch'}) is not None,'control characters rejected')
 passes(check({'operation':'browser_search','query':'x'*161}) is not None,'oversized searches rejected')
 passes(check({'operation':'browser_inspect'}) is None,'inspect allowed')
+passes(check({'operation':'browser_inspect','query':'MrBeast'}) is None,
+       'Visible browser element grounding accepts bounded owner query')
+passes(check({'operation':'browser_inspect','query':'X'*161}) is not None,
+       'Browser element grounding rejects oversized query')
+passes(check({'operation':'browser_inspect','query':'MrBeast','script':'execute'}) is not None,
+       'Browser element grounding refuses extra command parameters')
 passes(check({'operation':'browser_read_page'}) is None,'read allowed')
 passes(check({'operation':'browser_click_link','index':0,'pageToken':'a'*24}) is None,'bounded click accepted')
 passes(check({'operation':'browser_click_link','index':40,'pageToken':'a'*24}) is not None,'large click index denied')
@@ -92,6 +98,15 @@ page=Page([link,unsafe,search,password]); state={}
 items=ns['inspect_page'](page,state)
 passes(items['items'][0]['kind']=='link' and len(items['items'])==2,'inspect omits private links and passwords')
 passes(len(items['pageToken'])==24,'fresh page token issued')
+filtered=ns['inspect_page'](page,state,'MrBeast')
+passes(filtered['queryGrounded'] and len(filtered['items'])==1 and filtered['items'][0]['index']==0,
+       'Browser-use-style grounding matches only observed public page link')
+none=ns['inspect_page'](page,state,'UnknownDestinationXYZ')
+passes(not none['queryGrounded'] and len(none['items'])==0,
+       'Missing page target never creates guessed link')
+passes(0 not in state['inspection']['entries'],
+       'Unmatched browser selection is not actionable')
+items=ns['inspect_page'](page,state)
 def raises(f):
     try:f();return False
     except RuntimeError:return True

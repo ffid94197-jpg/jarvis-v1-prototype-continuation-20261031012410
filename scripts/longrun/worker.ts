@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../../src/lib/db';
 import { runTask, buildReplayFromJournal } from '../../src/lib/agent/core/loop';
 import { reconcileCrashedTasks } from '../../src/lib/agent/core/effects';
-import { makePlan, nextAfterOutcome, nextSchedule, taskPrompt, type LongGoal } from '../../src/lib/agent/longrun/planner.mjs';
+import { makePlan, advanceFromPersistedCheckpoint, nextSchedule, taskPrompt, type LongGoal } from '../../src/lib/agent/longrun/planner.mjs';
 
 const WORKER_ID = randomUUID();
 const LEASE_MS = 120000;
@@ -120,8 +120,16 @@ async function runRoutine(id:string) {
     if (lastStatus==='paused' || !lastStatus) {
       await block(id,'Routine paused after eight execution slices; requires operator review.');return;
     }
-    await db.agentRoutineAttempt.updateMany({where:{taskId},data:{outcome:lastStatus,summary:lastText.slice(0,1000),endedAt:new Date()}});
-    const next=nextAfterOutcome(plan,row.stepIndex,row.routeIndex,lastStatus);
+    const settled=await db.agentRoutineAttempt.updateMany({
+      where:{taskId,routineId:id,stepIndex:row.stepIndex,routeIndex:row.routeIndex},
+      data:{outcome:lastStatus,summary:lastText.slice(0,1000),endedAt:new Date()}
+    });
+    if(settled.count!==1){await block(id,'Persisted attempt/cursor mismatch; no replay permitted.');return;}
+    const attempt=await db.agentRoutineAttempt.findUnique({where:{taskId},
+      select:{taskId:true,routineId:true,stepIndex:true,routeIndex:true,outcome:true}});
+    const next=advanceFromPersistedCheckpoint(plan,{
+      taskId,routineId:id,stepIndex:row.stepIndex,routeIndex:row.routeIndex,outcome:lastStatus
+    },attempt);
     if(next.kind==='blocked') {await block(id,`Task ended ${lastStatus}: ${next.reason??''} ${lastText.slice(0,200)}`);return;}
     if(next.kind==='hold') {await block(id,`Unrecognized agent outcome: ${lastStatus}`);return;}
     if(next.kind==='retry_alternative' || next.kind==='advance') {

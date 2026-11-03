@@ -33,7 +33,8 @@ foreach ($case in $cases) {
     continue
   }
   try {
-    & $case.Exec @($case.Args)
+    $argsList = [string[]]$case.Args
+    & $case.Exec @argsList
     $code = $LASTEXITCODE
     if ($null -eq $code) {$code = 1}
     $checks += @{name=$case.Name; outcome=$(if($code -eq 0){'PASS'}else{'FAIL'}); exitCode=$code}

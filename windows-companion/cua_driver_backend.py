@@ -352,12 +352,26 @@ class CuaDriverBackend:
         )
         return _action_record(result)
 
+    def _action_target(self, op: dict[str, Any]):
+        from cua_driver import ActionTarget
+        if "pid" in op or "cuaWindowId" in op:
+            if (
+                type(op.get("pid")) is not int
+                or not 0 < op["pid"] < 2**32
+                or not isinstance(op.get("cuaWindowId"), str)
+                or re.fullmatch(r"[0-9]{1,20}", op["cuaWindowId"]) is None
+                or not 0 < int(op["cuaWindowId"]) < 2**64
+            ):
+                raise ValueError("Invalid exact-window CUA target.")
+            return ActionTarget.WINDOW(pid=op["pid"], window_id=int(op["cuaWindowId"]))
+        return ActionTarget.DESKTOP(display_id="primary")
+
     async def _type(self, op: dict[str, Any]) -> dict[str, Any]:
-        from cua_driver import ActionTarget, TypeTextInput
+        from cua_driver import TypeTextInput
         result = await self._driver.type_text(
             TypeTextInput(
                 text=op["text"],
-                target=ActionTarget.DESKTOP(display_id="primary"),
+                target=self._action_target(op),
                 scope=None, session=None,
             )
         )
@@ -373,7 +387,7 @@ class CuaDriverBackend:
             "win": "WIN", "f4": "F4",
         }
         keys = [aliases.get(key, key.upper()) for key in op["keys"]]
-        target = ActionTarget.DESKTOP(display_id="primary")
+        target = self._action_target(op)
         if len(keys) == 1:
             result = await self._driver.press_key(
                 PressKeyInput(

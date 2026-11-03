@@ -466,8 +466,9 @@ def validate_action(body):
         # The Python Guardian side of the bridge validates the same bounded
         # primitives as friend_protocol.cjs. All keys remain allowlisted.
         def mc_position(value):
-            return (isinstance(value,dict) and all(type(value.get(k)) is int and
-                abs(value[k]) <= 30000000 for k in ('x','y','z')))
+            return (type(value) is dict and set(value) == {'x','y','z'} and
+                all(type(value.get(k)) is int and abs(value[k]) <= 30000000
+                for k in ('x','y','z')))
         def mc_item(value):
             return isinstance(value,str) and re.fullmatch(r'[a-z0-9_]{1,64}',value) is not None
         def bounded_int(value,low,high):
@@ -507,12 +508,12 @@ def validate_action(body):
             if goal in fixed:
                 return True
             if goal=='gather':
-                return record.get('resource') in {'logs','planks','sticks','cobblestone','raw_iron',
+                return type(record.get('resource')) is str and record['resource'] in {'logs','planks','sticks','cobblestone','raw_iron',
                     'iron_ingot','diamond','obsidian','flint','netherrack'} and bounded_int(record.get('targetCount'),1,64)
             if goal=='travel':
                 return mc_position(record.get('destination')) and bounded_int(record.get('arrivalRange'),1,8)
             if goal=='craft':
-                return record.get('item') in {'stick','crafting_table','chest','furnace',
+                return type(record.get('item')) is str and record['item'] in {'stick','crafting_table','chest','furnace',
                     'ladder','bread','shield','torch'} and bounded_int(record.get('targetCount'),1,16)
             if goal=='equip':
                 slots={
@@ -526,15 +527,15 @@ def validate_action(body):
                     'off-hand':{'shield','torch','totem_of_undying'}
                 }
                 slot=record.get('destination' if step else 'destinationSlot')
-                return type(slot) is str and record.get('item') in slots.get(slot,set())
+                return type(slot) is str and type(record.get('item')) is str and record['item'] in slots.get(slot,set())
             if goal=='build':
                 p=record.get('position')
                 axis=record.get('axis')
                 n=record.get('length')
                 if (not mc_position(p) or axis not in ('x+','x-','z+','z-') or
                     not bounded_int(n,1,8) or
-                    record.get('block') not in {'cobblestone','dirt','oak_planks','spruce_planks',
-                        'birch_planks','stone_bricks','netherrack'}):
+                    (type(record.get('block')) is not str or record['block'] not in {'cobblestone','dirt','oak_planks','spruce_planks',
+                        'birch_planks','stone_bricks','netherrack'})):
                     return False
                 dx=(1 if axis=='x+' else -1 if axis=='x-' else 0)
                 dz=(1 if axis=='z+' else -1 if axis=='z-' else 0)

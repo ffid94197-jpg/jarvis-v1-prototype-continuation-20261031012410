@@ -122,6 +122,8 @@ const ACTIONABLE = [
   'can you help me complete it?',
   'could you please finish this?',
   'can you open chrome?',
+  'can you write this to a file?',
+  'could you please save this on disk?',
 ];
 for (const objective of ACTIONABLE) {
   const r = classifyRequestIntent(objective);
@@ -204,6 +206,10 @@ const CONVERSATIONAL = [
   'do you know how to make a cake?',
   'can you explain how to create a folder?',
   'can you tell me how to open chrome?',
+  'write me a poem',
+  'can you write me a poem?',
+  'could you please draft an email?',
+  'can you generate a summary?'
   'can you show me how to create a folder?',
   'could you please explain how to open chrome?',
   'how are you', 'what do you think about automation', 'tell me a joke',

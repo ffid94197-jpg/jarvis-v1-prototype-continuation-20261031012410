@@ -100,7 +100,9 @@ The correct adaptation is a JARVIS child-task service that:
 - returns only a bounded, provenance-tagged result to the parent;
 - never lets a child report parent-task completion.
 
-This is a future build item, not a claim of implemented delegation.
+This is a future build candidate, not a claim of implemented delegation.
+It is an optional advanced capability rather than a mandatory V1 release gate
+unless the owner explicitly adds delegated execution to the acceptance criteria.
 
 ## Non-goals
 

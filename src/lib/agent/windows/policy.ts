@@ -257,8 +257,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       if (process.env.JARVIS_CUA_DRIVER_ENABLED !== "1")
         return {ok:false,reason:"Snapshot element clicks require the explicit JARVIS_CUA_DRIVER_ENABLED=1 opt-in."};
       if (!Number.isInteger(args.pid) || (args.pid as number) <= 0 || (args.pid as number) >= 2**32 ||
-          typeof args.cuaWindowId !== "string" || !/^[0-9]{1,20}$/.test(args.cuaWindowId) ||
-          BigInt(args.cuaWindowId) <= 0n || BigInt(args.cuaWindowId) > 18446744073709551615n ||
+          typeof args.cuaWindowId !== "string" || !/^[1-9][0-9]{0,19}$/.test(args.cuaWindowId) ||
+          (args.cuaWindowId.length === 20 && args.cuaWindowId > "18446744073709551615") ||
           typeof args.elementToken !== "string" || !/^[A-Za-z0-9:_-]{1,128}$/.test(args.elementToken) ||
           !["left","right","double"].includes(String(args.button ?? "left")))
         return {ok:false,reason:"Use a fresh elementToken, PID and cuaWindowId from the same windows_desktop_observe result."};
@@ -279,8 +279,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     const hasCuaWindowTarget = args.pid !== undefined || args.cuaWindowId !== undefined;
     if (hasCuaWindowTarget && (process.env.JARVIS_CUA_DRIVER_ENABLED !== "1" ||
         !Number.isInteger(args.pid) || (args.pid as number) <= 0 || (args.pid as number) >= 2**32 ||
-        typeof args.cuaWindowId !== "string" || !/^[0-9]{1,20}$/.test(args.cuaWindowId) ||
-        BigInt(args.cuaWindowId) <= 0n || BigInt(args.cuaWindowId) > 18446744073709551615n))
+        typeof args.cuaWindowId !== "string" || !/^[1-9][0-9]{0,19}$/.test(args.cuaWindowId) ||
+          (args.cuaWindowId.length === 20 && args.cuaWindowId > "18446744073709551615")))
       return {ok:false,reason:"Exact-window input requires a fresh PID and cuaWindowId from the latest CUA observation."};
     if (tool === "windows_desktop_type") {
       if (typeof args.text !== "string" || args.text.length < 1 || args.text.length > 400 ||

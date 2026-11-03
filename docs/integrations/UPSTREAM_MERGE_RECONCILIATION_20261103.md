@@ -19,15 +19,17 @@ The comparison is against the current `main` content and the canonical PR #23 he
 | #3 | 5 | 5 | Fully represented in the canonical candidate. |
 | #4 | 74 | 67 | The seven uncovered paths are the same older pathfinder/MCP/test artifacts already reconciled through #1/#2, plus generated build metadata. No unique implementation to cherry-pick. |
 | #5 | 5 | 5 | Fully represented in the canonical candidate. |
-| #6 | 18 | 11 | Corpus validator, validator tests and benchmark README are already present in main. The old CI-only project-build adapter was deliberately not merged. Its replacement, local_project_build, is now implemented on branch feature/local-windows-sandbox-project-build-20261103 with Windows Sandbox, offline npm install/build, Guardian authorization and durable effect journaling; it awaits local Windows acceptance and a follow-up merge. |
+| #6 | 18 | 11 | Corpus validator, validator tests and benchmark README were already present in main. The old CI-only project-build adapter was not merged. Its local-only replacement, local_project_build, was merged through PR #25 as 6e7541da9adb038ec59f85e439d57ba6ee4ef8a5. TypeScript, offline tests and owner-PC Windows Sandbox acceptance remain pending; the capability stays disabled by default. |
 | #7 | 8 | 1 | The uncovered files are present in main as identical or later versions. In particular, main's autonomy engine has stricter action-to-proof binding than the older branch; the older Dragon/Netherite proof mapping must not replace it. No unique implementation to cherry-pick. |
-| #8 | 171 | 101 | Most uncovered Minecraft modules/tests are byte-identical; the differing files are older or superseded by stricter current-main companion validation, action-to-proof binding, live-campaign verification and language/gateway tests. Keep main's manual-only Windows workflow to preserve hosted Actions minutes. The CI-only project-build adapter was not merged; the local Windows Sandbox replacement is implemented separately on feature/local-windows-sandbox-project-build-20261103 and awaits owner-PC acceptance. Generated tsconfig.tsbuildinfo is not source. |
+| #8 | 171 | 101 | Most uncovered Minecraft modules/tests are byte-identical; the differing files are older or superseded by stricter current-main companion validation, action-to-proof binding, live-campaign verification and language/gateway tests. Keep main's manual-only Windows workflow to preserve hosted Actions minutes. The CI-only project-build adapter was not merged; its local Windows Sandbox replacement is now integrated by PR #25. Generated tsconfig.tsbuildinfo is not source. |
 
 ## Other open/closed integration PRs
 
 - PR #22 is closed as superseded by PR #23.
 - PR #24 is closed as a duplicate/smaller Hermes CUA implementation; its capability slice is represented in PR #23.
 - PR #23 was merged into `main` as `a2c7cb3cd8e2159524a0da958d17b197aacd667f`. The merge consolidated the selected native integrations; it did not certify live acceptance.
+- PR #25 was merged into `main` as `6e7541da9adb038ec59f85e439d57ba6ee4ef8a5`. This completed the local Windows Sandbox project-build integration; TypeScript, offline tests and owner-PC Windows Sandbox acceptance remain pending. The capability remains disabled by default.
+- PR #22 and PR #24 remain closed without merge because their contents were superseded/represented by the canonical PR #23 integration; no unique open integration PR remains.
 
 ## Hermes-derived CUA changes now in the canonical candidate
 
@@ -50,9 +52,9 @@ Additional fail-closed safeguards added during this reconciliation:
 - No full local TypeScript/Node/PowerShell acceptance has been run on the consolidated head.
 - Real Minecraft Java Dragon defeat, End return and full Netherite equipment remain NOT ACCEPTED.
 - The 200,000 Internet-original prompt corpus and live-model execution programme remain NOT ACCEPTED.
-- The old CI-only project-build adapter remains intentionally unmerged. The new Windows Sandbox local replacement is in a separate feature branch and is not yet merged.
+- The old CI-only project-build adapter remains intentionally unmerged. Its local Windows Sandbox replacement is now merged via PR #25; its runtime acceptance tests have not yet been executed.
 - This reconciliation is not a release certification and does not justify marking the autonomous layer 100%.
 
 ## Next gate
 
-Run `npm run test:local-project-build-offline` and `npm run test:local-project-build-windows-live` on the owner Windows PC, then run the existing external-integration and CUA local acceptance. Keep the local build feature opt-in and do not claim product acceptance from static checks alone.
+Run `npm run typecheck`, `npm run test:local-project-build-offline`, and `npm run test:local-project-build-windows-live` on the owner Windows PC, then run the existing external-integration and CUA local acceptance. Keep the local build feature opt-in and do not claim product acceptance from static checks alone.

@@ -254,6 +254,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:true,prepared:{operation:"desktop_focus",windowId:args.windowId}};
     }
     if (tool === "windows_desktop_click" && args.elementToken !== undefined) {
+      if (process.env.JARVIS_CUA_DRIVER_ENABLED !== "1")
+        return {ok:false,reason:"Snapshot element clicks require the explicit JARVIS_CUA_DRIVER_ENABLED=1 opt-in."};
       if (!Number.isInteger(args.pid) || (args.pid as number) <= 0 ||
           typeof args.cuaWindowId !== "string" || !/^[0-9]{1,20}$/.test(args.cuaWindowId) ||
           typeof args.elementToken !== "string" || !/^[A-Za-z0-9:_-]{1,128}$/.test(args.elementToken) ||

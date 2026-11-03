@@ -143,7 +143,7 @@ console.log('\n── concise continuation requests recover prior work ──');
 const FOLLOW_UPS = [
   'complete it fully', 'finish it', 'do it', 'do the remaining',
   'can you complete it?', 'can you do it?', 'can you help me complete it?',
-  'could you please finish this?'
+  'could you please finish this?', 'continue', 'resume from the latest checkpoint'
 ];
 for (const objective of FOLLOW_UPS) {
   ok(classifyRequestIntent(objective).kind === 'actionable',

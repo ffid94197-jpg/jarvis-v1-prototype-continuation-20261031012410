@@ -41,6 +41,14 @@ def validate_image_request(payload):
     # model-supplied path, URL, or remotely hosted image.
     if len(data) > MAX_IMAGE_BYTES or not data.startswith(b'\x89PNG\r\n\x1a\n'):
         raise ValueError('Only bounded PNG screenshots are accepted.')
+    # Validate the standard IHDR header before a GPU/CPU model or Pillow
+    # sees it. Small compressed files may otherwise expand to huge images.
+    if len(data) < 33 or data[12:16] != b'IHDR':
+        raise ValueError('PNG image header is malformed.')
+    width = int.from_bytes(data[16:20], 'big')
+    height = int.from_bytes(data[20:24], 'big')
+    if not 1 <= width <= 2048 or not 1 <= height <= 2048 or width * height > 4_194_304:
+        raise ValueError('PNG dimensions exceed the private desktop capture budget.')
     return encoded
 
 

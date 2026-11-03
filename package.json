@@ -13,6 +13,7 @@
     "db:reset": "prisma migrate reset",
     "test:provider-offline": "node scripts/verify-provider-offline.cjs",
     "test:memory-contracts": "node scripts/verify-memory-contracts.cjs",
+    "test:native-code-edit": "node scripts/verify-native-code-edit.cjs",
     "test:memory-route": "node scripts/verify-memory-route.cjs",
     "test:local-fallback": "node scripts/verify-local-fallback.cjs",
     "test:path-containment": "node scripts/verify-path-containment.cjs",

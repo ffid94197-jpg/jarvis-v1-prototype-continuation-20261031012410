@@ -59,6 +59,10 @@ add('build-gate','node','scripts/verify-production-build.mjs',['--self-test'],90
 add('capability-discovery','python','scripts/capability/verify_discovery.py',['--rounds','12','--cases','2500'],180000);
 const seen=new Set();
 const unique=cases.filter(t=>{const k=[t.command,t.file,...t.args].join('|');if(seen.has(k))return false;seen.add(k);return true;});
+// A missing/deleted suite must never turn a "0 failures" report into a false PASS.
+if (unique.length < 100) {
+  throw Error('Windows acceptance discovery incomplete: only '+unique.length+' regression scripts found');
+}
 const started=new Date().toISOString();
 const rows=[];
 const env={...process.env,JARVIS_AGENT_WORKSPACE:workspace,JARVIS_SIM_ROUNDS:'60000',JARVIS_MC_SIM_SEEDS:'60',JARVIS_SIM_OUTPUT:path.join(evidence,'mass-simulation.json'),JARVIS_LOCAL_PROJECT_BUILD_ENABLED:'0'};

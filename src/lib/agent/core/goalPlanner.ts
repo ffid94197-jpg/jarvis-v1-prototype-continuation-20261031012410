@@ -28,7 +28,8 @@ export const MAX_GOALS = 8;
 export function requiresExternalActionEvidence(objective: string): boolean {
   const s=objective.trim().replace(/^(?:please\s+|jarvis[,!: ]+)+/i,'');
   if (!s || s.length>5000) return false;
-  if (/^(?:what|why|who|when|where|how|explain|describe|tell me|can you explain|give me|summarize|translate|compare|what is|which is)\b/i.test(s)) return false;
+  if (/^(?:what|why|who|when|where|how|explain|describe|tell me|give me|summarize|translate|compare|what is|which is)\b/i.test(s) ||
+      /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:explain|describe|tell me how|show me how|teach me how|walk me through|give me instructions|tell me about)\b/i.test(s)) return false;
   if (/^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:do|complete|finish|continue|resume|keep\s+going|carry\s+on)(?:\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task|where\s+we\s+left(?:\s+off)?|from\s+(?:the\s+)?(?:last|latest)\s+checkpoint))?\b/i.test(s)) return true;
   // Plain text generation can be answered in a conversation; delivering a
   // file, sending content, or changing the outside world cannot.

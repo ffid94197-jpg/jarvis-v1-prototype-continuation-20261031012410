@@ -98,6 +98,17 @@ page=Page([link,unsafe,search,password]); state={}
 items=ns['inspect_page'](page,state)
 passes(items['items'][0]['kind']=='link' and len(items['items'])==2,'inspect omits private links and passwords')
 passes(len(items['pageToken'])==24,'fresh page token issued')
+filtered=ns['inspect_page'](page,state,'MrBeast')
+passes(filtered['queryGrounded'] and len(filtered['items'])==1 and filtered['items'][0]['index']==0,
+       'Browser-use-style grounding matches only observed public page link')
+none=ns['inspect_page'](page,state,'UnknownDestinationXYZ')
+passes(not none['queryGrounded'] and len(none['items'])==0,
+       'Missing page target never creates guessed link')
+passes(raises(lambda:ns['action_on_inspected_page'](page,state,{'operation':'browser_click_link',
+       'index':0,'pageToken':none['pageToken']})) if 'raises' in globals() else
+       0 not in state['inspection']['entries'],
+       'Unmatched browser selection is not actionable')
+items=ns['inspect_page'](page,state)
 def raises(f):
     try:f();return False
     except RuntimeError:return True

@@ -39,6 +39,12 @@ def _bounds(value: Any) -> dict[str, float] | None:
     }
 
 
+def _configure_sdk_environment() -> None:
+    # V1 does not send desktop telemetry. Do not inherit a parent-process
+    # opt-in accidentally; this backend keeps telemetry disabled.
+    os.environ["CUA_DRIVER_RS_TELEMETRY_ENABLED"] = "0"
+
+
 def _valid_element_target(op: dict[str, Any]) -> bool:
     return (
         type(op.get("pid")) is int
@@ -142,7 +148,7 @@ class CuaDriverBackend:
         self._loop.close()
 
     async def _initialize(self) -> None:
-        os.environ.setdefault("CUA_DRIVER_RS_TELEMETRY_ENABLED", "0")
+        _configure_sdk_environment()
         import cua_driver
         from importlib.metadata import version as package_version
         if package_version("cua-driver") != "0.38.0":
@@ -204,13 +210,16 @@ class CuaDriverBackend:
                 raise CuaDriverOutcomeUnknown(
                     "The prior action outcome is unknown. Run desktop_observe before another action."
                 )
-            if observation:
-                self._outcome_unknown = False
-
+            # Keep an unknown prior effect latched until a fresh, healthy
+            # observation actually completes. A failed observation must not
+            # authorize another mutation.
             assert self._loop is not None
             future = asyncio.run_coroutine_threadsafe(factory(), self._loop)
             try:
-                return future.result(timeout=timeout)
+                result = future.result(timeout=timeout)
+                if observation:
+                    self._outcome_unknown = False
+                return result
             except concurrent.futures.TimeoutError as exc:
                 self._pending = future
                 self._outcome_unknown = True
@@ -329,8 +338,15 @@ class CuaDriverBackend:
                 "controlCount": len(controls),
             })
         except Exception as exc:
-            record["inspectionError"] = type(exc).__name__
-            record["controlCount"] = 0
+            raise ValueError(
+                "CUA accessibility snapshot failed; an unsettled action remains unverified."
+            ) from exc
+
+        if not tokens_usable:
+            raise ValueError(
+                "CUA accessibility snapshot is degraded, truncated or incomplete; "
+                "an unsettled action remains unverified."
+            )
 
         return {
             "source": "Cua Driver accessibility snapshot",

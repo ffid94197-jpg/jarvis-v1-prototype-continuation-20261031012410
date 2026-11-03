@@ -36,4 +36,46 @@ for(const x of [
  {command:'interact_entity',entityId:-100},
  {command:'use_item',hand:'both'},
  {command:'attack_player'}])run(x,false);
+
+const authorized=[
+ {command:'auto_goal',goal:'gather',resource:'diamond',targetCount:4,durationSeconds:300},
+ {command:'auto_goal',goal:'travel',destination:{x:12,y:64,z:-5},arrivalRange:2},
+ {command:'auto_goal',goal:'craft',item:'chest',targetCount:2},
+ {command:'auto_goal',goal:'equip',item:'iron_helmet',destinationSlot:'head'},
+ {command:'auto_goal',goal:'build',position:{x:1,y:64,z:1},axis:'x+',length:4,block:'cobblestone'},
+ {command:'auto_goal',goal:'farm_wheat',position:{x:2,y:63,z:2},width:2,depth:2,targetCount:4},
+ {command:'auto_goal',goal:'sequence',steps:[
+    {goal:'gather',resource:'logs',targetCount:3},
+    {goal:'craft',item:'chest',targetCount:1},
+    {goal:'equip',item:'iron_helmet',destination:'head'}]},
+ {command:'auto_goal',goal:'dragon_then_netherite_run',durationSeconds:21600}
+];
+const {validateCommand:validateBot}=require('../windows-companion/minecraft-bot/friend_protocol.cjs');
+for(const input of authorized){
+ assert.equal(validateBot(input),null,'Bot accepts '+JSON.stringify(input));ok++;
+ const r=run(input,true);
+ for(const [k,v] of Object.entries(input)){
+   if(k==='command')continue;
+   assert.equal(JSON.stringify(r.prepared[k]),JSON.stringify(v),'Guardian forwards '+k);ok++;
+ }
+}
+for(const input of [
+ {command:'auto_goal',goal:'gather',resource:'command_block',targetCount:1},
+ {command:'auto_goal',goal:'gather',resource:'diamond',targetCount:100},
+ {command:'auto_goal',goal:'craft',item:'dragon_egg',targetCount:1},
+ {command:'auto_goal',goal:'equip',item:'diamond_sword',destinationSlot:'head'},
+ {command:'auto_goal',goal:'travel',destination:{x:30000001,y:64,z:0},arrivalRange:2},
+ {command:'auto_goal',goal:'build',position:{x:1,y:64,z:1},length:10,axis:'x+',block:'cobblestone'},
+ {command:'auto_goal',goal:'farm_wheat',position:{x:1,y:64,z:1},width:100,depth:2,targetCount:4},
+ {command:'auto_goal',goal:'sequence',steps:[{goal:'sequence',steps:[{goal:'tools'}]}]},
+ {command:'auto_goal',goal:'sequence',steps:[{goal:'equip',item:'iron_helmet',destinationSlot:'head'}]},
+ {command:'auto_goal',goal:'survive',script:'process.exit(1)'},
+ {command:'auto_goal',goal:'gather',resource:'logs',targetCount:1,durationSeconds:43201},
+ {command:'natural_goal',text:'mine stones',script:'evil'},
+ {command:'natural_goal',text:'hi\nbad'}
+])run(input,false);
+run({command:'natural_goal',text:'Jarvis, help me collect some diamonds'},true);
+run({command:'auto_checkpoint'},true);
+run({command:'auto_resume'},true);
+
 console.log(`MINECRAFT_TYPESCRIPT_BRIDGE ${ok}/${ok} PASS (policy only, not live gameplay)`);

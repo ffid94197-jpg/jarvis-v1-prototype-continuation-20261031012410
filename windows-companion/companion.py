@@ -482,7 +482,7 @@ def validate_action(body):
                 'gather':{'resource','targetCount'},
                 'travel':{'destination','arrivalRange'},
                 'craft':{'item','targetCount'},
-                'equip':{'item','destinationSlot'},
+                'equip':{'item',('destination' if step else 'destinationSlot')},
                 'build':{'position','block','axis','length'},
                 'farm_wheat':{'position','width','depth','targetCount'},
                 'sequence':{'steps'}
@@ -525,7 +525,7 @@ def validate_action(body):
                     'feet':{'leather_boots','iron_boots','golden_boots','diamond_boots','netherite_boots'},
                     'off-hand':{'shield','torch','totem_of_undying'}
                 }
-                slot=record.get('destinationSlot')
+                slot=record.get('destination' if step else 'destinationSlot')
                 return type(slot) is str and record.get('item') in slots.get(slot,set())
             if goal=='build':
                 p=record.get('position')

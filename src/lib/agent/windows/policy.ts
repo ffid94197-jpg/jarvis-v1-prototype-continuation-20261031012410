@@ -279,7 +279,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       "dragon_run","netherite_dragon_run","dragon_then_netherite_run","companion"]);
     const params:Record<string,string[]>={
       gather:["resource","targetCount"],travel:["destination","arrivalRange"],
-      craft:["item","targetCount"],equip:["item","destinationSlot"],
+      craft:["item","targetCount"],equip:["item",step?"destination":"destinationSlot"],
       build:["position","block","axis","length"],
       farm_wheat:["position","width","depth","targetCount"],sequence:["steps"]
     };
@@ -311,7 +311,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         feet:["leather_boots","iron_boots","golden_boots","diamond_boots","netherite_boots"],
         "off-hand":["shield","torch","totem_of_undying"]
       };
-      return typeof r.destinationSlot==="string" && (slots[r.destinationSlot]||[]).includes(String(r.item));
+      const slot=step?r.destination:r.destinationSlot;
+      return typeof slot==="string" && (slots[slot]||[]).includes(String(r.item));
     }
     if(g==="build"){
       if(!at(r.position)||!integer(r.length,1,8)||

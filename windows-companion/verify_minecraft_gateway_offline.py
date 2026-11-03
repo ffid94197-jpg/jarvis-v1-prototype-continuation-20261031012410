@@ -48,4 +48,39 @@ assert "16 if body.get('command') == 'natural_goal' else 8" in source
 checks+=1
 assert "'JARVIS_MINECRAFT_LAN_HOST':os.environ.get('JARVIS_MINECRAFT_LAN_HOST','127.0.0.1')" in source
 checks+=1
+
+for goal in ['dragon_then_netherite_run']:
+    test({'command':'auto_goal','goal':goal,'durationSeconds':21600})
+valid_goals=[
+ {'command':'auto_goal','goal':'gather','resource':'diamond','targetCount':4,'durationSeconds':300},
+ {'command':'auto_goal','goal':'travel','destination':{'x':1,'y':64,'z':1},'arrivalRange':2},
+ {'command':'auto_goal','goal':'craft','item':'chest','targetCount':2},
+ {'command':'auto_goal','goal':'equip','item':'iron_helmet','destinationSlot':'head'},
+ {'command':'auto_goal','goal':'build','position':{'x':1,'y':64,'z':1},'axis':'x+','length':4,'block':'cobblestone'},
+ {'command':'auto_goal','goal':'farm_wheat','position':{'x':1,'y':63,'z':1},'width':2,'depth':2,'targetCount':4},
+ {'command':'auto_goal','goal':'sequence','steps':[
+   {'goal':'gather','resource':'logs','targetCount':2},
+   {'goal':'craft','item':'chest','targetCount':1},
+   {'goal':'equip','item':'iron_helmet','destination':'head'}
+ ]}
+]
+for goal in valid_goals: test(goal)
+for invalid in [
+ {'command':'auto_goal','goal':'gather','resource':'command_block','targetCount':1},
+ {'command':'auto_goal','goal':'gather','resource':'diamond','targetCount':100},
+ {'command':'auto_goal','goal':'craft','item':'dragon_egg','targetCount':1},
+ {'command':'auto_goal','goal':'equip','item':'diamond_sword','destinationSlot':'head'},
+ {'command':'auto_goal','goal':'travel','destination':{'x':30000001,'y':64,'z':0},'arrivalRange':2},
+ {'command':'auto_goal','goal':'build','position':{'x':1,'y':64,'z':1},'length':10,'axis':'x+','block':'cobblestone'},
+ {'command':'auto_goal','goal':'farm_wheat','position':{'x':1,'y':64,'z':1},'width':100,'depth':2,'targetCount':4},
+ {'command':'auto_goal','goal':'sequence','steps':[{'goal':'sequence','steps':[{'goal':'tools'}]}]},
+ {'command':'auto_goal','goal':'sequence','steps':[{'goal':'equip','item':'iron_helmet','destinationSlot':'head'}]},
+ {'command':'auto_goal','goal':'survive','code':'danger'},
+ {'command':'auto_goal','goal':'gather','resource':'logs','targetCount':1,'durationSeconds':False}
+]: test(invalid,False)
+test({'command':'auto_checkpoint'})
+test({'command':'auto_resume'})
+assert "'resource','targetCount','arrivalRange','steps'" in source
+checks+=1
+
 print(f'MINECRAFT_GATEWAY_POLICY {checks}/{checks} PASS (offline Python, no LAN world)')

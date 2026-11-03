@@ -31,6 +31,7 @@ const tests=[
   'verify_mission_checkpoint.cjs',
   'verify_structure_goal.cjs',
   'verify_wheat_goal.cjs',
+  'verify_java_survival_campaign.cjs',
   'verify_late_game.cjs',
   'verify_late_skills.cjs',
   'verify_dragon_engagement.cjs',

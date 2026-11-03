@@ -1,0 +1,120 @@
+name: Prototype JARVIS postmerge real Minecraft Java survival Windows
+on:
+  push:
+    branches: [test/postmerge-full-windows-acceptance-20261104]
+    paths:
+      - ".github/workflows/postmerge-real-minecraft-windows.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  minecraft-real-java-stone:
+    runs-on: windows-latest
+    timeout-minutes: 38
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      JARVIS_MINECRAFT_LAN_HOST: 127.0.0.1
+      JARVIS_MINECRAFT_PLAYER: CIObserver
+      JARVIS_MC_TEST_PORT: '25565'
+      JARVIS_MC_TEST_STONE: '1'
+      JARVIS_MC_TEST_IRON: '0'
+      JARVIS_MC_TRACE_AUTONOMY: '1'
+      GIT_TERMINAL_PROMPT: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Minecraft Java companion dependencies
+        run: |
+          if ((node -p "process.platform") -ne "win32") { throw "Windows runner required" }
+          npm.cmd ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "Minecraft companion lockfile dependency installation failed" }
+          node --check windows-companion/minecraft-bot/bot.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Minecraft bot syntax invalid" }
+      - name: Download and authenticate official Mojang Java 1.21.1 survival server
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force -Path minecraft-live-ci | Out-Null
+          $manifest=Invoke-RestMethod -Uri 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json' -TimeoutSec 60
+          $entry=@($manifest.versions | Where-Object { $_.id -eq '1.21.1' })
+          if ($entry.Count -ne 1) { throw "Official Java 1.21.1 not found in Mojang version manifest" }
+          $version=Invoke-RestMethod -Uri $entry[0].url -TimeoutSec 60
+          if (!$version.downloads.server.url -or !$version.downloads.server.sha1) { throw "Official server digest missing" }
+          Invoke-WebRequest -Uri $version.downloads.server.url -OutFile minecraft-live-ci/server.jar -TimeoutSec 180
+          $actual=(Get-FileHash -Path minecraft-live-ci/server.jar -Algorithm SHA1).Hash.ToLowerInvariant()
+          if ($actual -ne $version.downloads.server.sha1.ToLowerInvariant()) { throw "Mojang official server SHA-1 mismatched" }
+          Write-Output "MOJANG_VANILLA_SERVER_VERIFIED version=1.21.1 sha1=$actual"
+      - name: Start real loopback-only Java survival server
+        run: |
+          $ErrorActionPreference='Stop'
+          $folder=Join-Path $env:GITHUB_WORKSPACE 'minecraft-live-ci'
+          "eula=true" | Set-Content -Path (Join-Path $folder 'eula.txt') -Encoding ascii
+          @(
+            'online-mode=false'
+            'enforce-secure-profile=false'
+            'server-ip=127.0.0.1'
+            'server-port=25565'
+            'gamemode=survival'
+            'force-gamemode=true'
+            'difficulty=normal'
+            'hardcore=false'
+            'allow-flight=false'
+            'enable-command-block=false'
+            'enable-rcon=false'
+            'enable-query=false'
+            'max-players=2'
+            'spawn-protection=0'
+            'view-distance=8'
+            'simulation-distance=6'
+            'level-seed=41902'
+            'level-type=minecraft:normal'
+            'pvp=false'
+          ) | Set-Content -Path (Join-Path $folder 'server.properties') -Encoding ascii
+          $out=Join-Path $folder 'server-stdout.log'
+          $err=Join-Path $folder 'server-stderr.log'
+          $proc=Start-Process -FilePath 'java.exe' -ArgumentList @('-Xms512M','-Xmx2500M','-jar','server.jar','nogui') -WorkingDirectory $folder -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -WindowStyle Hidden
+          "MINECRAFT_SERVER_PID=$($proc.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $ready=$false
+          for($i=0;$i -lt 160;$i++){
+            if($proc.HasExited){ throw "Java server exited prematurely $($proc.ExitCode)" }
+            $log=Join-Path $folder 'logs/latest.log'
+            if((Test-Path $log) -and (Select-String -Path $log -SimpleMatch 'Done (' -Quiet)){ $ready=$true; break }
+            Start-Sleep -Seconds 1
+          }
+          if(!$ready){ throw 'Real vanilla Java server did not reach ready state' }
+          Write-Output 'VANILLA_SURVIVAL_SERVER_READY'
+      - name: Run actual empty-inventory survival wood and stone progression
+        timeout-minutes: 29
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force -Path artifacts/postmerge-minecraft-java | Out-Null
+          $PSNativeCommandUseErrorActionPreference=$false
+          node windows-companion/minecraft-bot/verify_real_java_server_wood.cjs *> artifacts/postmerge-minecraft-java/wood-stone.log
+          $code=$LASTEXITCODE
+          Set-Content artifacts/postmerge-minecraft-java/wood-stone.exitcode $code
+          Get-Content artifacts/postmerge-minecraft-java/wood-stone.log -Tail 90
+          if($code -ne 0){ throw "Actual Mineflayer Java survival acceptance failed with code $code" }
+      - name: Preserve actual Java server and bot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-postmerge-real-minecraft-java-windows-evidence
+          if-no-files-found: warn
+          path: |
+            minecraft-live-ci/logs/latest.log
+            minecraft-live-ci/server-stdout.log
+            minecraft-live-ci/server-stderr.log
+            artifacts/postmerge-minecraft-java
+      - name: Terminate Java survival test server
+        if: always()
+        run: |
+          if($env:MINECRAFT_SERVER_PID){ Stop-Process -Id ([int]$env:MINECRAFT_SERVER_PID) -Force -ErrorAction SilentlyContinue }

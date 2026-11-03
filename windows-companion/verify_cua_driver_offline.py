@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cua_driver_backend import (
     CuaDriverBackend,
     _action_record,
+    _configure_sdk_environment,
     _element_record,
     _valid_element_target,
     _window_record,
@@ -20,6 +22,57 @@ from desktop_control import check_input
 
 
 class CuaDriverOfflineTests(unittest.TestCase):
+    def test_cua_sdk_telemetry_is_forced_off(self):
+        old = os.environ.get("CUA_DRIVER_RS_TELEMETRY_ENABLED")
+        try:
+            os.environ["CUA_DRIVER_RS_TELEMETRY_ENABLED"] = "1"
+            _configure_sdk_environment()
+            self.assertEqual(os.environ["CUA_DRIVER_RS_TELEMETRY_ENABLED"], "0")
+        finally:
+            if old is None:
+                os.environ.pop("CUA_DRIVER_RS_TELEMETRY_ENABLED", None)
+            else:
+                os.environ["CUA_DRIVER_RS_TELEMETRY_ENABLED"] = old
+
+    def test_failed_observation_does_not_clear_unknown_action_latch(self):
+        backend = CuaDriverBackend()
+        backend.enabled = lambda: True
+        backend._driver = object()
+        loop = asyncio.new_event_loop()
+        ready = threading.Event()
+
+        def run_loop():
+            asyncio.set_event_loop(loop)
+            ready.set()
+            loop.run_forever()
+
+        thread = threading.Thread(target=run_loop, daemon=True)
+        thread.start()
+        try:
+            self.assertTrue(ready.wait(2))
+            backend._loop = loop
+            backend._outcome_unknown = True
+
+            async def failed_observation():
+                raise RuntimeError("snapshot unavailable")
+
+            with self.assertRaisesRegex(RuntimeError, "snapshot unavailable"):
+                backend._run(failed_observation, timeout=2, observation=True)
+            self.assertTrue(backend._outcome_unknown)
+
+            async def healthy_observation():
+                return {"fresh": True}
+
+            self.assertEqual(
+                backend._run(healthy_observation, timeout=2, observation=True),
+                {"fresh": True},
+            )
+            self.assertFalse(backend._outcome_unknown)
+        finally:
+            loop.call_soon_threadsafe(loop.stop)
+            thread.join(timeout=2)
+            loop.close()
+
     def test_window_record_preserves_native_identity(self):
         window = SimpleNamespace(
             pid=4242, window_id=987654321, title="Editor",
@@ -168,7 +221,11 @@ class CuaDriverOfflineTests(unittest.TestCase):
         from cua_driver_backend import CuaDriverBackend
 
         class FakeDriver:
-            def __init__(self):
+            def __init__(self, *, degraded=False, truncated=False, complete=True, fail_snapshot=False):
+                self.degraded = degraded
+                self.truncated = truncated
+                self.complete = complete
+                self.fail_snapshot = fail_snapshot
                 self.windows = [
                     SimpleNamespace(
                         pid=41, window_id=401, title="Background", app_name="app.exe",
@@ -190,6 +247,8 @@ class CuaDriverOfflineTests(unittest.TestCase):
             async def get_window_state(self, request):
                 self.snapshots += 1
                 self.observed.append((request.pid, request.window_id))
+                if self.fail_snapshot:
+                    raise RuntimeError("accessibility unavailable")
                 token = f"s{self.snapshots:08x}:3"
                 element = SimpleNamespace(
                     element_index=3, role="button", depth=1, label="Save",
@@ -203,8 +262,8 @@ class CuaDriverOfflineTests(unittest.TestCase):
                     snapshot_id=f"s{self.snapshots:08x}", app_name="test",
                     window_title="test", tree_markdown="must not be returned",
                     elements=[element], element_count=1, total_element_count=1,
-                    elements_complete=True, degraded=False, degraded_reason=None,
-                    truncated=False, truncation_reason=None, screenshot_width=800,
+                    elements_complete=self.complete, degraded=self.degraded, degraded_reason=None,
+                    truncated=self.truncated, truncation_reason=None, screenshot_width=800,
                     screenshot_height=600, window_bounds=None,
                 )
 
@@ -241,6 +300,16 @@ class CuaDriverOfflineTests(unittest.TestCase):
                 asyncio.run(backend._observe({}))
             with self.assertRaisesRegex(ValueError, "current foreground window"):
                 asyncio.run(backend._observe({"_foregroundTitle": "Not visible"}))
+
+            for options in (
+                {"degraded": True},
+                {"truncated": True},
+                {"complete": False},
+                {"fail_snapshot": True},
+            ):
+                backend._driver = FakeDriver(**options)
+                with self.assertRaisesRegex(ValueError, "accessibility snapshot"):
+                    asyncio.run(backend._observe({"_foregroundTitle": "Foreground"}))
         finally:
             if old_module is None:
                 sys.modules.pop("cua_driver", None)

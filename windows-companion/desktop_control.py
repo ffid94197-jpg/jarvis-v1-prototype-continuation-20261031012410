@@ -44,7 +44,7 @@ def check_input(op):
     if name == 'desktop_click' and 'elementToken' in op:
         if (os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1' and
             type(op.get('pid')) is int and 0 < op['pid'] < 2**32 and
-            isinstance(op.get('cuaWindowId'), str) and re.fullmatch(r'[0-9]{1,20}', op['cuaWindowId']) and
+            isinstance(op.get('cuaWindowId'), str) and re.fullmatch(r'[1-9][0-9]{0,19}', op['cuaWindowId']) and
             0 < int(op['cuaWindowId']) < 2**64 and
             isinstance(op.get('elementToken'), str) and re.fullmatch(r'[A-Za-z0-9:_-]{1,128}', op['elementToken']) and
             op.get('button', 'left') in ('left','right','double')):

@@ -103,6 +103,7 @@ const checks=[
  // Additional native features and source-integrity gates. These must run in the same
  // local acceptance battery; isolated helper checks are not release certification.
  ['AUTONOMY-DEEP-WINDOWS',['scripts/verify-autonomy-deep-windows.cjs']],
+ ['LOCAL-DEV-NO-LOGIN',['scripts/verify-local-dev-no-login.cjs']],
  ['INVENTORY-INTEGRITY',['scripts/verify-inventory-integrity.cjs']],
  ['NATIVE-CODE-EDIT',['scripts/verify-native-code-edit.cjs']],
  ['NATIVE-MEMORY-RECALL',['scripts/verify-native-memory-recall.cjs']],

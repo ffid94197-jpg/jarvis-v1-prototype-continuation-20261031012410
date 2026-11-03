@@ -30,11 +30,11 @@ The execution path remains:
    provider API keys from the main JARVIS server are not copied into the
    companion. CUA telemetry is disabled by default.
 2. JARVIS Core selects a Windows desktop tool.
-2. JARVIS Guardian validates and audits the exact arguments.
-3. The authenticated loopback-only Windows companion validates the request again.
-4. The companion's desktop-control module dispatches to Cua Driver only when
+3. JARVIS Guardian validates and audits the exact arguments.
+4. The authenticated loopback-only Windows companion validates the request again.
+5. The companion's desktop-control module dispatches to Cua Driver only when
    both local opt-ins are set.
-5. The result is returned to JARVIS Core; the task verifier must still prove
+6. The result is returned to JARVIS Core; the task verifier must still prove
    the requested postcondition.
 
 Cua Driver has no model, planner, provider keys, task queue, shell access,

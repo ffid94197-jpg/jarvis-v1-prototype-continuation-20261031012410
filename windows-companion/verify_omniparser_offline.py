@@ -22,6 +22,9 @@ check(not normalize_detection_rows({'parsed_content_list':'malformed'}),
       'Malformed detector output is rejected')
 check(not normalize_detection_rows({'parsed_content_list':[]}),
       'Empty detector output stays empty')
+check(not normalize_detection_rows({'parsed_content_list':[
+  {'bbox':[float('nan'),0.2,0.4,0.5], 'content':'faked target'}
+]}),'NaN coordinates cannot become actionable or model-visible geometry')
 for name in ('JARVIS_OMNIPARSER_ENABLED','JARVIS_SCREEN_WATCH_ENABLED',
              'JARVIS_EXPERIMENTAL_DESKTOP_CONTROL'):
     os.environ.pop(name,None)

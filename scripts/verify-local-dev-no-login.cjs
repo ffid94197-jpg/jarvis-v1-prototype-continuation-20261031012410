@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const ts = require('typescript');
 const root = path.join(__dirname, '..');
 let sequence = 0;
@@ -108,6 +109,13 @@ function request(headers={},token=null){
     principals.push({id:'conflicting-owner',role:'OWNER',status:'ACTIVE',label:'other'});
     const conflict=await route.GET(request());
     assert.equal(conflict.status,503);pass('conflicting owners never auto-login');
-    console.log(`LOCAL_DEV_NO_LOGIN: ${passed}/20 PASS (mock database and HTTP route, not Windows integration)`);
+    const localBootstrap = await import(pathToFileURL(path.join(root,'scripts/local-dev-bootstrap.mjs')));
+    const plannerDefault = localBootstrap.localDevEnvironment({NODE_ENV:'development'});
+    assert.equal(plannerDefault.JARVIS_GOAL_PLANNER_ENABLED,'1');
+    pass('isolated local dev enables advisory long-horizon planning by default');
+    const plannerOptOut = localBootstrap.localDevEnvironment({NODE_ENV:'development',JARVIS_GOAL_PLANNER_ENABLED:'0'});
+    assert.equal(plannerOptOut.JARVIS_GOAL_PLANNER_ENABLED,'0');
+    pass('explicit local dev planner opt-out is preserved');
+    console.log(`LOCAL_DEV_NO_LOGIN: ${passed} PASS (mock database and HTTP route, not Windows integration)`);
   } finally { restoreEnv(); }
 })().catch(err=>{console.error(err);process.exitCode=1});

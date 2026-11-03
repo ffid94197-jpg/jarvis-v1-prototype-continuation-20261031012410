@@ -13,6 +13,9 @@ stdio-MCP transport. JARVIS now has an optional adapter for the same upstream
 Cua Driver project through its Python SDK inside the existing Windows
 companion. This intentionally changes the transport/lifecycle: no Hermes
 agent, no separate MCP server, and no imported Hermes model/tool loop.
+Guardian authorizes exact-window element clicks and window-targeted text/key
+input; the CUA receipt reports whether the selected route was background or
+foreground.
 
 Status: code added on the stacked Hermes integration branch; local offline and
 real Windows acceptance are still required.

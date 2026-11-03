@@ -26,7 +26,10 @@ Inspected upstream source revisions:
 
 The execution path remains:
 
-1. JARVIS Core selects a Windows desktop tool.
+1. The Windows companion receives only its existing allowlisted environment;
+   provider API keys from the main JARVIS server are not copied into the
+   companion. CUA telemetry is disabled by default.
+2. JARVIS Core selects a Windows desktop tool.
 2. JARVIS Guardian validates and audits the exact arguments.
 3. The authenticated loopback-only Windows companion validates the request again.
 4. The companion's desktop-control module dispatches to Cua Driver only when

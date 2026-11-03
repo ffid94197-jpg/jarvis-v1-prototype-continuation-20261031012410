@@ -1,0 +1,65 @@
+name: JARVIS targeted Windows repairs (GPT-6 isolated)
+on:
+  push:
+    branches: [fix/gpt6-autonomy-20261031]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  model-route-windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify native Windows and TypeScript
+        run: |
+          if ((node -p 'process.platform') -ne 'win32') { throw 'Windows required' }
+          npx tsc --noEmit --incremental false
+          if ($LASTEXITCODE -ne 0) { throw 'TypeScript failed' }
+      - name: Model route and cleanup must exit zero
+        run: |
+          node scripts/model-manager/verify-model-route.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Model routing or cleanup failed' }
+      - name: Repeat fixture lifecycle to detect locked Windows directories
+        run: |
+          1..3 | ForEach-Object {
+            node scripts/model-manager/verify-model-route.cjs
+            if ($LASTEXITCODE -ne 0) { throw "Cleanup failed on run $_" }
+          }
+      - name: Provider adapter regression
+        run: |
+          node scripts/verify-provider-offline.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Provider test failure' }
+  minecraft-smithing-contract:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Host-advertised smithing, exact vanilla ingredients, negative receipts
+        run: |
+          node windows-companion/minecraft-bot/verify_mcp_smithing_gate.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Smithing contract failed' }
+          node windows-companion/minecraft-bot/verify_mine_ai_mcp_mission.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Existing MCP mission regression failed' }
+      - name: Related simulation and Guardian boundaries
+        run: |
+          node scripts/verify-four-autonomy-gaps.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Four-gap simulation failed' }
+          node scripts/verify-minecraft-effect-identity.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Minecraft effect authorization failed' }

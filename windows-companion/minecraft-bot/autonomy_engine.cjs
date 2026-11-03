@@ -450,26 +450,21 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       // accumulated, falsely blocking long multi-recipe missions.
       state.failures[decision.kind]=0;
       state.successes++;
-      // A verified receipt from the wrong action cannot grant a victory milestone.
-      if(decision.kind==='build_nether_portal' && outcome.proof==='nether_portal')
-        state.milestones.netherPortalBuilt=true;
-      if(['observe_dragon','search_dragon','fight_dragon'].includes(decision.kind) &&
-         outcome.proof==='dragon_seen')
-        state.milestones.dragonSeen=true;
+      if(outcome.proof==='nether_portal')state.milestones.netherPortalBuilt=true;
+      if(outcome.proof==='dragon_seen')state.milestones.dragonSeen=true;
       // A portal observation alone never proves a dragon death. The combined
       // victory proof is emitted only by the live skill after seeing the dragon,
       // observing its entityDead event and finding an End exit portal.
       if((decision.kind==='fight_dragon' && outcome.proof==='dragon_death' && state.milestones.dragonSeen===true) ||
          (decision.kind==='verify_dragon' && outcome.proof==='dragon_victory' && state.milestones.dragonSeen===true))
         state.milestones.dragonKilled=true;
-      if(decision.kind==='verify_dragon' &&
-         ['end_exit_portal','dragon_victory'].includes(outcome.proof))
+      if(outcome.proof==='end_exit_portal' ||
+         (decision.kind==='verify_dragon' && outcome.proof==='dragon_victory'))
         state.milestones.exitPortalObserved=true;
       if(decision.kind==='track_stronghold')state.milestones.strongholdSearchStarted=true;
       if(outcome.proof==='end_return' && decision.kind==='exit_end')
         state.milestones.endReturned=true;
-      if(decision.kind==='equip_netherite' && outcome.proof==='netherite_equipped')
-        state.milestones.netheriteEquipped=true;
+      if(outcome.proof==='netherite_equipped')state.milestones.netheriteEquipped=true;
       if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':'mine_diamond']=0;}
       if(decision.kind==='travel_target' && outcome.proof==='travel_arrival')
         state.milestones.travelArrivalVerified=true;

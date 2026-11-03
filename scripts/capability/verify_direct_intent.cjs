@@ -14,5 +14,16 @@ for(const x of ['What is video editing?', 'How do I edit photos?', 'Explain the 
  assert.equal(decide(x),null,x);n++;
 }
 const loop=fs.readFileSync(path.join(root,'src/lib/agent/core/loop.ts'),'utf8');
-assert(loop.includes('directCapabilityDiscovery(objective)') && loop.includes('!localIntent ? directCapabilityDiscovery(objective)'), 'capability search is a deterministic first step');n++;
+// The guard list grew to `!localIntent && !minecraftIntent`, so matching the
+// historical exact substring '!localIntent ? directCapabilityDiscovery(...)'
+// rejected the stricter source. Assert the real contract instead: capability
+// discovery only on the first step, never on replay, never when a more
+// specific intent already matched — and it must actually be dispatched ahead
+// of the model call rather than merely computed.
+assert(/stepsUsed === 0 && !opts\.replay && !localIntent[\s\S]{0,80}\?\s*directCapabilityDiscovery\(objective\)/.test(loop),
+  'capability search is a deterministic first step');n++;
+assert(/capabilityIntent \?\s*JSON\.stringify\(capabilityIntent\) : await llmJson/.test(loop),
+  'capability intent is dispatched before any LLM planning call');n++;
+assert(/!localIntent && !minecraftIntent \? directCapabilityDiscovery/.test(loop),
+  'a specific local or Minecraft intent takes precedence over generic capability search');n++;
 console.log(`CAPABILITY_DIRECT_INTENT: ${n}/${n} PASS`);

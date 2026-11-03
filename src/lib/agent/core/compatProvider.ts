@@ -4,7 +4,7 @@
  * authorize tools. Core/Guardian remain responsible for every effect.
  * WARNING: egress filtering must also be enforced by the deployment network.
  */
-import type { ModelBridge, ModelMessage } from "./modelProvider";
+import { normalizeSystemInstructions, type ModelBridge, type ModelMessage } from "./modelProvider";
 
 import { modelRequestDeadlineMs } from "./modelDeadline";
 const MAX_JSON_BYTES = 1024 * 1024;
@@ -102,20 +102,15 @@ function contentFromChoice(body: unknown): string {
  * to a system message, leaving the user and actual dialogue history intact.
  * Do not change later assistant replies; never put user text into system.
  */
-export function normalizeCompatibleMessages(messages: ModelMessage[]): Array<{role: "system" | "user" | "assistant";content: string}> {
-  const firstUser = messages.findIndex(m => m.role === "user");
-  if (firstUser < 0) throw new Error("Model request missing user message.");
-  const prefix = messages.slice(0, firstUser);
-  if (prefix.some(m => m.role !== "assistant")) throw new Error("Unexpected model instruction roles.");
-  const rest = messages.slice(firstUser).map(m => ({role:m.role,content:m.content}));
-  if (!prefix.length) return rest;
-  const instructions = prefix.map(m => m.content).filter(Boolean).join("\n\n");
-  return instructions ? [{role:"system",content:instructions},...rest] : rest;
-}
+// The normalizer now lives in modelProvider.ts, next to the ModelMessage type it
+// operates on, because every backend needs it — not only OpenAI-compatible ones.
+// One implementation, so the adapters cannot drift apart on identity delivery.
+export { normalizeSystemInstructions } from "./modelProvider";
 
 export function createCompatibleBridge(
   settings: CompatibleSettings = getCompatibleSettings(),
   request: typeof fetch = fetch,
+  identityHint?: { provider?: string; local?: boolean },
 ): ModelBridge {
   // A single repeat is permitted only for a *read-only model completion* whose
   // prior HTTP response was valid but omitted text. No tools are sent here.
@@ -125,7 +120,7 @@ export function createCompatibleBridge(
       /^gemini-3\./.test(settings.model); } catch { return false; }
   })();
   const payload = (messages: ModelMessage[], stream: boolean, emptyRecovery = false) => JSON.stringify({
-    model: settings.model, messages: normalizeCompatibleMessages(messages), stream,
+    model: settings.model, messages: normalizeSystemInstructions(messages), stream,
     ...(emptyRecovery && isGemini3 ? { reasoning_effort: "low" } : {}),
   });
   const send = async (messages: ModelMessage[], stream: boolean, emptyRecovery = false) => {
@@ -146,7 +141,20 @@ export function createCompatibleBridge(
         "REQUEST_TIMEOUT" : "REQUEST_TRANSPORT");
     }
   };
+  // Honest provenance: JARVIS knows the configured endpoint and model id, not
+  // the vendor's marketing name, so the provider label is derived from the host
+  // unless the caller (an owner model profile) supplied its own label. The
+  // credential is never included.
+  const compatHost = (() => { try { return new URL(settings.url).host; } catch { return "unknown"; } })();
+  const bridgeIdentity = {
+    backend: "openai-compatible",
+    provider: identityHint?.provider?.trim() || `OpenAI-compatible endpoint (${compatHost})`,
+    modelId: settings.model,
+    local: identityHint?.local === true,
+    host: compatHost,
+  };
   return {
+    identity: bridgeIdentity,
     async complete(messages) {
       const readOnce = async (emptyRecovery: boolean) => {
       const r = await send(messages, false, emptyRecovery);

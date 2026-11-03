@@ -2,12 +2,14 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { buildReplayFromJournal, runTask } from "@/lib/agent/core/loop";
 import { ensureWorkspace } from "@/lib/agent/guardian/policy";
+import { prepareTaskObjective } from "@/lib/agent/core/taskInputGate";
 import {
   cancelFlags,
   clearCancel,
   isCancelled,
 } from "@/lib/agent/core/cancelRegistry";
 import { reconcileCrashedTasks } from "@/lib/agent/core/effects";
+import { deriveStepBudget, loadOwnerAutonomyProfile } from "@/lib/agent/core/autonomyPolicy";
 import {
   requireActiveSession,
   requireOwnedTask,
@@ -41,6 +43,14 @@ export async function POST(req: NextRequest) {
   // Startup crash reconciliation (§5.5): runs at most once per process.
   await reconcileCrashedTasks();
 
+  // ——— PART 2: owner-configurable autonomy tier ———
+  // Resolved from the SERVER-DERIVED principal (ctx.principalId), never from
+  // body.ownerId, which the request interface already documents as untrusted.
+  // A profile can only decide how LONG an authorized run may continue; it
+  // carries no permission of any kind, and a memory row that was not written by
+  // an explicit owner action is ignored rather than applied.
+  const autonomy = await loadOwnerAutonomyProfile(ctx.principalId);
+
   let taskId: string;
   let objective: string;
   let budget: number;
@@ -71,10 +81,9 @@ export async function POST(req: NextRequest) {
     executedEffects = journal.executedEffects; // Core duplicate-effect guard
     pendingGuiVerification = journal.pendingGuiVerification;
     stepsUsedOffset = journal.stepsUsed;
-    budget =
-      typeof body.stepBudget === "number" && body.stepBudget > 0
-        ? Math.floor(body.stepBudget)
-        : 12;
+    // Owner autonomy tier (Part 2). Durable, owner-scoped, and used ONLY to
+    // derive how long a run may continue — Guardian still authorizes every call.
+    budget = deriveStepBudget({ requested: body.stepBudget, profile: autonomy.profile }).budget;
     // Resume continues the SAME plan lineage (objective is immutable), so
     // the plan revision is unchanged — duplicate identities still match.
     try {
@@ -88,11 +97,13 @@ export async function POST(req: NextRequest) {
     if (typeof body.objective !== "string" || body.objective.trim().length === 0) {
       return Response.json({ error: "objective is required." }, { status: 400 });
     }
-    objective = body.objective.trim().slice(0, 2000);
-    budget =
-      typeof body.stepBudget === "number" && body.stepBudget > 0
-        ? Math.min(Math.floor(body.stepBudget), process.env.JARVIS_EXPERIMENTAL_DESKTOP_CONTROL === "1" ? 48 : 24)
-        : (process.env.JARVIS_EXPERIMENTAL_DESKTOP_CONTROL === "1" ? 24 : 12);
+    const inputCheck=prepareTaskObjective(body.objective);
+    console.info("[TASK_INPUT] "+(inputCheck.ok?"ACCEPTED":inputCheck.code)+
+      " chars="+body.objective.length+" parsedRows="+inputCheck.inventoryRows);
+    if(!inputCheck.ok)
+      return Response.json({error:inputCheck.message,code:inputCheck.code},{status:inputCheck.status});
+    objective=inputCheck.objective;
+    budget = deriveStepBudget({ requested: body.stepBudget, profile: autonomy.profile }).budget;
     try {
       const created = await db.agentTask.create({
         data: {
@@ -145,6 +156,9 @@ export async function POST(req: NextRequest) {
           pendingGuiVerification,
           stepsUsedOffset,
           planRevision,
+          // PART 2: the owner's autonomy tier, resolved from the server-derived
+          // principal above. It governs run persistence only.
+          autonomy: autonomy.profile,
           emit: (ev) => {
             if (ev.type === "status") send("status", ev);
             else if (ev.type === "step") send("step", ev);

@@ -1,0 +1,30 @@
+#!/usr/bin/env node
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const ts=require('typescript');
+const root=path.resolve(__dirname,'..');
+const file=path.join(root,'src/lib/agent/core/prompts.ts');
+const source=fs.readFileSync(file,'utf8');
+const compiled=ts.transpileModule(source,{fileName:file,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const m={exports:{}};
+new Function('module','exports',compiled)(m,m.exports);
+const {selectPlannerSystemPrompt,PLANNER_SYSTEM_PROMPT}=m.exports;
+let checks=0;
+function check(cond,label){assert.ok(cond,label);checks++;console.log('PASS',label);}
+const objective='Create a folder named real_model_e2e, then create file real_model_e2e/proof.txt containing exactly "TEST". Read back that file and verify it.';
+const short=selectPlannerSystemPrompt(objective);
+check(short!==PLANNER_SYSTEM_PROMPT,'short direct filesystem objective uses specialized catalog');
+check(short.length<PLANNER_SYSTEM_PROMPT.length/2,'specialized catalog removes unrelated token-heavy tools');
+check(short.includes('create_folder')&&short.includes('write_file')&&short.includes('read_file'),'all required filesystem tools remain present');
+check(!short.includes('windows_desktop_click')&&!short.includes('minecraft_companion_command'),'unrelated Windows/Minecraft model tools omitted from file-only advisory');
+check(short.includes('JARVIS')&&short.includes('Guardian'),'JARVIS identity and security instructions retained');
+check(short.includes('EXAMPLES only'),'literal placeholder-name warning included');
+const complex=selectPlannerSystemPrompt('Create a React website project in the workspace and build it safely.');
+check(complex===PLANNER_SYSTEM_PROMPT,'multi-tool website project retains full catalog');
+check(selectPlannerSystemPrompt('Open Chrome and browse YouTube')===PLANNER_SYSTEM_PROMPT,'Windows desktop tasks retain full catalog');
+check(selectPlannerSystemPrompt('Hi')===PLANNER_SYSTEM_PROMPT,'conversation retains full catalog');
+check(selectPlannerSystemPrompt('Create a folder named game for my Minecraft project')===PLANNER_SYSTEM_PROMPT,'cross-domain task is never hidden from broader tools');
+check(selectPlannerSystemPrompt('Write an inventory spreadsheet and verify all totals')===PLANNER_SYSTEM_PROMPT,'spreadsheet data task retains full tools');
+console.log('FILE_CATALOG_ROUTING '+checks+'/'+checks+' PASS (source logic, no model inference)');

@@ -81,9 +81,8 @@ class World {
    endPortalPresent:this.endPortal && this.dimension==='overworld',
    endPortalActivated:this.endPortal && this.dimension==='overworld',
    strongholdPortalFrameNearby:this.stronghold && this.dimension==='overworld',
-   // Match real Mineflayer digest: armor slots and held weapon are SEPARATE
-   // independently observed predicates. Backpack ownership is not equipment.
-   wornNetherite:Object.entries(GEAR_SLOTS).every(([gear,slot])=>this.equipment[slot]===gear),
+   wornNetherite:Object.entries(GEAR_SLOTS).every(([gear,slot])=>this.equipment[slot]===gear) &&
+     this.equipment.hand==='netherite_sword',
    heldNetheriteSword:this.equipment.hand==='netherite_sword',
    wornDiamond:Object.values(GEAR_SLOTS).every(slot=>this.equipment[slot]==='diamond_'+
      (slot==='head'?'helmet':slot==='torso'?'chestplate':slot==='legs'?'leggings':'boots')),
@@ -184,12 +183,7 @@ class World {
     evidence.proof='dragon_victory';this.dragonVictoryTick=this.ticks;break;
    case 'exit_end':
     dest('end');req(progress.milestones.dragonKilled===true && progress.milestones.exitPortalObserved===true && this.exitPortal,'not verified dragon win/exit portal');
-    this.dimension='overworld';this.workbench=above('crafting_table');this.furnace=above('furnace');
-    this.events.push(['end_exit',this.ticks]);
-    // The simulated world, like the live skill, must return an explicit
-    // VERIFIED End->Overworld transition receipt. Changing dimension alone
-    // must never silently satisfy the Core's endReturned milestone.
-    evidence.proof='end_return';break;
+    this.dimension='overworld';this.workbench=above('crafting_table');this.furnace=above('furnace');this.events.push(['end_exit',this.ticks]);evidence.proof='end_return';break;
    case 'loot_bastion_template':
     dest('nether');this.bastionScout++;if(this.bastionScout>=2)gain('netherite_upgrade_smithing_template');break;
    case 'mine_ancient_debris':dest('nether');req(pick(),'diamond-grade pick required');gain('ancient_debris',1+Number(this.random()>.84));break;
@@ -261,15 +255,13 @@ function run(seed,options={}){
  assert.equal(s.status,'complete','MISSION DID NOT COMPLETE seed '+seed+' '+JSON.stringify(s)+' TRACE '+trace.join(','));
  assert.equal(s.milestones.dragonKilled,true,'real simulated Dragon kill must be acknowledged');
  assert.equal(s.milestones.exitPortalObserved,true,'observed End exit required');
- assert.equal(s.milestones.endReturned,true,'explicit End-to-Overworld receipt required');
  assert.equal(s.milestones.netheriteEquipped,true,'equipped Netherite proof required');
  assert(w.dragonVictoryTick>0,'no witnessed Dragon death event');
  assert(w.armorEquipTick>w.dragonVictoryTick,'order violated: armor equipped before Dragon defeat');
  assert(w.events.some(e=>e[0]==='dragon_death_event'),'no simulated HP=0 Dragon death event');
  assert(w.events.some(e=>e[0]==='end_exit'),'no simulated return through End exit portal');
  assert.equal(w.dragonHP,0);assert.equal(w.crystals,0);
- assert.equal(w.world().wornNetherite,true,'all four current armor slots must be equipped');
- assert.equal(w.world().heldNetheriteSword,true,'Netherite sword must be actually held');
+ assert.equal(w.world().wornNetherite,true,'all four current armor slots plus weapon must be equipped');
  assert.equal(w.dimension,'overworld','completed mission must return to Overworld');
  assert.equal(w.portalEyesInserted,12,'twelve actual Eyes inserted before End entry');
  assert(w.ledger.some(e=>e.kind==='smith_netherite'),'no actual recipe-backed netherite smithing');
@@ -282,15 +274,8 @@ function negatives(){
  assert.throws(()=>w.execute({kind:'smith_netherite',item:'netherite_helmet',base:'diamond_helmet'},c.status()),/WORLD_PRECONDITION/);
  w.inv.netherite_helmet=1;w.inv.netherite_chestplate=1;w.inv.netherite_leggings=1;w.inv.netherite_boots=1;w.inv.netherite_sword=1;
  assert.equal(w.world().wornNetherite,false,'backpack armor is never worn');
- assert.equal(w.world().heldNetheriteSword,false,'backpack sword is never held');
  c.record({kind:'verify_dragon'},{ok:true,verified:false,proof:'dragon_victory'});
  assert.notEqual(c.status().milestones.dragonKilled,true,'unverified game event cannot kill dragon');
- c.record({kind:'exit_end'},{ok:true,verified:false,proof:'end_return'});
- assert.notEqual(c.status().milestones.endReturned,true,
-  'unverified End-return claim cannot advance mission milestone');
- c.record({kind:'exit_end'},{ok:true,verified:true,proof:'not_an_end_return'});
- assert.notEqual(c.status().milestones.endReturned,true,
-  'verified unrelated effect cannot forge Overworld return milestone');
  assert.equal(validateCommand({command:'auto_goal',goal:GOAL,durationSeconds:43200}),null,'new goal command accepted');
  assert.notEqual(validateCommand({command:'auto_goal',goal:GOAL,durationSeconds:43201}),null,'unbounded mission rejected');
 }

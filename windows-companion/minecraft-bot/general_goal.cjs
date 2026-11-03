@@ -31,7 +31,7 @@ function validCraftSpec(s){
 }
 function validEquipSpec(s){
  return exact(s,['goal','item','destination'])&&s.goal==='equip'&&
-  typeof s.destination==='string'&&Object.hasOwn(EQUIPMENT,s.destination)&&EQUIPMENT[s.destination].has(s.item);
+  typeof s.destination==='string'&&!!EQUIPMENT[s.destination]?.has(s.item);
 }
 const act=(kind,why,params={})=>({kind,why,...params});
 const count=(inv,name)=>Number.isFinite(inv?.raw?.[name])?Math.max(0,inv.raw[name]):0;

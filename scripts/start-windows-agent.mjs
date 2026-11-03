@@ -2,11 +2,10 @@
  * Opt-in screen capture and offline auth test ONLY, never production.
  */
 import {spawn} from 'node:child_process';
-import {randomBytes} from 'node:crypto';
 import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
-import {ensureLocalDevDatabase,localDevEnvironment} from './local-dev-bootstrap.mjs';
+import {companionAuthorizationContext,ensureLocalDevDatabase,localDevEnvironment} from './local-dev-bootstrap.mjs';
 import {validateLocalWindowsEnvironment,assertWindowsServicesFree} from './windows-startup-preflight.mjs';
 const root=dirname(dirname(fileURLToPath(import.meta.url)));
 const require=createRequire(import.meta.url);
@@ -16,11 +15,11 @@ if (process.platform !== 'win32' || process.env.NODE_ENV === 'production') {
   console.error('Windows companion is available on Windows development machines only.');process.exit(1);
 }
 const python=process.env.JARVIS_PYTHON || 'python';
-const secret=randomBytes(48).toString('hex');
 let env,paths;
 try {
-  env={...localDevEnvironment(process.env),JARVIS_WINDOWS_AGENT_ENABLED:'1',
-    JARVIS_WINDOWS_COMPANION_TOKEN:secret};
+  // One authorization context, shared with the plain launcher so the two can
+  // never disagree about what an authorized companion session looks like.
+  env={...localDevEnvironment(process.env),...companionAuthorizationContext(process.env)};
   validateLocalWindowsEnvironment(env);
   // Detect an already-running JARVIS or another process occupying either service.
   // A transient port race can still occur after the preflight check.

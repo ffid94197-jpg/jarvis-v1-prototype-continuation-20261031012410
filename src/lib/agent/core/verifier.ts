@@ -21,6 +21,7 @@
 import fs from "fs/promises";
 import { resolveScopedPath, assertWithinRoot } from "../guardian/policy";
 import { db } from "@/lib/db";
+import { inventoryArtifactKind, verifyInventoryCsv, verifyInventoryReport, type InventorySource } from "./inventoryIntegrity";
 
 export interface Predicate {
   kind: "folder" | "file";
@@ -37,6 +38,8 @@ export interface ArbitrationInput {
   objective: string;
   /** True when the loop is about to finalize a TOOL-ASSISTED run. */
   toolAssisted: boolean;
+  /** Source rows from current owner request or a same-owner prior objective. */
+  inventorySource?: InventorySource | null;
 }
 
 export type Verdict =
@@ -260,6 +263,69 @@ async function checkPredicate(
   };
 }
 
+
+/**
+ * Specific completion proof for a source-grounded inventory analysis.
+ * Both output files MUST be written in this task, durably settled and
+ * independently re-read from within the Guardian workspace. The report
+ * and CSV are each checked against original OWNER input, never against
+ * one another alone. Unknown formats or missing provenance remain PARTIAL.
+ */
+async function verifyInventoryArtifacts(
+  source: InventorySource,
+  effects: Array<{ status: string; tool: string; argsJson: string | null }>,
+  failedEffects: number,
+  verifiedProof: ReadonlySet<string>,
+): Promise<Arbitration> {
+  const targets = new Map<"csv" | "report", string[]>();
+  for (const e of effects) {
+    if(e.status !== "SETTLED" || e.tool !== "write_file") continue;
+    let args: {path?: unknown};
+    try { args=JSON.parse(e.argsJson ?? "{}"); } catch { continue; }
+    const scoped = resolveScopedPath(args.path);
+    if(!scoped.ok || !scoped.rel || !verifiedProof.has("write_file:"+scoped.rel)) continue;
+    const kind=inventoryArtifactKind(scoped.rel);
+    if(!kind)continue;
+    const paths=targets.get(kind) ?? [];
+    if(!paths.includes(scoped.rel))paths.push(scoped.rel);
+    targets.set(kind,paths);
+  }
+  const checked: Arbitration["predicates"]=[];
+  const predicateLines: string[]=[];
+  for(const kind of ["csv","report"] as const) {
+    const paths=targets.get(kind) ?? [];
+    if(paths.length !== 1){
+      predicateLines.push("✗ INVENTORY " + kind + " — expected exactly one durably written artifact in this task, found " + paths.length);
+      continue;
+    }
+    const rel=paths[0];
+    const pred: Predicate={kind:"file",relPath:rel};
+    const scoped=resolveScopedPath(rel);
+    let issue: string | null = null;
+    if(!scoped.ok || !scoped.abs)issue="invalid workspace-relative file path";
+    else {
+      const containment=await assertWithinRoot(scoped.abs);
+      if(!containment.ok)issue="failed Guardian containment verification";
+      else {
+        try {
+          const text=await fs.readFile(scoped.abs,"utf8");
+          issue=kind==="csv"?verifyInventoryCsv(text,source):verifyInventoryReport(text,source);
+        }catch {issue="file absent or unreadable from disk";}
+      }
+    }
+    const pass=issue===null;
+    checked.push({predicate:pred,pass,observed:pass?"all original rows and derived totals verified from disk":issue ?? "unverified"});
+    predicateLines.push((pass?"✓":"✗")+" INVENTORY "+kind+" "+rel+" — "+(pass?"source fidelity, arithmetic and disk readback verified":issue));
+  }
+  const complete=checked.length===2 && checked.every(x=>x.pass) && predicateLines.filter(x=>x.startsWith("✗")).length===0;
+  const clean=failedEffects===0;
+  predicateLines.push("INVENTORY VERDICT: "+(complete && clean?"VERIFIED":"PARTIAL")+
+    " — original source "+source.rows.length+" products, "+source.totalUnits+" units, "+
+    (source.totalPaise/100).toFixed(2)+" INR; verified "+checked.filter(x=>x.pass).length+"/2 output files"+
+    (clean?"":"; prior effect attempt failed"));
+  return {verdict:complete && clean?"verified":"partial",predicateLines,predicates:checked};
+}
+
 // ——— 3. authoritative arbitration (§6.3) ———
 
 export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbitration> {
@@ -271,6 +337,37 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
   const unknownEffects = effects.filter((e) => e.status === "EFFECT_UNKNOWN").length;
   const settledOk = effects.filter((e) => e.status === "SETTLED").length;
   const failedEffects = effects.filter((e) => e.status === "FAILED").length;
+  // Disk state alone may predate this task. Match each completed artifact to
+  // a Guardian-admitted, durably settled effect of THIS task with a verified
+  // executor/readback receipt. Missing/legacy/corrupt receipts are not proof.
+  const settledArtifactProof = new Set<string>();
+  for (const effect of effects) {
+    if (effect.status !== "SETTLED" ||
+      (effect.tool !== "write_file" && effect.tool !== "create_folder")) continue;
+    try {
+      const admitted = JSON.parse(effect.argsJson ?? "{}") as { path?: unknown };
+      const receipt = JSON.parse(effect.receiptJson ?? "{}") as {
+        ok?: unknown; tool?: unknown; reconciled?: unknown; path?: unknown;
+        isDirectory?: unknown; contentVerified?: unknown;
+        detail?: { path?: unknown; isDirectory?: unknown; verified?: unknown };
+      };
+      const scoped = resolveScopedPath(admitted.path);
+      if (!scoped.ok || !scoped.rel) continue;
+      const directSuccess = receipt.ok === true && receipt.tool === effect.tool &&
+        receipt.detail?.path === scoped.rel &&
+        (effect.tool === "write_file"
+          ? receipt.detail?.verified === true
+          : receipt.detail?.isDirectory === true);
+      const recoveredSuccess = receipt.reconciled === true &&
+        receipt.path === scoped.rel &&
+        (effect.tool === "write_file"
+          ? receipt.contentVerified === true
+          : receipt.isDirectory === true);
+      if (directSuccess || recoveredSuccess) {
+        settledArtifactProof.add(effect.tool + ":" + scoped.rel);
+      }
+    } catch { /* malformed or incomplete receipt is never completion proof */ }
+  }
 
   // Uncertain effects can NEVER yield a verified completion (VER-06).
   if (admittedUnsettled > 0 || unknownEffects > 0) {
@@ -283,7 +380,19 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
     };
   }
 
-  const predicates = extractPredicates(objective);
+  const inventoryDeliverables=/\b(?:inventory|stock)\b/i.test(objective)
+    && /\b(?:csv|spreadsheet)\b/i.test(objective)
+    && /(?:\b(?:report|summary)\b|[_-](?:report|summary)\.(?:txt|md)\b)/i.test(objective);
+  if(toolAssisted&&inventoryDeliverables&&!input.inventorySource)
+    return {verdict:"partial",predicates:[],
+      predicateLines:["INVENTORY_SOURCE_UNAVAILABLE: folder-only proof cannot certify inventory"]};
+  if(toolAssisted&&input.inventorySource)
+    return verifyInventoryArtifacts(input.inventorySource,effects,failedEffects,settledArtifactProof);
+  const predicates=extractPredicates(objective);
+  if(toolAssisted&&/\b(?:files?|csv|spreadsheet)\b/i.test(objective)
+     &&predicates.length>0&&predicates.every(p=>p.kind==="folder"))
+    return {verdict:"partial",predicates:[],
+      predicateLines:["Requested file artifacts have no independent proof"]};
 
   // Pure conversation: no predicates, no effects.
   if (predicates.length === 0) {
@@ -309,10 +418,14 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
   const checked: Arbitration["predicates"] = [];
   for (const p of predicates) {
     const r = await checkPredicate(p);
+    const proofKey = (p.kind === "folder" ? "create_folder:" : "write_file:") + r.observedPath;
+    const provenance = settledArtifactProof.has(proofKey);
     checked.push({
       predicate: { ...p, relPath: r.observedPath },
-      pass: r.pass,
-      observed: r.observed,
+      pass: r.pass && provenance,
+      observed: r.pass && !provenance
+        ? r.observed + "; missing matching verified SETTLED effect for this task"
+        : r.observed,
     });
   }
   const allPass = checked.every((c) => c.pass);
@@ -337,7 +450,8 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
       predicates: checked,
     };
   }
-  if (somePass || settledOk > 0) {
+  if (somePass || settledOk > 0 ||
+      checked.some(c => c.observed.includes("missing matching verified SETTLED effect"))) {
     return {
       verdict: "partial",
       predicateLines: [...predicateLines, `VERDICT: PARTIAL — ${checked.filter((c) => c.pass).length}/${checked.length} predicates confirmed; effects settled ${settledOk}, failed ${failedEffects}`],

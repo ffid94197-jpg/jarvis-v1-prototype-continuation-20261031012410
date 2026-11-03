@@ -1,0 +1,78 @@
+name: Prototype artifact proof targeted acceptance
+on:
+  pull_request:
+    branches: [autonomy-100-percent-acceptance-20261102, fix/autonomy-artifact-receipt-20261102]
+    paths:
+      - "src/lib/agent/core/verifier.ts"
+      - "src/lib/agent/core/loop.ts"
+      - "src/lib/agent/core/prompts.ts"
+      - "scripts/verify-file-catalog-routing.cjs"
+      - "scripts/verify-core-actionable-execution.cjs"
+      - "scripts/verify-task-outcome-honesty.cjs"
+      - "scripts/verify-inventory-integrity.cjs"
+      - "scripts/autonomy/validate-internet-corpus.cjs"
+      - "scripts/autonomy/verify-corpus-validator.cjs"
+      - "src/lib/agent/tools/ciProjectBuild.ts"
+      - "src/lib/agent/guardian/guardian.ts"
+      - "src/lib/agent/tools/executor.ts"
+      - "src/lib/agent/core/effects.ts"
+      - "scripts/verify-ci-project-build.cjs"
+      - ".github/workflows/prototype-artifact-proof.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-proof:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Generate Prisma and compile TypeScript
+        run: |
+          npx prisma generate
+          if ($LASTEXITCODE -ne 0) { throw "Prisma generation failed" }
+          npx tsc --noEmit --incremental false
+          if ($LASTEXITCODE -ne 0) { throw "TypeScript compilation failed" }
+      - name: Verify task completion honesty with real disk reads
+        run: |
+          node scripts/verify-task-outcome-honesty.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Artifact receipt acceptance failed" }
+      - name: Source-grounded inventory checks
+        run: |
+          node scripts/verify-inventory-integrity.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Inventory source-fidelity regression failed" }
+      - name: Internet corpus source-attestation tests
+        run: |
+          node scripts/autonomy/verify-corpus-validator.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Corpus provenance regression failed" }
+      - name: Verify scoped CI project build and fail-closed policy
+        run: |
+          node scripts/verify-ci-project-build.cjs
+          if ($LASTEXITCODE -ne 0) { throw "CI build authorization or output verification failed" }
+      - name: Verify task-specific model tool catalog
+        run: |
+          node scripts/verify-file-catalog-routing.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Planner capability routing regression failed" }
+      - name: Guard against Core behavior regression
+        run: |
+          npm.cmd run test:core-actionable-execution
+          if ($LASTEXITCODE -ne 0) { throw "Core action regression failed" }
+      - name: Verify long-horizon reliability and resume fixtures
+        run: |
+          npm.cmd run test:autonomy-reliability
+          if ($LASTEXITCODE -ne 0) { throw "Long-horizon regression failed" }
+      - name: Compile production application (not release certification)
+        run: |
+          npm.cmd run build
+          if ($LASTEXITCODE -ne 0) { throw "Production build failed" }

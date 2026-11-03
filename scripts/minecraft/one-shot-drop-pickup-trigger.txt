@@ -1,0 +1,2 @@
+One-shot test of real Minecraft Java empty-inventory wood and Stone gathering after server-backed dropped-item recovery repair.
+Only workflow minecraft-one-shot-stone-20261102.yml should run a Linux Java game job, maximum 16 runner minutes. No full-game autoplay on this trigger.

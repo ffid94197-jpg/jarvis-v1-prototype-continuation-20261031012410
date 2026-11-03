@@ -39,4 +39,46 @@ check('Isolated local SQLite DB provisioned without overwrite',()=>{assert.match
 check('Guardian session validation retained',()=>assert.match(auth,/getAuthContext/));
 check('No plaintext secrets or credentials added to UI',()=>{assert.doesNotMatch(models,/console\.log\([^)]*apiKey/);assert.doesNotMatch(page,/(?:AIza[A-Za-z0-9_-]{30,})/)});
 check('Detailed responsive mobile layout',()=>assert.match(css,/@media\(max-width:700px\)/));
+// ——— Part 9: the autonomy tier control must be wired to the runtime ————————
+const autonomyPanel=fs.readFileSync(path.join(root,'src/components/AutonomyTierPanel.tsx'),'utf8');
+check('Autonomy tier control is mounted inside the existing Autonomy & Routines tab',()=>{
+  assert.match(models,/import AutonomyTierPanel from "\.\/AutonomyTierPanel"/);
+  assert.match(models,/\{tab==="routines" && <><AutonomyTierPanel\/><RoutineManager/);
+});
+check('Mounting the panel does not displace the routines manager or the orb',()=>{
+  assert.match(models,/<RoutineManager onClose=\{closeSettings\}\/>/);
+  assert.match(page,/useState<"orb" \| "console">\("orb"\)/);
+});
+check('Autonomy panel reads and writes the real runtime endpoint',()=>{
+  assert.match(autonomyPanel,/fetch\('\/api\/jarvis\/autonomy',\s*\{\s*cache:\s*'no-store'\s*\}\)/);
+  assert.match(autonomyPanel,/method: 'POST'/);
+  assert.match(autonomyPanel,/JSON\.stringify\(\{ tier: chosen, stepBudget, replanBudget \}\)/);
+});
+check('Autonomy panel reports the profile ACTUALLY in effect, not the requested one',()=>{
+  assert.match(autonomyPanel,/In effect now:/);
+  assert.match(autonomyPanel,/state\.profile\.stepBudget/);
+  assert.match(autonomyPanel,/state\.source/);
+  assert.match(autonomyPanel,/await refresh\(\)/);
+});
+check('Autonomy panel states plainly that it grants no permission',()=>{
+  assert.match(autonomyPanel,/What this does not do\./);
+  assert.match(autonomyPanel,/repeatLimitFixedAcrossAllTiers/);
+  assert.match(autonomyPanel,/not adjustable here/);
+  assert.match(autonomyPanel,/durably <em>paused<\/em>, not failed/);
+});
+check('Autonomy panel surfaces server-side clamping and ignored untrusted rows',()=>{
+  assert.match(autonomyPanel,/untrustedRowIgnored/);
+  assert.match(autonomyPanel,/cannot raise autonomy/);
+  assert.match(autonomyPanel,/clamped server-side/);
+  assert.match(autonomyPanel,/state\.warnings\.map/);
+});
+check('Autonomy panel keeps honest loading and error states',()=>{
+  assert.match(autonomyPanel,/Autonomy service unavailable\./);
+  assert.match(autonomyPanel,/role="alert"/);
+  assert.match(autonomyPanel,/RETRY/);
+});
+check('Autonomy panel exposes no permission-like control',()=>{
+  for(const forbidden of ['skipGuardian','bypassGuardian','allowAll','disableGuardian','grantPermission'])
+    assert.ok(!autonomyPanel.includes(forbidden),forbidden);
+});
 console.log(`NEXUS_CONSOLE_SETTINGS ${pass}/${pass} PASS (source contracts; not live browser)`);

@@ -35,7 +35,17 @@ for(const [task,expected] of [
  console.log('PASS',task,'=>',expected?'requires real actions':'conversational');
 }
 const loop=fs.readFileSync(path.join(__dirname,'../src/lib/agent/core/loop.ts'),'utf8');
-assert.match(loop,/if \(desktopObjectiveRequiresActions\(objective\)\)/);
+// The loop's gate is now a disjunction:
+//   if (desktopObjectiveRequiresActions(objective) || requiresExternalActionEvidence(objective)) {
+// Matching the historical closed form `...(objective))` rejected the stricter
+// source. Assert the guard exists AND that both disjuncts are enforced.
+assert.match(loop,/if \(desktopObjectiveRequiresActions\(objective\)/);
 n++;
 console.log('PASS agent loop enforces action gate before conversational completion');
+assert.match(loop,/desktopObjectiveRequiresActions\(objective\)\s*\|\|\s*requiresExternalActionEvidence\(objective\)/);
+n++;
+console.log('PASS action gate is widened by requiresExternalActionEvidence (no weaker than before)');
+assert.match(loop,/requiresExternalActionEvidence\(objective\)\s*&&\s*arbitration\.verdict === "conversational"/);
+n++;
+console.log('PASS grounded verdict still overrides a conversational arbitration for actionable objectives');
 console.log(`CORE_GAME_ACTION_GATE ${n}/${n} PASS (offline source policy)`);

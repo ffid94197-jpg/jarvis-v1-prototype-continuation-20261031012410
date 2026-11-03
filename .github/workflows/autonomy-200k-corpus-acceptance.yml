@@ -1,0 +1,112 @@
+name: JARVIS 200K corpus + Windows acceptance gates
+on:
+  push:
+    branches: [autonomy-100-percent-acceptance-20261102]
+    paths:
+      - "scripts/autonomy/**"
+      - ".github/workflows/autonomy-200k-corpus-acceptance.yml"
+      - "src/lib/agent/**"
+      - "scripts/verify-task-outcome-honesty.cjs"
+      - "scripts/verify-model-deadline-offline.cjs"
+  workflow_dispatch:
+    inputs:
+      validate_corpus:
+        description: Require and validate the complete 200,000-record Internet-original corpus
+        type: boolean
+        required: true
+        default: false
+      corpus_path:
+        description: Repository-relative JSONL corpus path
+        required: true
+        default: benchmarks/autonomy/internet-hard-200k.jsonl
+      source_manifest:
+        description: Pinned source snapshot attestations (required for a 200K claim)
+        required: true
+        default: benchmarks/autonomy/upstream-source-manifest.json
+permissions:
+  contents: read
+jobs:
+  windows-regressions:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Test corpus validator against valid and invalid fixtures
+        run: |
+          node scripts/autonomy/verify-corpus-validator.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Corpus validator self-test failed." }
+      - name: Verify Internet-sourced WebBench candidate import
+        run: |
+          node scripts/autonomy/verify-webbench-candidate-import.cjs
+          if ($LASTEXITCODE -ne 0) { throw "WebBench candidate source integrity failed." }
+      - name: Verify Windows Agent Arena task and evaluator import
+        run: |
+          node scripts/autonomy/verify-windows-agent-arena-candidate.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Windows Agent Arena candidate integrity failed." }
+      - name: Install exact application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Install Minecraft bot test dependencies
+        run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
+      - name: Native Windows and full TypeScript check
+        run: |
+          if ((node -p "process.platform") -ne "win32") { throw "Native Windows runner required." }
+          npx tsc --noEmit --incremental false
+          if ($LASTEXITCODE -ne 0) { throw "TypeScript failed." }
+      - name: Verify bounded model deadline policy
+        run: |
+          node scripts/verify-model-deadline-offline.cjs
+          if ($LASTEXITCODE -ne 0) { throw "Model deadline regression failed." }
+      - name: Core autonomy and safety regression gates
+        run: |
+          $tests = @(
+            "test:core-actionable-execution",
+            "test:goal-loop-integration",
+            "test:autonomy-reliability",
+            "test:autonomy-tiers",
+            "test:outcome-honesty",
+            "test:model-error-status-precedence",
+            "test:path-containment",
+            "test:core-guardian-laya-boundaries",
+            "test:windows-policy",
+            "test:full-desktop-offline",
+            "test:native-desktop-offline",
+            "test:agent-tools-offline",
+            "test:minecraft-pathfinder-lifecycle"
+          )
+          foreach ($test in $tests) {
+            Write-Output "RUNNING $test"
+            npm.cmd run $test
+            if ($LASTEXITCODE -ne 0) { throw "FAILED $test" }
+          }
+      - name: Production build
+        run: |
+          npm.cmd run build
+          if ($LASTEXITCODE -ne 0) { throw "Production build failed." }
+      - name: Validate exact 200,000 Internet-original prompts
+        if: ${{ inputs.validate_corpus == true }}
+        env:
+          CORPUS_PATH: ${{ inputs.corpus_path }}
+          SOURCE_MANIFEST: ${{ inputs.source_manifest }}
+        run: |
+          if (!(Test-Path $env:CORPUS_PATH)) { throw "Corpus missing: $env:CORPUS_PATH. Do not substitute generated prompts." }
+          if (!(Test-Path $env:SOURCE_MANIFEST)) { throw "Pinned upstream source manifest is missing. No provenance acceptance." }
+          node scripts/autonomy/validate-internet-corpus.cjs --input "$env:CORPUS_PATH" --source-manifest "$env:SOURCE_MANIFEST" --expected 200000 --manifest artifacts/autonomy-corpus-manifest.json
+          if ($LASTEXITCODE -ne 0) { throw "Internet corpus provenance validation failed." }
+      - name: Upload acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-200k-corpus-and-windows-evidence
+          path: |
+            artifacts/autonomy-corpus-manifest.json
+            *.log
+          if-no-files-found: warn

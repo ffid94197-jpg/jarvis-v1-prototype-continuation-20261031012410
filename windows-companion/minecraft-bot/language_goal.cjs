@@ -51,7 +51,7 @@ function canonicalIntent(raw){
  if(SIMPLE.has(raw.command))
   return Object.keys(raw).length===1?{ok:true,command:{command:raw.command}}:fail('Unexpected model parameter');
  if(raw.command!=='auto_goal'||typeof raw.goal!=='string')return fail('Unregistered model action rejected');
- const keys=Object.hasOwn(PARAMS,raw.goal)?PARAMS[raw.goal]:(FIXED.has(raw.goal)?[]:null);
+ const keys=PARAMS[raw.goal]||(FIXED.has(raw.goal)?[]:null);
  if(!keys)return fail('Unsupported Minecraft goal');
  if(Object.keys(raw).some(k=>!['command','goal','durationSeconds',...keys].includes(k)))
   return fail('Unrelated model parameters rejected');

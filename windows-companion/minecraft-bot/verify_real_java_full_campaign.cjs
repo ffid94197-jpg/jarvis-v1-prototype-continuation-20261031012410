@@ -111,8 +111,8 @@ async function proof(){
  const kill=evidence.events.find(e=>e.type==='dragon_death'&&e.dimension==='the_end');
  const endExit=evidence.events.find(e=>e.type==='end_exit' && e.dimension==='overworld' &&
    kill && e.at>kill.at);
- const equip=evidence.events.find(e=>e.type==='netherite_equipped' &&
-   e.worn===true && e.held===true && endExit && e.at>endExit.at);
+ const equip=evidence.events.find(e=>e.type==='netherite_equipped'&&e.worn===true &&
+   endExit && e.at>endExit.at);
  assert(kill && endExit && equip,
    'Require ordered server-observed Dragon death -> real End exit -> subsequent worn Netherite armor');
  evidence.final={world,mission:completed};

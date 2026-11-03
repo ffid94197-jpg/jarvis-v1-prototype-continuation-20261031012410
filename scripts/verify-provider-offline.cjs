@@ -9,11 +9,25 @@ const assert = require('node:assert/strict');
 const { ReadableStream } = require('node:stream/web');
 
 const sourceRoot = path.join(__dirname, '..', 'src', 'lib', 'agent', 'core');
-function load(file) {
+// Relative imports inside the loaded TypeScript (e.g. compatProvider.ts ->
+// ./modelDeadline) must resolve against src/lib/agent/core and be transpiled
+// on demand. Passing the host `require` straight through resolved them against
+// the repo root instead, so the harness died with MODULE_NOT_FOUND even though
+// the source file exists. Type-only imports are erased by transpilation.
+function load(file, cache = new Map()) {
+  if (cache.has(file)) return cache.get(file);
   const source = fs.readFileSync(path.join(sourceRoot, file), 'utf8');
   const js = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const module = { exports: {} };
-  vm.runInNewContext(js, {exports:module.exports,module,require,URL,AbortSignal,TextDecoder,Uint8Array,Buffer,process,console,fetch,Error,JSON,Number,String}, { filename:file });
+  cache.set(file, module.exports); // registered before eval: safe for cycles
+  const localRequire = (spec) => {
+    if (typeof spec === 'string' && spec.startsWith('.')) {
+      const base = spec.replace(/^\.\//, '');
+      return load(base.endsWith('.ts') ? base : base + '.ts', cache);
+    }
+    return require(spec);
+  };
+  vm.runInNewContext(js, {exports:module.exports,module,require:localRequire,URL,AbortSignal,TextDecoder,Uint8Array,Buffer,process,console,fetch,Error,JSON,Number,String}, { filename:file });
   return module.exports;
 }
 const {getCompatibleSettings, createCompatibleBridge} = load('compatProvider.ts');

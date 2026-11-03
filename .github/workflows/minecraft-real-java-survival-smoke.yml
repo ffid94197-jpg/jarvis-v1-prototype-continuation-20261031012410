@@ -1,12 +1,11 @@
 name: Minecraft Java vanilla survival live server smoke
-# Default-branch registration ONLY. The actual test definition lives on
-# fix/minecraft-live-survival-bridge-20261102. Explicit manual trigger.
-# No jobs execute on main; no source code or acceptance gates are merged.
+# Paused: GitHub Actions included minutes exhausted. This workflow is
+# manual-only; prefer local Windows test scripts (no GitHub-runner minutes).
 on:
   workflow_dispatch:
     inputs:
       mission:
-        description: "Choose Stone first; Full tests actual Dragon then Netherite in vanilla survival"
+        description: "Real Java survival acceptance gate (Stone first; Full only after earlier stages are ready)"
         type: choice
         required: true
         default: Stone
@@ -17,8 +16,121 @@ on:
 permissions:
   contents: read
 jobs:
-  select-isolated-test-branch:
-    if: ${{ false }}
+  vanilla-java:
     runs-on: ubuntu-latest
+    timeout-minutes: 325
     steps:
-      - run: echo "Select fix/minecraft-live-survival-bridge-20261102, not main"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned Mineflayer dependency tree
+        run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
+      - name: Check live skill syntax and stone-target geometry
+        run: |
+          node --check windows-companion/minecraft-bot/bot.cjs
+          node --check windows-companion/minecraft-bot/autonomy_engine.cjs
+          node windows-companion/minecraft-bot/verify_progression.cjs
+          node --check windows-companion/minecraft-bot/stone_access.cjs
+          node --check windows-companion/minecraft-bot/verify_real_java_server_wood.cjs
+          node --check windows-companion/minecraft-bot/verify_real_java_full_campaign.cjs
+          node windows-companion/minecraft-bot/verify_stone_access.cjs
+          node windows-companion/minecraft-bot/verify_crafting_site.cjs
+          node --check windows-companion/minecraft-bot/drop_pickup.cjs
+          node windows-companion/minecraft-bot/verify_drop_pickup.cjs
+          node windows-companion/minecraft-bot/verify_wood_pickup_access.cjs
+          node --check windows-companion/minecraft-bot/inventory_settlement.cjs
+          node windows-companion/minecraft-bot/verify_inventory_settlement.cjs
+      - name: Get official Mojang Minecraft Java 1.21.1 vanilla server
+        env:
+          MC_VERSION: "1.21.1"
+        run: |
+          python3 - <<'PY'
+          import os, json, urllib.request,hashlib
+          root='https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'
+          with urllib.request.urlopen(root,timeout=30) as res: manifest=json.load(res)
+          version=next((v for v in manifest['versions'] if v['id']==os.environ['MC_VERSION']),None)
+          if not version:raise RuntimeError('Specified vanilla Java version absent from Mojang manifest')
+          with urllib.request.urlopen(version['url'],timeout=30) as res: info=json.load(res)
+          item=info['downloads']['server']
+          with urllib.request.urlopen(item['url'],timeout=120) as res: data=res.read()
+          if hashlib.sha1(data).hexdigest().lower()!=item['sha1'].lower():raise RuntimeError('Official Mojang server SHA-1 mismatch')
+          os.makedirs('minecraft-live-ci',exist_ok=True)
+          with open('minecraft-live-ci/server.jar','wb') as f:f.write(data)
+          print('MOJANG_VANILLA_SERVER_VERIFIED version='+os.environ['MC_VERSION']+' bytes='+str(len(data)))
+          PY
+      - name: Start real survival Java server without admin commands
+        run: |
+          cd minecraft-live-ci
+          printf 'eula=true\n' > eula.txt
+          cat > server.properties <<'EOF'
+          online-mode=false
+          enforce-secure-profile=false
+          server-ip=127.0.0.1
+          server-port=25565
+          gamemode=survival
+          force-gamemode=true
+          difficulty=normal
+          hardcore=false
+          allow-flight=false
+          enable-command-block=false
+          enable-rcon=false
+          enable-query=false
+          max-players=2
+          spawn-protection=0
+          view-distance=8
+          simulation-distance=6
+          level-seed=41902
+          level-type=minecraft:normal
+          pvp=false
+          white-list=false
+          EOF
+          nohup java -Xms512M -Xmx2500M -jar server.jar nogui > server.log 2>&1 &
+          echo $! > minecraft.pid
+          for i in $(seq 1 180); do
+            if grep -q 'Done (' server.log; then echo 'VANILLA_SERVER_STARTED'; exit 0; fi
+            if ! kill -0 "$(cat minecraft.pid)" 2>/dev/null; then cat server.log; exit 1; fi
+            sleep 1
+          done
+          cat server.log
+          echo 'Minecraft vanilla server did not start' >&2
+          exit 1
+      - name: Real survival wood, stone and optional iron progression
+        if: ${{ inputs.mission == 'Stone' || inputs.mission == 'Iron' }}
+        timeout-minutes: 28
+        env:
+          JARVIS_MC_TEST_PORT: "25565"
+          JARVIS_MC_TEST_STONE: "1"
+          JARVIS_MC_TRACE_AUTONOMY: "1"
+          JARVIS_MC_TEST_IRON: ${{ inputs.mission == 'Iron' && '1' || '0' }}
+        run: node windows-companion/minecraft-bot/verify_real_java_server_wood.cjs
+      - name: Real survival Dragon death then four equipped Netherite armor pieces
+        if: ${{ inputs.mission == 'Full' }}
+        timeout-minutes: 305
+        env:
+          JARVIS_MINECRAFT_LAN_HOST: "127.0.0.1"
+          JARVIS_MINECRAFT_LAN_PORT: "25565"
+          JARVIS_MINECRAFT_PLAYER: "CIObserver"
+          MINECRAFT_LIVE_ACCEPTANCE: "1"
+          JARVIS_MC_ACCEPTANCE_MS: "18000000"
+          JARVIS_MC_EVIDENCE_DIR: "minecraft-live-evidence"
+        run: node windows-companion/minecraft-bot/verify_real_java_full_campaign.cjs
+      - name: Preserve game and companion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vanilla-java-survival-smoke-evidence
+          if-no-files-found: warn
+          path: |
+            minecraft-live-ci/server.log
+            minecraft-live-evidence/minecraft-real-campaign-evidence.json
+      - name: Stop Minecraft server
+        if: always()
+        run: |
+          if test -f minecraft-live-ci/minecraft.pid; then kill "$(cat minecraft-live-ci/minecraft.pid)" || true; fi

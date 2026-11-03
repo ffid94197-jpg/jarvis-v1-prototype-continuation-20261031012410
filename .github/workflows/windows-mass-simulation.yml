@@ -1,0 +1,74 @@
+name: JARVIS Windows mass simulation (isolated)
+on:
+  push:
+    branches: [test/windows-mass-sim-20261031]
+    paths:
+      - scripts/verify-windows-mass-simulation.cjs
+      - scripts/verify-companion-bridge-workflow.cjs
+      - src/lib/agent/core/requestIntent.ts
+      - .github/workflows/windows-mass-simulation.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mass-sim:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact repository dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Minecraft bot test dependencies
+        run: npm ci --prefix windows-companion/minecraft-bot --no-audit --no-fund
+      - name: Prove native Windows host
+        run: |
+          Write-Output "Platform: $([System.Environment]::OSVersion)"
+          node -p "process.platform"
+          if ((node -p "process.platform") -ne "win32") { throw "Not running native Windows" }
+      - name: TypeScript check without tracked incremental cache
+        run: |
+          if (Test-Path tsconfig.tsbuildinfo) { Remove-Item tsconfig.tsbuildinfo }
+          npx tsc --noEmit --incremental false
+      - name: Fixed regression suites on Windows
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tests = @(
+            'test:model-error-status-precedence',
+            'test:jarvis-identity-disclosure',
+            'test:core-actionable-execution',
+            'test:core-conversational-separation',
+            'test:goal-loop-integration',
+            'test:autonomy-reliability',
+            'test:autonomy-tiers',
+            'test:windows-policy',
+            'test:companion-bridge-workflow',
+            'test:windows-startup-preflight',
+            'test:companion-launcher-authorization',
+            'test:minecraft-pathfinder-lifecycle',
+            'test:minecraft-bridge-e2e'
+          )
+          foreach ($test in $tests) {
+            Write-Output "RUNNING $test"
+            & npm.cmd run $test
+            if ($LASTEXITCODE -ne 0) { throw "FAILED $test with code $LASTEXITCODE" }
+          }
+      - name: Massive seeded Windows-like simulation
+        env:
+          JARVIS_SIM_ROUNDS: '40000'
+          JARVIS_SIM_OUTPUT: windows-mass-simulation-results.json
+        run: |
+          node scripts/verify-windows-mass-simulation.cjs
+      - name: Upload evidence even if tests failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-windows-mass-simulation
+          path: windows-mass-simulation-results.json
+          if-no-files-found: warn

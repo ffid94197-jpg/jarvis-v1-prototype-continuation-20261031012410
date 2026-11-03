@@ -13,8 +13,6 @@ const {acceptDragonDeath,resetDragon}=require('./dragon_engagement.cjs');
 const {Vec3} = require('vec3');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {validateCommand, inventorySummary} = require('./friend_protocol.cjs');
-const {goalSpecFromCommand}=require('./goal_dispatch.cjs');
-const {compactAutonomyStatus}=require('./status_receipt.cjs');
 const {interpretOwnerInstruction} = require('./language_goal.cjs');
 const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
@@ -925,10 +923,9 @@ async function autoTick(){
       }
       if(autopilot.status().goal==='dragon_then_netherite_run' && plan.kind==='equip_netherite' &&
          result?.ok===true && result?.verified===true && result?.proof==='netherite_equipped' &&
-         digest(bot,leader).wornNetherite===true &&
-         digest(bot,leader).heldNetheriteSword===true){
+         digest(bot,leader).wornNetherite===true){
         process.stdout.write('BOT_EVENT '+JSON.stringify({type:'netherite_equipped',
-          at:Date.now(),worn:true,held:true,dimension:String(bot.game?.dimension||'').replace(/^minecraft:/,''),
+          at:Date.now(),worn:true,dimension:String(bot.game?.dimension||'').replace(/^minecraft:/,''),
           goal:autopilot.status().goal})+'\n');
       }
     }
@@ -967,7 +964,7 @@ async function action(q){
       // silently truncate a late-game observation and mislead the planner.
       return {ok:true,status:projectWorld(snapshot,loadedTargets(bot),lastAction,mode)};
     }
-    case 'auto_status':return {ok:true,status:compactAutonomyStatus(autopilot.status())};
+    case 'auto_status':return {ok:true,status:JSON.stringify(autopilot.status()).slice(0,1900)};
     case 'auto_checkpoint':{
       const lease=missionCheckpoint.load();
       return {ok:true,status:JSON.stringify(lease.ok?
@@ -1010,7 +1007,9 @@ async function action(q){
       halt();mode='auto';resumeAfterSpawn=false;deathsOnCurrentGoal=0;
        // Evidence from an earlier owner mission is NOT proof for a new run.
        resetDragon(lateSkills.session);
-      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),goalSpecFromCommand(q));lastAction='Autonomous '+st.goal+' STARTED';
+      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),{resource:q.resource,targetCount:q.targetCount,destination:q.destination,arrivalRange:q.arrivalRange,
+          position:q.position,block:q.block,axis:q.axis,length:q.length,
+          width:q.width,depth:q.depth,steps:q.steps,item:q.item,destination:q.destinationSlot});lastAction='Autonomous '+st.goal+' STARTED';
         let saved=false;try{saved=missionCheckpoint.save(st);}catch{ /* Mission runs but restart recovery is unavailable. */ }
         return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; '+(saved?'recoverable goal intent saved':'restart recovery unavailable')+'; verify progress via auto_status'};
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}

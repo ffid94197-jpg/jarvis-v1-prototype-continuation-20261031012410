@@ -1,0 +1,46 @@
+{
+  "release_status": "DEVELOPMENT PATCH ONLY - JARVIS V1 NOT COMPLETE",
+  "manifest_purpose": "Attestation for the 2026-10-30 Pathfinder cancellation-lifecycle repair. PATHFINDER_PATCH_MANIFEST_SHA256.json (2026-10-29) is deliberately left byte-identical so its historical evidence is preserved; this is a separate, new record.",
+  "supersedes_manifest": "PATHFINDER_PATCH_MANIFEST_SHA256.json",
+  "supersedes_note": "The 2026-10-29 manifest's new_test_sha256 (102BE4AE...) matched the installed verify_pathfinder_regression_offline.cjs, but its modified_bot_sha256 (FCC98243...) matched neither that value nor original_bot_sha256 (07C1831C...). The bot.cjs actually installed at baseline c3f8e51 hashes to 1A4EF76C..., a third revision. The 2026-10-29 lifecycle change therefore did not survive in bot.cjs; its regression test did. This is why the defect was still live.",
+  "baseline_commit": "c3f8e51",
+  "repair_commits": [
+    "945cf96",
+    "62f183c",
+    "a48019b",
+    "a6a8b5c"
+  ],
+  "installed_library_versions": {
+    "mineflayer-pathfinder": "2.4.5",
+    "mineflayer": "4.39.0",
+    "vec3": "0.1.10"
+  },
+  "root_cause": "mineflayer-pathfinder 2.4.5 index.js:163 bot.pathfinder.stop() only arms the sticky module-level stopPathing latch; it is cleared exclusively by the internal stop() at index.js:390, reached from the next resetPath() at index.js:139. halt() called setGoal(null) before stop(), leaving the latch armed, so the following lib/goto.js setGoal(goal) consumed it and rejected immediately with 'Path was stopped before it could be completed!'.",
+  "pre_repair_bot_sha256": "1A4EF76CF128A5E1F79BBDDE5DE6EDDE21528D12ACECD25773BAF0B6344882B7",
+  "repaired_bot_sha256": "B7EDA782CA6FE5B8B7D8E7C865345C2E6EF45F54ADBC4427A2DB74190D26FAF5",
+  "new_module_sha256": {
+    "windows-companion/minecraft-bot/pathfinder_lifecycle.cjs": "A57D54D7FF4E79978503711C13D197468D9A88F8432E844F8A69FA13CF67F231"
+  },
+  "new_test_sha256": {
+    "windows-companion/minecraft-bot/verify_pathfinder_lifecycle_offline.cjs": "B3FDF27F050DB0BF233F278305A605532EE13EE162166BEC61247E6660853BF1"
+  },
+  "unchanged_test_sha256": {
+    "windows-companion/minecraft-bot/verify_pathfinder_regression_offline.cjs": "102BE4AE901D5F6D043F904139F76424DF60EEF19A72DE49876D3885AE05FA8E"
+  },
+  "bidirectional_evidence": {
+    "new_test_against_repaired_bot": "41/41 PASS, exit 0",
+    "new_test_against_pre_repair_bot": "30/41 PASS, 11 FAIL, exit 1",
+    "old_regression_test_against_pre_repair_bot": "13/13 PASS - it stubs stop() and setGoal() as no-ops and therefore cannot observe the latch defect. Do not cite it as navigation-lifecycle proof.",
+    "fail_closed_assertions": "cancellation authority, no-route refusal and buried-target refusal PASS in BOTH directions, so no safety check was loosened"
+  },
+  "offline_only": true,
+  "offline_scope": "Fixtures drive the REAL mineflayer-pathfinder lib/goto.js and lib/goals.js against a replica of the 2.4.5 cancellation state machine. Only pathfinder() and Movements are stubbed. This proves state-machine equivalence, NOT real gameplay.",
+  "required_live_acceptance": "Run on real Minecraft Java survival LAN: exposed stone selected, bot walks to a verified stance, block visibly breaks, status reports 'Dig VERIFIED: cobblestone inventory 0 -> 1', and the cobblestone is visible in the bot's actual inventory screen. No fabricated victory. A dispatched dig_block is not a collection.",
+  "not_claimed": [
+    "real Minecraft world acceptance",
+    "Windows-native certification",
+    "autonomous cobblestone mining verified",
+    "Netherite armor or weapons",
+    "stronghold, End portal or Ender Dragon progress"
+  ]
+}

@@ -13,13 +13,29 @@ let passed = 0;
 async function check(name, test) {
   await test(); ++passed; console.log('PASS',name);
 }
+// An explicit mock always wins. An UNMOCKED relative import is a real sibling
+// module, so resolve it against the importing file's directory and transpile it
+// instead of falling through to a host require() that cannot see TypeScript
+// sources. loop.ts gained ./minecraftIntent, ./minecraftAiGate and
+// ./goalPlanner after this harness was written; all three are dependency-free,
+// so loading the real code raises fidelity instead of touching DB or network.
+const siblingCache=new Map();
 function load(relative, mocks) {
   const source = path.join(root, relative);
+  if (siblingCache.has(source)) return siblingCache.get(source);
   const js = ts.transpileModule(fs.readFileSync(source,'utf8'),{
     fileName:source, compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}
   }).outputText;
   const mod={exports:{}};
-  const mocked=(id)=>Object.prototype.hasOwnProperty.call(mocks,id)?mocks[id]:require(id);
+  siblingCache.set(source, mod.exports); // set before eval: safe for cycles
+  const mocked=(id)=>{
+    if(Object.prototype.hasOwnProperty.call(mocks,id))return mocks[id];
+    if(typeof id==='string' && id.startsWith('.')){
+      const sibling=path.join(path.dirname(source), id.endsWith('.ts')?id:id+'.ts');
+      if(fs.existsSync(sibling))return load(path.relative(root,sibling),{});
+    }
+    return require(id);
+  };
   new Function('require','module','exports','process','Buffer','URL','AbortSignal','fetch', js)
     (mocked,mod,mod.exports,process,Buffer,URL,AbortSignal,()=>{throw Error('unexpected network')});
   return mod.exports;
@@ -135,7 +151,12 @@ async function main() {
     '../tools/executor':{executeTool:()=>{effectsUsed++;throw Error('must not execute');}},
     './prompts':{PLANNER_SYSTEM_PROMPT:'SYSTEM',plannerUserPrompt:()=>'',FINAL_REPORT_INSTRUCTION:'',sanitizeFinalReport:(v)=>v},
     './taskState':{transitionTask:async()=>({ok:true})},
-    './effects':{EFFECTFUL_TOOLS:new Set(),STEP_SCOPED_EFFECTS:new Set(),admitEffect:()=>{},canonicalKey:()=>'',isEffectfulToolInvocation:()=>false},
+    './effects':{EFFECTFUL_TOOLS:new Set(),STEP_SCOPED_EFFECTS:new Set(),admitEffect:()=>{},canonicalKey:()=>'',isEffectfulToolInvocation:()=>false,
+      // loop.ts also imports these. The replay-refusal path must return before
+      // any effect is reconciled or settled, so fail loudly rather than let a
+      // future change reach the settlement path silently.
+      reconcileEffect:()=>{throw Error('must not reconcile an effect');},
+      settleEffect:()=>{throw Error('must not settle an effect');}},
     './verifier':{arbitrateCompletion:()=>({verdict:'conversational'})},
     './autonomyGate':{AutonomyGate:class{pendingGuiVerification=0;},REPEATABLE_INPUT_TOOLS:new Set(),desktopObjectiveRequiresActions:()=>false},
     './observation':{compactToolObservation:()=>''},

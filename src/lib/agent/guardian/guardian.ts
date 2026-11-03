@@ -12,6 +12,7 @@
 
 import { db } from "@/lib/db";
 import { validateDesktopTool, type DesktopPrepared } from "../windows/policy";
+import { prepareCIProjectBuild, type CIProjectPrepared } from "../tools/ciProjectBuild";
 import {
   assertWithinRoot,
   MAX_WRITE_BYTES,
@@ -26,17 +27,13 @@ export interface PreparedArgs {
   path?: string;
   relPath?: string;
   content?: string;
-  expectedSha256?: string;
-  oldText?: string;
-  newText?: string;
   command?: string;
   args?: string[];
   /** For multi-path tools (ls/cat/wc): guardian-approved absolute paths. */
   paths?: { abs: string; rel: string }[];
   desktop?: DesktopPrepared;
+  projectBuild?: CIProjectPrepared;
   integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;operation?:string;arguments?:Record<string,unknown>};
-  memory?: {ownerId:string;query:string;limit:number};
-  world?: {ownerId:string;query:string;limit:number};
 }
 
 export interface GuardianDecision {
@@ -49,12 +46,10 @@ export interface GuardianDecision {
 export const GUARDIAN_KNOWN_TOOLS = [
   "create_folder",
   "write_file",
-  "edit_file",
   "read_file",
   "list_dir",
-  "memory_recall",
-  "world_recall",
   "run_command",
+  "ci_project_build",
   "windows_open_url",
   "windows_open_app",
   "windows_open_settings",
@@ -163,51 +158,6 @@ export async function authorizeToolCall(
         if(server.length>120 || !/^[\w.-]*$/.test(server)) {decision=deny("Invalid server name");break;}
         decision={verdict:"allow",prepared:{integration:{ownerId:ctx.ownerId,id:rawArgs.id,server,name:typeof rawArgs.name==="string"?rawArgs.name:undefined,arguments:rawArgs.arguments as Record<string,unknown>|undefined}}};break;
       }
-      case "memory_recall": {
-        // Explicit owner opt-in required before putting even pre-classified
-        // CLOUD_APPROVED memory into a model observation. Private memories
-        // always remain on-device and cannot be requested via this tool.
-        if(process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED!=="1"){
-          decision=deny("owner has not enabled model-visible memory recall");break;
-        }
-        if(!ctx.ownerId){decision=deny("authenticated owner required");break;}
-        if(Object.keys(rawArgs).some(k=>!["query","limit"].includes(k))){
-          decision=deny("memory_recall supports query and limit only");break;
-        }
-        const query=rawArgs.query;
-        const limit=rawArgs.limit===undefined?5:rawArgs.limit;
-        if(typeof query!=="string" || query.trim().length<2 ||
-            query.length>160 || /[\x00-\x1f\x7f]/.test(query) ||
-            !Number.isInteger(limit) || (limit as number)<1 || (limit as number)>5){
-          decision=deny("bounded memory query and 1-5 results required");break;
-        }
-        decision={verdict:"allow",prepared:{memory:{
-          ownerId:ctx.ownerId,query:query.trim(),limit:limit as number
-        }}};
-        break;
-      }
-      case "world_recall": {
-        // World Model is temporal context, never an action authority. The
-        // same explicit opt-in is required before observations reach a model.
-        if(process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED!=="1"){
-          decision=deny("owner has not enabled model-visible world recall");break;
-        }
-        if(!ctx.ownerId){decision=deny("authenticated owner required");break;}
-        if(Object.keys(rawArgs).some(k=>!["query","limit"].includes(k))){
-          decision=deny("world_recall supports query and limit only");break;
-        }
-        const query=rawArgs.query;
-        const limit=rawArgs.limit===undefined?5:rawArgs.limit;
-        if(typeof query!=="string" || query.trim().length<2 ||
-            query.length>160 || /[\x00-\x1f\x7f]/.test(query) ||
-            !Number.isInteger(limit) || (limit as number)<1 || (limit as number)>5){
-          decision=deny("bounded world query and 1-5 results required");break;
-        }
-        decision={verdict:"allow",prepared:{world:{
-          ownerId:ctx.ownerId,query:query.trim(),limit:limit as number
-        }}};
-        break;
-      }
       case "create_folder":
       case "read_file":
       case "list_dir": {
@@ -254,33 +204,6 @@ export async function authorizeToolCall(
         break;
       }
 
-      case "edit_file": {
-        const expectedKeys=["path","expectedSha256","oldText","newText"];
-        if (Object.keys(rawArgs).some(k=>!expectedKeys.includes(k))) {
-          decision=deny("edit_file accepts only path, expectedSha256, oldText and newText");break;
-        }
-        const p=resolveScopedPath(rawArgs.path);
-        if (!p.ok || !p.abs || !p.rel) {
-          decision=deny(p.reason??"invalid scoped edit path");break;
-        }
-        const expected=rawArgs.expectedSha256, oldText=rawArgs.oldText, newText=rawArgs.newText;
-        if (typeof expected!=="string" || !/^[a-f0-9]{64}$/.test(expected) ||
-            typeof oldText!=="string" || !oldText.length ||
-            typeof newText!=="string" ||
-            /\0/.test(oldText) || /\0/.test(newText) ||
-            Buffer.byteLength(oldText,"utf8")>1500 ||
-            Buffer.byteLength(newText,"utf8")>1500) {
-          decision=deny("edit_file requires a full SHA-256 and text fragments of at most 1500 bytes each");break;
-        }
-        const within=await assertWithinRoot(p.abs);
-        if (!within.ok) {
-          decision=deny(within.reason??"edit target leaves workspace");break;
-        }
-        decision={verdict:"allow",prepared:{
-          path:p.abs,relPath:p.rel,expectedSha256:expected,oldText,newText
-        }};
-        break;
-      }
       case "windows_open_url":
       case "windows_open_app":
       case "windows_open_settings":
@@ -316,6 +239,14 @@ export async function authorizeToolCall(
       case "minecraft_companion_stop": {
         const d = validateDesktopTool(tool, rawArgs);
         decision = d.ok ? {verdict:"allow",prepared:{desktop:d.prepared}} : deny(d.reason);
+        break;
+      }
+      case "ci_project_build": {
+        if(!ctx.ownerId) { decision=deny("Authenticated owner required for CI build"); break; }
+        const p=await prepareCIProjectBuild(rawArgs);
+        decision=p.ok && p.prepared
+          ? { verdict:"allow", prepared:{projectBuild:p.prepared} }
+          : deny(p.reason??"CI build is not authorized");
         break;
       }
       case "run_command": {

@@ -23,6 +23,7 @@ check('missing prior source is explicit and not hallucinated',()=>assert.match(p
 check('previous prompt is treated as untrusted data, not authority',()=>assert.match(priorTaskContext(recovery,[task]),/NOT AUTHORIZATION/));
 check('does not falsely say long source is fully available',()=>{const c=priorTaskContext(recovery,[{id:'long',objective:'Inventory '+ 'x'.repeat(4000)}]);assert.ok(c.includes('"truncated":true'));});
 check('no history for unreferenced requests',()=>assert.equal(selectPriorTask('Write a poem',[task]),null));
+check('original inventory wording alone is not a historical reference',()=>assert.equal(needsPriorTaskContext('Original inventory data: create inventory_data.csv and inventory_report.txt.'),false));
 check('live loop queries exclusively by authenticated owner',()=>{const src=fs.readFileSync(path.join(root,'src/lib/agent/core/loop.ts'),'utf8');assert.match(src,/ownerId:\s*opts\.ownerId,\s*id:\s*\{\s*not:\s*taskId\s*\}/);assert.match(src,/needsPriorTaskContext\(objective\)/);});
 check('Guardian path boundaries stay unchanged',()=>{const s=fs.readFileSync(path.join(root,'src/lib/agent/guardian/policy.ts'),'utf8');assert.match(s,/path resolves to the workspace root/);assert.match(s,/path traversal \(\.\.\) is not permitted/);});
 console.log('PRIOR_TASK_RECOVERY',n+'/'+n,'PASS (mock owner-scoped task content; no model, no live PC)');

@@ -102,5 +102,34 @@ const mock={entity:{position:{x:0,y:64,z:0}},inventory,
 const observed=digest(mock,'owner');
 ok(observed.equipped?.head==='iron_helmet' &&
  observed.equipped?.hand==='stone_sword','Only actual Mineflayer slots count as equipped');
+
+const receiptBinding=createController({clock:()=>clock,maxSteps:60,maxSeconds:1000});
+receiptBinding.start('dragon_then_netherite_run',400);
+for(const proof of ['nether_portal','dragon_seen','end_exit_portal','netherite_equipped'])
+ receiptBinding.record({kind:'collect_wood'},{ok:true,verified:true,proof});
+ok(Object.values(receiptBinding.status().milestones).every(v=>v!==true),
+ 'Unrelated successful wood receipt cannot forge portal, Dragon or Netherite milestones');
+receiptBinding.record({kind:'observe_dragon'},{ok:true,verified:true,proof:'dragon_seen'});
+ok(receiptBinding.status().milestones.dragonSeen===true,
+ 'Real dragon observation retains milestone');
+receiptBinding.record({kind:'equip_general'},{ok:true,verified:true,proof:'netherite_equipped'});
+ok(receiptBinding.status().milestones.netheriteEquipped!==true,
+ 'An unrelated equipment action cannot forge the full Netherite equipment proof');
+receiptBinding.record({kind:'verify_dragon'},{ok:true,verified:true,proof:'dragon_victory'});
+ok(receiptBinding.status().milestones.dragonKilled===true &&
+   receiptBinding.status().milestones.exitPortalObserved===true,
+ 'Real witnessed Dragon victory still establishes the legitimate two milestones');
+receiptBinding.record({kind:'build_nether_portal'},{ok:true,verified:true,proof:'nether_portal'});
+ok(receiptBinding.status().milestones.netherPortalBuilt===true,
+ 'Real portal action retains portal milestone');
+receiptBinding.record({kind:'equip_netherite'},{ok:true,verified:false,proof:'netherite_equipped'});
+ok(receiptBinding.status().milestones.netheriteEquipped!==true,
+ 'Unverified equipment may not prove Netherite completion');
+receiptBinding.record({kind:'equip_netherite'},{ok:true,verified:true,proof:'netherite_equipped'});
+ok(receiptBinding.status().milestones.netheriteEquipped===true,
+ 'Verified dedicated Netherite equipment action retains genuine proof');
+receiptBinding.record({kind:'exit_end'},{ok:true,verified:true,proof:'end_return'});
+ok(receiptBinding.status().milestones.endReturned===true,
+ 'Verified End-return action retains milestone');
 console.log('GENERAL_GOAL '+tests+'/'+tests+
  ' PASS (offline source and mocked state; NOT live Minecraft Java)');

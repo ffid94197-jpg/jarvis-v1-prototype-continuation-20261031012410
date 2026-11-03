@@ -182,7 +182,12 @@ class World {
     evidence.proof='dragon_victory';this.dragonVictoryTick=this.ticks;break;
    case 'exit_end':
     dest('end');req(progress.milestones.dragonKilled===true && progress.milestones.exitPortalObserved===true && this.exitPortal,'not verified dragon win/exit portal');
-    this.dimension='overworld';this.workbench=above('crafting_table');this.furnace=above('furnace');this.events.push(['end_exit',this.ticks]);break;
+    this.dimension='overworld';this.workbench=above('crafting_table');this.furnace=above('furnace');
+    this.events.push(['end_exit',this.ticks]);
+    // The simulated world, like the live skill, must return an explicit
+    // VERIFIED End->Overworld transition receipt. Changing dimension alone
+    // must never silently satisfy the Core's endReturned milestone.
+    evidence.proof='end_return';break;
    case 'loot_bastion_template':
     dest('nether');this.bastionScout++;if(this.bastionScout>=2)gain('netherite_upgrade_smithing_template');break;
    case 'mine_ancient_debris':dest('nether');req(pick(),'diamond-grade pick required');gain('ancient_debris',1+Number(this.random()>.84));break;
@@ -254,6 +259,7 @@ function run(seed,options={}){
  assert.equal(s.status,'complete','MISSION DID NOT COMPLETE seed '+seed+' '+JSON.stringify(s)+' TRACE '+trace.join(','));
  assert.equal(s.milestones.dragonKilled,true,'real simulated Dragon kill must be acknowledged');
  assert.equal(s.milestones.exitPortalObserved,true,'observed End exit required');
+ assert.equal(s.milestones.endReturned,true,'explicit End-to-Overworld receipt required');
  assert.equal(s.milestones.netheriteEquipped,true,'equipped Netherite proof required');
  assert(w.dragonVictoryTick>0,'no witnessed Dragon death event');
  assert(w.armorEquipTick>w.dragonVictoryTick,'order violated: armor equipped before Dragon defeat');

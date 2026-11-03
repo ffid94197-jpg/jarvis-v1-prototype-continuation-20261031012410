@@ -58,17 +58,16 @@ def load_pinned_omniparser(root):
         raise RuntimeError('Official OmniParser v2 weights are missing; install them separately.')
     # The pinned upstream parser loads Florence2 and a YOLOv9-E detector,
     # using their own dependencies and model-specific licenses.
-    sys.path.insert(0, str(root))
-    try:
-        from util.omniparser import Omniparser
-        parser = Omniparser({
+    # Preserve the upstream import path for model helpers loaded lazily.
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from util.omniparser import Omniparser
+    parser = Omniparser({
             'som_model_path': str(detector),
             'caption_model_name': 'florence2',
             'caption_model_path': str(caption),
             'BOX_TRESHOLD': 0.05,
         })
-    finally:
-        sys.path.remove(str(root))
     return parser
 
 

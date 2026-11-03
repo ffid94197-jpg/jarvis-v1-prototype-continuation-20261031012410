@@ -403,11 +403,33 @@ class CuaDriverBackend:
         return {"ok": bool(result.get("ok")), "evidence": result,
                 **({"error": result["error"]} if result.get("error") else {})}
 
+    def emergency_stop(self) -> bool:
+        loop, driver = self._loop, self._driver
+        if driver is None or loop is None or not loop.is_running():
+            return False
+        try:
+            from cua_driver import EndSessionInput
+            future = asyncio.run_coroutine_threadsafe(
+                driver.end_session(EndSessionInput(session=None)), loop
+            )
+            future.result(timeout=2)
+            return True
+        except Exception:
+            return False
+
     def close(self) -> None:
         with self._init_lock:
             driver, loop, thread = self._driver, self._loop, self._thread
             self._driver = None
             if driver is not None and loop is not None and loop.is_running():
+                try:
+                    from cua_driver import EndSessionInput
+                    end = asyncio.run_coroutine_threadsafe(
+                        driver.end_session(EndSessionInput(session=None)), loop
+                    )
+                    end.result(timeout=3)
+                except Exception:
+                    pass
                 try:
                     future = asyncio.run_coroutine_threadsafe(driver.shutdown(), loop)
                     future.result(timeout=8)
@@ -425,6 +447,10 @@ class CuaDriverBackend:
 
 _BACKEND = CuaDriverBackend()
 atexit.register(_BACKEND.close)
+
+
+def emergency_stop() -> bool:
+    return _BACKEND.emergency_stop()
 
 
 def run_action(op: dict[str, Any]) -> dict[str, Any]:

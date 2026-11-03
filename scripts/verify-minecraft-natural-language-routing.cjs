@@ -33,6 +33,39 @@ for(const s of [
 ok(isMinecraftObservationOnlyObjective('Observe my Minecraft inventory'),'read-only observation objective');
 no(isMinecraftObservationOnlyObjective('Observe and follow me in Minecraft'),'follow is an effect');
 no(isMinecraftObservationOnlyObjective('Observe Minecraft and mine diamonds'),'mining is an effect');
+const {singleInventoryResourceGoal}=out;
+const expected=[
+ ['Collect 2 logs in Minecraft',{resource:'logs',quantity:2}],
+ ['Mine six diamonds in Minecraft',{resource:'diamond',quantity:6}],
+ ['Get 3 iron ingots in Minecraft',{resource:'iron_ingot',quantity:3}],
+ ['Collect obsidian in Minecraft',{resource:'obsidian',quantity:1}],
+ ['Gather 65 diamonds in Minecraft',null],
+ ['Collect 3 diamonds and make a sword in Minecraft',null],
+ ['Get 4 diamonds and 5 iron ingots in Minecraft',null],
+ ['Mine a stack of diamonds in Minecraft',null],
+ ['Build a diamond house in Minecraft',null]
+];
+for(const [objective,wanted] of expected){
+ const actual=singleInventoryResourceGoal(objective);
+ ok(JSON.stringify(actual)===JSON.stringify(wanted),'bounded single-resource predicate '+objective);
+}
+const resourceGate=new MinecraftAiGate('Mine six diamonds in Minecraft');
+const resourceScene={joined:true,busy:false,position:{x:0,y:64,z:0},health:20,hunger:20,
+ inventory:{logs:0,raw:{diamond:5}},nearbyBlocks:[]};
+const observeResource=world=>resourceGate.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(world)}});
+observeResource(resourceScene);
+no(resourceGate.proof('Mine six diamonds in Minecraft').verified,'five diamonds cannot satisfy six');
+observeResource({...resourceScene,inventory:{...resourceScene.inventory,raw:{diamond:6}}});
+ok(resourceGate.proof('Mine six diamonds in Minecraft').verified,'six actual inventory diamonds satisfy six');
+no(resourceGate.proof('Collect 3 diamonds and make a sword in Minecraft').verified,
+ 'Compound objective cannot be proven from just an item count');
+const logGate=new MinecraftAiGate('Collect 2 logs in Minecraft');
+logGate.record('minecraft_companion_command',{command:'observe'},{ok:true,detail:{
+ botAcknowledged:true,command:'observe',status:JSON.stringify({...resourceScene,
+ inventory:{logs:2,raw:{}}})}});
+ok(logGate.proof('Collect 2 logs in Minecraft').verified,'aggregate server log count is valid even if raw inventory trimmed');
+
 const gate=new MinecraftAiGate('Follow me and protect me in Minecraft');
 ok(gate.check('minecraft_companion_command',{command:'auto_stop'}).ok,'safety stop without observation');
 no(gate.check('minecraft_companion_command',{command:'follow'}).ok,'follow requires fresh observation');

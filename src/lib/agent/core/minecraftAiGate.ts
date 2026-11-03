@@ -109,6 +109,37 @@ export function cobblestoneGoalQuantity(objective:string): number | null {
   return Number.isSafeInteger(n) && n>=1 && n<=256 ? n : null;
 }
 
+/** Conservatively identify a single, countable Minecraft resource request.
+ * This is a verification predicate, NOT tool admission or permission.
+ * Compound goals are never reduced to mere inventory possession.
+ */
+export function singleInventoryResourceGoal(objective:string):
+  {resource:string;quantity:number}|null {
+ const s=objective.toLowerCase();
+ if(!/\b(?:gather|collect|obtain|mine|get|find|bring|acquire)\b/.test(s) ||
+    /\b(?:and|then|craft|make|build|equip|smelt|trade|enchant|upgrade|fight|defeat|portal|all|many|enough|stacks?)\b/.test(s))
+   return null;
+ const supported:Array<{name:string;pattern:RegExp;defaultCount:number}>=[
+  {name:'logs',pattern:/\b(?:logs?|wood)\b/,defaultCount:4},
+  {name:'diamond',pattern:/\bdiamonds?\b/,defaultCount:1},
+  {name:'raw_iron',pattern:/\braw[ _]iron\b/,defaultCount:1},
+  {name:'iron_ingot',pattern:/\biron[ _]ingots?\b/,defaultCount:1},
+  {name:'obsidian',pattern:/\bobsidian\b/,defaultCount:1},
+  {name:'flint',pattern:/\bflint\b/,defaultCount:1},
+  {name:'netherrack',pattern:/\bnetherrack\b/,defaultCount:1}
+ ];
+ const matches=supported.map(x=>({goal:x,match:x.pattern.exec(s)})).filter(x=>x.match!==null);
+ if(matches.length!==1)return null;
+ const {goal,match}=matches[0];
+ const before=s.slice(Math.max(0,match!.index-42),match!.index);
+ const specified=/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|single)\s+(?:(?:blocks?|pieces?|units?|of)\s+)?$/.exec(before);
+ const words:Record<string,number>={one:1,two:2,three:3,four:4,five:5,six:6,
+  seven:7,eight:8,nine:9,ten:10,a:1,an:1,single:1};
+ const quantity=specified ? (words[specified[1]]??Number(specified[1])):goal.defaultCount;
+ if(!Number.isSafeInteger(quantity)||quantity<1||quantity>64)return null;
+ return {resource:goal.name,quantity};
+}
+
 export class MinecraftAiGate {
   private observed: MinecraftAiObservation|null=null;
   private fresh=false;
@@ -228,9 +259,18 @@ export class MinecraftAiGate {
       return count>=required ? {verified:true,reason:`Fresh inventory independently reports ${count} cobblestone (at least ${required} required)`} :
         {verified:false,reason:`Only ${count} cobblestone observed in current inventory; ${required} required`};
     }
-    if(/\b(?:wood|logs?)\b/.test(s) && /\b(?:collect|gather|obtain|mine)\b/.test(s))
-      return logs>=4 ? {verified:true,reason:`Inventory independently reports ${logs} logs`} :
-        {verified:false,reason:`Only ${logs} logs observed (four required)`};
+    const collection=singleInventoryResourceGoal(objective);
+    if(collection){
+      const count=collection.resource==='logs'?Math.max(logs,Number(o.inventory.logs)||0):
+        Number(raw[collection.resource])||0;
+      // The receipt proves CURRENT holdings, not a specific acquisition action.
+      // Do not report 'mined' or 'crafted' without an action-level server receipt.
+      return count>=collection.quantity?
+        {verified:true,reason:'Current Mineflayer inventory confirms '+count+' '+
+          collection.resource+' (requested '+collection.quantity+'); acquisition method not attested'}:
+        {verified:false,reason:'Observed '+count+' '+collection.resource+
+          '; need '+collection.quantity+' for the requested inventory goal'};
+    }
     if(/\b(?:wooden pickaxe|wooden tools?|craft tools?)\b/.test(s))
       return pick>0 ? {verified:true,reason:'Wooden pickaxe observed in current inventory'} :
         {verified:false,reason:'Wooden pickaxe not in inventory'};

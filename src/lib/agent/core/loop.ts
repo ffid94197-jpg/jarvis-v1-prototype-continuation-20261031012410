@@ -54,6 +54,8 @@ import {
   settleEffect,
 } from "./effects";
 import { arbitrateCompletion } from "./verifier";
+import { needsPriorTaskContext, priorTaskContext, selectPriorTask } from "./priorTaskContext";
+import { parseInventorySource, validateInventoryDraft } from "./inventoryIntegrity";
 import { AutonomyGate, REPEATABLE_INPUT_TOOLS, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
 import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan } from "./goalPlanner";
@@ -263,6 +265,11 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let seq = stepsUsed;
   let denials = 0;
   let parseRetries = 0;
+  let inventoryDraftCorrections = 0;
+  let inventorySource = parseInventorySource(objective);
+  const inventoryDeliverables = /\\b(?:inventory|stock)\\b/i.test(objective)
+    && /\\b(?:csv|spreadsheet)\\b/i.test(objective)
+    && /(?:\\b(?:report|summary)\\b|[_-](?:report|summary)\\.(?:txt|md)\\b)/i.test(objective);
   let effectsHappened = false; // at least one real effect attempted this run
   let effectJournalDegraded = false; // an effect settlement write failed
   let markedExecuting = false; // DB row moved planning→executing (fidelity)
@@ -292,6 +299,36 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     { role: "assistant", content: `LAYA advisory (not permission): ${JSON.stringify(adviseTask(objective))}. Core and Guardian remain authoritative.` },
     { role: "user", content: plannerUserPrompt(objective, opts.replay) },
   ];
+
+  // Explicit cross-task recovery is read-only, same-owner and bounded. The
+  // historical objective is untrusted context, never authorization or proof.
+  if (!opts.replay && needsPriorTaskContext(objective)) {
+    let sourceNote: string;
+    try {
+      const recent = await db.agentTask.findMany({
+        where: { ownerId: opts.ownerId, id: { not: taskId } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: { id: true, objective: true, createdAt: true },
+      });
+      sourceNote = priorTaskContext(objective, recent);
+      const original = selectPriorTask(objective, recent);
+      if (!inventorySource && original && original.objective.length <= 3000) {
+        inventorySource = parseInventorySource(original.objective);
+      }
+    } catch {
+      sourceNote = priorTaskContext(objective, []);
+    }
+    messages.splice(3, 0, { role: "assistant", content: sourceNote });
+  }
+
+  if (inventoryDeliverables) {
+    messages.splice(3, 0, { role: "assistant", content:
+      "INVENTORY CONTRACT: Preserve the owner's original quantities and prices exactly. " +
+      "CSV header: product,quantity,unit_price_inr,total_value_inr. " +
+      "The report must include every product line total, grand total and total units. " +
+      "Do not claim verification unless Core independently checks both files against the original source." });
+  }
 
   const emitStatus = (phase: string) =>
     emit({ type: "status", phase, taskId, stepsUsed });
@@ -595,7 +632,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       // completion predicates against actual disk state + the durable
       // effect table, and derives the terminal verdict from that — never
       // from model prose.
-      const arbitration = await arbitrateCompletion({ taskId, objective, toolAssisted: true });
+      const arbitration = await arbitrateCompletion({ taskId, objective, toolAssisted: true, inventorySource });
       const groundedVerdict = requiresExternalActionEvidence(objective) && arbitration.verdict === "conversational"
         ? "partial" : arbitration.verdict;
       const digestSections: string[] = [];
@@ -674,6 +711,31 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     const args = decision.args ?? {};
     const argsJson = JSON.stringify(args).slice(0, 2000);
     seq++;
+
+    // Deterministic data-fidelity rejection BEFORE Guardian admission or write.
+    // This does not grant authority: every accepted write still needs Guardian.
+    const inventoryMismatch = tool === "write_file" && inventoryDeliverables && !inventorySource
+      ? "INVENTORY_SOURCE_UNAVAILABLE: cannot write unverifiable inventory"
+      : tool === "write_file"
+        ? validateInventoryDraft(args.path, args.content, inventorySource) : null;
+    if (inventoryMismatch) {
+      inventoryDraftCorrections++;
+      stepsUsed++;
+      await persistStep(taskId, seq, "error", { tool, note: inventoryMismatch.slice(0, 500) });
+      emit({ type: "step", step: { seq, kind: "error", tool, note: inventoryMismatch.slice(0, 350), ok: false } });
+      if (inventoryDraftCorrections >= 2 || stepsUsed - opts.stepsUsedOffset >= effectiveBudget) {
+        await settleAndReport(taskId, "partial", stepsUsed,
+          "Inventory draft rejected by deterministic source-fidelity check after bounded attempts. No incorrect inventory file was written by the rejected steps. " + inventoryMismatch,
+          emit, { effectsHappened });
+        return;
+      }
+      messages.push({ role: "assistant", content: raw });
+      messages.push({ role: "user", content:
+        "CORE SOURCE VALIDATION FAILED BEFORE WRITE: " + inventoryMismatch +
+        " Correct the values using only the original owner request. Do not change the source, guess numbers, retry an identical draft, or claim verification. Emit one corrected tool action." });
+      continue;
+    }
+
     // Durable effect id once the admission gate grants this effectful call.
     let admittedEffectId: string | null = null;
     // Skip-path flag: duplicate/reconciliation guards consumed this step.

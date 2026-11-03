@@ -9,7 +9,7 @@ const REFERENCE = /\b(?:previous|prior|earlier|original|last)\b.{0,85}\b(?:task|
 // Short continuation commands ("complete it fully", "do the remaining",
 // "continue") are cross-task references, not self-contained new objectives.
 const FOLLOW_UP_REFERENCE =
- /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:do|complete|finish|continue|resume|keep\s+going|carry\s+on)(?:\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task|where\s+we\s+left(?:\s+off)?|from\s+(?:the\s+)?(?:last|latest)\s+checkpoint))?\b/i;
+ /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:(?:do|complete|finish)\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task)\b|(?:continue|resume|keep\s+going|carry\s+on)\b)/i;
 const TOPIC = /\b(?:jarvis|prototype|autonomy|windows|computer|agent|inventory|spreadsheet|report|document|minecraft|website|video|photo|image|app|code|budget|invoice|resume|email|file)\b/gi;
 export function needsPriorTaskContext(objective: string): boolean {
  return typeof objective === "string" && objective.length < 5000 && (REFERENCE.test(objective) || FOLLOW_UP_REFERENCE.test(objective.trim()));

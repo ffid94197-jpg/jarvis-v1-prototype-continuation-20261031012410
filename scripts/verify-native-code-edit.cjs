@@ -37,7 +37,8 @@ let audited=[];
 const guardian=load('src/lib/agent/guardian/guardian.ts',{
   '@/lib/db':{db:{auditLog:{create:async ({data})=>{audited.push(data);return {id:'record'}}}}},
   './policy':policy,
-  '../windows/policy':{validateDesktopTool:()=>({ok:false,reason:'no desktop action in this test'})}
+  '../windows/policy':{validateDesktopTool:()=>({ok:false,reason:'no desktop action in this test'})},
+  '../tools/localProjectBuild':{prepareLocalProjectBuild:async()=>({ok:false,reason:'sandbox build disabled in this fixture'})}
 });
 let checks=0;
 async function check(label,action) {

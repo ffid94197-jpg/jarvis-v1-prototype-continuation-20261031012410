@@ -925,9 +925,10 @@ async function autoTick(){
       }
       if(autopilot.status().goal==='dragon_then_netherite_run' && plan.kind==='equip_netherite' &&
          result?.ok===true && result?.verified===true && result?.proof==='netherite_equipped' &&
-         digest(bot,leader).wornNetherite===true){
+         digest(bot,leader).wornNetherite===true &&
+         digest(bot,leader).heldNetheriteSword===true){
         process.stdout.write('BOT_EVENT '+JSON.stringify({type:'netherite_equipped',
-          at:Date.now(),worn:true,dimension:String(bot.game?.dimension||'').replace(/^minecraft:/,''),
+          at:Date.now(),worn:true,held:true,dimension:String(bot.game?.dimension||'').replace(/^minecraft:/,''),
           goal:autopilot.status().goal})+'\n');
       }
     }

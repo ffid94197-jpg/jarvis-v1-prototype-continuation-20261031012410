@@ -373,8 +373,8 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
     };
   }
 
-  const inventoryDeliverables = /\b(?:inventory|stock)\b/i.test(objective)
-    && /\b(?:csv|spreadsheet)\b/i.test(objective)
+  const inventoryDeliverables = /(?:^|[^A-Za-z0-9])(?:inventory|stock)(?=$|[^A-Za-z0-9])/i.test(objective)
+    && /(?:\b(?:csv|spreadsheet)\b|\.csv\b)/i.test(objective)
     && /(?:\b(?:report|summary)\b|[_-](?:report|summary)\.(?:txt|md)\b)/i.test(objective);
   if (toolAssisted && inventoryDeliverables && !input.inventorySource) {
     return { verdict: "partial", predicates: [], predicateLines: [

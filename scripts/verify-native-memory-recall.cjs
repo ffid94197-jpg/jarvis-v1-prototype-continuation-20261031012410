@@ -41,7 +41,10 @@ const world=[
   observedAt:now,expiresAt:null,retractedAt:now},
  {principalId:'owner-B',subject:'office door',predicate:'status',value:'other owner secret',
   source:'USER_REPORTED',provenance:'owner_api',confidence:0.5,
-  observedAt:now,expiresAt:null,retractedAt:null}
+  observedAt:now,expiresAt:null,retractedAt:null},
+ {principalId:'owner-A',subject:'தமிழ் project',predicate:'பதில்',value:'செயலில்',
+  source:'USER_REPORTED',provenance:'owner_api',confidence:0.5,
+  observedAt:now,expiresAt:new Date(now.getTime()+3600000),retractedAt:null}
 ];
 const audit=[];
 const db={
@@ -49,23 +52,14 @@ const db={
  jarvisMemory:{findMany:async({where,take})=>memory.filter(x=>
    x.principalId===where.principalId &&
    x.deletedAt===where.deletedAt &&
-   x.dataClass===where.dataClass &&
-   where.OR.some(row=>
-     (row.key?.contains && x.key.includes(row.key.contains)) ||
-     (row.content?.contains && x.content.includes(row.content.contains))
-   )
+   x.dataClass===where.dataClass
  ).slice(0,take)},
  jarvisWorldObservation:{findMany:async({where,take})=>world.filter(x=>
    x.principalId===where.principalId && x.retractedAt===where.retractedAt &&
    where.AND.every(group=>group.OR.some(rule=>
      rule.expiresAt===null ? x.expiresAt===null :
        rule.expiresAt?.gt ? (x.expiresAt && x.expiresAt>rule.expiresAt.gt) : false
-   )) &&
-   where.OR.some(rule=>
-     (rule.subject?.contains && x.subject.includes(rule.subject.contains)) ||
-     (rule.predicate?.contains && x.predicate.includes(rule.predicate.contains)) ||
-     (rule.value?.contains && x.value.includes(rule.value.contains))
-   )
+   ))
  ).slice(0,take)}
 };
 const modules={
@@ -105,6 +99,14 @@ const before=process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED;
    assert.equal(x.verdict,'allow');
    assert.equal(x.prepared.memory.ownerId,'owner-A');
    prepared=x;
+ });
+ await verify('SQLite bounded retrieval supports case-insensitive owner memory ranking',async()=>{
+   const x=await guardian.authorizeToolCall({taskId:'t',ownerId:'owner-A'},
+     'memory_recall',{query:'vs code',limit:3});
+   assert.equal(x.verdict,'allow');
+   const r=await executor.executeTool('t','memory_recall',x);
+   assert.equal(r.ok,true);
+   assert.equal(r.detail.records[0].key,'editor');
  });
  await verify('No raw owner selection, oversized or control-character queries',async()=>{
    for(const input of [
@@ -152,6 +154,16 @@ const before=process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED;
    const all=JSON.stringify(r);
    for(const secret of ['other owner secret','was open','retracted state'])
      assert.ok(!all.includes(secret),secret);
+ });
+ await verify('World Model retrieval preserves multilingual facts on SQLite',async()=>{
+   const x=await guardian.authorizeToolCall({taskId:'t',ownerId:'owner-A'},
+     'world_recall',{query:'தமிழ்',limit:3});
+   assert.equal(x.verdict,'allow');
+   const r=await executor.executeTool('t','world_recall',x);
+   assert.equal(r.ok,true);
+   assert.equal(r.detail.records.length,1);
+   assert.equal(r.detail.records[0].subject,'தமிழ் project');
+   assert.equal(r.detail.records[0].value,'செயலில்');
  });
  await verify('World recall remains context-only and cancellation-safe',async()=>{
    assert.equal((await executor.executeTool('t','world_recall',worldPrepared,()=>true)).ok,false);

@@ -23,7 +23,8 @@ const PROVEN_FLAGS = ["textVerifiedByUIA", "focusVerified", "playbackConfirmed",
 
 export function desktopObjectiveRequiresActions(objective: string): boolean {
   const trimmed = objective.trim();
-  if (/^(what|why|how|explain|describe|tell me about)\b/i.test(trimmed)) return false;
+  if (/^(what|why|how|explain|describe|tell me about)\b/i.test(trimmed) ||
+      /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:explain|describe|tell me how|show me how|teach me how|walk me through|give me instructions|tell me about)\b/i.test(trimmed)) return false;
   const desktopAction = /\b(open|launch|click|press|type|write in|scroll|navigate|play|watch|find|focus|search for|interact with|join)\b[\s\S]{0,110}\b(windows|desktop|screen|pc|chrome|browser|settings|notepad|youtube|minecraft|app|window|game|file explorer)\b/i.test(trimmed) ||
     /^(?:please |jarvis[,! ]+)?(?:open|launch|click|press|type|scroll|navigate|play|watch|find|focus)\b/i.test(trimmed);
   // A game win or inventory objective is NOT a conversational answer. Earlier,

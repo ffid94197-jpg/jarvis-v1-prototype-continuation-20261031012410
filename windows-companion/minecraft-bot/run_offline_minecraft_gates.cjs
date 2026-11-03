@@ -18,6 +18,7 @@ const files=[
   'verify_real_java_server_wood.cjs','verify_real_java_full_campaign.cjs'
 ];
 const tests=[
+  'verify_gameplay_proof_projection.cjs',
   'verify_progression.cjs',
   'verify_resource_goal.cjs',
   'verify_retreat_access.cjs',

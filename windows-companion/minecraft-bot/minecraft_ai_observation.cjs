@@ -28,7 +28,8 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay'){
     health:world.health,hunger:world.hunger,
     ownerVisible:world.ownerVisible===true,ownerDistance:world.ownerDistance,
     inventory:{logs:world.inventory?.logs||0,woodenPickaxe:world.inventory?.woodenPickaxe||0,raw:Object.fromEntries(ordered)},
-    wornNetherite:world.wornNetherite===true,dragonDeadObserved:world.dragonDeadObserved===true,
+    wornNetherite:world.wornNetherite===true,heldNetheriteSword:world.heldNetheriteSword===true,
+    dragonDeadObserved:world.dragonDeadObserved===true,
     exitPortalPresent:world.exitPortalPresent===true,dragonPresent:world.dragonPresent===true,
     threats:Array.isArray(world.threats)?world.threats.slice(0,2):[],
     nearbyBlocks:Array.isArray(nearby)?nearby.slice(0,12):[],lastAction:String(lastAction).slice(0,100)

@@ -47,7 +47,8 @@
     "test:core-guardian-laya-boundaries": "node scripts/security/verify-core-guardian-laya-boundaries.cjs",
     "typecheck": "tsc --noEmit",
     "test:production-build-artifacts": "node scripts/verify-production-build.mjs --self-test",
-    "test:production-build-gate": "node scripts/verify-production-build.mjs --self-test && node scripts/verify-production-build-wiring.cjs"
+    "test:production-build-gate": "node scripts/verify-production-build.mjs --self-test && node scripts/verify-production-build-wiring.cjs",
+    "test:corpus-validator": "node scripts/autonomy/verify-corpus-validator.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

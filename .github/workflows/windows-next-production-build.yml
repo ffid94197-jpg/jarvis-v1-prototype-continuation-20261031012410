@@ -1,14 +1,9 @@
 name: Windows Next.js Standalone Build (not V1 release)
+# Deliberately manual-only: preserve the owner's GitHub Actions minutes.
+# Local Windows validation is documented in the repository; do not dispatch
+# this hosted build unless the owner explicitly authorizes runner usage.
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'src/**'
-      - 'scripts/**'
-      - 'package.json'
-      - 'prisma/**'
-      - 'next.config.ts'
-      - '.github/workflows/windows-next-production-build.yml'
 jobs:
   standalone-build:
     runs-on: windows-latest

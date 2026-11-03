@@ -17,6 +17,9 @@ export interface DesktopPrepared {
   pages?: number;
   appId?: string;
   windowId?: string;
+  pid?: number;
+  cuaWindowId?: string;
+  elementToken?: string;
   x?: number;
   y?: number;
   button?: "left" | "right" | "double";
@@ -249,6 +252,16 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       if (typeof args.windowId !== "string" || !/^[a-f0-9]{24}$/.test(args.windowId))
         return {ok:false,reason:"Use a fresh windowId from windows_desktop_windows."};
       return {ok:true,prepared:{operation:"desktop_focus",windowId:args.windowId}};
+    }
+    if (tool === "windows_desktop_click" && args.elementToken !== undefined) {
+      if (!Number.isInteger(args.pid) || (args.pid as number) <= 0 ||
+          typeof args.cuaWindowId !== "string" || !/^[0-9]{1,20}$/.test(args.cuaWindowId) ||
+          typeof args.elementToken !== "string" || !/^[A-Za-z0-9:_-]{1,128}$/.test(args.elementToken) ||
+          !["left","right","double"].includes(String(args.button ?? "left")))
+        return {ok:false,reason:"Use a fresh elementToken, PID and cuaWindowId from the same windows_desktop_observe result."};
+      return {ok:true,prepared:{operation:"desktop_click",pid:args.pid as number,
+        cuaWindowId:args.cuaWindowId,elementToken:args.elementToken,
+        button:(args.button ?? "left") as "left"|"right"|"double"}};
     }
     if (tool === "windows_desktop_click" || tool === "windows_desktop_move") {
       if (!Number.isInteger(args.x) || !Number.isInteger(args.y) ||

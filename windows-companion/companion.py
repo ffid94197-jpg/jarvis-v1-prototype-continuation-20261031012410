@@ -340,7 +340,7 @@ def inspect_page(page, state, query=None):
         # Browser-Use-style observed-element grounding: rank only inspected
         # public HTTPS links and search inputs; NEVER model-guessed selectors.
         words=[w for w in re.findall(r'[a-z0-9]+',query.casefold())
-               if len(w)>1 and w not in ('please','click','press','open','find','the','this','that','search','link')][:20]
+               if len(w)>1 and w not in ('please','click','press','open','find','the','this','that','link')][:20]
         def rank(entry):
             label=str(entry.get('text') or entry.get('hint') or '').casefold()
             matches=sum(1 for w in words if w in label)

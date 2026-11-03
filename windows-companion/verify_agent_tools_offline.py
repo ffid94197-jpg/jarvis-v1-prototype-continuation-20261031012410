@@ -29,6 +29,12 @@ passes(check({'operation':'browser_search','query':'fun videos'}) is None,'gener
 passes(check({'operation':'browser_search','query':'\nsearch'}) is not None,'control characters rejected')
 passes(check({'operation':'browser_search','query':'x'*161}) is not None,'oversized searches rejected')
 passes(check({'operation':'browser_inspect'}) is None,'inspect allowed')
+passes(check({'operation':'browser_inspect','query':'MrBeast'}) is None,
+       'Visible browser element grounding accepts bounded owner query')
+passes(check({'operation':'browser_inspect','query':'X'*161}) is not None,
+       'Browser element grounding rejects oversized query')
+passes(check({'operation':'browser_inspect','query':'MrBeast','script':'execute'}) is not None,
+       'Browser element grounding refuses extra command parameters')
 passes(check({'operation':'browser_read_page'}) is None,'read allowed')
 passes(check({'operation':'browser_click_link','index':0,'pageToken':'a'*24}) is None,'bounded click accepted')
 passes(check({'operation':'browser_click_link','index':40,'pageToken':'a'*24}) is not None,'large click index denied')

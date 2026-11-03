@@ -41,6 +41,13 @@ def check_input(op):
     if name in ('desktop_state','desktop_windows','desktop_observe'): return None
     if name=='desktop_focus':
         return None if isinstance(op.get('windowId'),str) and re.fullmatch(r'[a-f0-9]{24}',op['windowId']) else 'Use a fresh windowId.'
+    if name == 'desktop_click' and 'elementToken' in op:
+        if (type(op.get('pid')) is int and 0 < op['pid'] < 2**32 and
+            isinstance(op.get('cuaWindowId'), str) and re.fullmatch(r'[0-9]{1,20}', op['cuaWindowId']) and
+            isinstance(op.get('elementToken'), str) and re.fullmatch(r'[A-Za-z0-9:_-]{1,128}', op['elementToken']) and
+            op.get('button', 'left') in ('left','right','double')):
+            return None
+        return 'Invalid or incomplete CUA element target.'
     if name in ('desktop_move','desktop_click'):
         if any(type(op.get(k)) is not int or not 0<=op[k]<16000 for k in ('x','y')):
             return 'Invalid screen coordinates.'
@@ -219,6 +226,15 @@ def run_action(op):
     bad=check_input(op)
     if bad:return fail(bad)
     if _stopped.is_set():return fail('Emergency stop engaged; restart JARVIS to reset.')
+    name=op.get('operation')
+    if os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1' and name in (
+        'desktop_observe','desktop_click','desktop_move','desktop_type','desktop_keys'
+    ):
+        try:
+            from cua_driver_backend import run_action as run_cua_action
+            return run_cua_action(op)
+        except Exception as exc:
+            return fail('Cua Driver dispatch failed safely: '+type(exc).__name__)
     with _lock:
         if _stopped.is_set():return fail('Emergency stop engaged.')
         try:

@@ -112,6 +112,15 @@ const ACTIONABLE = [
   'jarvis, launch notepad',
   'good, now open chrome',
   'Open Windows Settings',
+  'complete it fully',
+  'finish it',
+  'do it',
+  'do the remaining',
+  'can you complete it?',
+  'can you do it?',
+  'can you help me complete it?',
+  'could you please finish this?',
+  'can you open chrome?',
 ];
 for (const objective of ACTIONABLE) {
   const r = classifyRequestIntent(objective);
@@ -158,6 +167,9 @@ const CONVERSATIONAL = [
   'what is the capital of France?', 'why is the sky blue',
   'explain what a Guardian policy is', 'compare sqlite and postgres',
   'how do I open chrome', 'how do I defeat the Ender Dragon?',
+  'do you know how to make a cake?',
+  'can you explain how to create a folder?',
+  'can you tell me how to open chrome?',
   'how are you', 'what do you think about automation', 'tell me a joke',
   'bye', 'good night',
 ];

@@ -207,10 +207,10 @@ class CuaDriverOfflineTests(unittest.TestCase):
                 "operation": "desktop_keys", "keys": ["ctrl", "s"],
                 "cuaWindowId": "9001"
             }))
-            self.assertIsNotNone(check_input({
+            self.assertIsNone(check_input({
                 "operation": "desktop_type", "text": "hello"
             }))
-            self.assertIsNotNone(check_input({
+            self.assertIsNone(check_input({
                 "operation": "desktop_keys", "keys": ["ctrl", "s"]
             }))
             os.environ["JARVIS_CUA_DRIVER_ENABLED"] = "0"

@@ -86,7 +86,29 @@ export async function stageFromDirectory(owner,sourceDir,source,selected=''){
 }
 const MAX_ARCHIVE=24*1024*1024;
 export async function stageGitHub(owner,url){
- const spec=githubSpec(url);const api=`https://api.github.com/repos/${spec.owner}/${spec.repo}`;
+ const spec=githubSpec(url);
+ // OpenClaw's full repository is too large for the controlled archive
+ // importer. Support only two pinned, text-only skills; no shell scripts,
+ // CLI dependencies, runtime installation, or auto-execution.
+ if (spec.owner.toLowerCase()==='openclaw' && spec.repo.toLowerCase()==='openclaw' &&
+     /^skills\/(skill-creator|healthcheck)$/.test(spec.subPath) &&
+     (spec.ref==='main' || spec.ref==='5918b1d7bf4bca308322e0c0a7f5b5acb1311d48')) {
+   const pin='5918b1d7bf4bca308322e0c0a7f5b5acb1311d48';
+   const raw='https://raw.githubusercontent.com/openclaw/openclaw/'+pin+'/'+spec.subPath+'/SKILL.md';
+   const resp=await fetch(raw,{redirect:'error',headers:{'User-Agent':'Jarvis-Pinned-Skill/1'},
+     signal:AbortSignal.timeout(12000)});
+   if(!resp.ok)throw new AdoptionError('Pinned OpenClaw skill could not be retrieved',502);
+   const body=await resp.text();
+   if(Buffer.byteLength(body,'utf8')>32000 || !body.startsWith('---\n'))
+     throw new AdoptionError('Pinned OpenClaw skill is malformed or too large',502);
+   const temp=await fs.mkdtemp(path.join(os.tmpdir(),'jarvis-openclaw-skill-'));
+   try{
+     await fs.writeFile(path.join(temp,'SKILL.md'),body,{mode:0o600});
+     return await stageFromDirectory(owner,temp,
+       'https://github.com/openclaw/openclaw/tree/'+pin+'/'+spec.subPath);
+   }finally{await fs.rm(temp,{recursive:true,force:true});}
+ }
+ const api=`https://api.github.com/repos/${spec.owner}/${spec.repo}`;
  const metaResp=await fetch(api,{headers:{'Accept':'application/vnd.github+json','User-Agent':'Jarvis-Managed-Integration/1'},signal:AbortSignal.timeout(12000)});
  if(!metaResp.ok)throw new AdoptionError(`GitHub repository lookup returned ${metaResp.status}`,502);
  const meta=await metaResp.json();if(meta.private||meta.size>100000)throw new AdoptionError('Repository is private or exceeds maximum size');

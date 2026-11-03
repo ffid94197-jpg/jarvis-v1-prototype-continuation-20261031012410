@@ -169,6 +169,17 @@ export function mayStartNativeMinecraftGoal(
   Number.isInteger(v) && (v as number)>=min && (v as number)<=max;
  const itemLabel=(x:unknown):boolean=>typeof x==='string'&&
   /^[a-z_]{2,64}$/.test(x) && s.includes(x.replace(/_/g,' '));
+ const explicitQuantity=(names:string[]):number|null=>{
+  const words:Record<string,number>={one:1,two:2,three:3,four:4,five:5,
+   six:6,seven:7,eight:8,nine:9,ten:10,a:1,an:1};
+  for(const name of names){
+   const re=new RegExp('\\b(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\\s+'+
+     '(?:(?:blocks?|pieces?|units?|of)\\s+)?'+name.replace(/_/g,' ')+'s?\\b');
+   const m=re.exec(s);
+   if(m)return words[m[1]]??Number(m[1]);
+  }
+  return null;
+ };
  const localField=(p:unknown):boolean=>{
   if(!p||typeof p!=='object'||Array.isArray(p))return false;
   const v=p as Record<string,unknown>;
@@ -189,14 +200,23 @@ export function mayStartNativeMinecraftGoal(
   if(typeof resource!=='string'||!Object.hasOwn(resources,resource) ||
     !resources[resource].test(s) || !amount(args.targetCount,1,64) ||
     !/\b(?:collect|gather|mine|dig|obtain|find|get|bring|acquire)\b/.test(s))return false;
+  const aliases=resource==='logs'?['log','wood','timber']:
+   resource==='iron_ingot'?['iron_ingot']:
+   [resource];
+  const requested=explicitQuantity(aliases);
+  if(requested!==null && (!amount(requested,1,64)||requested!==args.targetCount))return false;
   const match=singleInventoryResourceGoal(objective);
   if(match && match.resource===resource && args.targetCount!==match.quantity)return false;
   if(resource==='cobblestone' && /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+cobblestone\b/.test(s) &&
      args.targetCount!==cobblestoneGoalQuantity(objective))return false;
   return true;
  }
- if(goal==='craft')return /\b(?:craft|make)\b/.test(s) &&
-  itemLabel(args.item)&&amount(args.targetCount,1,16);
+ if(goal==='craft'){
+  if(!/\b(?:craft|make)\b/.test(s) || !itemLabel(args.item) ||
+     !amount(args.targetCount,1,16))return false;
+  const requested=explicitQuantity([String(args.item)]);
+  return requested===null||requested===args.targetCount;
+ }
  if(goal==='equip')return /\b(?:equip|wear|put on|hold|wield)\b/.test(s) &&
   itemLabel(args.item)&&typeof args.destinationSlot==='string';
  if(goal==='travel'){

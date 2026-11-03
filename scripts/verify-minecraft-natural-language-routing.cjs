@@ -134,6 +134,20 @@ wearable.record('minecraft_companion_command',{command:'observe'},
 ok(wearable.check('minecraft_companion_command',{command:'auto_goal',goal:'equip',
  item:'iron_helmet',destinationSlot:'head'}).ok,'wear phrasing maps to owner-requested equip goal');
 
+const tooMany=new MinecraftAiGate('In Minecraft, gather 65 diamonds');
+tooMany.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+no(tooMany.check('minecraft_companion_command',{command:'auto_goal',
+ goal:'gather',resource:'diamond',targetCount:64}).ok,
+ 'Model must not silently reduce a request for 65 diamonds to 64');
+const crafting=new MinecraftAiGate('In Minecraft, craft two chests');
+crafting.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(crafting.check('minecraft_companion_command',{command:'auto_goal',goal:'craft',
+ item:'chest',targetCount:2}).ok,'Spoken two-chest count preserved');
+no(crafting.check('minecraft_companion_command',{command:'auto_goal',goal:'craft',
+ item:'chest',targetCount:1}).ok,'Model must not silently undercraft the owner request');
+
 const incoming=new MinecraftAiGate('Jarvis, can you defeat the Ender Dragon in Minecraft?');
 incoming.record('minecraft_companion_command',{command:'observe'},
  {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});

@@ -1288,8 +1288,12 @@ const reader=readline.createInterface({input:process.stdin,crlfDelay:Infinity});
 reader.on('line',line=>{
   let q;try{q=JSON.parse(line);}catch{return;}
   if(typeof q.id!=='string'||!/^[a-f0-9]{16}$/.test(q.id))return;
-  action(q).then(r=>ack(q.id,r.ok,r.status,r.error))
-    .catch(err=>ack(q.id,false,'',String(err.message||err).slice(0,120)));
+  // Transport correlation IDs are NOT gameplay command arguments. In
+  // particular, strict auto_goal validation rejects unknown keys, so passing
+  // q with id made every valid authenticated auto_goal fail before execution.
+  const {id,...command}=q;
+  action(command).then(r=>ack(id,r.ok,r.status,r.error))
+    .catch(err=>ack(id,false,'',String(err.message||err).slice(0,120)));
 });
 bot.on('entityDead',entity=>{
    // A death event is only admissible if the current mission observed a

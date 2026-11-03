@@ -50,6 +50,9 @@ function check(value, label) {
 }
 
 (async () => {
+  const malformed = await api.prepareLocalProjectBuild(null);
+  check(malformed.ok === false && /JSON object/.test(malformed.reason || ''),
+    'malformed tool arguments fail closed without throwing');
   check(api.isExcludedProjectPath('node_modules/react/index.js'), 'node_modules excluded from source snapshot');
   check(api.isExcludedProjectPath('.git/config'), 'Git metadata excluded from source snapshot');
   check(api.isExcludedProjectPath('.env.production'), 'environment secrets excluded');

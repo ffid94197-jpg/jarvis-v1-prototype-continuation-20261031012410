@@ -47,20 +47,25 @@ const world=[
   observedAt:now,expiresAt:new Date(now.getTime()+3600000),retractedAt:null}
 ];
 const audit=[];
+const retrievalQueries={memory:null,world:null};
 const db={
  auditLog:{create:async({data})=>{audit.push(data);return{id:'audit'}}},
- jarvisMemory:{findMany:async({where,take})=>memory.filter(x=>
-   x.principalId===where.principalId &&
-   x.deletedAt===where.deletedAt &&
-   x.dataClass===where.dataClass
- ).slice(0,take)},
- jarvisWorldObservation:{findMany:async({where,take})=>world.filter(x=>
-   x.principalId===where.principalId && x.retractedAt===where.retractedAt &&
-   where.AND.every(group=>group.OR.some(rule=>
-     rule.expiresAt===null ? x.expiresAt===null :
-       rule.expiresAt?.gt ? (x.expiresAt && x.expiresAt>rule.expiresAt.gt) : false
-   ))
- ).slice(0,take)}
+ jarvisMemory:{findMany:async({where,take})=>{
+   retrievalQueries.memory={where,take};
+   return memory.filter(x=>x.principalId===where.principalId &&
+     x.deletedAt===where.deletedAt && x.dataClass===where.dataClass
+   ).slice(0,take);
+ }},
+ jarvisWorldObservation:{findMany:async({where,take})=>{
+   retrievalQueries.world={where,take};
+   return world.filter(x=>x.principalId===where.principalId &&
+     x.retractedAt===where.retractedAt &&
+     where.AND.every(group=>group.OR.some(rule=>
+       rule.expiresAt===null ? x.expiresAt===null :
+         rule.expiresAt?.gt ? (x.expiresAt && x.expiresAt>rule.expiresAt.gt) : false
+     ))
+   ).slice(0,take);
+ }}
 };
 const modules={
  '@/lib/db':{db},
@@ -126,6 +131,10 @@ const before=process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED;
    for(const secret of ['private secret','another owner','deleted recommendation'])
      assert.ok(!all.includes(secret),secret);
    assert.equal(r.detail.classification,'CLOUD_APPROVED');
+   assert.equal(retrievalQueries.memory.take,500);
+   assert.equal(retrievalQueries.memory.where.principalId,'owner-A');
+   assert.equal(retrievalQueries.memory.where.dataClass,'CLOUD_APPROVED');
+   assert.equal('OR' in retrievalQueries.memory.where,false);
  });
  let worldPrepared;
  await verify('World recall is bound to authenticated owner and bounded query',async()=>{
@@ -151,6 +160,10 @@ const before=process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED;
    assert.equal(r.detail.records[0].source,'USER_REPORTED');
    assert.equal(r.detail.records[0].authority,'context_only');
    assert.equal(r.detail.records[0].neverAuthorizesActions,true);
+   assert.equal(retrievalQueries.world.take,500);
+   assert.equal(retrievalQueries.world.where.principalId,'owner-A');
+   assert.equal(retrievalQueries.world.where.retractedAt,null);
+   assert.equal('OR' in retrievalQueries.world.where,false);
    const all=JSON.stringify(r);
    for(const secret of ['other owner secret','was open','retracted state'])
      assert.ok(!all.includes(secret),secret);

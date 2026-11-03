@@ -56,7 +56,7 @@ export async function checkEndpoint(url){
 // the validated IP is pinned to the socket's lookup callback. TLS SNI and
 // certificate validation still use the original public hostname. Redirects
 // are rejected, and no proxy is implicitly trusted.
-async function pinnedPublicHttpsPost(url,headers,requestBody){
+export async function pinnedPublicHttpsPost(url,headers,requestBody){
  const addresses=await publicAddresses(url.hostname);
  const selected=addresses.find(x=>x.family===4)||addresses[0];
  return await new Promise((resolve,reject)=>{

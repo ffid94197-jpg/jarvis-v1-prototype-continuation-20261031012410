@@ -7,3 +7,13 @@ export function nextAfterOutcome(plan: LongGoal[], stepIndex: number, routeIndex
 export function nextSchedule(mode: string, scheduledAt: Date | string, intervalMinutes: number, now?: Date): Date | null;
 export function findBoundedPath(start:string,target:string,edges:Array<{id:string;from:string;to:string;cost:number}>,excludedIds?:string[],expansionCap?:number):{found:boolean;cost:number|null;edges:string[];expanded:number};
 export function nextStrategyPath(goal:LongGoal,failedRouteIndex:number):number|null;
+
+/**
+ * Fail-closed bridge between the persisted routine cursor and its exact
+ * completed attempt. See planner.mjs: it never treats model text as proof.
+ */
+export function advanceFromPersistedCheckpoint(
+  plan: LongGoal[],
+  cursor: { taskId: string; routineId: string; stepIndex: number; routeIndex: number; outcome: string },
+  attempt: { taskId: string; routineId: string; stepIndex: number; routeIndex: number; outcome: string | null } | null,
+): { kind: string; stepIndex?: number; routeIndex?: number; reason?: string };

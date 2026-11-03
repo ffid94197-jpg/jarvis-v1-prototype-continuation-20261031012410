@@ -18,6 +18,7 @@ $cases = @(
   @{Name='Owner memory route'; Exec='node'; Args=@('scripts/verify-memory-route.cjs')},
   @{Name='MCP/skills adoption'; Exec='node'; Args=@('scripts/adoption/verify-adoption.mjs')},
   @{Name='MCP pinned transport'; Exec='node'; Args=@('scripts/adoption/verify-mcp-pinned.mjs')},
+  @{Name='Hermes CUA driver offline contracts'; Exec='node'; Args=@('scripts/verify-cua-driver-offline.mjs')},
   @{Name='Long-run checkpoint'; Exec='node'; Args=@('scripts/longrun/verify-longrun.mjs')},
   @{Name='Browser companion'; Exec='python'; Args=@('windows-companion/verify_agent_tools_offline.py')},
   @{Name='OmniParser detection'; Exec='python'; Args=@('windows-companion/verify_omniparser_offline.py')},

@@ -65,7 +65,7 @@ OmniParser is disabled by default. To use it, an owner must separately install/r
   This is a model *driver*, not an agent authority. Official model weights are
   **not bundled** and were **not loaded** here.
 - Added a focused `verify_omniparser_loopback_offline.py` test against the
-  actual HTTP handler with stub inference (7 request/denial assertions in a
+  actual HTTP handler with stub inference (8 request/denial assertions, including PNG dimension rejection, in a
   local equivalent harness; live model not tested). See
   `OMNIPARSER_LOCAL_RUNTIME.md` for owner Windows installation/flags.
 - Local owner memory search now asks Prisma to filter owner-scoped, non-deleted

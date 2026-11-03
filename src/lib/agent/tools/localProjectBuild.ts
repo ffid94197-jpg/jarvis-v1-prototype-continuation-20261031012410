@@ -429,6 +429,7 @@ async function terminateSandbox(child: ChildProcess): Promise<void> {
       execFile(taskkill, ["/PID", String(child.pid), "/T", "/F"], {
         shell: false, windowsHide: true, timeout: 10_000,
         env: {
+          NODE_ENV: "production",
           SystemRoot: process.env.SystemRoot || process.env.WINDIR,
           WINDIR: process.env.WINDIR || process.env.SystemRoot,
           PATH: path.join(process.env.WINDIR || "C:\\Windows", "System32"),
@@ -439,7 +440,7 @@ async function terminateSandbox(child: ChildProcess): Promise<void> {
   try { child.kill(); } catch { /* already exited */ }
 }
 function sandboxEnvironment(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {};
+  const env: NodeJS.ProcessEnv = { NODE_ENV: "production" };
   for (const key of [
     "SystemRoot", "WINDIR", "TEMP", "TMP", "USERPROFILE", "LOCALAPPDATA", "APPDATA",
   ]) {

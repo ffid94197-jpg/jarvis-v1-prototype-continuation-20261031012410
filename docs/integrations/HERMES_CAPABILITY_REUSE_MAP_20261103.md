@@ -17,6 +17,10 @@ Guardian authorizes exact-window element clicks and window-targeted text/key
 input; the CUA receipt reports whether the selected route was background or
 foreground.
 
+The observation tool snapshots exactly one window per call: foreground
+by default, or an exact PID/window ID selected from the visible-window list.
+This prevents snapshot-token invalidation when inspecting multiple windows.
+
 Status: code added on the stacked Hermes integration branch; local offline and
 real Windows acceptance are still required.
 

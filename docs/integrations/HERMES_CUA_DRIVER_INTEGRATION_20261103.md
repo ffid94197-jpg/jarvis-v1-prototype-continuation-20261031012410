@@ -2,12 +2,16 @@
 
 ## Source and decision
 
-Hermes Agent's computer-use implementation uses the Cua Driver SDK/backend.
-JARVIS adopts the underlying Cua Driver execution engine, not the Hermes Agent
+Hermes Agent's computer-use implementation manages the Cua Driver native
+binary as a separate stdio-MCP child process. JARVIS adopts the same upstream
+Cua Driver project through its optional in-process Python SDK, so the existing
+JARVIS companion owns execution without launching a second agent or MCP
+server. This is a transport/lifecycle adaptation, not a copy of Hermes's
+process manager or permission UI. JARVIS does not import the Hermes Agent
 runtime, planner, model routing, credentials, or independent agent loop.
 
 Inspected upstream source revisions:
-- Hermes Agent: NousResearch/hermes-agent at 74b2ed65e6564bfcafd29236e5fab2447a68fc76
+- Hermes Agent: NousResearch/hermes-agent at fd267bb3242a14c33d4899cffc60ee4be816f14d
 - Cua Driver: trycua/cua at 07460674e1924ba2ed1219e858c31647bc206669
 - Python SDK: cua-driver 0.38.0, MIT-licensed package.
 

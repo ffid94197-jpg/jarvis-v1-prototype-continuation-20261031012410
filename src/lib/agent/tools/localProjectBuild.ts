@@ -497,6 +497,8 @@ export async function executeLocalProjectBuild(
   }
 
   let stageRoot = "";
+  let partialResultRoot = "";
+  let keepResult = false;
   let childClosed = false;
   let childCode: number | null = null;
   let keepStage = false;
@@ -632,7 +634,8 @@ export async function executeLocalProjectBuild(
 
     const guestResult = await readBoundedJson(path.join(output, "result.json"));
     if (guestResult.status !== "ok" || guestResult.exitCode !== 0 ||
-        ![".next", "dist", "build", "out"].includes(String(guestResult.artifactKind))) {
+        ![".next", "dist", "build", "out"].includes(String(guestResult.artifactKind)) ||
+        !Number.isInteger(guestResult.artifactFiles) || !Number.isInteger(guestResult.artifactBytes)) {
       return {
         ok: false, tool, evidence: "Sandboxed npm install/build did not produce a verified success receipt",
         detail: { runId, guestError: String(guestResult.error || "Unknown guest failure").slice(0, 300) },
@@ -644,9 +647,13 @@ export async function executeLocalProjectBuild(
     const parent = await fs.realpath(prepared.projectAbs);
     const resultsRoot = await ensureRealDirectory(path.join(parent, ".jarvis-build-results"), parent);
     const runRoot = path.join(resultsRoot, runId);
+    partialResultRoot = runRoot;
     await fs.mkdir(runRoot, { recursive: false });
     const artifactRoot = path.join(runRoot, "artifact");
     const artifact = await copyVerifiedArtifact(outputArtifact, artifactRoot, kind);
+    if (artifact.files !== guestResult.artifactFiles || artifact.bytes !== guestResult.artifactBytes) {
+      throw new Error("Host artifact count/size does not match the guest build receipt");
+    }
     const receipt = {
       schemaVersion: 1,
       runId,
@@ -666,6 +673,7 @@ export async function executeLocalProjectBuild(
     await fs.writeFile(path.join(runRoot, "build-receipt.json"), JSON.stringify(receipt, null, 2) + "\n", {
       encoding: "utf8", flag: "wx",
     });
+    keepResult = true;
     return {
       ok: true, tool,
       evidence: "npm dependencies installed offline and the project build completed inside Windows Sandbox; artifact tree independently copied and hashed on the host",
@@ -692,6 +700,9 @@ export async function executeLocalProjectBuild(
       error: error instanceof Error ? error.message.slice(0, 500) : "Local project build failed closed",
     };
   } finally {
+    if (partialResultRoot && !keepResult) {
+      await fs.rm(partialResultRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(() => {});
+    }
     if (stageRoot && !keepStage) {
       await fs.rm(stageRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }).catch(() => {});
     }

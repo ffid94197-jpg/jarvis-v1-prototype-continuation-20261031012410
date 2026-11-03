@@ -51,7 +51,7 @@ for(let i=0;i<1500;i++){
  const decision=lateGamePlan(state({wornNetherite:missing!==3}),{milestones});
  ck(decision.kind!=='complete','never declare a false Minecraft victory '+i);
 }
-const valid=lateGamePlan(state({wornNetherite:true}),{milestones:{dragonKilled:true,exitPortalObserved:true,netheriteEquipped:true}});
+const valid=lateGamePlan(state({wornNetherite:true,heldNetheriteSword:true}),{milestones:{dragonKilled:true,exitPortalObserved:true,netheriteEquipped:true}});
 ck(valid.kind==='complete','synthetic complete ONLY when full evidence is injected');
 const sample={joined:true,dimension:'minecraft:overworld',position:{x:0,y:64,z:0},vitals:{health:20,food:20},inventory:{stacks:ARMOR.map(name=>({name,count:1,location:'main'}))},endFight:{dragons:[],crystals:[]},nearby:{players:[]}};
 ck(observedWorld(sample).wornNetherite===false,'carried armor is not equipped');

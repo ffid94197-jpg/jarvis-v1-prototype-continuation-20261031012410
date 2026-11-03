@@ -45,6 +45,7 @@ def _valid_element_target(op: dict[str, Any]) -> bool:
         and 0 < op["pid"] < 2**32
         and isinstance(op.get("cuaWindowId"), str)
         and re.fullmatch(r"[0-9]{1,20}", op["cuaWindowId"]) is not None
+        and 0 < int(op["cuaWindowId"]) < 2**64
         and isinstance(op.get("elementToken"), str)
         and re.fullmatch(r"[A-Za-z0-9:_-]{1,128}", op["elementToken"]) is not None
     )
@@ -288,7 +289,7 @@ class CuaDriverBackend:
             "controlCount": min(len(controls), 30),
             "note": (
                 "Element tokens are exact-window and snapshot scoped. Use the token, pid and "
-                "cuaWindowId from the same row. Any new observation invalidates old tokens. "
+                "cuaWindowId from the same row. Tokens are single-use, expire after 25 seconds, ""and any new observation invalidates them. "
                 "A degraded or truncated tree does not expose clickable tokens."
             ),
         }

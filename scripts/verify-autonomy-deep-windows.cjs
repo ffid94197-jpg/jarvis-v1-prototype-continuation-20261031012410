@@ -129,8 +129,11 @@ async function executeTool(taskId, tool, decision) {
     const content = String(prepared.content ?? '');
     await fs.promises.mkdir(path.dirname(abs), { recursive: true });
     await fs.promises.writeFile(abs, content, 'utf8');
-    return { ok: true, detail: { path: prepared.relPath, bytes: Buffer.byteLength(content) },
-      evidence: `Wrote ${prepared.relPath} (${Buffer.byteLength(content)} bytes)` };
+    // The real verifier accepts ONLY a successful readback-backed receipt for this task.
+    const readBack = await fs.promises.readFile(abs, 'utf8');
+    return { ok: readBack === content, tool, detail: {
+      path: prepared.relPath, bytes: Buffer.byteLength(readBack), verified: readBack === content,
+    }, evidence: `Wrote and independently read back ${prepared.relPath}` };
   }
   if (tool === 'read_file') {
     const content = await fs.promises.readFile(abs, 'utf8');
@@ -196,14 +199,19 @@ const mocks = {
     isEffectfulToolInvocation: (tool) => tool === 'write_file',
     admitEffect: async (taskId, _planRevision, eff) => {
       const row = { taskId, tool: eff.tool, key: `${eff.tool}:${JSON.stringify(eff.args ?? {})}`,
+        argsJson: JSON.stringify(eff.args ?? {}), receiptJson: null,
         status: 'ADMITTED', effectId: `eff-${effectRows.length + 1}` };
       effectRows.push(row);
       return { kind: 'admitted', effectId: row.effectId };
     },
-    settleEffect: async (effectId, _receipt, status = 'SETTLED') => {
+    settleEffect: async (effectId, receipt, status = 'SETTLED') => {
       const row = effectRows.find((r) => r.effectId === effectId);
-      if (row) row.status = status;
-      return Boolean(row);
+      if (row && row.status === 'ADMITTED') {
+        row.receiptJson = JSON.stringify(receipt);
+        row.status = status;
+        return true;
+      }
+      return false;
     },
   },
   './observation': { compactToolObservation: (r) => JSON.stringify({ ok: r.ok, detail: r.detail ?? r.error ?? null }).slice(0, 600) },

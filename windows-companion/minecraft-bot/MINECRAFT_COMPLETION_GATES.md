@@ -157,3 +157,17 @@ Next without hosted Actions: in the isolated Windows prototype checkout run .\sc
 - A first stress attempt uncovered a faulty randomized test-generator expectation, which was corrected, plus the actual failure-streak bug described above; the final corrected stress outcome is PASS for safety invariants. Local wall-clock execution of the final accelerated stress was around 4.2 seconds, **not** Minecraft real time.
 - **Acceptance boundary:** General-purpose game capability remains **bounded** to supported operations and cannot honestly be described as doing *anything* in Minecraft. No external plugins or native Java/Mineflayer server were available to this isolated runtime. **Real-world movement, item crafting, equipment, combat, and the complete Dragon-to-Netherite victory remain unverified end-to-end.** Do not report 100% completion.
 - All development commits contain `[skip ci]`; no GitHub Actions workflows were requested or needed.
+
+## 2026-11-03 local source-isolated regression run
+
+Using the exact current Prototype `main` source files fetched from the repository, a local V8/CommonJS compatibility harness executed:
+
+- Dragon-first survival-rule campaign model: **40/40 seeds PASS**; 10,753 simulated steps; maximum 278 steps in a seed.
+- Late-game planner: **200,078/200,078 assertions PASS**, including 100,000 randomized state snapshots.
+- Progression regression: PASS.
+- Generic resource goals: **31/31 PASS**.
+- Multi-step mission sequence: **32/32 PASS**.
+
+The harness loads the actual planner/controller modules and tests; its CommonJS and assertion adapters are source-isolated. This is not a full Node/Mineflayer installation, not the entire offline gate runner, and not real Java gameplay. Do not interpret model campaigns or randomized snapshots as actual games.
+
+Separately, the Internet-corpus validator's Node.js 22.16.0 regression harness passed **12/12** cases, including source-path traversal and non-HTTPS URL rejection. This validates the validator only; no 200,000-record corpus exists or has been executed.

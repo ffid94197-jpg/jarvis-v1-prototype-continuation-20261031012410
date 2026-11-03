@@ -76,6 +76,9 @@ for invalid in [
  {'command':'auto_goal','goal':'sequence','steps':[{'goal':'sequence','steps':[{'goal':'tools'}]}]},
  {'command':'auto_goal','goal':'sequence','steps':[{'goal':'equip','item':'iron_helmet','destinationSlot':'head'}]},
  {'command':'auto_goal','goal':'survive','code':'danger'},
+ {'command':'auto_goal','goal':'constructor'},
+ {'command':'auto_goal','goal':'__proto__'},
+ {'command':'auto_goal','goal':'equip','item':'iron_helmet','destinationSlot':'constructor'},
  {'command':'auto_goal','goal':'gather','resource':'logs','targetCount':1,'durationSeconds':False}
 ]: test(invalid,False)
 test({'command':'auto_checkpoint'})

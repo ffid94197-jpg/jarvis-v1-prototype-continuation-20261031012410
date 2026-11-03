@@ -283,7 +283,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       build:["position","block","axis","length"],
       farm_wheat:["position","width","depth","targetCount"],sequence:["steps"]
     };
-    const g=r.goal,extra=fixed.has(g)?[]:params[g];
+    const g=r.goal,extra=fixed.has(g)?[]:(Object.hasOwn(params,g)?params[g]:undefined);
     if(!extra || (step && (g==="sequence" || (fixed.has(g)&&!["tools","stone_age","iron_age"].includes(g)))))
       return false;
     const permitted=["goal",...(step?[]:["command","durationSeconds"]),...extra];
@@ -312,7 +312,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         "off-hand":["shield","torch","totem_of_undying"]
       };
       const slot=step?r.destination:r.destinationSlot;
-      return typeof slot==="string" && (slots[slot]||[]).includes(String(r.item));
+      return typeof slot==="string" && Object.hasOwn(slots,slot) && slots[slot].includes(String(r.item));
     }
     if(g==="build"){
       if(!at(r.position)||!integer(r.length,1,8)||

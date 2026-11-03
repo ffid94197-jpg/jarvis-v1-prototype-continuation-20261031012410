@@ -70,6 +70,9 @@ for(const input of [
  {command:'auto_goal',goal:'sequence',steps:[{goal:'sequence',steps:[{goal:'tools'}]}]},
  {command:'auto_goal',goal:'sequence',steps:[{goal:'equip',item:'iron_helmet',destinationSlot:'head'}]},
  {command:'auto_goal',goal:'survive',script:'process.exit(1)'},
+ {command:'auto_goal',goal:'constructor'},
+ {command:'auto_goal',goal:'__proto__'},
+ {command:'auto_goal',goal:'equip',item:'iron_helmet',destinationSlot:'constructor'},
  {command:'auto_goal',goal:'gather',resource:'logs',targetCount:1,durationSeconds:43201},
  {command:'natural_goal',text:'mine stones',script:'evil'},
  {command:'natural_goal',text:'hi\nbad'}

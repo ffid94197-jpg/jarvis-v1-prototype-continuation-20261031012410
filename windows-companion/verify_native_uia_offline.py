@@ -1,6 +1,7 @@
 """Mock-backed UIA behavior fixture; NEVER claims real Windows was controlled."""
 import native_uia as mod
 import time
+from ufo2_control_grounding import plan_keywords, ranked_control_indices, validate_query
 
 checks=0
 def check(ok,label):
@@ -9,6 +10,24 @@ def check(ok,label):
     checks+=1;print('PASS',label)
 
 check(mod.validate_request({'operation':'native_inspect'}) is None,'UIA inspection contract')
+check(mod.validate_request({'operation':'native_inspect','query':'click Save'}) is None,
+      'UFO2-derived owner intent accepted without expanding execution')
+for bad in ('', ' ', 'x'*161, 'Save\npassword'):
+    check(mod.validate_request({'operation':'native_inspect','query':bad}) is not None,
+          'Malformed or oversized grounding query denied')
+check(mod.validate_request({'operation':'native_inspect','query':'Save','script':'run'}) is not None,
+      'No injected inspection options allowed')
+check(validate_query('Find Save') is None and plan_keywords('Please click Save') == ['save'],
+      'UFO2-derived keywords remove commands and preserve UI label')
+items=[{'name':'Cancel','automationId':'cancel','enabled':True,'password':False},
+       {'name':'Save as','automationId':'SaveAs','enabled':True,'password':False},
+       {'name':'Save','automationId':'save','enabled':True,'password':False},
+       {'name':'Secret Save','automationId':'save','enabled':True,'password':True}]
+check(ranked_control_indices(items,'Please press Save')==[2,1],
+      'Only observed non-password Save controls ranked, exact name first')
+check(ranked_control_indices(items,'unrelatedxyz')==[],
+      'Unmatched intent must not invent a control')
+
 check(mod.validate_request({'operation':'native_open_url','url':'https://www.youtube.com/@MrBeast/videos'}) is None,'native public browser URL')
 for u in ('http://youtube.com','https://127.0.0.1:9000','file:///C:/','https://user:pass@example.com','https://example.com:444/','https://app.internal'):
     check(mod.validate_request({'operation':'native_open_url','url':u}) is not None,'native URL blocked '+u)
@@ -38,6 +57,14 @@ try:
     hwnd=[4242]
     mod._get_root=lambda:(4242,root)
     mod._active_hwnd=lambda:hwnd[0]
+    filtered=mod.inspect_native('Save')
+    check(filtered['ok'] and filtered['evidence']['queryGrounded'] is True and
+          [r['name'] for r in filtered['evidence']['controls']]==['Save'],
+          'Owner intent grounds exact live foreground UIA control')
+    missing=mod.inspect_native('unrelatedxyz')
+    check(missing['ok'] and not missing['evidence']['controls'] and
+          missing['evidence']['queryGrounded'] is False,
+          'No fake inspected control when UIA has no match')
     snap=mod.inspect_native()
     check(snap['ok'] and snap['evidence']['count']==3,'inspects foreground UIA controls')
     check(all(c['name']!='Password' for c in snap['evidence']['controls']),'password field omitted')

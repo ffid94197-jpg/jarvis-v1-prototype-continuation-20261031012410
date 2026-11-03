@@ -35,6 +35,8 @@ optional input/accessibility backend, not another agent.
   PID, native window ID and snapshot-scoped element token.
 - Exact-window background element-token clicks.
 - Primary-desktop coordinate clicks, pointer movement, text input and key chords.
+- Existing Win32 window enumeration/focus and scrolling remain on the legacy
+  backend; this integration does not silently replace those paths.
 - Structured action receipts distinguish refused, partial, unverifiable and
   confirmed effects.
 - A timeout after dispatch is marked outcome-unknown. A second mutation is

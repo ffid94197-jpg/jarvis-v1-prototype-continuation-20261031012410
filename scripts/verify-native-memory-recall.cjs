@@ -28,6 +28,21 @@ const memory=[
  {principalId:'owner-A',key:'editor.deleted',content:'old deleted recommendation',
   dataClass:'CLOUD_APPROVED',source:'OWNER_EXPLICIT',version:1,deletedAt:new Date()},
 ];
+const now=new Date();
+const world=[
+ {principalId:'owner-A',subject:'office door',predicate:'status',value:'closed',
+  source:'USER_REPORTED',provenance:'owner_api',confidence:0.5,
+  observedAt:new Date(now.getTime()-3600000),expiresAt:new Date(now.getTime()+3600000),retractedAt:null},
+ {principalId:'owner-A',subject:'office door',predicate:'status',value:'was open',
+  source:'USER_REPORTED',provenance:'owner_api',confidence:0.5,
+  observedAt:new Date(now.getTime()-7200000),expiresAt:new Date(now.getTime()-1000),retractedAt:null},
+ {principalId:'owner-A',subject:'office door',predicate:'status',value:'retracted state',
+  source:'USER_REPORTED',provenance:'owner_api',confidence:0.5,
+  observedAt:now,expiresAt:null,retractedAt:now},
+ {principalId:'owner-B',subject:'office door',predicate:'status',value:'other owner secret',
+  source:'USER_REPORTED',provenance:'owner_api',confidence:0.5,
+  observedAt:now,expiresAt:null,retractedAt:null}
+];
 const audit=[];
 const db={
  auditLog:{create:async({data})=>{audit.push(data);return{id:'audit'}}},
@@ -38,6 +53,18 @@ const db={
    where.OR.some(row=>
      (row.key?.contains && x.key.includes(row.key.contains)) ||
      (row.content?.contains && x.content.includes(row.content.contains))
+   )
+ ).slice(0,take)},
+ jarvisWorldObservation:{findMany:async({where,take})=>world.filter(x=>
+   x.principalId===where.principalId && x.retractedAt===where.retractedAt &&
+   where.AND.every(group=>group.OR.some(rule=>
+     rule.expiresAt===null ? x.expiresAt===null :
+       rule.expiresAt?.gt ? (x.expiresAt && x.expiresAt>rule.expiresAt.gt) : false
+   )) &&
+   where.OR.some(rule=>
+     (rule.subject?.contains && x.subject.includes(rule.subject.contains)) ||
+     (rule.predicate?.contains && x.predicate.includes(rule.predicate.contains)) ||
+     (rule.value?.contains && x.value.includes(rule.value.contains))
    )
  ).slice(0,take)}
 };

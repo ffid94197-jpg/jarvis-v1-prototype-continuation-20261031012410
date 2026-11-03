@@ -14,7 +14,7 @@ if ($LASTEXITCODE -ne 0) { throw "Use the same Python 3.10–3.13 interpreter co
 & $PythonPath -m pip install --disable-pip-version-check --only-binary=:all: --index-url https://pypi.org/simple -r $requirements
 if ($LASTEXITCODE -ne 0) { throw "Pinned Cua Driver SDK installation failed." }
 
-& $PythonPath -c "import cua_driver; assert cua_driver.__version__ == '0.38.0'; print('Cua Driver SDK', cua_driver.__version__)"
+& $PythonPath -c "from importlib.metadata import version; v=version('cua-driver'); assert v == '0.38.0'; print('Cua Driver SDK', v)"
 if ($LASTEXITCODE -ne 0) { throw "Cua Driver SDK import/version check failed." }
 
 Write-Host ""

@@ -63,6 +63,15 @@ Restart JARVIS with npm run dev:windows. If Cua Driver is disabled, the
 existing Windows backend remains unchanged. If it is explicitly enabled but
 unavailable, CUA operations fail safely rather than silently switching drivers.
 
+Before enabling it in JARVIS, run the read-only native SDK preflight:
+
+    npm run test:cua-driver-windows-live
+
+This checks the installed SDK against real visible Windows windows and
+accessibility snapshots without dispatching clicks or keystrokes. It is a
+driver preflight only; the JARVIS/Guardian end-to-end check must still be run
+separately with windows_desktop_observe and a harmless test application.
+
 ## Model operating rules
 
 - Run windows_desktop_observe before selecting controls.

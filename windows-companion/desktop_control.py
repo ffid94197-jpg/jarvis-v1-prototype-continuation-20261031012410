@@ -150,15 +150,25 @@ def observe_desktop():
 
 def emergency_monitor():
     if os.name!='nt':return
+    def release_cua_session():
+        if os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1':
+            try:
+                from cua_driver_backend import emergency_stop
+                emergency_stop()
+            except Exception:
+                pass
     try:
         user=ctypes.windll.user32
         while True:
             # 0x11 Ctrl, 0x10 Shift, 0x7B F12
             if all(user.GetAsyncKeyState(k)&0x8000 for k in (0x11,0x10,0x7B)):
                 _stopped.set()
+                release_cua_session()
+                return
             time.sleep(.08)
     except Exception:
         _stopped.set() # if input-safety monitor failed, don't continue blindly
+        release_cua_session()
 
 
 def all_windows():

@@ -59,9 +59,16 @@ def check_input(op):
     if name=='minecraft_input':
         return None if op.get('action') in ('forward','back','left','right','jump','sneak','attack','use','inventory') and \
             type(op.get('durationMs')) is int and 100 <= op['durationMs'] <= 1500 else 'Invalid bounded Minecraft input.'
+    if name in ('desktop_type','desktop_keys') and ('pid' in op or 'cuaWindowId' in op):
+        if (os.environ.get('JARVIS_CUA_DRIVER_ENABLED') != '1' or
+            type(op.get('pid')) is not int or not 0 < op['pid'] < 2**32 or
+            not isinstance(op.get('cuaWindowId'), str) or
+            not re.fullmatch(r'[0-9]{1,20}', op['cuaWindowId']) or
+            not 0 < int(op['cuaWindowId']) < 2**64):
+            return 'Invalid exact-window CUA target.'
     if name=='desktop_type':
         s=op.get('text')
-        return None if isinstance(s,str) and 1<=len(s)<=400 and not any(ord(c)<32 and c not in '\t\n\r' for c in s) else 'Invalid text.'
+        return None if isinstance(s,str) and 1<=len(s)<=400 and not any(ord(c)<32 and c not in '\\t\\n\\r' for c in s) else 'Invalid text.'
     if name=='desktop_keys':
         seq=op.get('keys')
         return None if isinstance(seq,list) and 1<=len(seq)<=4 and all(isinstance(k,str) and k in KEYS for k in seq) else 'Invalid key combination.'

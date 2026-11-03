@@ -267,8 +267,8 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let parseRetries = 0;
   let inventoryDraftCorrections = 0;
   let inventorySource = parseInventorySource(objective);
-  const inventoryDeliverables = /\b(?:inventory|stock)\b/i.test(objective)
-    && /\b(?:csv|spreadsheet)\b/i.test(objective)
+  const inventoryDeliverables = /(?:^|[^A-Za-z0-9])(?:inventory|stock)(?=$|[^A-Za-z0-9])/i.test(objective)
+    && /(?:\b(?:csv|spreadsheet)\b|\.csv\b)/i.test(objective)
     && /(?:\b(?:report|summary)\b|[_-](?:report|summary)\.(?:txt|md)\b)/i.test(objective);
   let effectsHappened = false; // at least one real effect attempted this run
   let effectJournalDegraded = false; // an effect settlement write failed

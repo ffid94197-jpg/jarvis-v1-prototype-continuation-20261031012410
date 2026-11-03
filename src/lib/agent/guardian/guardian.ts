@@ -219,9 +219,9 @@ export async function authorizeToolCall(
             typeof oldText!=="string" || !oldText.length ||
             typeof newText!=="string" ||
             /\0/.test(oldText) || /\0/.test(newText) ||
-            Buffer.byteLength(oldText,"utf8")>MAX_WRITE_BYTES ||
-            Buffer.byteLength(newText,"utf8")>MAX_WRITE_BYTES) {
-          decision=deny("edit_file requires a full SHA-256 and bounded UTF-8 replacement");break;
+            Buffer.byteLength(oldText,"utf8")>1500 ||
+            Buffer.byteLength(newText,"utf8")>1500) {
+          decision=deny("edit_file requires a full SHA-256 and text fragments of at most 1500 bytes each");break;
         }
         const within=await assertWithinRoot(p.abs);
         if (!within.ok) {

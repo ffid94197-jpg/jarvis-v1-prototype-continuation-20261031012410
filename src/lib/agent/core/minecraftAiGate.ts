@@ -299,6 +299,8 @@ export class MinecraftAiGate {
     // Existing native mission skills are admitted only for a precisely matched
     // owner request. The Guardian + companion revalidate the wire contract.
     if(command==='auto_resume'){
+      if(Object.keys(args).some(key=>key!=='command'))
+        return {ok:false,reason:'Mission resume accepts no model-supplied goal or parameters'};
       if(!/\b(?:continue|resume|keep going|carry on)\b/i.test(this.objective))
         return {ok:false,reason:'Mission resume requires an explicit owner continuation request'};
       return {ok:true,reason:'Owner requested resume; companion must validate the saved lease and discard prior success proofs'};

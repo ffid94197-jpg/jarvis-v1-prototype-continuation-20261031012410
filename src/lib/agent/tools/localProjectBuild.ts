@@ -66,7 +66,7 @@ function isReparsePoint(st: any): boolean {
   return Boolean(st?.isSymbolicLink?.()) ||
     (typeof st?.attributes === "number" && (st.attributes & 0x400) !== 0);
 }
-function safeEntryName(name: string): boolean {
+export function isSafeSandboxEntryName(name: string): boolean {
   if (!name || name === "." || name === ".." || /[<>:"/\\|?*\x00-\x1f]/.test(name) ||
       /[. ]$/.test(name)) return false;
   const base = name.split(".")[0].toUpperCase();
@@ -256,7 +256,7 @@ async function treeCopy(
   async function visit(src: string, dst: string, relative: string): Promise<void> {
     const entries = await fs.readdir(src, { withFileTypes: true });
     for (const entry of entries) {
-      if (!safeEntryName(entry.name)) throw new Error("Unsafe filename in project snapshot");
+      if (!isSafeSandboxEntryName(entry.name)) throw new Error("Unsafe filename in project snapshot");
       const childRel = relative ? relative + "/" + entry.name : entry.name;
       if (exclude?.(childRel)) continue;
       const srcChild = path.join(src, entry.name);

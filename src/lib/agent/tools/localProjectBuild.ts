@@ -16,7 +16,6 @@ import os from "node:os";
 import { execFile, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
-  assertWithinRoot,
   resolveScopedPath,
   WORKSPACE_ROOT,
 } from "../guardian/policy";
@@ -66,7 +65,7 @@ function isReparsePoint(st: any): boolean {
     (typeof st?.attributes === "number" && (st.attributes & 0x400) !== 0);
 }
 export function isSafeSandboxEntryName(name: string): boolean {
-  if (!name || name === "." || name === ".." || /[<>:"/\\|?*\x00-\x1f]/.test(name) ||
+  if (!name || name === "." || name === ".." || /[<>:"\/\\|?*\x00-\x1f]/.test(name) ||
       /[. ]$/.test(name)) return false;
   const base = name.split(".")[0].toUpperCase();
   if (/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(base)) return false;
@@ -459,10 +458,22 @@ async function copyVerifiedArtifact(
   }
   const digest = createHash("sha256");
   for (const entry of copied.entries.sort((a, b) => a.rel.localeCompare(b.rel))) {
-    const bytes = await fs.readFile(path.join(destination, ...entry.rel.split("/")));
+    const file = path.join(destination, ...entry.rel.split("/"));
+    const handle = await fs.open(file, "r");
+    const fileHash = createHash("sha256");
+    const chunk = Buffer.alloc(1024 * 1024);
+    try {
+      while (true) {
+        const read = await handle.read(chunk, 0, chunk.length, null);
+        if (!read.bytesRead) break;
+        fileHash.update(chunk.subarray(0, read.bytesRead));
+      }
+    } finally {
+      await handle.close();
+    }
     digest.update(entry.rel);
     digest.update("\0");
-    digest.update(createHash("sha256").update(bytes).digest("hex"));
+    digest.update(fileHash.digest("hex"));
     digest.update("\n");
   }
   return { files: copied.files, bytes: copied.bytes, sha256: digest.digest("hex") };
@@ -486,7 +497,6 @@ export async function executeLocalProjectBuild(
   }
 
   let stageRoot = "";
-  let child: ChildProcess | undefined;
   let childClosed = false;
   let childCode: number | null = null;
   let keepStage = false;
@@ -565,7 +575,6 @@ export async function executeLocalProjectBuild(
         stderr: String(stderr || "").slice(-2000),
       });
     });
-    child = launchedChild;
     register(launchedChild);
 
     const startedAt = Date.now();

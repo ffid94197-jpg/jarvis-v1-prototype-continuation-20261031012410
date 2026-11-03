@@ -110,6 +110,12 @@ function check(value, label) {
   if (previous === undefined) delete process.env.JARVIS_LOCAL_PROJECT_BUILD_ENABLED;
   else process.env.JARVIS_LOCAL_PROJECT_BUILD_ENABLED = previous;
 
+  const design = fs.readFileSync(path.join(root, 'docs/integrations/LOCAL_PROJECT_BUILD_WINDOWS_SANDBOX_20261103.md'), 'utf8');
+  check(source.includes('not a signed build attestation') &&
+    design.includes('NOT a cryptographic attestation') &&
+    design.includes('visible to guest build code'),
+    'guest writable output is explicitly treated as untrusted, non-attested data');
+
   const guardian = fs.readFileSync(path.join(root, 'src/lib/agent/guardian/guardian.ts'), 'utf8');
   const executor = fs.readFileSync(path.join(root, 'src/lib/agent/tools/executor.ts'), 'utf8');
   const effects = fs.readFileSync(path.join(root, 'src/lib/agent/core/effects.ts'), 'utf8');

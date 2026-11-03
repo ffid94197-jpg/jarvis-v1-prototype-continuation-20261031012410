@@ -270,9 +270,13 @@ export class MinecraftAiGate {
     if(this.observed.busy)return {ok:false,reason:'Previous game action still running; poll observe until busy=false before new effect'};
     // Existing native mission skills are admitted only for a precisely matched
     // owner request. The Guardian + companion revalidate the wire contract.
-    if(command==='auto_goal')return mayStartNativeMinecraftGoal(this.objective,args,this.observed)?
-      {ok:true,reason:'Owner-matched existing JARVIS bounded mission, requires later status/evidence'}:
-      {ok:false,reason:'Unmatched or unsafe proposed native Minecraft mission; use observed primitives instead'};
+    if(command==='auto_goal'){
+      if(this.observed.health<=6 && !['survive','guard'].includes(String(args.goal)))
+        return {ok:false,reason:'Health critically low; refuse non-defensive long-running Minecraft mission'};
+      return mayStartNativeMinecraftGoal(this.objective,args,this.observed)?
+        {ok:true,reason:'Owner-matched existing JARVIS bounded mission, requires later status/evidence'}:
+        {ok:false,reason:'Unmatched or unsafe proposed native Minecraft mission; use observed primitives instead'};
+    }
     // Never allow a model to aim an action far outside the most recent observed scene.
     const target=(command==='place_block'?args.reference:args.position);
     if(target!==undefined){

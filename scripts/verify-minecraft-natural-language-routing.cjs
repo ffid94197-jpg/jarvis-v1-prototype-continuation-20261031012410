@@ -115,6 +115,19 @@ no(native.check('minecraft_companion_command',{...validNative,shell:'cmd /c evil
 native.record('minecraft_companion_command',validNative,{ok:true,detail:{botAcknowledged:true}});
 no(native.check('minecraft_companion_command',validNative).ok,'cannot repeat persistent mission without observing');
 ok(native.check('minecraft_companion_command',{command:'auto_status'}).ok,'mission polling is always read-only');
+const injured=new MinecraftAiGate('In Minecraft, gather 5 diamonds');
+injured.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',
+ status:JSON.stringify({...nativeWorld,health:5})}});
+no(injured.check('minecraft_companion_command',validNative).ok,
+ 'Low health must deny non-defensive long-running mining');
+const survival=new MinecraftAiGate('In Minecraft, survive');
+survival.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',
+ status:JSON.stringify({...nativeWorld,health:5})}});
+ok(survival.check('minecraft_companion_command',
+ {command:'auto_goal',goal:'survive'}).ok,'Owner-authorized survival recovery permitted when injured');
+
 const incoming=new MinecraftAiGate('Jarvis, can you defeat the Ender Dragon in Minecraft?');
 incoming.record('minecraft_companion_command',{command:'observe'},
  {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});

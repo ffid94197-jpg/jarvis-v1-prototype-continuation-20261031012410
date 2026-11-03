@@ -444,7 +444,7 @@ class CuaDriverBackend:
     def run_action(self, op: dict[str, Any]) -> dict[str, Any]:
         name = op.get("operation")
         if name == "desktop_observe":
-            evidence = self._run(self._observe, timeout=38, observation=True)
+            evidence = self._run(lambda: self._observe(op), timeout=38, observation=True)
             return {"ok": True, "evidence": evidence}
         if name == "desktop_click":
             result = self._run(lambda: self._click(op), timeout=15)

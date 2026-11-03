@@ -18,7 +18,7 @@ from cua_driver_backend import (
     _valid_element_target,
     _window_record,
 )
-from desktop_control import check_input
+from desktop_control import check_input, check_cua_coordinates
 
 
 class CuaDriverOfflineTests(unittest.TestCase):
@@ -233,7 +233,7 @@ class CuaDriverOfflineTests(unittest.TestCase):
                         is_on_screen=True, minimized=False, z_index=2,
                     ),
                     SimpleNamespace(
-                        pid=42, window_id=402, title="Foreground", app_name="editor.exe",
+                        pid=42, window_id=402, title="Editor", app_name="editor.exe",
                         bounds=SimpleNamespace(x=10, y=20, width=800, height=600),
                         is_on_screen=True, minimized=False, z_index=1,
                     ),
@@ -279,10 +279,14 @@ class CuaDriverOfflineTests(unittest.TestCase):
         try:
             backend = CuaDriverBackend()
             backend._driver = FakeDriver()
-            first = asyncio.run(backend._observe({"_foregroundTitle": "Foreground"}))
+            first = asyncio.run(backend._observe({
+                "_foregroundPid": 42, "_foregroundWindowId": "402",
+                "_foregroundTitle": "Editor"
+            }))
             first_token = first["foregroundControls"][0]["elementToken"]
             self.assertEqual(first["observedWindow"]["pid"], 42)
-            self.assertEqual(first["observedWindow"]["selectionReason"], "foreground-title")
+            self.assertEqual(first["observedWindow"]["cuaWindowId"], "402")
+            self.assertEqual(first["observedWindow"]["selectionReason"], "foreground-identity")
             self.assertEqual(backend._driver.snapshots, 1)
             self.assertIn(first_token, backend._tokens)
             self.assertNotIn("treeMarkdown", first["observedWindow"])
@@ -296,10 +300,12 @@ class CuaDriverOfflineTests(unittest.TestCase):
 
             # Never silently inspect the first visible window when the actual
             # foreground window cannot be identified or is absent from the list.
-            with self.assertRaisesRegex(ValueError, "Foreground window"):
+            with self.assertRaisesRegex(ValueError, "Foreground PID/window identity"):
                 asyncio.run(backend._observe({}))
-            with self.assertRaisesRegex(ValueError, "current foreground window"):
-                asyncio.run(backend._observe({"_foregroundTitle": "Not visible"}))
+            with self.assertRaisesRegex(ValueError, "exact foreground PID/window"):
+                asyncio.run(backend._observe({
+                    "_foregroundPid": 41, "_foregroundWindowId": "999"
+                }))
 
             for options in (
                 {"degraded": True},
@@ -309,12 +315,25 @@ class CuaDriverOfflineTests(unittest.TestCase):
             ):
                 backend._driver = FakeDriver(**options)
                 with self.assertRaisesRegex(ValueError, "accessibility snapshot"):
-                    asyncio.run(backend._observe({"_foregroundTitle": "Foreground"}))
+                    asyncio.run(backend._observe({
+                        "_foregroundPid": 42, "_foregroundWindowId": "402"
+                    }))
         finally:
             if old_module is None:
                 sys.modules.pop("cua_driver", None)
             else:
                 sys.modules["cua_driver"] = old_module
+
+    def test_cua_coordinates_must_fit_actual_primary_display(self):
+        info={"width":1920,"height":1080}
+        self.assertIsNone(check_cua_coordinates(
+            {"operation":"desktop_click","x":1919,"y":1079},info))
+        self.assertIsNotNone(check_cua_coordinates(
+            {"operation":"desktop_click","x":1920,"y":500},info))
+        self.assertIsNotNone(check_cua_coordinates(
+            {"operation":"desktop_move","x":500,"y":1080},info))
+        self.assertIsNone(check_cua_coordinates(
+            {"operation":"desktop_click","elementToken":"s00000001:2"},info))
 
     def test_backend_requires_both_explicit_opt_ins(self):
         backend = CuaDriverBackend()

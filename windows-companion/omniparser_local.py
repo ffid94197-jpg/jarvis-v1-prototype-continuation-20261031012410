@@ -72,7 +72,11 @@ def inspect_live_screen():
                 return {'ok':False,'reason':'OmniParser loopback endpoint not ready'}
             raw=resp.read(256001)
             if len(raw)>256000:raise ValueError('Oversized response')
-            detected=normalize_detection_rows(json.loads(raw))
+            parsed=json.loads(raw)
+            if not isinstance(parsed,dict) or not isinstance(
+                parsed.get('parsed_content_list',parsed.get('elements')),list):
+                return {'ok':False,'reason':'OmniParser returned no structured detection list'}
+            detected=normalize_detection_rows(parsed)
             return {'ok':True,'source':'operator-approved local OmniParser model (unverified hints)',
                 'detections':detected,'count':len(detected),
                 'imageSize':[image.width,image.height],

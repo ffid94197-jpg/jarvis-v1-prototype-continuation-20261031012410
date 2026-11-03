@@ -43,7 +43,7 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'bot.cjs'),'utf8'),{
  require:mod=>mod==='mineflayer'?{createBot:()=>bot}:mod==='readline'?fakeReadline:
    mod==='mineflayer-pathfinder'?{pathfinder(){},Movements:class{},goals:{GoalNear,GoalFollow}}:
    mod==='vec3'?{Vec3:class {constructor(x,y,z){Object.assign(this,{x,y,z});} distanceTo(p){return Math.hypot(this.x-p.x,this.y-p.y,this.z-p.z);} plus(p){return new this.constructor(this.x+p.x,this.y+p.y,this.z+p.z);}}}:require(mod),
- __dirname,process:{env:{JARVIS_MINECRAFT_LAN_PORT:'51234',JARVIS_MINECRAFT_PLAYER:'Owner'},
+ __dirname:fs.mkdtempSync(path.join(require('node:os').tmpdir(),'jarvis-mc-session-fixture-')),process:{env:{JARVIS_MINECRAFT_LAN_PORT:'51234',JARVIS_MINECRAFT_PLAYER:'Owner'},
  stdout:{write:x=>stdout.push(x)},stderr:{write:x=>stdout.push(x)},on(){}},
  Buffer,console,setTimeout:(fn,ms)=>ms<500?realTimeout(fn,0):888,clearTimeout:()=>{},
  setInterval:(fn)=>{interval=fn;return 777;},clearInterval:()=>{}
@@ -53,7 +53,10 @@ let num=0;async function command(q){const id=(++num).toString(16).padStart(16,'0
 (async()=>{
  check(!(await command({command:'auto_goal',goal:'tools'})).ok,'cannot auto play before spawn');
  bot.emit('spawn');check(stdout.some(x=>x.includes('MINECRAFT_COMPANION_JOINED')),'spawn observed');
- check((await command({command:'auto_goal',goal:'tools',durationSeconds:300})).ok,'start autonomous tools');
+ const start=await command({command:'auto_goal',goal:'tools',durationSeconds:300});
+ check(start.ok,'start autonomous tools; receipt='+JSON.stringify(start));
+ check(!(await command({command:'auto_goal',goal:'tools',durationSeconds:300,unsupportedParameter:true})).ok,
+  'unrecognized gameplay parameters cannot sneak through correlation envelope');
  check((await command({command:'auto_status'})).status.includes('"running"'),'autonomous status reports running');
  const active=JSON.parse((await command({command:'auto_status'})).status);
  const duplicate=await command({command:'auto_goal',goal:'explore',durationSeconds:300});

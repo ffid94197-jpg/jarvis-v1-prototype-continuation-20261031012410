@@ -90,7 +90,10 @@ const before=process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED;
    delete process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED;
    const x=await guardian.authorizeToolCall({taskId:'t',ownerId:'owner-A'},
      'memory_recall',{query:'editor',limit:3});
+   const w=await guardian.authorizeToolCall({taskId:'t',ownerId:'owner-A'},
+     'world_recall',{query:'office door',limit:3});
    assert.equal(x.verdict,'deny');
+   assert.equal(w.verdict,'deny');
  });
  process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED='1';
  let prepared;
@@ -167,6 +170,8 @@ const before=process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED;
    const txt=JSON.stringify(audit);
    assert.ok(!txt.includes('VS Code'));
    assert.ok(!txt.includes('private secret preference'));
+   assert.ok(!txt.includes('office door'));
+   assert.ok(!txt.includes('closed'));
  });
  console.log(`NATIVE_MEMORY_RECALL: ${n}/${n} PASS (mock data, no real Prisma/LLM)`);
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{

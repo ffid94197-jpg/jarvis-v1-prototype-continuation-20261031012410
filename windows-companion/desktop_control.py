@@ -38,9 +38,27 @@ def is_enabled():
 def check_input(op):
     if not isinstance(op,dict): return 'Invalid desktop request.'
     name=op.get('operation')
-    if name in ('desktop_state','desktop_windows','desktop_observe'): return None
+    if name in ('desktop_state','desktop_windows'): return None
+    if name == 'desktop_observe':
+        if 'pid' in op or 'cuaWindowId' in op:
+            if (os.environ.get('JARVIS_CUA_DRIVER_ENABLED') != '1' or
+                type(op.get('pid')) is not int or not 0 < op['pid'] < 2**32 or
+                not isinstance(op.get('cuaWindowId'), str) or
+                not re.fullmatch(r'[1-9][0-9]{0,19}', op['cuaWindowId']) or
+                not 0 < int(op['cuaWindowId']) < 2**64):
+                return 'Invalid exact-window CUA observation target.'
+        return None
     if name=='desktop_focus':
         return None if isinstance(op.get('windowId'),str) and re.fullmatch(r'[a-f0-9]{24}',op['windowId']) else 'Use a fresh windowId.'
+    if name == 'desktop_click' and 'elementToken' in op:
+        if (os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1' and
+            type(op.get('pid')) is int and 0 < op['pid'] < 2**32 and
+            isinstance(op.get('cuaWindowId'), str) and re.fullmatch(r'[1-9][0-9]{0,19}', op['cuaWindowId']) and
+            0 < int(op['cuaWindowId']) < 2**64 and
+            isinstance(op.get('elementToken'), str) and re.fullmatch(r'[A-Za-z0-9:_-]{1,128}', op['elementToken']) and
+            op.get('button', 'left') in ('left','right','double')):
+            return None
+        return 'Invalid or incomplete CUA element target.'
     if name in ('desktop_move','desktop_click'):
         if any(type(op.get(k)) is not int or not 0<=op[k]<16000 for k in ('x','y')):
             return 'Invalid screen coordinates.'
@@ -50,9 +68,16 @@ def check_input(op):
     if name=='minecraft_input':
         return None if op.get('action') in ('forward','back','left','right','jump','sneak','attack','use','inventory') and \
             type(op.get('durationMs')) is int and 100 <= op['durationMs'] <= 1500 else 'Invalid bounded Minecraft input.'
+    if name in ('desktop_type','desktop_keys') and ('pid' in op or 'cuaWindowId' in op):
+        if (os.environ.get('JARVIS_CUA_DRIVER_ENABLED') != '1' or
+            type(op.get('pid')) is not int or not 0 < op['pid'] < 2**32 or
+            not isinstance(op.get('cuaWindowId'), str) or
+            not re.fullmatch(r'[0-9]{1,20}', op['cuaWindowId']) or
+            not 0 < int(op['cuaWindowId']) < 2**64):
+            return 'Invalid exact-window CUA target.'
     if name=='desktop_type':
         s=op.get('text')
-        return None if isinstance(s,str) and 1<=len(s)<=400 and not any(ord(c)<32 and c not in '\t\n\r' for c in s) else 'Invalid text.'
+        return None if isinstance(s,str) and 1<=len(s)<=400 and not any(ord(c)<32 and c not in '\\t\\n\\r' for c in s) else 'Invalid text.'
     if name=='desktop_keys':
         seq=op.get('keys')
         return None if isinstance(seq,list) and 1<=len(seq)<=4 and all(isinstance(k,str) and k in KEYS for k in seq) else 'Invalid key combination.'
@@ -142,15 +167,25 @@ def observe_desktop():
 
 def emergency_monitor():
     if os.name!='nt':return
+    def release_cua_session():
+        if os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1':
+            try:
+                from cua_driver_backend import emergency_stop
+                emergency_stop()
+            except Exception:
+                pass
     try:
         user=ctypes.windll.user32
         while True:
             # 0x11 Ctrl, 0x10 Shift, 0x7B F12
             if all(user.GetAsyncKeyState(k)&0x8000 for k in (0x11,0x10,0x7B)):
                 _stopped.set()
+                release_cua_session()
+                return
             time.sleep(.08)
     except Exception:
         _stopped.set() # if input-safety monitor failed, don't continue blindly
+        release_cua_session()
 
 
 def all_windows():
@@ -219,6 +254,31 @@ def run_action(op):
     bad=check_input(op)
     if bad:return fail(bad)
     if _stopped.is_set():return fail('Emergency stop engaged; restart JARVIS to reset.')
+    name=op.get('operation')
+    if os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1' and name in (
+        'desktop_observe','desktop_click','desktop_move','desktop_type','desktop_keys'
+    ):
+        with _lock:
+            if _stopped.is_set():return fail('Emergency stop engaged.')
+            try:
+                from cua_driver_backend import run_action as run_cua_action
+                scene_info=None
+                if name == 'desktop_observe':
+                    try:
+                        scene_info=screen_info()
+                        op=dict(op)
+                        op['_foregroundTitle']=scene_info.get('foregroundTitle','')
+                    except Exception:
+                        scene_info=None
+                receipt=run_cua_action(op)
+                if name == 'desktop_observe' and receipt.get('ok') and isinstance(receipt.get('evidence'),dict):
+                    if scene_info is not None:
+                        receipt['evidence']['screenInfo']=scene_info
+                    else:
+                        receipt['evidence']['screenInfoUnavailable']=True
+                return receipt
+            except Exception as exc:
+                return fail('Cua Driver dispatch failed safely: '+type(exc).__name__)
     with _lock:
         if _stopped.is_set():return fail('Emergency stop engaged.')
         try:

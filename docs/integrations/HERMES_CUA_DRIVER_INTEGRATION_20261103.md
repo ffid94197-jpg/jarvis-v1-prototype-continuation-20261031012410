@@ -45,8 +45,9 @@ optional input/accessibility backend, not another agent.
 
 - Same-process Python SDK runtime, one instance per companion process.
 - Native visible-window discovery and accessibility snapshots.
-- Structured control records with role, label, value, bounds, enabled state,
-  PID, native window ID and snapshot-scoped element token.
+- Structured control records with role, label, bounds, enabled state, PID,
+  native window ID and snapshot-scoped element token. Raw text-field values,
+  screenshots and unredacted accessibility markdown are not forwarded.
 - Exact-window background element-token clicks.
 - Exact-window background text input and key chords when PID/window ID are supplied.
 - Primary-desktop coordinate clicks, pointer movement, and foreground text/key input.

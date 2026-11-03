@@ -23,6 +23,7 @@ import {
 import type { GuardianDecision } from "../guardian/guardian";
 import { companionAction } from "../windows/bridge";
 import type { DesktopPrepared } from "../windows/policy";
+import { executeLocalProjectBuild, type LocalProjectBuildPrepared } from "./localProjectBuild";
 
 export interface ToolResult {
   ok: boolean;
@@ -265,6 +266,7 @@ export async function executeTool(
     command?: string;
     args?: string[];
     desktop?: DesktopPrepared;
+    localProjectBuild?: LocalProjectBuildPrepared;
     integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;arguments?:Record<string,unknown>};
     memory?: {ownerId:string;query:string;limit:number};
     world?: {ownerId:string;query:string;limit:number};
@@ -403,6 +405,13 @@ export async function executeTool(
       return toolListDir(prepared);
     case "run_command":
       return toolRunCommand(taskId, prepared);
+    case "local_project_build":
+      if (!prepared.localProjectBuild) {
+        return { ok: false, tool, evidence: "", error: "Guardian local project-build approval absent" };
+      }
+      return executeLocalProjectBuild(
+        prepared.localProjectBuild, isCancelled, (child) => registerChild(taskId, child),
+      );
     case "windows_open_url":
     case "windows_open_app":
     case "windows_open_settings":

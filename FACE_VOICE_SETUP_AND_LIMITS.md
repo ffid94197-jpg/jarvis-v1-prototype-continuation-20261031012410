@@ -44,3 +44,14 @@
 - [OpenCV face recognition tutorial](https://docs.opencv.org/4.x/d0/dd4/tutorial_dnn_face.html).
 - [Vosk official offline models](https://alphacephei.com/vosk/models).
 - Gradio open-source `test_data/test_audio.wav` fixture used only for input format/stability checks; it is not evidence of real speech transcription quality.
+
+## Optional faster-whisper STT backend (November 3, 2026)
+
+The existing Vosk offline backend remains the default. An optional local
+`faster-whisper==1.2.1` adapter is available for owner comparison; see
+[`FASTER_WHISPER_LOCAL_STT.md`](FASTER_WHISPER_LOCAL_STT.md). It loads only a
+preinstalled local CTranslate2 model with hub downloads disabled. Its package
+code is MIT; model-weight licenses are separate. No model or large dependency
+is installed automatically. Piper `jarvis-high.onnx` remains the selected
+British English TTS voice. The optional adapter has offline stub-contract
+tests only; Windows/CUDA and real transcription quality remain unaccepted.

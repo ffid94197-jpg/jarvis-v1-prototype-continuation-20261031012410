@@ -86,7 +86,7 @@ const PLAIN_TEXT_REQUEST_PREFIX =
 const PLAIN_TEXT_OUTPUT =
   /^(?:write|draft|compose|generate)\s+(?:me\s+)?(?:a|an|the|some)\s+(?:poem|story|email|message|essay|description|summary|snippet|example|paragraph|reply)\b/i;
 const EXTERNAL_DELIVERY =
-  /\b(?:to (?:a|the) file|on disk|send|publish|deploy|save|upload|email it)\b/i;
+  /\b(?:to (?:a|the) file|on disk|send|publish|deploy|save|upload|share|post|submit|print|attach|export|deliver|sync|email it)\b/i;
 function isPlainTextGenerationRequest(raw: string): boolean {
   const body = raw.trim().replace(PLAIN_TEXT_REQUEST_PREFIX, "").trim();
   return PLAIN_TEXT_OUTPUT.test(body) && !EXTERNAL_DELIVERY.test(body);

@@ -68,6 +68,13 @@ def check_input(op):
     if name=='minecraft_input':
         return None if op.get('action') in ('forward','back','left','right','jump','sneak','attack','use','inventory') and \
             type(op.get('durationMs')) is int and 100 <= op['durationMs'] <= 1500 else 'Invalid bounded Minecraft input.'
+    # A caller may not supply an exact-window target when the CUA backend is
+    # disabled: silently ignoring those coordinates would type into whatever
+    # foreground app happened to receive focus (wrong-window mutation).
+    if name in ('desktop_type','desktop_keys') and (
+        'pid' in op or 'cuaWindowId' in op) and (
+        os.environ.get('JARVIS_CUA_DRIVER_ENABLED') != '1'):
+        return 'Exact-window input requires the enabled CUA backend.'
     if name in ('desktop_type','desktop_keys') and os.environ.get('JARVIS_CUA_DRIVER_ENABLED') == '1':
         if ('pid' not in op or 'cuaWindowId' not in op or
             type(op.get('pid')) is not int or not 0 < op['pid'] < 2**32 or

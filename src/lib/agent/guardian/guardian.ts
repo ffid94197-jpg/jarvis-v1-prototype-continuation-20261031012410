@@ -35,6 +35,7 @@ export interface PreparedArgs {
   paths?: { abs: string; rel: string }[];
   desktop?: DesktopPrepared;
   integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;operation?:string;arguments?:Record<string,unknown>};
+  memory?: {ownerId:string;query:string;limit:number};
 }
 
 export interface GuardianDecision {
@@ -50,6 +51,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "edit_file",
   "read_file",
   "list_dir",
+  "memory_recall",
   "run_command",
   "windows_open_url",
   "windows_open_app",
@@ -158,6 +160,29 @@ export async function authorizeToolCall(
         const server=typeof rawArgs.server==="string"?rawArgs.server:"";
         if(server.length>120 || !/^[\w.-]*$/.test(server)) {decision=deny("Invalid server name");break;}
         decision={verdict:"allow",prepared:{integration:{ownerId:ctx.ownerId,id:rawArgs.id,server,name:typeof rawArgs.name==="string"?rawArgs.name:undefined,arguments:rawArgs.arguments as Record<string,unknown>|undefined}}};break;
+      }
+      case "memory_recall": {
+        // Explicit owner opt-in required before putting even pre-classified
+        // CLOUD_APPROVED memory into a model observation. Private memories
+        // always remain on-device and cannot be requested via this tool.
+        if(process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED!=="1"){
+          decision=deny("owner has not enabled model-visible memory recall");break;
+        }
+        if(!ctx.ownerId){decision=deny("authenticated owner required");break;}
+        if(Object.keys(rawArgs).some(k=>!["query","limit"].includes(k))){
+          decision=deny("memory_recall supports query and limit only");break;
+        }
+        const query=rawArgs.query;
+        const limit=rawArgs.limit===undefined?5:rawArgs.limit;
+        if(typeof query!=="string" || query.trim().length<2 ||
+            query.length>160 || /[\x00-\x1f\x7f]/.test(query) ||
+            !Number.isInteger(limit) || (limit as number)<1 || (limit as number)>5){
+          decision=deny("bounded memory query and 1-5 results required");break;
+        }
+        decision={verdict:"allow",prepared:{memory:{
+          ownerId:ctx.ownerId,query:query.trim(),limit:limit as number
+        }}};
+        break;
       }
       case "create_folder":
       case "read_file":

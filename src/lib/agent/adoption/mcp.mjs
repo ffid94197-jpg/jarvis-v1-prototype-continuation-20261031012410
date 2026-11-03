@@ -6,16 +6,83 @@ import {spawn} from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import dns from 'node:dns/promises';
+import net from 'node:net';
+import https from 'node:https';
 import {AdoptionError,get} from './registry.mjs';
 import {redactUntrustedToolData} from './redact.mjs';
 const MAX_REPLY=1024*1024;
-const PRIVATE=/^(?:10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1$|fc|fd|fe80:)/i;
-export async function checkEndpoint(url){const u=new URL(url);if(u.username||u.password||u.hash||u.search)throw new AdoptionError('Credentials/fragments in endpoint are forbidden');
+// Fail closed on reserved, internal, link-local, benchmark, documentation,
+// multicast, IPv4-mapped IPv6 and malformed addresses. This is *not* a
+// substitute for pinned connection-level DNS resolution below.
+export function isPublicMcpAddress(address){
+ const kind=net.isIP(address);
+ if(kind===4){
+  const [a,b,c]=address.split('.').map(Number);
+  return !(a===0 || a===10 || a===127 || a>=224 ||
+   (a===100&&b>=64&&b<=127) || (a===169&&b===254) ||
+   (a===172&&b>=16&&b<=31) ||
+   (a===192&&(b===0||b===168||(b===88&&c===99)||(b===0&&c===2))) ||
+   (a===198&&(b===18||b===19||(b===51&&c===100))) ||
+   (a===203&&b===0&&c===113));
+ }
+ if(kind===6){
+  const s=address.toLowerCase();
+  if(s.includes('.')||s.startsWith('::ffff:'))return false;
+  const first=Number.parseInt(s.split(':')[0],16);
+  // Global-unicast only, except known special and documentation prefixes.
+  return first>=0x2000&&first<=0x3fff &&
+    !s.startsWith('2001:db8:') && !s.startsWith('2001:0:');
+ }
+ return false;
+}
+async function publicAddresses(hostname){
+ if(net.isIP(hostname))throw new AdoptionError('IP-literal HTTPS MCP endpoints are disabled');
+ let ips;
+ try{ips=await dns.lookup(hostname,{all:true});}
+ catch{throw new AdoptionError('MCP DNS lookup failed',502);}
+ if(!ips.length||ips.some(x=>!isPublicMcpAddress(x.address)))
+  throw new AdoptionError('MCP endpoint resolves to a restricted IP');
+ return ips;
+}
+export async function checkEndpoint(url){
+ let u;try{u=new URL(url);}catch{throw new AdoptionError('Invalid MCP endpoint URL');}
+ if(u.username||u.password||u.hash||u.search)throw new AdoptionError('Credentials/fragments in endpoint are forbidden');
  if(u.protocol==='http:' && !['127.0.0.1','localhost','[::1]'].includes(u.hostname))throw new AdoptionError('HTTP only permitted for loopback');
  if(u.protocol!=='https:'&&u.protocol!=='http:')throw new AdoptionError('MCP endpoint must use HTTPS');
- if(u.protocol==='https:'){
-  const ips=await dns.lookup(u.hostname,{all:true});if(!ips.length||ips.some(x=>PRIVATE.test(x.address)))throw new AdoptionError('MCP endpoint resolves to a restricted IP');
- }return u;
+ if(u.protocol==='https:')await publicAddresses(u.hostname);
+ return u;
+}
+// HTTPS resolution is repeated at the *moment of the actual request* and
+// the validated IP is pinned to the socket's lookup callback. TLS SNI and
+// certificate validation still use the original public hostname. Redirects
+// are rejected, and no proxy is implicitly trusted.
+async function pinnedPublicHttpsPost(url,headers,requestBody){
+ const addresses=await publicAddresses(url.hostname);
+ const selected=addresses.find(x=>x.family===4)||addresses[0];
+ return await new Promise((resolve,reject)=>{
+  let settled=false;
+  const fail=(message,status=502)=>{if(settled)return;settled=true;reject(new AdoptionError(message,status));};
+  const req=https.request(url,{
+   method:'POST',headers,servername:url.hostname,
+   timeout:10000,maxHeaderSize:8192,
+   lookup:(hostname,options,callback)=>callback(null,selected.address,selected.family)
+  },response=>{
+   if(settled){response.resume();return;}
+   const status=response.statusCode||0;
+   if(status<200||status>=300){
+    response.resume();return fail(`MCP endpoint returned ${status}`,502);
+   }
+   settled=true;
+   resolve({
+    ok:true,status,
+    headers:{get(key){const v=response.headers[String(key).toLowerCase()];return Array.isArray(v)?v[0]??null:v??null;}},
+    body:response
+   });
+  });
+  req.once('error',()=>fail('Pinned MCP HTTPS request failed'));
+  req.once('timeout',()=>req.destroy(new Error('Pinned MCP HTTPS timeout')));
+  req.end(requestBody);
+ });
 }
 function parseReply(text,contentType,expectedId){
  if(Buffer.byteLength(text,'utf8')>MAX_REPLY)throw new AdoptionError('MCP reply exceeds limit',502);
@@ -49,7 +116,17 @@ async function withHttp(endpoint,handler){
    'MCP-Protocol-Version':modern?'2026-07-28':'2025-11-25',
    ...(modern?{'Mcp-Method':method,...(method==='tools/call'?{'Mcp-Name':String(params.name||'')}:{})}:{}),
    ...(!modern&&session?{'mcp-session-id':session}:{})};
-  let r;try{r=await fetch(url,{method:'POST',headers,body:JSON.stringify(req),redirect:'error',signal:AbortSignal.timeout(10000)});}catch(e){throw new AdoptionError(`MCP endpoint unavailable: ${String(e.message||e).slice(0,150)}`,502);}
+  let r;
+  try{
+   const payload=JSON.stringify(req);
+   r=url.protocol==='https:'
+      ? await pinnedPublicHttpsPost(url,headers,payload)
+      : await fetch(url,{method:'POST',headers,body:payload,
+          redirect:'error',signal:AbortSignal.timeout(10000)});
+  }catch(e){
+   if(e instanceof AdoptionError)throw e;
+   throw new AdoptionError('MCP endpoint unavailable',502);
+  }
   if(!r.ok){const error=new AdoptionError(`MCP endpoint returned ${r.status}`,502);error.httpStatus=r.status;throw error;}
   if(!modern)session=r.headers.get('mcp-session-id')||session;
   if(notification)return null;

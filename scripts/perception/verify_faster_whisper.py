@@ -22,6 +22,12 @@ def check(label,fn):
     global checks
     fn();checks+=1;print('PASS',label)
 
+def _raises(expected,fn):
+    try:fn()
+    except expected:return True
+    return False
+
+
 def run():
     pcm=(b'\x01\x00'*16000)
     with tempfile.TemporaryDirectory(prefix='jarvis-faster-whisper-') as tmp:
@@ -69,7 +75,7 @@ def run():
             with mock.patch.dict(sys.modules,{'faster_whisper':fake_fw}):
                 result=backend.transcribe_pcm(pcm)
         check('Optional local faster-whisper backend transcribes bounded PCM',
-              lambda: (_ for _ in ()).throw(AssertionError(result)) if result!='local  transcript' else None)
+              lambda: (_ for _ in ()).throw(AssertionError(result)) if result!='local transcript' else None)
         check('Model loads by local path with hub downloads disabled',
               lambda: (_ for _ in ()).throw(AssertionError(captured)) if
                 captured['path']==str(model_dir.resolve()) and
@@ -82,6 +88,16 @@ def run():
                 captured['transcribe'].get('beam_size')==1 and
                 captured['transcribe'].get('vad_filter') is True and
                 captured['transcribe'].get('condition_on_previous_text') is False else None)
+        with mock.patch.dict(os.environ,env,clear=False):
+            check('Audio shorter than 0.1 seconds is rejected',
+                  lambda: (_ for _ in ()).throw(AssertionError())
+                  if not _raises(ValueError,lambda:backend._transcribe_faster_whisper(bytes(1598))) else None)
+            check('Audio longer than 12 seconds is rejected',
+                  lambda: (_ for _ in ()).throw(AssertionError())
+                  if not _raises(ValueError,lambda:backend._transcribe_faster_whisper(bytes(16000*12*2+2))) else None)
+            check('Odd-length PCM is rejected',
+                  lambda: (_ for _ in ()).throw(AssertionError())
+                  if not _raises(ValueError,lambda:backend._transcribe_faster_whisper(bytes(32001))) else None)
         with mock.patch.dict(os.environ,env,clear=False):
             check('Runtime reports the selected engine honestly',
                   lambda: (_ for _ in ()).throw(AssertionError()) if

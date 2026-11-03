@@ -54,11 +54,38 @@ The importer always pins the source commit, checks bounded UTF-8 metadata, prese
 
 OmniParser is disabled by default. To use it, an owner must separately install/run a **local compatible** `POST /parse` service that wraps their legitimate, appropriately licensed OmniParser model, with a bearer token, loopback-only bind, and a JSON response containing `parsed_content_list`. The caller uses the hard-coded address `127.0.0.1`, bounded port, bounded screenshot and response sizes, and a short timeout. Set `JARVIS_OMNIPARSER_ENABLED=1`, `JARVIS_SCREEN_WATCH_ENABLED=1`, `JARVIS_EXPERIMENTAL_DESKTOP_CONTROL=1`, a private `JARVIS_OMNIPARSER_PORT`, and a 32+ character `JARVIS_OMNIPARSER_TOKEN` only on the isolated owner Windows test PC. Do not run it in an untrusted environment. Detector output is advice only; it never yields a Guardian authority or a clickable element ID.
 
+## November 3 continuation — runnable runtime additions
+
+- Added `windows-companion/omniparser_server.py`, a **real optional
+  localhost HTTP model driver** that loads the pinned official
+  `util.omniparser.Omniparser` from a separately installed, revision-checked
+  Microsoft source checkout. It uses the official v2 detector/Florence config.
+  Strong bearer authentication, bounding, fixed loopback binding, serialized
+  requests, no screenshot logs, and a PNG-only request contract are enforced.
+  This is a model *driver*, not an agent authority. Official model weights are
+  **not bundled** and were **not loaded** here.
+- Added a focused `verify_omniparser_loopback_offline.py` test against the
+  actual HTTP handler with stub inference (8 request/denial assertions, including PNG dimension rejection, in a
+  local equivalent harness; live model not tested). See
+  `OMNIPARSER_LOCAL_RUNTIME.md` for owner Windows installation/flags.
+- Local owner memory search now asks Prisma to filter owner-scoped, non-deleted
+  matching records **before** taking the 500-row ranking window. The API
+  explicitly labels potentially truncated searches; it does not imply
+  exhaustive semantic/vector matching. A route fixture covers old records
+  outside the original 500-newest window.
+- One local, Windows-native acceptance script
+  `scripts/verify-external-integrations-local.ps1` runs changed offline gates
+  without GitHub Actions and records `NOT_RUN` for the live PC/model/Guardian
+  and Minecraft gates.
+
+**No change to the safety boundary:** JARVIS Core and Guardian stay sole
+authority, and no completion proof is inferred from test fixtures.
+
 ## What remains NOT VERIFIED / NOT COMPLETE
 
 - Real Windows node/python sidecar, installed dependencies, TypeScript production build, model access, encrypted credential storage and authorizations on the owner PC.
 - Live browser navigation or memory DB integration with changed APIs.
-- OmniParser model weights/server: not bundled; this is an adapter, not a full model deployment.
+- OmniParser official weights are not bundled; a local pinned-source model driver is now included but has not been installed on Windows or run with real model weights. This is not full model deployment.
 - Full OpenHands autonomous software-engineering runtime, complete LangGraph state-engine, Browser Use's agent, Mem0 backend, and OpenClaw gateway are **not installed**: the selected capabilities above are intentionally smaller, which preserves JARVIS's sole-Core design.
 - Extended Minecraft unknown-seed live gameplay and Dragon/Netherite end-to-end Java LAN acceptance remain blocked. This integration work provides no evidence of Minecraft victory.
 

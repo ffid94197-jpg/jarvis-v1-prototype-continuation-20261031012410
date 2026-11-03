@@ -46,8 +46,21 @@ export async function GET(req: NextRequest) {
   if (query !== null && kind !== "memory") return deny(400,"Search is available for owner memory records only.");
   try {
     if (kind === "memory") {
+      // Search within the owner's records in the DB before the bounded
+      // ranking window. Searching only the 500 newest memories could
+      // silently miss an older, directly relevant record.
+      const terms = query === null ? [] : Array.from(new Set(
+        query.toLocaleLowerCase("en-US").match(/[a-z0-9_]+/g) ?? []
+      )).slice(0,8);
+      if (query !== null && !terms.length)
+        return Response.json({kind,records:[],searchApplied:true,
+          searchTruncated:false,retrievalSource:"owner_local_records"},
+          {headers:{"Cache-Control":"no-store"}});
       const rows = await db.jarvisMemory.findMany({
-        where: { principalId: a.principalId, deletedAt: null },
+        where: { principalId: a.principalId, deletedAt: null,
+          ...(query === null ? {} : {OR:terms.flatMap(term=>[
+            {key:{contains:term}},{content:{contains:term}}
+          ])}) },
         orderBy: { updatedAt: "desc" }, take: query === null ? limit : 500,
         select: { id: true, key: true, content: true, dataClass: true, source: true,
           version: true, createdAt: true, updatedAt: true },
@@ -56,6 +69,7 @@ export async function GET(req: NextRequest) {
       // No automatic model context injection, embeddings or cloud export.
       return Response.json({ kind, records: query === null ? rows :
         rankOwnerMemoryRows(rows,query,limit), searchApplied:query !== null,
+        searchTruncated:query !== null && rows.length === 500,
         retrievalSource:"owner_local_records" },
         { headers: { "Cache-Control": "no-store" } });
     }

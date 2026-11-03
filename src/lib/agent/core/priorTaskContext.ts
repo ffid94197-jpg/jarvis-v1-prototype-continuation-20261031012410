@@ -9,14 +9,15 @@ const REFERENCE = /\b(?:previous|prior|earlier|original|last)\b.{0,85}\b(?:task|
 // Short continuation commands ("complete it fully", "do the remaining",
 // "continue") are cross-task references, not self-contained new objectives.
 const FOLLOW_UP_REFERENCE =
- /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:(?:do|complete|finish)\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task)\b|(?:continue|resume|keep\s+going|carry\s+on)\b)/i;
+ /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+|(?:hey\s+)?jarvis[,!:\s]+)?(?:(?:do|complete|finish)\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task)\b|(?:continue|resume|keep\s+going|carry\s+on)\b)/i;
 const TOPIC = /\b(?:jarvis|prototype|autonomy|windows|computer|agent|inventory|spreadsheet|report|document|minecraft|website|video|photo|image|app|code|budget|invoice|resume|email|file)\b/gi;
 export function needsPriorTaskContext(objective: string): boolean {
  return typeof objective === "string" && objective.length < 5000 && (REFERENCE.test(objective) || FOLLOW_UP_REFERENCE.test(objective.trim()));
 }
 export function selectPriorTask(objective: string, tasks: PriorTaskSnapshot[]): PriorTaskSnapshot | null {
  if(!needsPriorTaskContext(objective) || !Array.isArray(tasks)) return null;
- const topics = new Set((objective.toLowerCase().match(TOPIC) || []).map(x=>x.toLowerCase()));
+ const topicText = objective.trim().replace(/^(?:hey\s+)?jarvis[,!:\s]+/i, '');
+ const topics = new Set((topicText.toLowerCase().match(TOPIC) || []).map(x=>x.toLowerCase()));
  const matches=tasks.slice(0,20).filter(t=>{
   if(!t || typeof t.id!=="string" || typeof t.objective!=="string" || !t.objective.trim())return false;
   const prev=(t.objective.toLowerCase().match(TOPIC)||[]).map(x=>x.toLowerCase());

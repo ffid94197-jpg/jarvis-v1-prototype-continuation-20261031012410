@@ -81,6 +81,9 @@ function check(value, label) {
 
   const guest = api.createWindowsSandboxGuestScript();
   check(guest.includes("'--offline', '--cache'") && guest.includes("'ci'"), 'dependency install is offline');
+  check(guest.includes("'--include=dev'") && guest.includes("$env:NODE_ENV = 'development'") &&
+    guest.indexOf("$env:NODE_ENV = 'production'") > guest.indexOf("'ci', '--include=dev'"),
+    'development dependencies installed before production build environment');
   check(guest.includes("'run', 'build'"), 'only declared npm build script executed');
   check(guest.includes('Get-TreeStats') && guest.includes('2147483648'), 'guest worktree size/file quota enforced');
   check(guest.includes('Stop-Tree') && guest.includes('shutdown.exe'), 'guest process tree and VM shutdown handled');

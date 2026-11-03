@@ -22,7 +22,7 @@ const VERIFY_TOOLS = new Set(["windows_native_verify"]);
 const PROVEN_FLAGS = ["textVerifiedByUIA", "focusVerified", "playbackConfirmed", "uiEffectVerified"];
 
 export function desktopObjectiveRequiresActions(objective: string): boolean {
-  const trimmed = objective.trim();
+  const trimmed = objective.trim().replace(/^(?:please\\s+|(?:hey\\s+)?jarvis[,!:\\s]+)+/i, '');
   if (/^(what|why|how|explain|describe|tell me about)\b/i.test(trimmed) ||
       /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:explain|describe|tell me how|show me how|teach me how|walk me through|give me instructions|tell me about)\b/i.test(trimmed)) return false;
   const desktopAction = /\b(open|launch|click|press|type|write in|scroll|navigate|play|watch|find|focus|search for|interact with|join)\b[\s\S]{0,110}\b(windows|desktop|screen|pc|chrome|browser|settings|notepad|youtube|minecraft|app|window|game|file explorer)\b/i.test(trimmed) ||

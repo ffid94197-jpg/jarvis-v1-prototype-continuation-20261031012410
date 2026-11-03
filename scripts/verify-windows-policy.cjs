@@ -93,7 +93,7 @@ assert(!decide('windows_delete_all_files',{}).ok,'unknown tool denied');
 
 // Cua Driver element clicks must be bound to one exact observed window and
 // retain the existing explicit desktop-control opt-in.
-const cuaDecide = make({...base,JARVIS_EXPERIMENTAL_DESKTOP_CONTROL:'1'});
+const cuaDecide = make({...base,JARVIS_EXPERIMENTAL_DESKTOP_CONTROL:'1',JARVIS_CUA_DRIVER_ENABLED:'1'});
 const cuaElementArgs = {
   pid:4242,cuaWindowId:'987654321',elementToken:'s0000002a:3',button:'left',
 };
@@ -111,6 +111,8 @@ for (const bad of [
 ]) assert(!cuaDecide('windows_desktop_click',bad).ok,'malformed CUA element target denied');
 assert(!make(base)('windows_desktop_click',cuaElementArgs).ok,
   'CUA element click still requires experimental desktop-control opt-in');
+assert(!make({...base,JARVIS_EXPERIMENTAL_DESKTOP_CONTROL:'1'})('windows_desktop_click',cuaElementArgs).ok,
+  'CUA element click requires explicit CUA backend opt-in');
 assert(cuaDecide('windows_desktop_click',{x:200,y:150,button:'left'}).ok,
   'legacy coordinate click remains supported with CUA opt-in');
 

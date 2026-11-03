@@ -2,7 +2,10 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 const root=path.join(__dirname,'..');
-const code=ts.transpileModule(fs.readFileSync(path.join(root,'src/lib/agent/windows/policy.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const compiled=ts.transpileModule(fs.readFileSync(path.join(root,'src/lib/agent/windows/policy.ts'),'utf8'),{reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
+const errors=(compiled.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
+assert.equal(errors.length,0,'Windows Guardian TypeScript must parse without syntax errors');
+const code=compiled.outputText;
 const outputs={};
 vm.runInNewContext(code,{exports:outputs,URL,process:{platform:'win32',env:{JARVIS_WINDOWS_AGENT_ENABLED:'1',JARVIS_LOCAL_DEV_NO_LOGIN:'1',JARVIS_LOCAL_DEV_BIND:'127.0.0.1',JARVIS_WINDOWS_COMPANION_TOKEN:'a'.repeat(64),JARVIS_MINECRAFT_LAN_ENABLED:'1'},cwd:()=>root},require});
 const validate=outputs.validateDesktopTool;let ok=0;

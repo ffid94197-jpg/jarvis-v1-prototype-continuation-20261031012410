@@ -213,9 +213,10 @@ class CuaDriverOfflineTests(unittest.TestCase):
                 self.__dict__.update(kwargs)
 
         old_module = sys.modules.get("cua_driver")
-        sys.modules["cua_driver"] = SimpleNamespace(
-            ListWindowsInput=Input, GetWindowStateInput=Input
-        )
+        fake_module = type(sys)("cua_driver")
+        fake_module.ListWindowsInput = Input
+        fake_module.GetWindowStateInput = Input
+        sys.modules["cua_driver"] = fake_module
         try:
             backend = CuaDriverBackend()
             backend._driver = FakeDriver()

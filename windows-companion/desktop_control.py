@@ -38,7 +38,16 @@ def is_enabled():
 def check_input(op):
     if not isinstance(op,dict): return 'Invalid desktop request.'
     name=op.get('operation')
-    if name in ('desktop_state','desktop_windows','desktop_observe'): return None
+    if name in ('desktop_state','desktop_windows'): return None
+    if name == 'desktop_observe':
+        if 'pid' in op or 'cuaWindowId' in op:
+            if (os.environ.get('JARVIS_CUA_DRIVER_ENABLED') != '1' or
+                type(op.get('pid')) is not int or not 0 < op['pid'] < 2**32 or
+                not isinstance(op.get('cuaWindowId'), str) or
+                not re.fullmatch(r'[1-9][0-9]{0,19}', op['cuaWindowId']) or
+                not 0 < int(op['cuaWindowId']) < 2**64):
+                return 'Invalid exact-window CUA observation target.'
+        return None
     if name=='desktop_focus':
         return None if isinstance(op.get('windowId'),str) and re.fullmatch(r'[a-f0-9]{24}',op['windowId']) else 'Use a fresh windowId.'
     if name == 'desktop_click' and 'elementToken' in op:

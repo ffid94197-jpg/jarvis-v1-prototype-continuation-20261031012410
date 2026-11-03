@@ -127,6 +127,7 @@ const ACTIONABLE = [
   'can you write this to a file?',
   'could you please save this on disk?',
   'can you write me a poem and share it?',
+  'hey jarvis, can you write me a poem and share it?',
 ];
 for (const objective of ACTIONABLE) {
   const r = classifyRequestIntent(objective);
@@ -136,6 +137,8 @@ for (const objective of ACTIONABLE) {
 ok(requiresExternalActionEvidence('write me a poem') === false, 'plain poem drafting does not require external-effect proof');
 ok(requiresExternalActionEvidence('can you write me a poem?') === false, 'polite plain drafting does not require external-effect proof');
 ok(requiresExternalActionEvidence('hey jarvis, write me a poem') === false, 'wake-name plain drafting does not require external-effect proof');
+ok(requiresExternalActionEvidence('hey jarvis, can you write me a poem?') === false, 'wake-name polite plain drafting does not require external-effect proof');
+ok(requiresExternalActionEvidence('hey jarvis, can you write me a poem and share it?') === true, 'wake-name sharing still requires independent effect proof');
 ok(requiresExternalActionEvidence('can you write me a poem and share it?') === true, 'sharing a draft requires independent effect proof');
 ok(requiresExternalActionEvidence('can you write this to a file?') === true, 'writing to a file requires independent effect proof');
 ok(requiresExternalActionEvidence('can you send this email?') === true, 'sending a message requires independent effect proof');
@@ -228,6 +231,7 @@ const CONVERSATIONAL = [
   'can you explain how to create a folder?',
   'can you tell me how to open chrome?',
   'hey jarvis, write me a poem',
+  'hey jarvis, can you write me a poem?',
   'hey jarvis, can you tell me how to open chrome?',
   'write me a poem',
   'can you write me a poem?',

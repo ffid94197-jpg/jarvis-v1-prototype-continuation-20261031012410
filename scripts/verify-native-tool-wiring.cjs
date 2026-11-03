@@ -20,7 +20,7 @@ const grounded=gate('windows_native_inspect',{query:'Save'});
 check(grounded.ok && grounded.prepared.query==='Save','UFO2 read-only control query stays in native Guardian contract');
 check(!permit('windows_native_inspect',{query:' '}) &&
       !permit('windows_native_inspect',{query:'x'.repeat(161)}) &&
-      !permit('windows_native_inspect',{query:'Save\\nsecret'}),
+      !permit('windows_native_inspect',{query:'Save'+String.fromCharCode(10)+'secret'}),
       'Empty, oversized, and control-character UIA query denied');
 check(!permit('windows_native_inspect',{query:'Save',shell:'cmd'}),
       'No alternate unapproved effect parameters may accompany UIA query');

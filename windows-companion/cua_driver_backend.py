@@ -220,7 +220,7 @@ class CuaDriverBackend:
         listed = await self._driver.list_windows(
             ListWindowsInput(pid=None, on_screen_only=True)
         )
-        windows = list(getattr(listed, "windows", None) or [])[:6]
+        windows = list(getattr(listed, "windows", None) or [])[:5]
         records: list[dict[str, Any]] = []
         controls: list[dict[str, Any]] = []
         self._tokens.clear()
@@ -256,18 +256,18 @@ class CuaDriverBackend:
                 truncated = bool(getattr(state, "truncated", False))
                 complete = getattr(state, "elements_complete", None)
                 tokens_usable = not degraded and not truncated and complete is True
-                elements = list(getattr(state, "elements", None) or [])[:12]
+                elements = list(getattr(state, "elements", None) or [])[:10]
                 local_controls = []
                 for element in elements:
                     item = _element_record(element, pid, window_id, tokens_usable)
                     local_controls.append(item)
                     token = item.get("elementToken")
-                    if token and len(controls) < 40:
+                    if token and len(controls) < 30:
                         self._tokens[token] = (pid, window_id, time.monotonic() + 25)
                 controls.extend(local_controls)
                 record.update({
                     "snapshotId": getattr(state, "snapshot_id", None),
-                    "treeMarkdown": str(getattr(state, "tree_markdown", "") or "")[:1800],
+                    "treeMarkdown": str(getattr(state, "tree_markdown", "") or "")[:900],
                     "elementCount": getattr(state, "element_count", None),
                     "elementsComplete": complete,
                     "degraded": degraded,
@@ -283,9 +283,9 @@ class CuaDriverBackend:
         return {
             "source": "Cua Driver accessibility snapshots",
             "visibleWindows": records,
-            "foregroundControls": controls[:40],
+            "foregroundControls": controls[:30],
             "windowCount": len(records),
-            "controlCount": min(len(controls), 40),
+            "controlCount": min(len(controls), 30),
             "note": (
                 "Element tokens are exact-window and snapshot scoped. Use the token, pid and "
                 "cuaWindowId from the same row. Any new observation invalidates old tokens. "

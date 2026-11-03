@@ -354,6 +354,9 @@ async function locateRuntime(): Promise<{
 export async function prepareLocalProjectBuild(
   args: Record<string, unknown>,
 ): Promise<LocalProjectBuildDecision> {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return { ok: false, reason: "local_project_build requires a JSON object" };
+  }
   if (Object.keys(args).some((key) => key !== "project")) {
     return { ok: false, reason: "local_project_build accepts only a workspace-relative project path" };
   }

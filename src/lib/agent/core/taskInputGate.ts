@@ -12,8 +12,8 @@ export function prepareTaskObjective(input:unknown):PreparedObjective{
     message:"Task too large; no truncation or execution",inventoryRows:0};
  const source=parseInventorySource(objective);
  const inventoryRows=source?.rows.length??0;
- const deliverables=/\b(?:inventory|stock)\b/i.test(objective)
-  &&/\b(?:csv|spreadsheet)\b/i.test(objective)
+ const deliverables=/(?:^|[^A-Za-z0-9])(?:inventory|stock)(?=$|[^A-Za-z0-9])/i.test(objective)
+  &&/(?:\b(?:csv|spreadsheet)\b|\.csv\b)/i.test(objective)
   &&/(?:\b(?:report|summary)\b|[_-](?:report|summary)\.(?:txt|md)\b)/i.test(objective);
  const original=/\boriginal\s+(?:inventory|product)\s+(?:data|list)\b/i.test(objective);
  if(deliverables&&original&&!source&&!needsPriorTaskContext(objective))

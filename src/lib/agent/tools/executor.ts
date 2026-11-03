@@ -285,10 +285,11 @@ export async function executeTool(
         // Prisma enforces BOTH authenticated owner isolation and explicit
         // cloud-approved classification before records reach a model.
         const candidates=await db.jarvisMemory.findMany({
-          where:{principalId:ownerId,deletedAt:null,dataClass:"CLOUD_APPROVED",
-            OR:terms.flatMap(term=>[
-              {key:{contains:term}},{content:{contains:term}}
-            ])},
+          // SQLite LIKE/contains is not reliably Unicode case-folded.
+          // Fetch only a bounded same-owner/approved slice, then rank in JS.
+          // This keeps the database boundary private and multilingual recall
+          // independent of SQLite's ASCII-only case folding.
+          where:{principalId:ownerId,deletedAt:null,dataClass:"CLOUD_APPROVED"},
           orderBy:{updatedAt:"desc"},take:500,
           select:{key:true,content:true,source:true,version:true,updatedAt:true},
         });
@@ -320,12 +321,10 @@ export async function executeTool(
       try {
         const now=new Date();
         const candidates=await db.jarvisWorldObservation.findMany({
+          // Filter owner and temporal validity in SQLite first; lexical
+          // Unicode/case-fold ranking happens on this bounded local slice.
           where:{principalId:ownerId,retractedAt:null,
-            AND:[{OR:[{expiresAt:null},{expiresAt:{gt:now}}]}],
-            OR:terms.flatMap(term=>[
-              {subject:{contains:term}},{predicate:{contains:term}},
-              {value:{contains:term}}
-            ])},
+            AND:[{OR:[{expiresAt:null},{expiresAt:{gt:now}}]}]},
           orderBy:{observedAt:"desc"},take:500,
           select:{subject:true,predicate:true,value:true,source:true,
             provenance:true,confidence:true,observedAt:true,expiresAt:true},

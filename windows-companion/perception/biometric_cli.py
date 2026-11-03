@@ -150,6 +150,11 @@ def _faster_whisper_model(model_path,device,compute_type,cpu_threads):
         raise RuntimeError('FASTER_WHISPER_MODEL_MISSING: Configure a local CTranslate2 model directory.')
     if not (model/'config.json').is_file():
         raise RuntimeError('FASTER_WHISPER_MODEL_INVALID: Local model config is missing.')
+    # faster-whisper may otherwise fall back to Tokenizer.from_pretrained()
+    # when tokenizer.json is absent. That fallback is not covered by
+    # local_files_only in the local-directory loading path.
+    if not (model/'tokenizer.json').is_file():
+        raise RuntimeError('FASTER_WHISPER_TOKENIZER_MISSING: Local tokenizer.json is required; remote tokenizer fallback is disabled.')
     from faster_whisper import WhisperModel
     return WhisperModel(str(model),device=device,compute_type=compute_type,
                         cpu_threads=cpu_threads,num_workers=1,
@@ -190,7 +195,10 @@ def _transcribe_faster_whisper(pcm):
         word_timestamps=False,
     )
     # The generator is consumed here, inside the request's bounded input scope.
-    return ' '.join(str(segment.text) for segment in segments).strip()[:1500]
+    # Normalize segment whitespace so provider-specific leading/trailing
+    # spaces cannot create doubled gaps in the final transcript.
+    return ' '.join(' '.join(str(segment.text).split())
+                    for segment in segments if str(segment.text).strip()).strip()[:1500]
 
 
 def transcribe_pcm(pcm):

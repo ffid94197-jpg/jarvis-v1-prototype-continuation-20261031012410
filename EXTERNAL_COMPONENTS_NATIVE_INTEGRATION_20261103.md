@@ -207,3 +207,33 @@ runner. No test run or live owner-PC/model acceptance is claimed in this branch.
   owner/expiry/retraction/context-only world recall, and the faster-whisper
   adapter. They are included in the Windows-local acceptance runner; they
   have not been run on the owner's PC or against real models/Prisma.
+
+## November 3 acceptance-hardening follow-on
+
+- SQLite `contains` matching is not a reliable Unicode case-folding layer.
+  Owner memory and temporal World Model recall now retrieve only a bounded
+  500-row same-owner slice (with deleted/private and expired/retracted
+  filtering enforced in Prisma), then apply Unicode NFKC/case-fold ranking in
+  the local executor. Results remain capped at five and no other owner's rows
+  are fetched. The test fixture asserts the owner/classification/temporal
+  predicates and the 500-row bound, including Tamil query examples.
+- Corrected faster-whisper's segment join to normalize provider-specific
+  whitespace and added tests for the 0.1–12 second PCM bounds and odd byte
+  lengths. The Python/CTranslate2 wheel compatibility check is documented;
+  do not alter the existing Windows Companion Python environment if no
+  compatible wheel exists.
+- Source-level verification performed in this continuation: the actual
+  TypeScript ranking implementation passed isolated phrase/key, recency,
+  Unicode and stopword checks; changed JavaScript test files passed syntax
+  parsing; source wiring for Guardian/executor/opt-in and local runner was
+  inspected. These checks do **not** substitute for executing the Windows
+  acceptance runner or real Prisma/model inference.
+
+- Closed an upstream faster-whisper offline fallback: if a local CTranslate2
+  folder omits `tokenizer.json`, the library can call
+  `Tokenizer.from_pretrained("openai/whisper-tiny")`; the model's
+  `local_files_only=True` flag does not guard that local-directory tokenizer
+  fallback. The JARVIS loader now requires `tokenizer.json` before importing
+  the optional runtime and has a regression fixture for the missing-tokenizer
+  case. The exact upstream behavior is visible in the official
+  [faster-whisper constructor](https://github.com/SYSTRAN/faster-whisper/blob/v1.2.1/faster_whisper/transcribe.py).

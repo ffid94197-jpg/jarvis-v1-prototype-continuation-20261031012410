@@ -61,3 +61,26 @@ The new tools still require `JARVIS_WINDOWS_AGENT_ENABLED=1`, local-dev session 
 - `windows_native_action` invokes/focuses inspected controls or sets bounded text with exact UIA readback when supported. For complex tasks, inspect again after any navigation and verify external effects.
 
 These new tools require the same explicit local desktop-control flag and existing Guardian/audit pipeline. UIA may not expose custom game GUIs, protected desktops or certain Chrome content. Mouse/keyboard + the continuous screen-vision loop remain available as fallbacks. Real laptop tests are mandatory.
+
+## Native coding edit — November 3, 2026
+
+The OpenHands-inspired source-edit slice now exposes `edit_file` as a
+first-class **JARVIS Core + Guardian** tool, not as a separate agent.
+
+- `read_file` returns `sha256` only for a *full untruncated* file read.
+- `edit_file` accepts `path`, `expectedSha256`, `oldText` and `newText`.
+- Guardian requires a workspace-relative path, audited authorization, a full
+  64-character lowercase SHA-256 and fragments of at most 1500 UTF-8 bytes.
+- The executor requires an existing regular UTF-8 file, a digest match, and
+  exactly one occurrence of `oldText`; it stages into a same-directory
+  temporary file, rechecks the source digest before rename, and verifies
+  the result by reading back the file.
+- Every call is durably admitted before file modification; crash-interrupted
+  edits are conservatively `EFFECT_UNKNOWN` and **never automatically retried**.
+- No new shell, repository-wide permissions, external OpenHands executor,
+  GitHub Actions dependency or full coding-agent certification.
+- Focused regression command: `node scripts/verify-native-code-edit.cjs`.
+
+**Important:** the rename is not a cross-process filesystem transaction.
+Changes by uncooperative external writers can still race; real Windows,
+permissions, file-locking, model and release behavior remain unverified.

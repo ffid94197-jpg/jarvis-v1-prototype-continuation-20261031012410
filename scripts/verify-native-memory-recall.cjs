@@ -137,7 +137,7 @@ const before=process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED;
    for(const input of [
      {query:'office door',ownerId:'owner-B'},
      {query:'office door',limit:6},
-     {query:'office\\ndoor'}
+     {query:'office\ndoor'}
    ]) assert.equal((await guardian.authorizeToolCall(
      {taskId:'t',ownerId:'owner-A'},'world_recall',input)).verdict,'deny');
  });

@@ -271,15 +271,81 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:"Minecraft action requires an approved input and duration 100–1500ms."};
     return {ok:true,prepared:{operation:"minecraft_input",action:args.action,durationMs:args.durationMs as number}};
   }
+  // Declarative Minecraft goals share JARVIS's existing Guardian boundary.
+  // The companion independently revalidates. This grants NO raw code/tool authority.
+  const validMinecraftGoal=(r:Record<string,unknown>,step=false):boolean=>{
+    if(!r || typeof r!=="object" || Array.isArray(r) || typeof r.goal!=="string")return false;
+    const fixed=new Set(["survive","wood","tools","explore","follow","guard","stone_age","iron_age",
+      "dragon_run","netherite_dragon_run","dragon_then_netherite_run","companion"]);
+    const params:Record<string,string[]>={
+      gather:["resource","targetCount"],travel:["destination","arrivalRange"],
+      craft:["item","targetCount"],equip:["item","destinationSlot"],
+      build:["position","block","axis","length"],
+      farm_wheat:["position","width","depth","targetCount"],sequence:["steps"]
+    };
+    const g=r.goal,extra=fixed.has(g)?[]:params[g];
+    if(!extra || (step && (g==="sequence" || (fixed.has(g)&&!["tools","stone_age","iron_age"].includes(g)))))
+      return false;
+    const permitted=["goal",...(step?[]:["command","durationSeconds"]),...extra];
+    if(Object.keys(r).some(k=>!permitted.includes(k)))return false;
+    if((step && r.command!==undefined)||(!step && r.command!=="auto_goal"))return false;
+    const integer=(v:unknown,min:number,max:number)=>
+      typeof v==="number" && Number.isInteger(v) && v>=min && v<=max;
+    const at=(v:unknown)=>!!v && typeof v==="object" && !Array.isArray(v) &&
+      Object.keys(v as Record<string,unknown>).length===3 &&
+      ["x","y","z"].every(k=>integer((v as Record<string,unknown>)[k],-30000000,30000000));
+    if(!step && r.durationSeconds!==undefined && !integer(r.durationSeconds,10,43200))return false;
+    if(fixed.has(g))return true;
+    if(g==="gather")return ["logs","planks","sticks","cobblestone","raw_iron","iron_ingot",
+      "diamond","obsidian","flint","netherrack"].includes(String(r.resource))&&integer(r.targetCount,1,64);
+    if(g==="travel")return at(r.destination)&&integer(r.arrivalRange,1,8);
+    if(g==="craft")return ["stick","crafting_table","chest","furnace","ladder","bread","shield","torch"]
+      .includes(String(r.item))&&integer(r.targetCount,1,16);
+    if(g==="equip"){
+      const slots:Record<string,string[]>={
+        hand:["wooden_pickaxe","stone_pickaxe","iron_pickaxe","diamond_pickaxe","netherite_pickaxe",
+          "wooden_sword","stone_sword","iron_sword","diamond_sword","netherite_sword","bow","crossbow","trident","shield","torch"],
+        head:["leather_helmet","iron_helmet","golden_helmet","diamond_helmet","netherite_helmet","turtle_helmet"],
+        torso:["leather_chestplate","iron_chestplate","golden_chestplate","diamond_chestplate","netherite_chestplate","elytra"],
+        legs:["leather_leggings","iron_leggings","golden_leggings","diamond_leggings","netherite_leggings"],
+        feet:["leather_boots","iron_boots","golden_boots","diamond_boots","netherite_boots"],
+        "off-hand":["shield","torch","totem_of_undying"]
+      };
+      return typeof r.destinationSlot==="string" && (slots[r.destinationSlot]||[]).includes(String(r.item));
+    }
+    if(g==="build"){
+      if(!at(r.position)||!integer(r.length,1,8)||
+          !["x+","x-","z+","z-"].includes(String(r.axis))||
+          !["cobblestone","dirt","oak_planks","spruce_planks","birch_planks","stone_bricks","netherrack"].includes(String(r.block)))
+        return false;
+      const p=r.position as {x:number;y:number;z:number};
+      const n=r.length as number;
+      const dx=r.axis==="x+"?1:r.axis==="x-"?-1:0;
+      const dz=r.axis==="z+"?1:r.axis==="z-"?-1:0;
+      return integer(p.y,-62,318)&&Math.abs(p.x+dx*(n-1))<=29999984&&Math.abs(p.z+dz*(n-1))<=29999984;
+    }
+    if(g==="farm_wheat"){
+      if(!at(r.position)||!integer(r.width,1,4)||!integer(r.depth,1,4)||!integer(r.targetCount,1,16))return false;
+      const p=r.position as {x:number;y:number;z:number};
+      return integer(p.y,-62,319)&&p.x>=-29999984&&p.z>=-29999984&&
+        p.x+(r.width as number)-1<=29999984&&p.z+(r.depth as number)-1<=29999984;
+    }
+    if(g==="sequence")return !step && Array.isArray(r.steps)&&r.steps.length>=1&&r.steps.length<=8&&
+      r.steps.every(x=>validMinecraftGoal(x as Record<string,unknown>,true));
+    return false;
+  };
   if (tool === "minecraft_companion_command") {
     if (process.env.JARVIS_MINECRAFT_LAN_ENABLED !== "1") return {ok:false,reason:"Enable Minecraft LAN companion."};
     const command=String(args.command||"");
     const allowed=["follow","stop","jump","move","look","status","come","stay","guard","collect_wood","inventory","say","observe","auto_goal","auto_status","auto_stop",
-      "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block","interact_entity","use_item"];
+      "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block","interact_entity","use_item","natural_goal","auto_checkpoint","auto_resume"];
     if (!allowed.includes(command)) return {ok:false,reason:"Unknown Minecraft companion command."};
-    if (command === "auto_goal" && (!['survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','netherite_dragon_run','companion'].includes(String(args.goal)) ||
-        (args.durationSeconds !== undefined && (!Number.isInteger(args.durationSeconds) || (args.durationSeconds as number) < 10 || (args.durationSeconds as number) > 43200))))
-      return {ok:false,reason:'Unsupported Minecraft goal or duration outside 10–43200 seconds.'};
+    if (command==="auto_goal" && !validMinecraftGoal(args))
+      return {ok:false,reason:"Minecraft goal failed bounded Guardian validation; no effect authorized."};
+    if(command==="natural_goal" && (typeof args.text!=="string" || args.text.trim().length===0 ||
+        args.text.length>600 || /[\x00-\x1f\x7f]/.test(args.text) ||
+        Object.keys(args).some(k=>!["command","text"].includes(k))))
+      return {ok:false,reason:"Minecraft language instruction invalid (1–600 printable characters, no extra fields)."};
     if (command === "move" && (!['forward','back','left','right'].includes(String(args.directionInput)) ||
         !Number.isInteger(args.durationMs) || (args.durationMs as number) < 100 || (args.durationMs as number) > 3000))
       return {ok:false,reason:"Minecraft movement requires direction and 100–3000 ms duration."};
@@ -307,7 +373,14 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     const prepared:DesktopPrepared={operation:'minecraft_command',command};
     if(command==='say')prepared.text=args.text as string;
     if(command==='move'){prepared.directionInput=args.directionInput as string;prepared.durationMs=args.durationMs as number;}
-    if(command==='auto_goal'){prepared.goal=args.goal as string;if(args.durationSeconds!==undefined)prepared.durationSeconds=args.durationSeconds as number;}
+    if(command==='auto_goal'){
+      prepared.goal=args.goal as string;
+      if(args.durationSeconds!==undefined)prepared.durationSeconds=args.durationSeconds as number;
+      const fields=["resource","targetCount","destination","arrivalRange","steps","position","block","axis",
+        "length","width","depth","item","destinationSlot"];
+      for(const key of fields)if(args[key]!==undefined)(prepared as unknown as Record<string,unknown>)[key]=args[key];
+    }
+    if(command==='natural_goal')prepared.text=args.text as string;
     if(['navigate','dig_block','inspect_block','interact_block'].includes(command))prepared.position=args.position as {x:number;y:number;z:number};
     if(command==='navigate'&&args.range!==undefined)prepared.range=args.range as number;
     if(['equip_item','craft_item','place_block'].includes(command))prepared.item=args.item as string;

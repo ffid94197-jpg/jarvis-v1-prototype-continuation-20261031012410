@@ -66,7 +66,7 @@ async function run() {
  });
  await check('Ambiguous find refuses unintended edits',async()=>{
    const x=await edits.editWorkspaceTextFile({...prepared,
-    expectedSha256:digest('const answer = 42;\n'),oldText:'2',newText:'3'});
+    expectedSha256:digest('const answer = 42;\n'),oldText:' ',newText:'_'});
    assert.equal(x.ok,false);
    assert.equal(await fsp.readFile(file,'utf8'),'const answer = 42;\n');
  });

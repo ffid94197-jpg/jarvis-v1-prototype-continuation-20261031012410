@@ -276,18 +276,26 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         x:args.x as number,y:args.y as number,
         ...(tool === "windows_desktop_click" ? {button:args.button as "left"|"right"|"double"}: {})}};
     }
+    const hasCuaWindowTarget = args.pid !== undefined || args.cuaWindowId !== undefined;
+    if (hasCuaWindowTarget && (process.env.JARVIS_CUA_DRIVER_ENABLED !== "1" ||
+        !Number.isInteger(args.pid) || (args.pid as number) <= 0 || (args.pid as number) >= 2**32 ||
+        typeof args.cuaWindowId !== "string" || !/^[0-9]{1,20}$/.test(args.cuaWindowId) ||
+        BigInt(args.cuaWindowId) <= 0n || BigInt(args.cuaWindowId) > 18446744073709551615n))
+      return {ok:false,reason:"Exact-window input requires a fresh PID and cuaWindowId from the latest CUA observation."};
     if (tool === "windows_desktop_type") {
       if (typeof args.text !== "string" || args.text.length < 1 || args.text.length > 400 ||
-          /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(args.text))
+          /[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/.test(args.text))
         return {ok:false,reason:"Text must be 1–400 characters without control bytes."};
-      return {ok:true,prepared:{operation:"desktop_type",text:args.text}};
+      return {ok:true,prepared:{operation:"desktop_type",text:args.text,
+        ...(hasCuaWindowTarget ? {pid:args.pid as number,cuaWindowId:args.cuaWindowId as string}:{})}};
     }
     if (tool === "windows_desktop_keys") {
       const allowed = new Set(["enter","esc","tab","space","backspace","delete","up","down","left","right","home","end","ctrl","alt","shift","win","a","c","v","x","s","f","r","t","w","d","e","n","p","z","y","f4"]);
       if (!Array.isArray(args.keys) || args.keys.length < 1 || args.keys.length > 4 ||
           !args.keys.every(k => typeof k === "string" && allowed.has(k)))
         return {ok:false,reason:"Use 1–4 documented keys; no arbitrary key scan codes."};
-      return {ok:true,prepared:{operation:"desktop_keys",keys:args.keys as string[]}};
+      return {ok:true,prepared:{operation:"desktop_keys",keys:args.keys as string[],
+        ...(hasCuaWindowTarget ? {pid:args.pid as number,cuaWindowId:args.cuaWindowId as string}:{})}};
     }
     if (tool === "windows_desktop_scroll") {
       if (!Number.isInteger(args.amount) || Math.abs(args.amount as number) > 5 || args.amount === 0)

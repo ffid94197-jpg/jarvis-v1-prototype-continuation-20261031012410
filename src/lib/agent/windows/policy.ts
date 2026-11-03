@@ -228,7 +228,16 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         return {ok:false,reason:"UI expectation must contain 2–160 printable characters."};
       return {ok:true,prepared:{operation:"native_verify",[key]:value}};
     }
-    if (tool === "windows_desktop_observe") return {ok:true,prepared:{operation:"desktop_observe"}};
+    if (tool === "windows_desktop_observe") {
+      const hasTarget = args.pid !== undefined || args.cuaWindowId !== undefined;
+      if (hasTarget && (process.env.JARVIS_CUA_DRIVER_ENABLED !== "1" ||
+          !Number.isInteger(args.pid) || (args.pid as number) <= 0 || (args.pid as number) >= 2**32 ||
+          typeof args.cuaWindowId !== "string" || !/^[1-9][0-9]{0,19}$/.test(args.cuaWindowId) ||
+          (args.cuaWindowId.length === 20 && args.cuaWindowId > "18446744073709551615")))
+        return {ok:false,reason:"Exact-window observation requires a fresh PID and cuaWindowId from the latest CUA window list."};
+      return {ok:true,prepared:{operation:"desktop_observe",
+        ...(hasTarget ? {pid:args.pid as number,cuaWindowId:args.cuaWindowId as string}:{})}};
+    }
     if (tool === "windows_native_action") {
       if (typeof args.elementId !== "string" || !/^[a-f0-9]{24}$/.test(args.elementId) ||
           !["invoke","focus","set_text"].includes(String(args.action)))

@@ -15,6 +15,7 @@ from cua_driver_backend import (
     _valid_element_target,
     _window_record,
 )
+from desktop_control import check_input
 
 
 class CuaDriverOfflineTests(unittest.TestCase):
@@ -75,6 +76,31 @@ class CuaDriverOfflineTests(unittest.TestCase):
             summary="refused", evidence=[], hint=None,
         )
         self.assertFalse(_action_record(result)["ok"])
+
+    def test_guardian_companion_accepts_only_fresh_target_shape(self):
+        old = os.environ.get("JARVIS_CUA_DRIVER_ENABLED")
+        try:
+            os.environ["JARVIS_CUA_DRIVER_ENABLED"] = "1"
+            valid = {
+                "operation": "desktop_click", "pid": 42,
+                "cuaWindowId": "9001", "elementToken": "s00000001:2",
+                "button": "left",
+            }
+            self.assertIsNone(check_input(valid))
+            for key, value in (
+                ("pid", True), ("pid", -1), ("cuaWindowId", "../9001"),
+                ("elementToken", "stale token"),
+            ):
+                invalid = dict(valid)
+                invalid[key] = value
+                self.assertIsNotNone(check_input(invalid), (key, value))
+            os.environ["JARVIS_CUA_DRIVER_ENABLED"] = "0"
+            self.assertIsNotNone(check_input(valid))
+        finally:
+            if old is None:
+                os.environ.pop("JARVIS_CUA_DRIVER_ENABLED", None)
+            else:
+                os.environ["JARVIS_CUA_DRIVER_ENABLED"] = old
 
     def test_backend_requires_both_explicit_opt_ins(self):
         backend = CuaDriverBackend()

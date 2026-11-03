@@ -21,7 +21,7 @@
 | OpenHands Software Agent SDK | HYBRID — partial | MIT redaction adaptation, Guardian-audited `edit_file`, digest/readback and effect journal. | Not the full SDK, Agent Server, terminal runtime or autonomous coding agent. A full coding workflow still needs safe test execution and live project validation. |
 | Browser Use | HYBRID — partial | Playwright-controlled browser and bounded inspected-element/page-token grounding. | Not Browser Use agent or arbitrary semantic selector/click generation; real browser acceptance pending. |
 | Microsoft OmniParser | WRAP — partial | Pinned source model driver, local loopback adapter, bounded read-only hints. | Official detector/Florence weights, dependencies, real inference and Windows performance are not installed/verified. |
-| Mem0 | HYBRID — partial | Existing owner-scoped database, privacy classifications, lexical search and opt-in model recall. | Not full Mem0 service/vector/embedding/automatic-memory pipeline; retrieval benchmark and real Prisma acceptance pending. |
+| Mem0 | HYBRID — native bounded recall | Existing owner-scoped SQLite store, LOCAL_PRIVATE/CLOUD_APPROVED classification, explicit opt-in, bounded 500-row owner slice and deterministic lexical ranking. | Not full Mem0 service/vector/embedding/automatic-memory pipeline; live Prisma and retrieval benchmark acceptance pending. |
 | OpenClaw | HYBRID — partial | Pinned read-only skill staging for selected official skills; owner approval required; MCP tools subordinate to Guardian. | No OpenClaw gateway, CLI, independent runtime or shell authority. |
 
 ## B. Earlier agent and Minecraft research
@@ -52,16 +52,16 @@
 
 ## D. Memory and knowledge harvest
 
-| Candidate | Decision | Native use / reason |
-|---|---|---|
-| Mem0 | HYBRID — partial | Existing owner-only store, explicit LOCAL_PRIVATE/CLOUD_APPROVED classification and opt-in recall. |
-| PropMem / MemEval | HYBRID — partial native patterns | Atomic facts/provenance and a deterministic lexical retrieval benchmark are represented by JARVIS's existing owner store, temporal World Model, and new multi-signal ranking. | Full proposition extraction and benchmark corpus still pending; no second memory database. |
-| Graphiti | HYBRID — native temporal recall merged in branch | JARVIS world observations have subject-predicate-value, provenance, confidence, observed/expiry/retraction timestamps; new owner-consented `world_recall` filters expired/retracted rows before ranking. | No Graphiti graph database/runtime; real Prisma acceptance pending. |
-| Letta | REFERENCE-ONLY | Study memory reflection/sleep; no autonomous promotion of private or model-inferred facts into owner memory. |
-| SimpleMem family | HYBRID | Borrow bounded multi-signal retrieval/ranking; embeddings and consolidation require benchmark and explicit privacy handling. |
-| Hindsight | REFERENCE-ONLY | Study episodic/semantic reflection and temporal retrieval; do not create a parallel memory authority/store. |
-| pgvector | DEFER | Existing deployment uses current Prisma database; Postgres migration and vector quality must be justified by a Jarvis-task benchmark. |
-| Qdrant | REJECT for current V1 | Another database is not justified until pgvector/current DB retrieval demonstrably fails a reproducible benchmark. |
+| Candidate | Decision | Native use | Remaining gap / acceptance |
+|---|---|---|---|
+| Mem0 | HYBRID — native bounded recall | Existing owner-scoped SQLite store, LOCAL_PRIVATE/CLOUD_APPROVED classification, explicit opt-in, bounded 500-row owner slice and deterministic lexical ranking. | Not full Mem0 service/vector/embedding/automatic-memory pipeline; live Prisma and retrieval benchmark acceptance pending. |
+| PropMem / MemEval | HYBRID — partial native patterns | Atomic facts/provenance and deterministic multi-signal ranking are represented by the existing owner store and temporal World Model. | Full proposition extraction and a larger benchmark corpus remain open; no second memory database. |
+| Graphiti | HYBRID — native temporal recall merged to main | Existing observations retain subject/predicate/value, provenance, confidence and observed/expiry/retraction timestamps. Owner-consented `world_recall` filters owner, expiry and retraction in SQLite before bounded Unicode/case-fold ranking. | No Graphiti graph database/runtime; live Prisma acceptance pending. |
+| Letta | REFERENCE-ONLY | Study memory reflection/sleep patterns. | No autonomous promotion of private or model-inferred facts into owner memory. |
+| SimpleMem family | HYBRID | Bounded multi-signal retrieval/ranking patterns are adapted. | Embeddings and consolidation require a privacy review and a measurable retrieval benchmark. |
+| Hindsight | REFERENCE-ONLY | Study episodic/semantic reflection and temporal retrieval. | Do not create a parallel memory authority/store. |
+| pgvector | DEFER | Existing deployment uses SQLite and Prisma. | Postgres migration and vector quality must be justified by a JARVIS-task benchmark. |
+| Qdrant | REJECT for current V1 | No second vector database is justified today. | Reconsider only if the current DB and a justified pgvector path fail a reproducible benchmark. |
 
 ## E. Windows, visual computer use and browser
 
@@ -96,7 +96,7 @@
 |---|---|---|
 | Piper `jarvis-high.onnx` | KEEP | Owner-selected British English local TTS; do not replace it. |
 | Vosk | KEEP / fallback | Existing offline STT backend. |
-| faster-whisper | HYBRID — native adapter merged in this branch | Optional local-only STT backend; explicit local model path, no hub downloads, bounded PCM, Vosk remains default. | Optional package/model weights and Windows/CUDA quality/latency acceptance still pending. |
+| faster-whisper | HYBRID — native adapter merged to main | Optional local-only STT backend; explicit local model path, no hub downloads, bounded PCM and normalized transcript output; Vosk remains default. | Compatible CTranslate2 wheel, optional package/model weights, real Windows inference and quality/latency acceptance pending. |
 | whisper.cpp | REFERENCE-ONLY | Alternative local Whisper runtime; avoid installing a third STT engine before comparative benchmark. |
 | Pipecat | REFERENCE-ONLY | Realtime pipeline patterns; current local browser/sidecar voice path is sufficient for V1. |
 | LiveKit | DEFER | Remote/mobile realtime transport only when that product scope is activated. |
@@ -116,11 +116,11 @@
 
 ## Current closure priorities
 
-1. Add the optional faster-whisper backend while keeping Vosk as default and Piper unchanged.
-2. Strengthen Mem0/PropMem/SimpleMem-inspired lexical retrieval using deterministic ranking and a small golden retrieval benchmark; the native ranking and temporal World Model recall are now implemented, while the full benchmark corpus remains open.
-3. Run the existing Windows-local integration acceptance command on the owner PC; install no models automatically.
-4. After real PC acceptance, decide whether NeMo/Prompt Guard, OPA, sandboxing, OTel, vector search or remote realtime transport earns a measured integration.
-5. Do not import full external agent runtimes simply to make the matrix look complete.
+1. Run the Windows-local integration acceptance runner on the owner PC and repair any concrete failures; no GitHub Actions jobs are needed.
+2. If faster-whisper is desired, verify a compatible CTranslate2 wheel first, provision an approved local model and compare accuracy/latency against Vosk. Piper remains unchanged.
+3. Build a larger deterministic memory retrieval benchmark and verify the actual Prisma path on Windows.
+4. Only after measured need, evaluate NeMo/Prompt Guard, OPA, sandboxing, OTel, vector search or remote realtime transport.
+5. Keep full upstream agent runtimes out of the execution path unless a concrete gap justifies them.
 
 ## Completion vocabulary
 

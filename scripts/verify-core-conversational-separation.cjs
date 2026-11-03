@@ -84,7 +84,8 @@ function load(rel) {
 const { classifyRequestIntent, isConversationalRequest } = load('src/lib/agent/core/requestIntent.ts');
 const { enforceJarvisIdentity, PLANNER_SYSTEM_PROMPT, JARVIS_IDENTITY_CONTRACT } = load('src/lib/agent/core/prompts.ts');
 const { desktopObjectiveRequiresActions } = load('src/lib/agent/core/autonomyGate.ts');
-const { requiresExternalActionEvidence } = load('src/lib/agent/core/goalPlanner.ts');
+const { requiresExternalActionEvidence, requiresGoalPlan } = load('src/lib/agent/core/goalPlanner.ts');
+const { needsPriorTaskContext, selectPriorTask, priorTaskContext } = load('src/lib/agent/core/priorTaskContext.ts');
 
 // ——— 1. ACTIONABLE requests must require real execution evidence ————————————
 // The first nine were measured as reaching a zero-step "conversational" =>
@@ -126,6 +127,39 @@ for (const objective of ACTIONABLE) {
   const r = classifyRequestIntent(objective);
   ok(r.kind === 'actionable', `actionable: ${JSON.stringify(objective)}`, `got ${r.kind} (${r.reason})`);
 }
+
+// Concise follow-ups must recover the prior owner task and use the long-horizon
+// planner instead of being settled as casual conversation.
+console.log('\n── concise continuation requests recover prior work ──');
+const FOLLOW_UPS = [
+  'complete it fully', 'finish it', 'do it', 'do the remaining',
+  'can you complete it?', 'can you do it?', 'can you help me complete it?',
+  'could you please finish this?'
+];
+for (const objective of FOLLOW_UPS) {
+  ok(classifyRequestIntent(objective).kind === 'actionable',
+    `continuation is actionable: ${JSON.stringify(objective)}`);
+  ok(requiresExternalActionEvidence(objective),
+    `continuation requires independent evidence: ${JSON.stringify(objective)}`);
+  ok(requiresGoalPlan(objective),
+    `continuation enters long-horizon planning: ${JSON.stringify(objective)}`);
+  ok(needsPriorTaskContext(objective),
+    `continuation loads prior owner task context: ${JSON.stringify(objective)}`);
+}
+const priorCandidates = [
+  { id: 'latest-jarvis', objective: 'Complete the JARVIS prototype autonomous core and Windows acceptance.' },
+  { id: 'older-writing', objective: 'Write a short poem about the rain.' }
+];
+ok(selectPriorTask('complete it fully', priorCandidates)?.id === 'latest-jarvis',
+  'unqualified completion follow-up resolves to the newest owner task');
+ok(selectPriorTask('complete the Minecraft work', [
+  { id: 'unrelated', objective: 'Prepare a spreadsheet report.' },
+  { id: 'minecraft', objective: 'Defeat the Ender Dragon and equip full Netherite.' }
+])?.id === 'minecraft', 'topic-specific continuation resolves to the matching owner task');
+ok(priorTaskContext('complete it fully', priorCandidates).includes('UNTRUSTED DATA'),
+  'recovered task text remains explicitly untrusted and cannot authorize actions');
+ok(needsPriorTaskContext('how do I open Chrome?') === false,
+  'educational how-to question does not hydrate a previous task');
 
 // BIDIRECTIONAL PROOF that this test is load-bearing. The legacy guard was a
 // denylist: for the objectives below BOTH legacy classifiers return false, so
@@ -170,6 +204,8 @@ const CONVERSATIONAL = [
   'do you know how to make a cake?',
   'can you explain how to create a folder?',
   'can you tell me how to open chrome?',
+  'can you show me how to create a folder?',
+  'could you please explain how to open chrome?',
   'how are you', 'what do you think about automation', 'tell me a joke',
   'bye', 'good night',
 ];

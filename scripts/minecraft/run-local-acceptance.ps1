@@ -30,6 +30,13 @@ if (-not (Test-Path (Join-Path $bot 'bot.cjs'))) {
 }
 $node = Get-Command 'node.exe' -ErrorAction SilentlyContinue
 if (-not $node) { throw 'Install Node.js 22+ and ensure node.exe is on PATH.' }
+$nodeVersion = & $node.Source --version
+if ($LASTEXITCODE -ne 0 -or $nodeVersion -notmatch '^v(\d+)\.') {
+    throw "Could not determine Node.js version: $nodeVersion"
+}
+if ([int]$Matches[1] -lt 22) {
+    throw "Node.js 22 or newer is required; found $nodeVersion"
+}
 
 if ($Mode -notin @('Offline','Code')) {
     $hostOk = $HostAddress -eq 'localhost'

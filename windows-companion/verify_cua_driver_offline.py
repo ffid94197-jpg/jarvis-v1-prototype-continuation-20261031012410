@@ -1,6 +1,7 @@
 """Offline contract tests; these do not require Windows or the Cua SDK."""
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import unittest
@@ -162,6 +163,79 @@ class CuaDriverOfflineTests(unittest.TestCase):
                 os.environ.pop("JARVIS_CUA_DRIVER_ENABLED", None)
             else:
                 os.environ["JARVIS_CUA_DRIVER_ENABLED"] = old
+
+    def test_observation_snapshots_exactly_one_window_and_expires_old_tokens(self):
+        from cua_driver_backend import CuaDriverBackend
+
+        class FakeDriver:
+            def __init__(self):
+                self.windows = [
+                    SimpleNamespace(
+                        pid=41, window_id=401, title="Background", app_name="app.exe",
+                        bounds=SimpleNamespace(x=0, y=0, width=500, height=400),
+                        is_on_screen=True, minimized=False, z_index=2,
+                    ),
+                    SimpleNamespace(
+                        pid=42, window_id=402, title="Foreground", app_name="editor.exe",
+                        bounds=SimpleNamespace(x=10, y=20, width=800, height=600),
+                        is_on_screen=True, minimized=False, z_index=1,
+                    ),
+                ]
+                self.snapshots = 0
+                self.observed = []
+
+            async def list_windows(self, request):
+                return SimpleNamespace(windows=self.windows)
+
+            async def get_window_state(self, request):
+                self.snapshots += 1
+                self.observed.append((request.pid, request.window_id))
+                token = f"s{self.snapshots:08x}:3"
+                element = SimpleNamespace(
+                    element_index=3, role="button", depth=1, label="Save",
+                    value="", value_description="", enabled=True, selected=False,
+                    in_web_content=False, actions=["press"],
+                    frame=SimpleNamespace(x=10, y=20, width=40, height=20),
+                    element_token=token,
+                )
+                return SimpleNamespace(
+                    pid=request.pid, window_id=request.window_id,
+                    snapshot_id=f"s{self.snapshots:08x}", app_name="test",
+                    window_title="test", tree_markdown="must not be returned",
+                    elements=[element], element_count=1, total_element_count=1,
+                    elements_complete=True, degraded=False, degraded_reason=None,
+                    truncated=False, truncation_reason=None, screenshot_width=800,
+                    screenshot_height=600, window_bounds=None,
+                )
+
+        class Input:
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+
+        old_module = sys.modules.get("cua_driver")
+        sys.modules["cua_driver"] = SimpleNamespace(
+            ListWindowsInput=Input, GetWindowStateInput=Input
+        )
+        try:
+            backend = CuaDriverBackend()
+            backend._driver = FakeDriver()
+            first = asyncio.run(backend._observe({"_foregroundTitle": "Foreground"}))
+            first_token = first["foregroundControls"][0]["elementToken"]
+            self.assertEqual(first["observedWindow"]["pid"], 42)
+            self.assertEqual(backend._driver.snapshots, 1)
+            self.assertIn(first_token, backend._tokens)
+            self.assertNotIn("treeMarkdown", first["observedWindow"])
+            self.assertNotIn("value", first["foregroundControls"][0])
+
+            second = asyncio.run(backend._observe({"pid": 41, "cuaWindowId": "401"}))
+            self.assertEqual(second["observedWindow"]["pid"], 41)
+            self.assertEqual(backend._driver.snapshots, 2)
+            self.assertNotIn(first_token, backend._tokens)
+        finally:
+            if old_module is None:
+                sys.modules.pop("cua_driver", None)
+            else:
+                sys.modules["cua_driver"] = old_module
 
     def test_backend_requires_both_explicit_opt_ins(self):
         backend = CuaDriverBackend()

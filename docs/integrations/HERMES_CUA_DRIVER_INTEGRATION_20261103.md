@@ -96,10 +96,14 @@ separately with windows_desktop_observe and a harmless test application.
 ## Model operating rules
 
 - Run windows_desktop_observe before selecting controls. It lists visible
-  windows and takes one accessibility snapshot of the current foreground
-  window. If the foreground window cannot be identified or is not present in
-  the bounded visible-window list, observation fails closed; it never silently
-  selects the first visible window.
+  windows and takes one accessibility snapshot of the exact current foreground
+  PID/HWND pair. Window-title matching is not used to choose the target, so
+  duplicate titles cannot redirect observation. If the exact foreground
+  identity is not present in the bounded visible-window list, observation
+  fails closed.
+- CUA coordinate clicks/moves are checked against the actual primary-display
+  width and height. Text and key input require the exact PID/window ID from a
+  fresh observation; implicit "whatever is foreground now" input is denied.
 - To inspect a different window, pass its PID and cuaWindowId from
   visibleWindows to windows_desktop_observe. The returned observedWindow then
   reports selectionReason "explicit-window". Only one window is snapshotted

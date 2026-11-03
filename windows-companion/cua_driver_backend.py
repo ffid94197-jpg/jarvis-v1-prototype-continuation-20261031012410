@@ -262,7 +262,7 @@ class CuaDriverBackend:
                     item = _element_record(element, pid, window_id, tokens_usable)
                     local_controls.append(item)
                     token = item.get("elementToken")
-                    if token:
+                    if token and len(controls) < 40:
                         self._tokens[token] = (pid, window_id, time.monotonic() + 25)
                 controls.extend(local_controls)
                 record.update({
@@ -433,6 +433,6 @@ def run_action(op: dict[str, Any]) -> dict[str, Any]:
     try:
         return _BACKEND.run_action(op)
     except CuaDriverOutcomeUnknown as exc:
-        return {"ok": False, "error": str(exc), "outcomeUnknown": True}
+        return {"ok": False, "error": str(exc), "evidence": {"outcomeUnknown": True}}
     except Exception as exc:
         return {"ok": False, "error": "Cua Driver operation failed safely: " + type(exc).__name__}

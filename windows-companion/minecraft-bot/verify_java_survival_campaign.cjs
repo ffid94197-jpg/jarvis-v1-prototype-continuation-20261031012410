@@ -285,6 +285,12 @@ function negatives(){
  assert.equal(w.world().heldNetheriteSword,false,'backpack sword is never held');
  c.record({kind:'verify_dragon'},{ok:true,verified:false,proof:'dragon_victory'});
  assert.notEqual(c.status().milestones.dragonKilled,true,'unverified game event cannot kill dragon');
+ c.record({kind:'exit_end'},{ok:true,verified:false,proof:'end_return'});
+ assert.notEqual(c.status().milestones.endReturned,true,
+  'unverified End-return claim cannot advance mission milestone');
+ c.record({kind:'exit_end'},{ok:true,verified:true,proof:'not_an_end_return'});
+ assert.notEqual(c.status().milestones.endReturned,true,
+  'verified unrelated effect cannot forge Overworld return milestone');
  assert.equal(validateCommand({command:'auto_goal',goal:GOAL,durationSeconds:43200}),null,'new goal command accepted');
  assert.notEqual(validateCommand({command:'auto_goal',goal:GOAL,durationSeconds:43201}),null,'unbounded mission rejected');
 }

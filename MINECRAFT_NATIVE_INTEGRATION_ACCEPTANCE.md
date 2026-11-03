@@ -27,6 +27,13 @@ node scripts/run-minecraft-native-gates.cjs
 ```
 This launches only project-local offline tests. It forces `MINECRAFT_LIVE_ACCEPTANCE=0`, and returns nonzero on any failed test. There is no GitHub Actions invocation.
 
+## Dragon-first + Netherite simulator regression (2026-11-03)
+- Reproduced an actual offline acceptance failure: the separate survival world model changed from End to Overworld but failed to return the explicit `end_return` receipt, causing JARVIS's strict controller to reject the completed step. **The strict controller was correct to reject unverified transition; the modeled action receipt was repaired.**
+- Reproduced a second failure after that correction: the test world combined worn armor and held sword into one boolean and did not expose the separate `heldNetheriteSword` field that the production planner requires. The simulation now models the real Mineflayer observation contract, keeping four worn armor slots and actively held sword separate.
+- Executed the production planner plus this independent, recipe-grounded world model in an isolated V8 harness using **1,000 seeded runs, 948,314 assertions and 269,390 modeled action ticks — all passed**. No actual Java server was contacted or Minecraft won.
+- Added the seed campaign test to the existing developer-PC offline test runner so future changes cannot omit this crucial Dragon/End-return/Netherite regression.
+- No code change weakens any real Dragon/Netherite acceptance criteria. An unverified or missing End return remains **NOT ACCEPTED**.
+
 ## Real-game strict final acceptance — NOT PASSED
 Only after the owner starts an approved compatible vanilla Java survival world on the test PC, with empty inventory, local LAN opt-in and no cheats, may the owner separately run:
 ```powershell

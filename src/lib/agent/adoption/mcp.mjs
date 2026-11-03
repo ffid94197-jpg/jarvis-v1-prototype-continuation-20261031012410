@@ -132,7 +132,7 @@ async function withHttp(endpoint,handler){
   if(notification)return null;
   let size=0;const chunks=[];for await(const part of r.body){size+=part.length;if(size>MAX_REPLY)throw new AdoptionError('MCP HTTP reply too large',502);chunks.push(part);}
   const body=Buffer.concat(chunks).toString('utf8');const parsed=parseReply(body,r.headers.get('content-type')||'',id);
-  if(parsed.error){const error=new AdoptionError(`MCP error: ${String(parsed.error.message||'unknown').slice(0,220)}`,502);error.rpcCode=parsed.error.code;throw error;}
+  if(parsed.error){const error=new AdoptionError('MCP server reported an error',502);error.rpcCode=parsed.error.code;throw error;}
   return parsed.result;
  }
  const modernRequest=(method,params={},notification=false)=>wire('modern',method,params,notification);
@@ -157,7 +157,7 @@ async function withStdio(command,args,cwd,handler){
   const timer=setTimeout(()=>abort(new AdoptionError('MCP stdio command timed out',504)),13000);
   child=spawn(command,args,{cwd,shell:false,windowsHide:true,env:{PATH:process.env.PATH||'',SYSTEMROOT:process.env.SYSTEMROOT||'',TEMP:process.env.TEMP||'',HOME:cwd,USERPROFILE:cwd,PYTHONIOENCODING:'utf-8'}});
   child.once('error',e=>abort(new AdoptionError(`MCP process unavailable: ${e.message}`,502)));
-  child.stdout.on('data',chunk=>{total+=chunk.length;if(total>MAX_REPLY)return abort(new AdoptionError('MCP stdout too large',502));buf+=chunk.toString('utf8');let idx;while((idx=buf.indexOf('\n'))>=0){const line=buf.slice(0,idx).trim();buf=buf.slice(idx+1);if(!line)continue;let j;try{j=JSON.parse(line);}catch{continue;}if(j.jsonrpc!=='2.0'||!pending.has(j.id))continue;const p=pending.get(j.id);pending.delete(j.id);if(j.error)p.reject(new AdoptionError('MCP server error: '+String(j.error.message||'unknown'),502));else p.resolve(j.result);}});
+  child.stdout.on('data',chunk=>{total+=chunk.length;if(total>MAX_REPLY)return abort(new AdoptionError('MCP stdout too large',502));buf+=chunk.toString('utf8');let idx;while((idx=buf.indexOf('\n'))>=0){const line=buf.slice(0,idx).trim();buf=buf.slice(idx+1);if(!line)continue;let j;try{j=JSON.parse(line);}catch{continue;}if(j.jsonrpc!=='2.0'||!pending.has(j.id))continue;const p=pending.get(j.id);pending.delete(j.id);if(j.error)p.reject(new AdoptionError('MCP server reported an error',502));else p.resolve(j.result);}});
   child.once('exit',()=>{if(!closed&&pending.size)abort(new AdoptionError('MCP stdio process exited before response',502));});
   const request=(method,params={},notification=false)=>new Promise((res,rej)=>{if(closed)return rej(new AdoptionError('MCP channel closed',502));const id=++seq;const message={jsonrpc:'2.0',...(notification?{}:{id}),method,params};if(!notification)pending.set(id,{resolve:res,reject:rej});child.stdin.write(JSON.stringify(message)+'\n',e=>{if(e)rej(e);else if(notification)res(null);});});
   (async()=>{const hello=await request('initialize',{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'jarvis-agent',version:'1.0'}});if(!hello?.serverInfo)throw new AdoptionError('MCP stdio handshake missing serverInfo',502);await request('notifications/initialized',{},true);return handler(request,hello);})().then(v=>{closed=true;clearTimeout(timer);child.kill();resolve(v);},e=>{clearTimeout(timer);abort(e);});

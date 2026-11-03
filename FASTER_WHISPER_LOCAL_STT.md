@@ -18,16 +18,30 @@ unchanged.
 
 ## Install (optional; no automatic install)
 
-Use the exact Python interpreter used by the Windows Companion. First check
-that the CTranslate2 dependency has a compatible wheel for the machine's
-Python version. The companion has other Windows UIA dependencies that may
+Use the exact Python interpreter used by the Windows Companion. The
+faster-whisper 1.2.1 package metadata requires Python >=3.9, but its universal
+wheel does **not** guarantee that the native CTranslate2 dependency has a
+compatible wheel for every newer Python/Windows combination. Check the actual
+dependency wheels before installing. The companion's UIA dependencies may
 require a different Python version; do not upgrade or replace that environment
 just for this optional backend.
 
 ```powershell
 python --version
-python -m pip install -r windows-companion/requirements-perception-advanced.txt
+$env:TEMP_FW = Join-Path $env:TEMP "jarvis-fw-wheelcheck"
+New-Item -ItemType Directory -Force $env:TEMP_FW | Out-Null
+python -m pip download --only-binary=:all: --dest $env:TEMP_FW faster-whisper==1.2.1
 ```
+
+If pip cannot find a compatible CTranslate2 wheel, stop and keep Vosk enabled.
+Do not force a native source build or change the Windows Companion Python
+environment. A separate Python sidecar would require a separately reviewed
+integration; it is not silently assumed by this adapter.
+
+For GPU execution, the upstream project documents cuBLAS for CUDA 12 and
+cuDNN 9 for CUDA 12. CPU INT8 is the conservative first acceptance target.
+GPU mode remains disabled until the exact CUDA/cuDNN stack is installed and
+tested on the actual machine.
 
 Place a converted CTranslate2 model in a local directory. The folder must
 contain at least `model.bin` and `config.json`; tokenizer/preprocessor files
@@ -53,7 +67,16 @@ path (0.1–12 seconds), bounds threads to 1–16, uses beam size 1 and VAD, and
 caps text to 1,500 characters. Transcripts are suggestions, not identity or
 authorization: wake/command text still follows the existing owner/session,
 review, Core and Guardian path. No transcription automatically executes a
-command. If the selected engine or model is unavailable, the request returns
+command.
+
+## Upstream compatibility references
+
+- [faster-whisper 1.2.1 on PyPI](https://pypi.org/project/faster-whisper/1.2.1/) — package metadata, Python requirement and MIT code license.
+- [Official faster-whisper README](https://github.com/SYSTRAN/faster-whisper#readme) — CTranslate2, CUDA 12/cuBLAS and cuDNN 9 requirements.
+
+A successful dependency wheel check is not a transcription acceptance. Real
+local model loading, accuracy, latency and Windows microphone input remain
+separate acceptance gates. If the selected engine or model is unavailable, the request returns
 an honest error; it does not silently change engines.
 
 Unset `JARVIS_STT_ENGINE` (or set it to `vosk`) to keep the current default.

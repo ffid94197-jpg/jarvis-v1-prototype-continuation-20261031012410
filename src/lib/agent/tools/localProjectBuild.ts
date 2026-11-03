@@ -28,7 +28,7 @@ const MAX_RUNTIME_BYTES = 128 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 512 * 1024 * 1024;
 const MAX_FILES = 50_000;
 const MAX_OUTPUT_FILES = 25_000;
-const MAX_RUN_MS = 22 * 60 * 1000;
+const MAX_RUN_MS = 27 * 60 * 1000;
 
 export interface LocalProjectBuildPrepared {
   projectAbs: string;
@@ -576,7 +576,7 @@ export async function executeLocalProjectBuild(
         break;
       }
       if (Date.now() - startedAt > MAX_RUN_MS) {
-        quotaFailure = "Windows Sandbox build exceeded the 22-minute deadline";
+        quotaFailure = "Windows Sandbox build exceeded the 27-minute deadline";
         await terminateSandbox(launchedChild);
         break;
       }

@@ -539,7 +539,9 @@ def validate_action(body):
                     return False
                 dx=(1 if axis=='x+' else -1 if axis=='x-' else 0)
                 dz=(1 if axis=='z+' else -1 if axis=='z-' else 0)
-                return -62 <= p['y'] <= 318 and abs(p['x']+dx*(n-1))<=29999984 and abs(p['z']+dz*(n-1))<=29999984
+                return (-62 <= p['y'] <= 318 and abs(p['x'])<=29999984 and
+                    abs(p['z'])<=29999984 and abs(p['x']+dx*(n-1))<=29999984 and
+                    abs(p['z']+dz*(n-1))<=29999984)
             if goal=='farm_wheat':
                 p=record.get('position')
                 w=record.get('width')

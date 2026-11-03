@@ -323,7 +323,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       const n=r.length as number;
       const dx=r.axis==="x+"?1:r.axis==="x-"?-1:0;
       const dz=r.axis==="z+"?1:r.axis==="z-"?-1:0;
-      return integer(p.y,-62,318)&&Math.abs(p.x+dx*(n-1))<=29999984&&Math.abs(p.z+dz*(n-1))<=29999984;
+      return integer(p.y,-62,318)&&Math.abs(p.x)<=29999984&&Math.abs(p.z)<=29999984&&
+        Math.abs(p.x+dx*(n-1))<=29999984&&Math.abs(p.z+dz*(n-1))<=29999984;
     }
     if(g==="farm_wheat"){
       if(!at(r.position)||!integer(r.width,1,4)||!integer(r.depth,1,4)||!integer(r.targetCount,1,16))return false;

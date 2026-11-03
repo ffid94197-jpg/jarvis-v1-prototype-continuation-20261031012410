@@ -28,6 +28,7 @@ function launch(owner,playerName='JarvisBuddy') {
   stdout:{write:x=>out.push(x)},stderr:{write:x=>lines.push(x)},on(){},exit(code){throw Error('EXIT_'+code)}};
  vm.runInNewContext(src,{
   require:n=>mocks[n]??orig(n),
+  __dirname:fs.mkdtempSync(path.join(require('node:os').tmpdir(),'jarvis-mc-owner-fixture-')),
   process:processFake,console,Buffer,
   setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},
  });

@@ -4,7 +4,13 @@
  * Mineflayer digest and optional loaded block positions.
  */
 const INTERESTING=/^(?:[a-z_]+_log|stone|cobblestone|deepslate|cobbled_deepslate|iron_ore|deepslate_iron_ore|diamond_ore|deepslate_diamond_ore|crafting_table|furnace|smithing_table|nether_portal|end_portal_frame)$/;
-const {diggableObserved,MINABLE_STONE}=require('./mining_navigation.cjs');
+const {diggableObserved,MINABLE_STONE,isExposed,stances}=require('./mining_navigation.cjs');
+const ORES=new Set(['iron_ore','deepslate_iron_ore','diamond_ore','deepslate_diamond_ore']);
+// Preserve completion-relevant items when the compact ACK must trim inventory.
+const CRITICAL_ITEMS=['cobblestone','diamond','iron_ingot','raw_iron','obsidian','flint',
+ 'netherrack','wooden_pickaxe','stone_pickaxe','iron_pickaxe','netherite_sword',
+ 'oak_log','spruce_log','birch_log','dark_oak_log','jungle_log','cherry_log'];
+const itemRank=new Map(CRITICAL_ITEMS.map((n,i)=>[n,i]));
 function loadedTargets(bot){
   if(typeof bot?.findBlocks!=='function'||typeof bot?.blockAt!=='function')return [];
   let coords=[];
@@ -14,14 +20,24 @@ function loadedTargets(bot){
   for(const x of coords){
     if(!x || ![x.x,x.y,x.z].every(Number.isFinite))continue;
     if(p && Math.max(Math.abs(x.x-p.x),Math.abs(x.y-p.y),Math.abs(x.z-p.z))>14)continue;
-    try{const b=bot.blockAt(x);if(b?.name&&INTERESTING.test(b.name) && (!MINABLE_STONE.has(b.name) || diggableObserved(bot,{x:Math.floor(x.x),y:Math.floor(x.y),z:Math.floor(x.z)},b)))arr.push({name:b.name,x:Math.floor(x.x),y:Math.floor(x.y),z:Math.floor(x.z)});}catch{}
+    try{const b=bot.blockAt(x);if(!b?.name||!INTERESTING.test(b.name))continue;
+      const target={x:Math.floor(x.x),y:Math.floor(x.y),z:Math.floor(x.z)};
+      // A buried ore in a loaded chunk is not an exposed mine target.
+      // Reporting it as actionable causes the LLM to dispatch doomed digs.
+      const accessible=MINABLE_STONE.has(b.name)?
+        diggableObserved(bot,target,b): ORES.has(b.name)?
+        isExposed(bot,target)&&stances(bot,target).length>0:true;
+      if(accessible)arr.push({name:b.name,...target});}catch{}
   }
   return arr.sort((a,b)=>Number(MINABLE_STONE.has(b.name))-Number(MINABLE_STONE.has(a.name))).slice(0,12);
 }
 function projectWorld(world,nearby=[],lastAction='',mode='stay'){
   if(!world || !world.position)throw Error('No observed Minecraft player position');
   const raw=world.inventory?.raw||{};
-  const ordered=Object.entries(raw).filter(([k,n])=>/^[a-z0-9_]{1,64}$/.test(k)&&Number.isFinite(n)&&n>0).slice(0,32);
+  const ordered=Object.entries(raw)
+    .filter(([k,n])=>/^[a-z0-9_]{1,64}$/.test(k)&&Number.isFinite(n)&&n>0)
+    .sort(([a],[b])=>(itemRank.get(a)??1000)-(itemRank.get(b)??1000))
+    .slice(0,32);
   const slim={
     joined:world.joined===true,position:world.position,dimension:world.dimension,
     busy:['collect_wood','navigate','dig_block','come','auto'].includes(mode),

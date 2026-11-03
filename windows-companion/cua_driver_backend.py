@@ -224,7 +224,9 @@ class CuaDriverBackend:
         listed = await self._driver.list_windows(
             ListWindowsInput(pid=None, on_screen_only=True)
         )
-        windows = list(getattr(listed, "windows", None) or [])[:5]
+        # Keep enough candidates to locate the actual foreground window, but
+        # bound the amount of native window metadata returned to the model.
+        windows = list(getattr(listed, "windows", None) or [])[:40]
         valid_windows = [
             window for window in windows
             if type(getattr(window, "pid", None)) is int
@@ -235,7 +237,6 @@ class CuaDriverBackend:
             raise ValueError("No visible Windows targets were found in the interactive session.")
 
         target_window = None
-        selection_reason = "first-visible-fallback"
         if "pid" in op or "cuaWindowId" in op:
             selection_reason = "explicit-window"
             pid = op.get("pid")
@@ -254,18 +255,24 @@ class CuaDriverBackend:
                 raise ValueError("The requested CUA window is no longer visible.")
         else:
             foreground_title = str(op.get("_foregroundTitle", "") or "").strip().casefold()
-            if foreground_title:
-                target_window = next(
-                    (
-                        window for window in valid_windows
-                        if str(getattr(window, "title", "") or "")[:100].strip().casefold()
-                        == foreground_title
-                    ),
-                    None,
+            if not foreground_title:
+                raise ValueError(
+                    "Foreground window could not be identified; select an exact visible window."
                 )
-                if target_window is not None:
-                    selection_reason = "foreground-title"
-            target_window = target_window or valid_windows[0]
+            target_window = next(
+                (
+                    window for window in valid_windows
+                    if str(getattr(window, "title", "") or "")[:100].strip().casefold()
+                    == foreground_title
+                ),
+                None,
+            )
+            if target_window is None:
+                raise ValueError(
+                    "The current foreground window is not in the visible CUA window list; "
+                    "select an exact visible window."
+                )
+            selection_reason = "foreground-title"
 
         pid = getattr(target_window, "pid", None)
         window_id = getattr(target_window, "window_id", None)

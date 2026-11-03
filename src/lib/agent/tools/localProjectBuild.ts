@@ -695,8 +695,8 @@ export async function executeLocalProjectBuild(
       detail: {
         runId,
         project: prepared.projectRel,
-        artifactPath: path.relative(WORKSPACE_ROOT, artifactRoot).replace(/\\/g, "/"),
-        receiptPath: path.relative(WORKSPACE_ROOT, path.join(runRoot, "build-receipt.json")).replace(/\\/g, "/"),
+        artifactPath: path.relative(workspaceReal, artifactRoot).replace(/\\/g, "/"),
+        receiptPath: path.relative(workspaceReal, path.join(runRoot, "build-receipt.json")).replace(/\\/g, "/"),
         artifactKind: kind,
         artifactFiles: artifact.files,
         artifactBytes: artifact.bytes,

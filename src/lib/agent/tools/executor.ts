@@ -306,6 +306,54 @@ export async function executeTool(
         return {ok:false,tool,evidence:"",error:"local memory retrieval unavailable"};
       }
     }
+    case "world_recall": {
+      if(!prepared.world || isCancelled() ||
+         process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED!=="1")
+        return {ok:false,tool,evidence:"",error:"owner-approved world recall unavailable"};
+      const {ownerId,query,limit}=prepared.world;
+      const terms=Array.from(new Set(query.normalize("NFKC").toLocaleLowerCase("en-US")
+        .match(/[\p{L}\p{N}_]+/gu)??[])).slice(0,8);
+      if(!terms.length)
+        return {ok:true,tool,evidence:"No matching active world observations",
+          detail:{records:[],searchTruncated:false,ownerOnly:true,authority:"context_only"}};
+      try {
+        const now=new Date();
+        const candidates=await db.jarvisWorldObservation.findMany({
+          where:{principalId:ownerId,retractedAt:null,
+            AND:[{OR:[{expiresAt:null},{expiresAt:{gt:now}}]}],
+            OR:terms.flatMap(term=>[
+              {subject:{contains:term}},{predicate:{contains:term}},
+              {value:{contains:term}}
+            ])},
+          orderBy:{observedAt:"desc"},take:500,
+          select:{subject:true,predicate:true,value:true,source:true,
+            provenance:true,confidence:true,observedAt:true,expiresAt:true},
+        });
+        if(isCancelled())return {ok:false,tool,evidence:"",error:"world recall cancelled"};
+        const ranked=rankOwnerMemoryRows(candidates.map(record=>({
+          key:record.subject+" "+record.predicate,
+          content:record.value,updatedAt:record.observedAt,record
+        })),query,limit);
+        const records=ranked.map(item=>({
+          subject:item.record.subject,predicate:item.record.predicate,
+          value:item.record.value,source:item.record.source,
+          provenance:item.record.provenance,confidence:item.record.confidence,
+          observedAt:item.record.observedAt instanceof Date
+            ? item.record.observedAt.toISOString():String(item.record.observedAt),
+          expiresAt:item.record.expiresAt instanceof Date
+            ? item.record.expiresAt.toISOString()
+            : item.record.expiresAt===null?null:String(item.record.expiresAt),
+          authority:"context_only",neverAuthorizesActions:true
+        }));
+        return {ok:true,tool,
+          evidence:`Recalled ${records.length} active owner-scoped world observations; context only`,
+          detail:{records,searchTruncated:candidates.length===500,
+            ownerOnly:true,activeOnly:true,temporal:true,
+            authority:"context_only",notAnAuthorizationSource:true}};
+      }catch{
+        return {ok:false,tool,evidence:"",error:"local world retrieval unavailable"};
+      }
+    }
     case "adoption_stage_github":
     case "adoption_list":
     case "adoption_skill":

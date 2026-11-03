@@ -22,6 +22,8 @@ ok(!L.canonicalIntent({command:'auto_goal',goal:'gather',resource:'logs',targetC
 ok(!L.canonicalIntent({command:'follow',attack:true}).ok,'command smuggling denied');
 ok(!L.canonicalIntent({command:'auto_goal',goal:'survive',resource:'logs'}).ok,'unrelated params denied');
 ok(!L.canonicalIntent({command:'auto_goal',goal:'sequence',steps:[{goal:'evil'}]}).ok,'invalid sequence denied');
+for(const goal of ['constructor','__proto__','toString','hasOwnProperty'])
+ ok(!L.canonicalIntent({command:'auto_goal',goal}).ok,'inherited JS key denied: '+goal);
 ok(L.strictFormat([{role:'assistant',content:'hi'},{role:'user',content:'mine'}])[0].role==='user','Mindcraft formatter');
 const env={JARVIS_MODEL_BACKEND:'ollama',JARVIS_OLLAMA_MODEL:'local-test'};
 (async()=>{

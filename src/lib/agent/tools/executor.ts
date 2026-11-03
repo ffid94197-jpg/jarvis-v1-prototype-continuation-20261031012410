@@ -10,6 +10,10 @@
  */
 
 import { execFile } from "child_process";
+import { createHash } from "node:crypto";
+import { editWorkspaceTextFile } from "./edit";
+import { db } from "@/lib/db";
+import { rankOwnerMemoryRows } from "../memory/contracts";
 import fs from "fs/promises";
 import {
   COMMAND_TIMEOUT_MS,
@@ -19,7 +23,6 @@ import {
 import type { GuardianDecision } from "../guardian/guardian";
 import { companionAction } from "../windows/bridge";
 import type { DesktopPrepared } from "../windows/policy";
-import { executeCIProjectBuild, type CIProjectPrepared } from "./ciProjectBuild";
 
 export interface ToolResult {
   ok: boolean;
@@ -90,14 +93,16 @@ async function toolReadFile(
         ok: true,
         tool: "read_file",
         evidence: `read ${buf.byteLength} bytes from ${prepared.relPath} (truncated to ${MAX_READ_BYTES})`,
-        detail: { path: prepared.relPath, size: buf.byteLength, content: head },
+        detail: { path: prepared.relPath, size: buf.byteLength, content: head,
+        truncated:true },
       };
     }
     return {
       ok: true,
       tool: "read_file",
       evidence: `read ${buf.byteLength} bytes from ${prepared.relPath}`,
-      detail: { path: prepared.relPath, size: buf.byteLength, content: buf.toString("utf8") },
+      detail: { path: prepared.relPath, size: buf.byteLength, content: buf.toString("utf8"),
+        sha256:createHash("sha256").update(buf).digest("hex"),truncated:false },
     };
   } catch (err) {
     return {
@@ -254,13 +259,101 @@ export async function executeTool(
     path?: string;
     relPath?: string;
     content?: string;
+    expectedSha256?: string;
+    oldText?: string;
+    newText?: string;
     command?: string;
     args?: string[];
     desktop?: DesktopPrepared;
-    projectBuild?: CIProjectPrepared;
     integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;arguments?:Record<string,unknown>};
+    memory?: {ownerId:string;query:string;limit:number};
+    world?: {ownerId:string;query:string;limit:number};
   };
   switch (tool) {
+    case "memory_recall": {
+      if(!prepared.memory || isCancelled() ||
+         process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED!=="1")
+        return {ok:false,tool,evidence:"",error:"owner-approved memory recall unavailable"};
+      const {ownerId,query,limit}=prepared.memory;
+      const terms=Array.from(new Set(query.normalize("NFKC")
+        .toLocaleLowerCase("en-US").match(/[\p{L}\p{N}_]+/gu)??[])).slice(0,8);
+      if(!terms.length)
+        return {ok:true,tool,evidence:"No matching owner-approved memories",
+          detail:{records:[],searchTruncated:false,ownerOnly:true}};
+      try {
+        // Even a manipulated planner cannot retrieve LOCAL_PRIVATE records.
+        // Prisma enforces BOTH authenticated owner isolation and explicit
+        // cloud-approved classification before records reach a model.
+        const candidates=await db.jarvisMemory.findMany({
+          // SQLite LIKE/contains is not reliably Unicode case-folded.
+          // Fetch only a bounded same-owner/approved slice, then rank in JS.
+          // This keeps the database boundary private and multilingual recall
+          // independent of SQLite's ASCII-only case folding.
+          where:{principalId:ownerId,deletedAt:null,dataClass:"CLOUD_APPROVED"},
+          orderBy:{updatedAt:"desc"},take:500,
+          select:{key:true,content:true,source:true,version:true,updatedAt:true},
+        });
+        if(isCancelled())return {ok:false,tool,evidence:"",error:"memory recall cancelled"};
+        const records=rankOwnerMemoryRows(candidates,query,limit).map(item=>({
+          key:item.key,content:item.content.slice(0,1200),
+          source:item.source,version:item.version,
+          userReportedNotVerified:true
+        }));
+        return {ok:true,tool,
+          evidence:`Recalled ${records.length} owner-approved memory records (not independent proof)`,
+          detail:{records,searchTruncated:candidates.length===500,
+            ownerOnly:true,classification:"CLOUD_APPROVED",
+            untrustedOwnerRecords:true}};
+      }catch{
+        return {ok:false,tool,evidence:"",error:"local memory retrieval unavailable"};
+      }
+    }
+    case "world_recall": {
+      if(!prepared.world || isCancelled() ||
+         process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED!=="1")
+        return {ok:false,tool,evidence:"",error:"owner-approved world recall unavailable"};
+      const {ownerId,query,limit}=prepared.world;
+      const terms=Array.from(new Set(query.normalize("NFKC").toLocaleLowerCase("en-US")
+        .match(/[\p{L}\p{N}_]+/gu)??[])).slice(0,8);
+      if(!terms.length)
+        return {ok:true,tool,evidence:"No matching active world observations",
+          detail:{records:[],searchTruncated:false,ownerOnly:true,authority:"context_only"}};
+      try {
+        const now=new Date();
+        const candidates=await db.jarvisWorldObservation.findMany({
+          // Filter owner and temporal validity in SQLite first; lexical
+          // Unicode/case-fold ranking happens on this bounded local slice.
+          where:{principalId:ownerId,retractedAt:null,
+            AND:[{OR:[{expiresAt:null},{expiresAt:{gt:now}}]}]},
+          orderBy:{observedAt:"desc"},take:500,
+          select:{subject:true,predicate:true,value:true,source:true,
+            provenance:true,confidence:true,observedAt:true,expiresAt:true},
+        });
+        if(isCancelled())return {ok:false,tool,evidence:"",error:"world recall cancelled"};
+        const ranked=rankOwnerMemoryRows(candidates.map(record=>({
+          key:record.subject+" "+record.predicate,
+          content:record.value,updatedAt:record.observedAt,record
+        })),query,limit);
+        const records=ranked.map(item=>({
+          subject:item.record.subject,predicate:item.record.predicate,
+          value:item.record.value,source:item.record.source,
+          provenance:item.record.provenance,confidence:item.record.confidence,
+          observedAt:item.record.observedAt instanceof Date
+            ? item.record.observedAt.toISOString():String(item.record.observedAt),
+          expiresAt:item.record.expiresAt instanceof Date
+            ? item.record.expiresAt.toISOString()
+            : item.record.expiresAt===null?null:String(item.record.expiresAt),
+          authority:"context_only",neverAuthorizesActions:true
+        }));
+        return {ok:true,tool,
+          evidence:`Recalled ${records.length} active owner-scoped world observations; context only`,
+          detail:{records,searchTruncated:candidates.length===500,
+            ownerOnly:true,activeOnly:true,temporal:true,
+            authority:"context_only",notAnAuthorizationSource:true}};
+      }catch{
+        return {ok:false,tool,evidence:"",error:"local world retrieval unavailable"};
+      }
+    }
     case "adoption_stage_github":
     case "adoption_list":
     case "adoption_skill":
@@ -293,15 +386,23 @@ export async function executeTool(
       return toolCreateFolder(prepared);
     case "write_file":
       return toolWriteFile(prepared);
+    case "edit_file": {
+      if (!prepared.path || !prepared.relPath || !prepared.expectedSha256 ||
+          prepared.oldText===undefined || prepared.newText===undefined)
+        return {ok:false,tool,evidence:"",error:"Guardian-scoped edit arguments missing"};
+      const result=await editWorkspaceTextFile({
+        path:prepared.path,relPath:prepared.relPath,
+        expectedSha256:prepared.expectedSha256,
+        oldText:prepared.oldText,newText:prepared.newText
+      },isCancelled);
+      return {...result,tool};
+    }
     case "read_file":
       return toolReadFile(prepared);
     case "list_dir":
       return toolListDir(prepared);
     case "run_command":
       return toolRunCommand(taskId, prepared);
-    case "ci_project_build":
-      if (!prepared.projectBuild) return {ok:false,tool,evidence:"",error:"Guardian CI project approval absent"};
-      return executeCIProjectBuild(prepared.projectBuild,isCancelled,child=>registerChild(taskId,child));
     case "windows_open_url":
     case "windows_open_app":
     case "windows_open_settings":

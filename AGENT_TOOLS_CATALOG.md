@@ -108,3 +108,13 @@ agent. Owner-managed memory remains stored in JARVIS's existing local database.
 This is still an owner-requested memory retrieval capability, not the full
 Mem0 embedding or consolidation platform. End-to-end Prisma/provider privacy
 acceptance is required before production use.
+
+## November 3 — native research-derived Core capabilities
+
+- `edit_file`: Guardian-audited, workspace-relative, expected-SHA-256 text replacement; exact-one-match, staged readback and durable effect journal.
+- `memory_recall`: explicit owner opt-in; returns only same-owner `CLOUD_APPROVED` memory records.
+- `world_recall`: same opt-in and owner binding; queries current temporal World Model observations, filtering retracted/expired rows before ranking. Results include provenance and are explicitly marked context-only; they never authorize actions.
+- Memory retrieval uses deterministic phrase/key, token-coverage, Unicode and bounded recency signals. It is not embedding/vector search.
+- Optional faster-whisper is an additional local STT backend. Vosk remains the default; Piper `jarvis-high` remains the selected TTS. See `FASTER_WHISPER_LOCAL_STT.md`.
+
+These tools remain inside the one JARVIS Core/Guardian path. No upstream agent is granted independent execution or permission authority.

@@ -218,81 +218,119 @@ class CuaDriverBackend:
                     "CUA operation timed out after dispatch. Its effect may have landed; observe before retrying."
                 ) from exc
 
-    async def _observe(self) -> dict[str, Any]:
+    async def _observe(self, op: dict[str, Any]) -> dict[str, Any]:
         from cua_driver import GetWindowStateInput, ListWindowsInput
 
         listed = await self._driver.list_windows(
             ListWindowsInput(pid=None, on_screen_only=True)
         )
         windows = list(getattr(listed, "windows", None) or [])[:5]
-        records: list[dict[str, Any]] = []
-        controls: list[dict[str, Any]] = []
-        self._tokens.clear()
+        records = [
+            _window_record(window)
+            for window in windows
+            if type(getattr(window, "pid", None)) is int
+            and type(getattr(window, "window_id", None)) is int
+        ]
+        if not records:
+            raise ValueError("No visible Windows targets were found in the interactive session.")
 
-        for window in windows:
-            pid = getattr(window, "pid", None)
-            window_id = getattr(window, "window_id", None)
-            if type(pid) is not int or type(window_id) is not int:
-                continue
-            record = _window_record(window)
-            try:
-                state = await self._driver.get_window_state(
-                    GetWindowStateInput(
-                        pid=pid,
-                        window_id=window_id,
-                        session=None,
-                        query=None,
-                        include_accessibility_tree=True,
-                        include_screenshot=False,
-                        screenshot_out_file=None,
-                        max_elements=24,
-                        max_depth=8,
-                        max_dimension=None,
-                        max_image_dimension=None,
-                        timeout_ms=5000,
-                        tree_format="markdown",
-                        since=None,
-                        verbose=False,
-                        full_output=False,
-                    )
+        target_window = None
+        if "pid" in op or "cuaWindowId" in op:
+            pid = op.get("pid")
+            raw_window_id = op.get("cuaWindowId")
+            if type(pid) is not int or not isinstance(raw_window_id, str):
+                raise ValueError("Exact-window observation requires PID and CUA window ID.")
+            target_window = next(
+                (
+                    window for window in windows
+                    if getattr(window, "pid", None) == pid
+                    and str(getattr(window, "window_id", "")) == raw_window_id
+                ),
+                None,
+            )
+            if target_window is None:
+                raise ValueError("The requested CUA window is no longer visible.")
+        else:
+            foreground_title = str(op.get("_foregroundTitle", "") or "").strip().casefold()
+            if foreground_title:
+                target_window = next(
+                    (
+                        window for window in windows
+                        if str(getattr(window, "title", "") or "").strip().casefold()
+                        == foreground_title
+                    ),
+                    None,
                 )
-                degraded = bool(getattr(state, "degraded", False))
-                truncated = bool(getattr(state, "truncated", False))
-                complete = getattr(state, "elements_complete", None)
-                tokens_usable = not degraded and not truncated and complete is True
-                elements = list(getattr(state, "elements", None) or [])[:10]
-                local_controls = []
-                for element in elements:
-                    item = _element_record(element, pid, window_id, tokens_usable)
-                    local_controls.append(item)
-                    token = item.get("elementToken")
-                    if token and len(controls) < 30:
-                        self._tokens[token] = (pid, window_id, time.monotonic() + 25)
-                controls.extend(local_controls)
-                record.update({
-                    "snapshotId": getattr(state, "snapshot_id", None),
-                    "elementCount": getattr(state, "element_count", None),
-                    "elementsComplete": complete,
-                    "degraded": degraded,
-                    "degradedReason": getattr(state, "degraded_reason", None),
-                    "truncated": truncated,
-                    "truncationReason": getattr(state, "truncation_reason", None),
-                    "controlCount": len(local_controls),
-                })
-            except Exception as exc:
-                record["inspectionError"] = type(exc).__name__
-            records.append(record)
+            target_window = target_window or windows[0]
+
+        pid = getattr(target_window, "pid", None)
+        window_id = getattr(target_window, "window_id", None)
+        if type(pid) is not int or type(window_id) is not int:
+            raise ValueError("Selected CUA window has no valid process/window identity.")
+
+        # Keep exactly one native snapshot per observation call. CUA element
+        # tokens are snapshot-scoped; taking multiple snapshots in one call
+        # could invalidate tokens from earlier windows before the model sees them.
+        self._tokens.clear()
+        record = _window_record(target_window)
+        controls: list[dict[str, Any]] = []
+        try:
+            state = await self._driver.get_window_state(
+                GetWindowStateInput(
+                    pid=pid,
+                    window_id=window_id,
+                    session=None,
+                    query=None,
+                    include_accessibility_tree=True,
+                    include_screenshot=False,
+                    screenshot_out_file=None,
+                    max_elements=24,
+                    max_depth=8,
+                    max_dimension=None,
+                    max_image_dimension=None,
+                    timeout_ms=5000,
+                    tree_format="markdown",
+                    since=None,
+                    verbose=False,
+                    full_output=False,
+                )
+            )
+            degraded = bool(getattr(state, "degraded", False))
+            truncated = bool(getattr(state, "truncated", False))
+            complete = getattr(state, "elements_complete", None)
+            tokens_usable = not degraded and not truncated and complete is True
+            elements = list(getattr(state, "elements", None) or [])[:30]
+            for element in elements:
+                item = _element_record(element, pid, window_id, tokens_usable)
+                controls.append(item)
+                token = item.get("elementToken")
+                if token:
+                    self._tokens[token] = (pid, window_id, time.monotonic() + 25)
+            record.update({
+                "snapshotId": getattr(state, "snapshot_id", None),
+                "elementCount": getattr(state, "element_count", None),
+                "elementsComplete": complete,
+                "degraded": degraded,
+                "degradedReason": getattr(state, "degraded_reason", None),
+                "truncated": truncated,
+                "truncationReason": getattr(state, "truncation_reason", None),
+                "controlCount": len(controls),
+            })
+        except Exception as exc:
+            record["inspectionError"] = type(exc).__name__
+            record["controlCount"] = 0
 
         return {
-            "source": "Cua Driver accessibility snapshots",
+            "source": "Cua Driver accessibility snapshot",
             "visibleWindows": records,
+            "observedWindow": record,
             "foregroundControls": controls[:30],
             "windowCount": len(records),
-            "controlCount": min(len(controls), 30),
+            "controlCount": len(controls),
             "note": (
-                "Element tokens are exact-window and snapshot scoped. Use the token, pid and "
-                "cuaWindowId from the same row. Tokens are single-use and expire after 25 seconds. "
-                "Any new observation invalidates them. "
+                "Only observedWindow has a current accessibility snapshot. Element tokens "
+                "are bound to that exact PID/window and snapshot. Tokens are single-use, "
+                "expire after 25 seconds, and any new observation invalidates them. "
                 "A degraded or truncated tree does not expose clickable tokens."
             ),
         }

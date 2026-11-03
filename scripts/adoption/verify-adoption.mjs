@@ -36,10 +36,19 @@ const owner='owner_test_A', other='owner_test_B';
 const staged=await stageFromDirectory(owner,fixture,'fixture:local');ok(staged.status==='staged','staged not enabled');ok((await list(other)).length===0,'other owner isolated');
 let rejected=false;try{await activateSkill(owner,staged.id,'inspect-code');}catch{rejected=true;}ok(rejected,'unapproved skill rejected');
 await update(owner,staged.id,'approve');const skill=await activateSkill(owner,staged.id,'inspect-code');ok(skill.content.includes('Review files'),'skill loaded');
+const oldStdioOptIn=process.env.JARVIS_UNSANDBOXED_MCP_STDIO_ALLOWED;
+delete process.env.JARVIS_UNSANDBOXED_MCP_STDIO_ALLOWED;
+let unsandboxedDenied=false;
+try { await mcpOperation(owner,staged.id,'fixture','list_tools'); }
+catch (e) { unsandboxedDenied=/unisolated|unsandboxed|disabled/i.test(e.message); }
+ok(unsandboxedDenied,'approved unsandboxed MCP subprocess denied without server operator opt-in');
+process.env.JARVIS_UNSANDBOXED_MCP_STDIO_ALLOWED='1';
 const servers=await mcpOperation(owner,staged.id,'fixture','list_tools');ok(servers.tools[0].name==='echo','stdio MCP handshake and list');
 const called=await mcpOperation(owner,staged.id,'fixture','call_tool','echo',{hello:'world'});ok(called.ok&&called.content.includes('world'),'stdio MCP call');
 await update(owner,staged.id,'disable');rejected=false;try{await mcpOperation(owner,staged.id,'fixture','list_tools');}catch{rejected=true;}ok(rejected,'disabled MCP rejected');
 await update(owner,staged.id,'approve');
+if(oldStdioOptIn===undefined)delete process.env.JARVIS_UNSANDBOXED_MCP_STDIO_ALLOWED;
+else process.env.JARVIS_UNSANDBOXED_MCP_STDIO_ALLOWED=oldStdioOptIn;
 const server=http.createServer(async(req,res)=>{let body='';for await(const chunk of req)body+=chunk;const q=JSON.parse(body);res.setHeader('Content-Type','application/json');const result=q.method==='initialize'?{serverInfo:{name:'mock-http',version:'1'},protocolVersion:'2026-07-28',capabilities:{tools:{}}}:q.method==='tools/list'?{tools:[{name:'sum',inputSchema:{type:'object'},description:'sum numbers'}]}:q.method==='tools/call'?{content:[{type:'text',text:String(q.params.arguments.a+q.params.arguments.b)}]}:{};res.end(JSON.stringify({jsonrpc:'2.0',id:q.id,result}));});
 await new Promise(res=>server.listen(0,'127.0.0.1',res));const addr=server.address();
 try{

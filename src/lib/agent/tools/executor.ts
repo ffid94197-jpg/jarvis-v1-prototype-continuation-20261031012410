@@ -275,8 +275,8 @@ export async function executeTool(
          process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED!=="1")
         return {ok:false,tool,evidence:"",error:"owner-approved memory recall unavailable"};
       const {ownerId,query,limit}=prepared.memory;
-      const terms=Array.from(new Set(query.toLocaleLowerCase("en-US")
-        .match(/[a-z0-9_]+/g)??[])).slice(0,8);
+      const terms=Array.from(new Set(query.normalize("NFKC")
+        .toLocaleLowerCase("en-US").match(/[\p{L}\p{N}_]+/gu)??[])).slice(0,8);
       if(!terms.length)
         return {ok:true,tool,evidence:"No matching owner-approved memories",
           detail:{records:[],searchTruncated:false,ownerOnly:true}};

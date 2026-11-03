@@ -42,7 +42,7 @@ const realTimeout=setTimeout;
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'bot.cjs'),'utf8'),{
  require:mod=>mod==='mineflayer'?{createBot:()=>bot}:mod==='readline'?fakeReadline:
    mod==='mineflayer-pathfinder'?{pathfinder(){},Movements:class{},goals:{GoalNear,GoalFollow}}:
-   mod==='vec3'?{Vec3:class {constructor(x,y,z){Object.assign(this,{x,y,z});} distanceTo(p){return Math.hypot(this.x-p.x,this.y-p.y,this.z-p.z);} plus(p){return new this.constructor(this.x+p.x,this.y+p.y,this.z+p.z);}}}:require(mod),
+   mod==='vec3'?{Vec3:class {constructor(x,y,z){Object.assign(this,{x,y,z});} distanceTo(p){return Math.hypot(this.x-p.x,this.y-p.y,this.z-p.z);} plus(p){return new this.constructor(this.x+p.x,this.y+p.y,this.z+p.z);} offset(x,y,z){return new this.constructor(this.x+x,this.y+y,this.z+z);}}}:require(mod),
  __dirname:fs.mkdtempSync(path.join(require('node:os').tmpdir(),'jarvis-mc-session-fixture-')),process:{env:{JARVIS_MINECRAFT_LAN_PORT:'51234',JARVIS_MINECRAFT_PLAYER:'Owner'},
  stdout:{write:x=>stdout.push(x)},stderr:{write:x=>stdout.push(x)},on(){}},
  Buffer,console,setTimeout:(fn,ms)=>ms<500?realTimeout(fn,0):888,clearTimeout:()=>{},

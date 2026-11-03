@@ -82,7 +82,7 @@ const ACTION_VERB =
 
 /** Text-only drafting is a direct answer, unless the request also asks for delivery or an external side effect. */
 const PLAIN_TEXT_REQUEST_PREFIX =
-  /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+|kindly\s+|jarvis[,!:\s]+)?/i;
+  /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+|kindly\s+|hey\s+jarvis[,!:\s]+|jarvis[,!:\s]+)?/i;
 const PLAIN_TEXT_OUTPUT =
   /^(?:write|draft|compose|generate)\s+(?:me\s+)?(?:a|an|the|some)\s+(?:poem|story|email|message|essay|description|summary|snippet|example|paragraph|reply)\b/i;
 const EXTERNAL_DELIVERY =

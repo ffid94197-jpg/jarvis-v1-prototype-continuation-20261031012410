@@ -69,7 +69,6 @@ def _element_record(element: Any, pid: int, window_id: int, tokens_usable: bool)
     row: dict[str, Any] = {
         "role": str(getattr(element, "role", "") or "")[:80],
         "name": str(getattr(element, "label", "") or "")[:180],
-        "value": str(getattr(element, "value", "") or "")[:240],
         "enabled": getattr(element, "enabled", None),
         "selected": getattr(element, "selected", None),
         "bounds": frame,
@@ -272,7 +271,6 @@ class CuaDriverBackend:
                 controls.extend(local_controls)
                 record.update({
                     "snapshotId": getattr(state, "snapshot_id", None),
-                    "treeMarkdown": str(getattr(state, "tree_markdown", "") or "")[:900],
                     "elementCount": getattr(state, "element_count", None),
                     "elementsComplete": complete,
                     "degraded": degraded,

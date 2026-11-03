@@ -122,7 +122,7 @@ export function nextStrategyPath(goal, failedRouteIndex) {
 export function advanceFromPersistedCheckpoint(plan, cursor, attempt) {
   const good = v => typeof v==='string' && /^[A-Za-z0-9_-]{8,100}$/.test(v);
   if (!Array.isArray(plan) || !plan.length || !cursor || !attempt ||
-      !good(cursor.taskId) || attempt.taskId!==cursor.taskId ||
+      !good(cursor.taskId) || !good(cursor.routineId) || attempt.taskId!==cursor.taskId ||
       attempt.routineId!==cursor.routineId ||
       !Number.isInteger(cursor.stepIndex) || !Number.isInteger(cursor.routeIndex) ||
       !Number.isInteger(attempt.stepIndex) || !Number.isInteger(attempt.routeIndex) ||

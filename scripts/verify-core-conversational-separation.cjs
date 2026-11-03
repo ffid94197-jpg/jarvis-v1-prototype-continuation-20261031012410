@@ -130,6 +130,12 @@ for (const objective of ACTIONABLE) {
   const r = classifyRequestIntent(objective);
   ok(r.kind === 'actionable', `actionable: ${JSON.stringify(objective)}`, `got ${r.kind} (${r.reason})`);
 }
+// Direct drafting stays conversational, but external delivery is an effect.
+ok(requiresExternalActionEvidence('write me a poem') === false, 'plain poem drafting does not require external-effect proof');
+ok(requiresExternalActionEvidence('can you write me a poem?') === false, 'polite plain drafting does not require external-effect proof');
+ok(requiresExternalActionEvidence('can you write me a poem and share it?') === true, 'sharing a draft requires independent effect proof');
+ok(requiresExternalActionEvidence('can you write this to a file?') === true, 'writing to a file requires independent effect proof');
+ok(requiresExternalActionEvidence('can you send this email?') === true, 'sending a message requires independent effect proof');
 
 // Concise follow-ups must recover the prior owner task and use the long-horizon
 // planner instead of being settled as casual conversation.

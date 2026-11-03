@@ -10,6 +10,7 @@
 export const TOOL_CATALOG_JSON = `AVAILABLE TOOLS (execute real actions; arguments are JSON objects):
 - create_folder   {"path": "<workspace-relative path>"}          — create a directory (recursive)
 - write_file      {"path": "<workspace-relative path>", "content": "<text>"} — write a UTF-8 text file
+- edit_file       {"path":"src/demo.ts","expectedSha256":"<64 hex from untruncated read_file>","oldText":"const a = 1;","newText":"const a = 2;"} — OpenHands-inspired targeted source edit. Requires an observed FULL read_file SHA-256 and exactly one match; Guardian scope and readback enforced; stale, missing, ambiguous, or unsafe edits fail closed. Never guess hashes or repeat uncertain effects.
 - read_file       {"path": "<workspace-relative path>"}          — read a file's exact contents
 - list_dir        {"path": "<workspace-relative path>"}          — list a directory's entries
 - run_command     {"command": "<one of: pwd,date,whoami,node,bun,echo,ls,cat,wc>", "args": ["..."]} — run an allowlisted read-only command

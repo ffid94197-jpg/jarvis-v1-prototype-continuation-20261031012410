@@ -117,6 +117,21 @@ assert(!make({...base,JARVIS_EXPERIMENTAL_DESKTOP_CONTROL:'1'})('windows_desktop
   'CUA element click requires explicit CUA backend opt-in');
 assert(cuaDecide('windows_desktop_click',{x:200,y:150,button:'left'}).ok,
   'legacy coordinate click remains supported with CUA opt-in');
+const cuaWindowTarget = {pid:4242,cuaWindowId:'987654321'};
+const backgroundType = cuaDecide('windows_desktop_type',{text:'hello',...cuaWindowTarget});
+assert(backgroundType.ok && backgroundType.prepared.pid === 4242 &&
+  backgroundType.prepared.cuaWindowId === '987654321',
+  'exact-window background text input is Guardian-prepared');
+const backgroundKeys = cuaDecide('windows_desktop_keys',{keys:['ctrl','s'],...cuaWindowTarget});
+assert(backgroundKeys.ok && backgroundKeys.prepared.pid === 4242,
+  'exact-window background keyboard input is Guardian-prepared');
+assert(!cuaDecide('windows_desktop_type',{text:'hello',pid:4242}).ok,
+  'partial exact-window text target denied');
+assert(!cuaDecide('windows_desktop_keys',{keys:['ctrl','s'],cuaWindowId:'987654321'}).ok,
+  'partial exact-window key target denied');
+assert(!make({...base,JARVIS_EXPERIMENTAL_DESKTOP_CONTROL:'1'})(
+  'windows_desktop_type',{text:'hello',...cuaWindowTarget}).ok,
+  'exact-window text input requires CUA opt-in');
 
 assert(decide('windows_browser_search',{query:'MrBeast oldest video'}).ok,'bounded web search accepted');
 assert(!decide('windows_browser_search',{query:'\nsecret'}).ok,'control characters rejected from search');

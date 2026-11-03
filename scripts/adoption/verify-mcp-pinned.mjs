@@ -45,7 +45,8 @@ try{
   requests++;
   const request=new EventEmitter();
   request.end=(payload)=>{
-   observed={hostname:url.hostname,servername:opts.servername,headers:opts.headers,payload};
+   observed={hostname:url.hostname,servername:opts.servername,
+    headers:opts.headers,payload,agent:opts.agent,verifyTLS:opts.rejectUnauthorized};
    opts.lookup('public.example',{family:0},(error,address,family)=>{
     if(error){request.emit('error',error);return;}
     observed={...observed,address,family};
@@ -66,6 +67,8 @@ try{
  test(observed.address==='8.8.8.8'&&observed.hostname==='public.example'&&
       observed.servername==='public.example'&&observed.family===4,
       'TLS hostname/SNI preserved while socket resolves to validated address');
+ test(observed.agent===false&&observed.verifyTLS===true,
+      'Socket pooling disabled and TLS certificate verification required');
  const before=requests;
  dns.lookup=async()=>[{address:'127.0.0.1',family:4}];
  await assert.rejects(pinnedPublicHttpsPost(u,{},'{}'),/restricted IP/);

@@ -147,6 +147,8 @@ async function asyncCases(){
   fs.writeFileSync(cPath,csv);
   a=await v.arbitrateCompletion({taskId:"t",objective:"Audit the inventory analysis",toolAssisted:true,inventorySource:null});
   assert.equal(a.verdict,"partial");count++;console.log("PASS absent original source: PARTIAL");
+  a=await v.arbitrateCompletion({taskId:"t",objective:"Create inventory_data.csv and inventory_report.txt",toolAssisted:true,inventorySource:null});
+  assert.equal(a.verdict,"partial");assert.match(a.predicateLines.join("\\n"),/INVENTORY_SOURCE_UNAVAILABLE/);count++;console.log("PASS filename-only inventory artifacts without source: PARTIAL");
   console.log("INVENTORY_INTEGRITY",count+"/"+count,"PASS (real temp files + mocked durable effects; no live provider or Windows PC)");
  } finally{fs.rmSync(tmp,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
 }

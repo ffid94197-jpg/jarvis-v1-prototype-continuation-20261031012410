@@ -20,7 +20,9 @@ async function fixture({logs=[],unreachable=[],neverArrive=false,fireDeadline=fa
   bot.setControlState=()=>{};bot.chat=()=>{};bot.quit=()=>{};
   bot.findBlocks=()=>blocks.map(x=>x.position);
   bot.findBlock=({matching})=>blocks.find(matching)||null;
-  bot.blockAt=p=>blocks.find(x=>x.position.distanceTo(p)<.01)||{name:'air',position:p};
+  bot.blockAt=p=>blocks.find(x=>x.position.distanceTo(p)<.01)||
+    (p.y===63?{name:'grass_block',boundingBox:'block',position:p}:
+      {name:'air',boundingBox:'empty',position:p});
   bot.nearestEntity=()=>null;
   bot.dig=async block=>{const i=blocks.indexOf(block);assert.ok(i>=0);blocks.splice(i,1);count++;};
   bot.pathfinder={setMovements(){},setGoal(){},stop(){if(pendingReject){const reject=pendingReject;pendingReject=null;reject(Error('Path was stopped before it could be completed'));}},
@@ -34,7 +36,7 @@ async function fixture({logs=[],unreachable=[],neverArrive=false,fireDeadline=fa
   let id=0;
   const timer=(fn,ms)=>{if(ms<=350 || (fireDeadline && ms>1000))queueMicrotask(fn);return ++id;};
   const mocks={mineflayer:{createBot:()=>bot},readline:{createInterface:()=>stdin},
-    vec3:{Vec3:class{constructor(x,y,z){Object.assign(this,{x,y,z});} distanceTo(p){return Math.hypot(this.x-p.x,this.y-p.y,this.z-p.z);} plus(p){return new this.constructor(this.x+p.x,this.y+p.y,this.z+p.z);}}},
+    vec3:{Vec3:class{constructor(x,y,z){Object.assign(this,{x,y,z});} distanceTo(p){return Math.hypot(this.x-p.x,this.y-p.y,this.z-p.z);} plus(p){return new this.constructor(this.x+p.x,this.y+p.y,this.z+p.z);} offset(x,y,z){return new this.constructor(this.x+x,this.y+y,this.z+z);}}},
     'mineflayer-pathfinder':{pathfinder(){},Movements:class{},goals:{GoalFollow,GoalNear}}};
   vm.runInNewContext(source,{require:name=>mocks[name]||require(name),__dirname:fs.mkdtempSync(path.join(require('node:os').tmpdir(),'jarvis-mc-path-fixture-')),process:{env:{JARVIS_MINECRAFT_LAN_PORT:'54321',JARVIS_MINECRAFT_PLAYER:'Owner'},stdout:{write:x=>output.push(x)},stderr:{write:x=>output.push(x)},on(){}},console,Buffer,setTimeout:timer,clearTimeout(){},setInterval(){},clearInterval(){}});
   const send=async(command)=>{

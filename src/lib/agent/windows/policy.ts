@@ -197,7 +197,16 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
   if (tool.startsWith("windows_desktop_") || tool.startsWith("windows_native_") || tool === "windows_launch_installed") {
     if (process.env.JARVIS_EXPERIMENTAL_DESKTOP_CONTROL !== "1")
       return {ok:false, reason:"Enable JARVIS_EXPERIMENTAL_DESKTOP_CONTROL=1 for this private test PC."};
-    if (tool === "windows_native_inspect") return {ok:true,prepared:{operation:"native_inspect"}};
+    if (tool === "windows_native_inspect") {
+      if (Object.keys(args).some(k => k !== "query"))
+        return {ok:false,reason:"Only an optional bounded control query is accepted."};
+      if (args.query === undefined) return {ok:true,prepared:{operation:"native_inspect"}};
+      if (typeof args.query !== "string" || args.query.length < 2 ||
+          args.query.length > 160 || !args.query.trim() ||
+          /[\x00-\x1f\x7f]/.test(args.query))
+        return {ok:false,reason:"Control query must be 2–160 printable characters."};
+      return {ok:true,prepared:{operation:"native_inspect",query:args.query.trim()}};
+    }
     if (tool === "windows_native_verify") {
       const names = ["titleContains", "controlContains", "textEquals"] as const;
       const supplied = names.filter(k => args[k] !== undefined);

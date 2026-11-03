@@ -36,6 +36,7 @@ export interface PreparedArgs {
   desktop?: DesktopPrepared;
   integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;operation?:string;arguments?:Record<string,unknown>};
   memory?: {ownerId:string;query:string;limit:number};
+  world?: {ownerId:string;query:string;limit:number};
 }
 
 export interface GuardianDecision {
@@ -52,6 +53,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "read_file",
   "list_dir",
   "memory_recall",
+  "world_recall",
   "run_command",
   "windows_open_url",
   "windows_open_app",
@@ -180,6 +182,28 @@ export async function authorizeToolCall(
           decision=deny("bounded memory query and 1-5 results required");break;
         }
         decision={verdict:"allow",prepared:{memory:{
+          ownerId:ctx.ownerId,query:query.trim(),limit:limit as number
+        }}};
+        break;
+      }
+      case "world_recall": {
+        // World Model is temporal context, never an action authority. The
+        // same explicit opt-in is required before observations reach a model.
+        if(process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED!=="1"){
+          decision=deny("owner has not enabled model-visible world recall");break;
+        }
+        if(!ctx.ownerId){decision=deny("authenticated owner required");break;}
+        if(Object.keys(rawArgs).some(k=>!["query","limit"].includes(k))){
+          decision=deny("world_recall supports query and limit only");break;
+        }
+        const query=rawArgs.query;
+        const limit=rawArgs.limit===undefined?5:rawArgs.limit;
+        if(typeof query!=="string" || query.trim().length<2 ||
+            query.length>160 || /[\x00-\x1f\x7f]/.test(query) ||
+            !Number.isInteger(limit) || (limit as number)<1 || (limit as number)>5){
+          decision=deny("bounded world query and 1-5 results required");break;
+        }
+        decision={verdict:"allow",prepared:{world:{
           ownerId:ctx.ownerId,query:query.trim(),limit:limit as number
         }}};
         break;

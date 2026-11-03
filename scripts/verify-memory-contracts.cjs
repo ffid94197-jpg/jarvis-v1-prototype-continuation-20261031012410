@@ -44,6 +44,31 @@ test('Rank only actually supplied owner memory records, never invent',()=>{
   assert.equal(ranked[1].key,'video.editor');
   assert.deepEqual(JSON.parse(JSON.stringify(rankOwnerMemoryRows(rows,'unseen_xyz',3))),[]);
 });
+test('Phrase and key matches outrank weak token overlap',()=>{
+  const rows=[
+    {key:'project.tools',content:'The editor is available'},
+    {key:'preferred.editor',content:'VS Code'},
+    {key:'notes',content:'preferred editor selected for code'}
+  ];
+  const result=rankOwnerMemoryRows(rows,'preferred editor',3);
+  assert.equal(result[0].key,'preferred.editor');
+  assert.equal(result[1].key,'notes');
+});
+test('Recent equal-match owner memory ranks ahead of stale duplicate',()=>{
+  const rows=[
+    {key:'editor',content:'VS Code',updatedAt:new Date(Date.now()-90*86400000)},
+    {key:'editor',content:'VS Code',updatedAt:new Date(Date.now()-1*86400000)}
+  ];
+  assert.equal(rankOwnerMemoryRows(rows,'editor',2)[0].updatedAt,rows[1].updatedAt);
+});
+test('Unicode memory keys can be retrieved without ASCII-only token loss',()=>{
+  const rows=[{key:'தமிழ்.பதில்',content:'உரையாடல்'}];
+  assert.equal(rankOwnerMemoryRows(rows,'தமிழ்',3)[0].key,'தமிழ்.பதில்');
+});
+test('Stopword-only memory query does not return unrelated records',()=>{
+  const rows=[{key:'project',content:'JARVIS prototype'}];
+  assert.deepEqual(JSON.parse(JSON.stringify(rankOwnerMemoryRows(rows,'where is the',3))),[]);
+});
 test('Search budget is at most 100 and does not change original rows',()=>{
   const rows=Array.from({length:130},(_,i)=>({key:'item'+i,content:'linux node editor'}));
   const result=rankOwnerMemoryRows(rows,'editor',200);

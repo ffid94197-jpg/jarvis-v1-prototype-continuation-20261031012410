@@ -83,6 +83,7 @@ class World {
    strongholdPortalFrameNearby:this.stronghold && this.dimension==='overworld',
    wornNetherite:Object.entries(GEAR_SLOTS).every(([gear,slot])=>this.equipment[slot]===gear) &&
      this.equipment.hand==='netherite_sword',
+   heldNetheriteSword:this.equipment.hand==='netherite_sword',
    wornDiamond:Object.values(GEAR_SLOTS).every(slot=>this.equipment[slot]==='diamond_'+
      (slot==='head'?'helmet':slot==='torso'?'chestplate':slot==='legs'?'leggings':'boots')),
    dragonPresent:this.dimension==='end'&&this.dragonPresent,

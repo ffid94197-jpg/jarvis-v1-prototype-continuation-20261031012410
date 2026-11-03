@@ -55,7 +55,7 @@ export interface LocalProjectBuildResult {
 }
 
 type TreeLimits = { maxBytes: number; maxFiles: number };
-type TreeStats = { bytes: number; files: number; entries: { rel: string; size: number }[] };
+type TreeStats = { bytes: number; files: number; directories: number; entries: { rel: string; size: number }[] };
 
 function within(parent: string, child: string): boolean {
   const relative = path.relative(parent, child);
@@ -148,11 +148,13 @@ export function createWindowsSandboxGuestScript(): string {
     "function Get-TreeStats([string]$Root) {",
     "  $all = @(Get-ChildItem -LiteralPath $Root -Force -Recurse -ErrorAction Stop)",
     "  $files = @($all | Where-Object { -not $_.PSIsContainer })",
+    "  $directories = @($all | Where-Object { $_.PSIsContainer })",
+    "  if ($directories.Count -gt 50000) { throw 'Build workspace directory quota exceeded' }",
     "  foreach ($entry in $all) {",
     "    if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Reparse point in build tree' }",
     "  }",
     "  $bytes = [int64](($files | Measure-Object -Property Length -Sum).Sum)",
-    "  return @{ files = $files.Count; bytes = $bytes }",
+    "  return @{ files = $files.Count; directories = $directories.Count; bytes = $bytes }",
     "}",
     "function Invoke-BoundedNode([string[]]$Arguments, [int]$LimitSeconds) {",
     "  $proc = Start-Process -FilePath $node -ArgumentList $Arguments -WorkingDirectory $work -NoNewWindow -PassThru",
@@ -209,7 +211,7 @@ export function createWindowsSandboxGuestScript(): string {
     "  if (-not $kind) { throw 'Build exited zero but no supported artifact marker was found' }",
     "  $artifactRoot = Join-Path $work $kind",
     "  $stats = Get-TreeStats $artifactRoot",
-    "  if ($stats.files -lt 1 -or $stats.files -gt 25000 -or $stats.bytes -gt 536870912) { throw 'Build artifact exceeds file/size quota' }",
+    "  if ($stats.files -lt 1 -or $stats.files -gt 25000 -or $stats.directories -gt 25000 -or $stats.bytes -gt 536870912) { throw 'Build artifact exceeds file/directory/size quota' }",
     "  $copy = Start-Process -FilePath \"$env:SystemRoot\\System32\\robocopy.exe\" -ArgumentList @($artifactRoot, (Join-Path $output 'artifact'), '/E', '/R:1', '/W:1', '/XJ', '/NFL', '/NDL', '/NJH', '/NJS') -NoNewWindow -PassThru -Wait",
     "  if ($copy.ExitCode -ge 8) { throw 'Unable to export build artifact' }",
     "  $result.status = 'ok'",
@@ -256,7 +258,7 @@ async function treeCopy(
 ): Promise<TreeStats> {
   const sourceRoot = await requireDirectory(source);
   await fs.mkdir(destination, { recursive: false });
-  const stats: TreeStats = { bytes: 0, files: 0, entries: [] };
+  const stats: TreeStats = { bytes: 0, files: 0, directories: 0, entries: [] };
   async function visit(src: string, dst: string, relative: string): Promise<void> {
     const entries = await fs.readdir(src, { withFileTypes: true });
     for (const entry of entries) {
@@ -269,6 +271,10 @@ async function treeCopy(
       const st = await fs.lstat(srcChild);
       if (isReparsePoint(st)) throw new Error("Symbolic link/reparse point rejected in build input");
       if (st.isDirectory()) {
+        stats.directories++;
+        if (stats.directories > limits.maxFiles) {
+          throw new Error("Build input exceeds bounded directory quota");
+        }
         await fs.mkdir(dstChild, { recursive: false });
         await visit(srcChild, dstChild, childRel);
         continue;
@@ -290,7 +296,7 @@ async function measureDirectory(
   root: string, limits: TreeLimits, isCancelled?: () => boolean,
 ): Promise<TreeStats> {
   const rootReal = await requireDirectory(root);
-  const stats: TreeStats = { bytes: 0, files: 0, entries: [] };
+  const stats: TreeStats = { bytes: 0, files: 0, directories: 0, entries: [] };
   async function visit(dir: string, relative: string): Promise<void> {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
@@ -301,6 +307,10 @@ async function measureDirectory(
       const st = await fs.lstat(child);
       if (isReparsePoint(st)) throw new Error("Reparse point rejected in sandbox output");
       if (st.isDirectory()) {
+        stats.directories++;
+        if (stats.directories > limits.maxFiles) {
+          throw new Error("Sandbox output exceeded bounded directory quota");
+        }
         await visit(child, childRel);
       } else if (st.isFile() && st.nlink <= 1) {
         stats.files++;

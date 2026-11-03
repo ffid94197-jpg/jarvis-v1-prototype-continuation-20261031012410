@@ -190,7 +190,10 @@ def _transcribe_faster_whisper(pcm):
         word_timestamps=False,
     )
     # The generator is consumed here, inside the request's bounded input scope.
-    return ' '.join(str(segment.text) for segment in segments).strip()[:1500]
+    # Normalize segment whitespace so provider-specific leading/trailing
+    # spaces cannot create doubled gaps in the final transcript.
+    return ' '.join(' '.join(str(segment.text).split())
+                    for segment in segments if str(segment.text).strip()).strip()[:1500]
 
 
 def transcribe_pcm(pcm):

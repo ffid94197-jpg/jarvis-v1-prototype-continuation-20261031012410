@@ -236,4 +236,4 @@ runner. No test run or live owner-PC/model acceptance is claimed in this branch.
   fallback. The JARVIS loader now requires `tokenizer.json` before importing
   the optional runtime and has a regression fixture for the missing-tokenizer
   case. The exact upstream behavior is visible in the official
-  [faster-whisper constructor](https://github.com/SYSTRAN/faster-whisper/blob/master/faster_whisper/transcribe.py).
+  [faster-whisper constructor](https://github.com/SYSTRAN/faster-whisper/blob/v1.2.1/faster_whisper/transcribe.py).

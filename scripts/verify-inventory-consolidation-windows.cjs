@@ -39,6 +39,10 @@ test("source-free task with only filename report reference rejected",()=>{
  const r=api.prepareTaskObjective("Original inventory data: Create inventory_data.csv and inventory_report.txt.");
  assert.equal(r.status,422);
 });
+test("explicit previous-task source reference reaches bounded owner history lookup",()=>{
+ const r=api.prepareTaskObjective("Use original inventory data from my previous task and create inventory_data.csv and inventory_report.txt.");
+ assert.equal(r.ok,true);
+});
 test("source-free task rejected at API boundary",()=>assert.equal(api.prepareTaskObjective(prefix+"Please create inventory_data.csv and inventory_report.txt.").status,422));
 test("source >2000 chars preserved",()=>{
  const objective="Untrusted context.\n".repeat(130)+multi;assert.ok(objective.length>2000);

@@ -8,7 +8,18 @@ let seed=432109;function random(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;
 function world(overrides={}){return {joined:true,health:20,hunger:20,ownerVisible:true,ownerDistance:4,threats:[],workbenchNearby:false,
  inventory:{logs:0,planks:0,sticks:0,table:0,woodenPickaxe:0,food:0,raw:{}},...overrides};}
 function inv(overrides={}){return {...world().inventory,...overrides};}
-for(const goal of GOALS)ok(validateCommand({command:'auto_goal',goal,durationSeconds:300})===null,'allowed '+goal);
+const parameterized={
+ gather:{resource:'logs',targetCount:3},
+ travel:{destination:{x:3,y:64,z:7},arrivalRange:2},
+ build:{position:{x:3,y:64,z:7},length:2,axis:'x+',block:'cobblestone'},
+ farm_wheat:{position:{x:3,y:64,z:7},width:2,depth:2,targetCount:4},
+ sequence:{steps:[{goal:'stone_age'}]},
+ craft:{item:'chest',targetCount:2},
+ equip:{item:'iron_helmet',destinationSlot:'head'}
+};
+for(const goal of GOALS)
+ ok(validateCommand({command:'auto_goal',goal,...(parameterized[goal]||{}),durationSeconds:300})===null,
+ 'valid typed goal '+goal);
 for(const command of [{command:'auto_goal',goal:'mine_everything'}, {command:'auto_goal',goal:'survive',durationSeconds:100000},
  {command:'auto_goal',goal:'wood',durationSeconds:0},{command:'auto_goal',goal:'wood',durationSeconds:'20'},
  {command:'auto_goal',goal:'survive',durationSeconds:10.2}])ok(!!validateCommand(command),'denied malformed goal');
@@ -17,13 +28,14 @@ ok(validateCommand({command:'auto_status'})===null,'progress observation');
 ok(validateCommand({command:'auto_stop'})===null,'stop allowed');
 ok(decide('wood',world({inventory:inv({logs:4})})).kind==='complete','wood ends by inventory proof');
 ok(decide('wood',world({inventory:inv({logs:2})})).kind==='collect_wood','wood needs pickup');
-ok(decide('tools',world({inventory:inv({logs:1,planks:0})})).kind==='craft_planks','can craft planks');
-ok(decide('tools',world({inventory:inv({planks:4})})).kind==='craft_sticks','sticks before table');
-ok(decide('tools',world({inventory:inv({planks:4,sticks:4})})).kind==='craft_table','workbench after sticks');
+ok(decide('tools',world({inventory:inv({logs:3,planks:0})})).kind==='craft_planks','can craft planks');
+ok(decide('tools',world({inventory:inv({planks:9})})).kind==='craft_sticks','sticks before table');
+ok(decide('tools',world({inventory:inv({planks:7,sticks:4})})).kind==='craft_table','workbench after sticks');
 ok(decide('tools',world({inventory:inv({table:1,planks:3,sticks:2})})).kind==='place_table','table placement');
 ok(decide('tools',world({inventory:inv({table:0,planks:3,sticks:2}),workbenchNearby:true})).kind==='craft_pickaxe','already placed table honored');
 ok(decide('tools',world({inventory:inv({woodenPickaxe:1})})).kind==='complete','pickaxe inventory proof');
-ok(decide('survive',world({ownerVisible:false,inventory:inv({planks:4})})).kind==='wait','no owner -> no wander');
+ok(decide('survive',world({ownerVisible:false,inventory:inv({planks:4})})).kind==='collect_wood',
+  'Independent survival continues with safe tool prerequisites even when owner is absent');
 ok(decide('guard',world({threats:[{name:'creeper',distance:3}],health:16})).kind==='retreat','creeper retreat');
 ok(decide('guard',world({threats:[{name:'zombie',distance:3,id:1}],health:18})).kind==='defend','defend hostile');
 ok(decide('guard',world({threats:[{name:'zombie',distance:3,id:1}],health:6})).kind==='retreat','critical health retreat');
@@ -41,7 +53,26 @@ let now=100000;const c=createController({clock:()=>now,maxSteps:4,maxSeconds:100
 ok(c.next(world({inventory:inv({logs:4})})).kind==='complete','verified goal completion');
 ok(c.status().status==='complete','completion durable state');
 c.start('wood',10);for(let i=0;i<3;i++){const d=c.next(world());c.record(d,{verified:false,detail:'no log pickup'});}
-ok(c.status().status==='blocked','three failed tasks block instead of looping');
+ok(c.status().status==='running' && c.status().lastDecision?.kind==='survey_wood',
+  'Repeated wood failures switch to bounded survey instead of claiming success');
+// Bound continuation by the ORIGINAL 12-hour owner authorization, not
+// an infinite series of newly fabricated 6-hour leases.
+let missionClock=1000000;
+const long=createController({clock:()=>missionClock,maxSeconds:43200,maxSteps:120});
+long.start('dragon_then_netherite_run',21600);
+missionClock+=21600*1000;
+ok(long.next(world()).kind==='idle'&&long.status().status==='expired',
+ 'Initial long mission expires at its requested window');
+ok(long.renewMission(21600),'One bounded six-hour mission continuation permitted');
+ok(long.status().deadline===1000000+43200*1000,
+ 'Second window cannot exceed original 12-hour authority boundary');
+missionClock+=21600*1000;
+ok(long.next(world()).kind==='idle'&&long.status().status==='expired',
+ 'Long mission expires at absolute 12-hour limit');
+ok(!long.renewMission(21600),'Renewal denied after owner authority has expired');
+const paused=createController({clock:()=>missionClock,maxSeconds:43200});
+paused.start('dragon_run',300);paused.stop('Owner stop');
+ok(!paused.renewMission(21600),'Explicit owner stop cannot be renewed');
 c.start('follow',10);ok(c.next(world()).kind==='follow','follow chosen');now+=11000;ok(c.next(world()).kind==='idle','deadline stops bot');
 ok(c.status().status==='expired','expiry recorded');c.start('explore',10);c.stop();ok(c.next(world()).kind==='idle','manual pause prevents action');
 for(let i=0;i<60000;i++){

@@ -7,17 +7,36 @@
 const mineflayer = require('mineflayer');
 const readline = require('readline');
 const net = require('node:net');
+const path = require('node:path');
+const {createCheckpoint} = require('./mission_checkpoint.cjs');
+const {acceptDragonDeath,resetDragon}=require('./dragon_engagement.cjs');
 const {Vec3} = require('vec3');
 const {pathfinder, Movements, goals} = require('mineflayer-pathfinder');
 const {validateCommand, inventorySummary} = require('./friend_protocol.cjs');
-const {digest, createController, FOOD, resolveOwnerEntity} = require('./autonomy_engine.cjs');
+const {interpretOwnerInstruction} = require('./language_goal.cjs');
+const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
 const {planSurveyStep}=require('./terrain_survey.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
 const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_navigation.cjs');
+const {collectObservedDrop,pickupFeet}=require('./drop_pickup.cjs');
+const {retreatStances}=require('./retreat_access.cjs');
+const {normalizeResource}=require('./resource_goal.cjs');
+const {validBuildSpec,observeBuild}=require('./structure_goal.cjs');
+const {validFarmSpec,observeWheat}=require('./wheat_goal.cjs');
+const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
+const {safeSurveyFeet}=require('./wood_navigation.cjs');
+const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
+const {stoneProposal,excavationProposal}=require('./stone_access.cjs');
+const {findCraftingSite,findCarvableCraftingAlcove}=require('./crafting_site.cjs');
+const {stopPathfinder,clearStaleStop}=require('./pathfinder_lifecycle.cjs');
+// mineflayer-pathfinder needs up to thinkTimeout (5000ms default) just to
+// decide a route. A per-leg navigation budget below that expires while A* is
+// still computing, so every stance leg gets at least this much wall clock.
+const STANCE_NAV_TIMEOUT_MS = 12000;
 const port = Number(process.env.JARVIS_MINECRAFT_LAN_PORT);
 const leader = process.env.JARVIS_MINECRAFT_PLAYER || '';
 const BOT_USERNAME = 'JarvisBuddy';
@@ -41,7 +60,8 @@ let spawned=false, mode='follow', actionEpoch=0, followTimer, moveTimer, lastAct
 // Failed digging coordinates are quarantined until a meaningful position change.
 const failedDigTargets=new Map();
 const autopilot=createController({maxSeconds:43200,maxSteps:20000});
-let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;
+const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-mission.json'),{host,port,owner:leader});
+let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const MOB_NAMES=new Set(['zombie','skeleton','spider','husk','drowned']);
 function ack(id,ok,status,error){
@@ -51,9 +71,18 @@ function stopInput(){
   if(moveTimer){clearTimeout(moveTimer);moveTimer=undefined;}
   for(const key of ['forward','back','left','right','jump'])bot.setControlState(key,false);
 }
+// A stance leg must outlive pathfinder's own A* think budget plus walking time.
+function stanceNavTimeoutMs(){
+  const think=Number(bot?.pathfinder?.thinkTimeout)||5000;
+  return Math.max(STANCE_NAV_TIMEOUT_MS,think+7000);
+}
 function halt(){
-  ++actionEpoch;bot.pathfinder.setGoal(null);
-  if(typeof bot.pathfinder.stop==='function')bot.pathfinder.stop();
+  ++actionEpoch;
+  // Order matters. mineflayer-pathfinder's stop() only ARMS a sticky latch
+  // that the next setGoal() consumes; calling setGoal(null) first and stop()
+  // second left the latch armed, which killed the NEXT goto() before the bot
+  // moved. stopPathfinder() arms then consumes, so no sticky state survives.
+  stopPathfinder(bot);
   stopInput();
 }
 function ownerEntity(){ return resolveOwnerEntity(bot, leader); }
@@ -61,7 +90,7 @@ function conciseStatus(){
   const p=bot.entity?.position;const owner=ownerEntity();
   const delta=p && owner?.position ? Math.round(p.distanceTo(owner.position)) : null;
   return JSON.stringify({mode,position:p?{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}:null,
-    ownerName:leader,botName:bot.username,ownerVisible:!!owner,ownerDistance:delta,health:bot.health,food:bot.food,
+    ownerName:leader,botName:bot.username,gameMode:bot.game?.gameMode||'unknown',ownerVisible:!!owner,ownerDistance:delta,health:bot.health,food:bot.food,
     inventory:inventorySummary(bot),autonomy:autopilot.status().status,
     autoGoal:autopilot.status().goal,autoSteps:autopilot.status().steps,lastAction}).slice(0,1500);
 }
@@ -69,7 +98,7 @@ function say(text){
   if(typeof text!=='string'||!text.trim())return;
   bot.chat(String(text).replace(/[\r\n]/g,' ').slice(0,120));
 }
-function setMode(next){halt();if(mode==='auto')autopilot.stop('Superseded by owner command');mode=next;lastAction='mode '+next;}
+function setMode(next){halt();if(mode==='auto'){autopilot.stop('Superseded by owner command');missionCheckpoint.clear();}mode=next;lastAction='mode '+next;}
 function doFollow(){
   const player=ownerEntity();
   if(player)bot.pathfinder.setGoal(new goals.GoalFollow(player,3),true);
@@ -89,11 +118,18 @@ function startAction(name,fn){
 }
 function isTreeLog(block){return !!block && /_log$/.test(block.name) && !block.name.includes('stripped');}
 function nearbyLogs(){
-  // Inspect multiple logs; the closest one can be behind a wall or above a cliff.
-  const positions=typeof bot.findBlocks==='function' ? bot.findBlocks({matching:isTreeLog,maxDistance:SCAN_RADIUS,count:MAX_LOG_CANDIDATES}) : [];
-  if(positions?.length)return rankLogs(positions,bot.entity.position);
+  // Avoid digging canopy blocks whose drops cannot be retrieved from an
+  // observed standable foot position. The real Java 1.21.1 field run failed
+  // at Y=75 after mining logs but leaving inaccessible floating drops.
+  const eligible=p=>{
+    const foot=pickupFeet(bot,p.offset(.5,.5,.5),Vec3);
+    return !!foot && foot.distanceTo(p)<=4.5;
+  };
+  const positions=typeof bot.findBlocks==='function' ?
+    bot.findBlocks({matching:isTreeLog,maxDistance:SCAN_RADIUS,count:MAX_LOG_CANDIDATES*3}) : [];
+  if(positions?.length)return rankLogs(positions,bot.entity.position,eligible);
   const nearest=bot.findBlock({matching:isTreeLog,maxDistance:SCAN_RADIUS});
-  return nearest?rankLogs([nearest.position],bot.entity.position):[];
+  return nearest?rankLogs([nearest.position],bot.entity.position,eligible):[];
 }
 // Return a verified inventory delta, not a mere block-digging receipt.
 async function gatherOneLog(epoch,deadline){
@@ -136,17 +172,17 @@ async function gatherOneLog(epoch,deadline){
         if(!isTreeLog(live))throw Error('Tree log no longer present');
         if(bot.entity.position.distanceTo(p)>5)throw Error('Log beyond digging reach');
         await bot.dig(live);
-        for(let i=0;i<12;i++){
-          if(epoch!==actionEpoch)throw Error('Wood collection cancelled');
-          await pause(300);
-          let after=digest(bot,leader).inventory.logs;
-          if(after>before)return {ok:true,verified:true,detail:`Logs in inventory ${before} -> ${after}`};
-          const item=bot.nearestEntity?.(e=>e?.position && (e.name==='item'||e.type==='other') && e.position.distanceTo(p)<6);
-          if(item?.position && bot.entity.position.distanceTo(item.position)>1.5){
-            try{await navigate(item.position,1,epoch,Math.min(3000,Math.max(500,deadline-Date.now())));}catch{ /* Pickup still requires an inventory delta. */ }
-          }
-        }
-        lastFailure='Log dug but item pickup not verified';
+        if(epoch!==actionEpoch)throw Error('Wood collection cancelled');
+        const acquired=await collectObservedDrop({
+          bot,origin:p,beforeCount:before,
+          readCount:()=>digest(bot,leader).inventory.logs,
+          move:(target,range,limitMs)=>navigate(target,range,epoch,limitMs),
+          check:()=>{if(epoch!==actionEpoch)throw Error('Wood collection cancelled')},
+          wait:pause,deadline:Math.min(deadline,Date.now()+19000),
+          Vec3,label:'Wood logs'
+        });
+        if(acquired.ok && acquired.verified)return acquired;
+        lastFailure=acquired.detail;
       }catch(err){
         if(epoch!==actionEpoch)throw Error('Wood collection cancelled');
         lastFailure=String(err.message||err).slice(0,130);
@@ -185,6 +221,10 @@ function guardTick(){
 async function navigate(p,range,epoch,limitMs=12000){
   let timer,expired=false;
   const destination=`${Math.floor(p.x)},${Math.floor(p.y)},${Math.floor(p.z)}`;
+  // Clear any latch a previous cancellation or timeout left armed. Otherwise
+  // goto() below would reject instantly with 'Path was stopped' and the bot
+  // would never take its first step toward this destination.
+  clearStaleStop(bot);
   try{
     await Promise.race([
       bot.pathfinder.goto(new goals.GoalNear(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z),range)),
@@ -193,7 +233,9 @@ async function navigate(p,range,epoch,limitMs=12000){
         // Queue the meaningful error BEFORE stopping Pathfinder. Otherwise the
         // generic 'Path was stopped' rejection can win the race.
         reject(Error(`Navigation timeout after ${limitMs}ms to ${destination}`));
-        if(typeof bot.pathfinder.stop==='function')bot.pathfinder.stop();
+        // Arm AND consume: a bare stop() here leaves the latch armed and
+        // silently poisons every subsequent stance retry in the same action.
+        stopPathfinder(bot);
       },limitMs);})
     ]);
   }catch(err){
@@ -213,29 +255,242 @@ async function craftNamed(name,count,epoch,table=null){
   const recipes=bot.recipesFor(item.id,null,1,table);
   if(!recipes?.length)throw Error('Required crafting ingredients or workstation unavailable');
   await bot.craft(recipes[0],count,table);
+  // The server can acknowledge a crafting operation before the inventory
+  // packet settles. Readback immediately after craft() incorrectly rejected
+  // real planks/sticks, then retried a spent log and deadlocked the mission.
   if(epoch!==actionEpoch)throw Error('Craft cancelled by owner');
-  const after=digest(bot,leader).inventory.raw[name]||0;
-  return {ok:after>before,verified:after>before,detail:`${name}: inventory ${before} -> ${after}`};
+  const result=await waitForInventoryIncrease({
+    before,read:()=>digest(bot,leader).inventory.raw[name]||0,
+    check:()=>{if(epoch!==actionEpoch)throw Error('Craft cancelled by owner')},
+    wait:pause,deadline:Date.now()+3500,
+  });
+  return {ok:result.ok,verified:result.ok,
+    detail:`${name}: inventory ${before} -> ${result.after}`+
+      (result.ok?' (server receipt)':' (recipe dispatched, result unverified)')};
 }
 const lateSkills=createLateSkills({bot,navigate,craftNamed,getEpoch:()=>actionEpoch,getOwner:()=>leader,digest,Vec3});
+async function collectVerifiedDrop(blockPosition,beforeCount,readCount,epoch,label){
+  return collectObservedDrop({
+    bot,origin:blockPosition,beforeCount,readCount,
+    move:(target,range,limitMs)=>navigate(target,range,epoch,limitMs),
+    check:()=>{if(epoch!==actionEpoch)throw Error('Mining pickup cancelled')},
+    wait:pause,deadline:Date.now()+25000,Vec3,label
+  });
+}
+async function scoutStoneSite(epoch){
+  // A finite, real-position scouting fallback for exhausted local surface
+  // layers. It never claims cobblestone from a movement observation.
+  const attempt=bot.jarvisStoneScoutCount||0;
+  if(attempt>=8)return {ok:false,verified:false,detail:'Eight stone-search regions exhausted, no ore proof'};
+  const dirs=[[8,0],[0,8],[-8,0],[0,-8],[8,8],[-8,8],[8,-8],[-8,-8]];
+  const here=bot.entity.position.clone();
+  for(let j=0;j<3;j++){
+    const [dx,dz]=dirs[(attempt+j)%dirs.length];
+    const px=Math.floor(here.x)+dx,pz=Math.floor(here.z)+dz;
+    for(const dy of [0,1,-1,2,-2]){
+      const foot=new Vec3(px,Math.floor(here.y)+dy,pz);
+      const ground=bot.blockAt(foot.offset(0,-1,0));
+      const legs=bot.blockAt(foot),head=bot.blockAt(foot.offset(0,1,0));
+      if(!ground||ground.boundingBox!=='block'||
+         /lava|water|magma|cactus/.test(ground.name)||
+         !legs||legs.boundingBox!=='empty'||!head||head.boundingBox!=='empty'||
+         /lava|water|fire|powder_snow/.test(legs.name+' '+head.name))continue;
+      try{
+        const reached=await navigate(foot.offset(.5,0,.5),2,epoch,
+          Math.min(14500,stanceNavTimeoutMs()));
+        if(reached && bot.entity.position.distanceTo(here)>3){
+          bot.jarvisStoneScoutCount=attempt+1;
+          return {ok:true,verified:true,detail:'New stone-search region reached, server observed '+here+' -> '+bot.entity.position+'; no stone claimed'};
+        }
+      }catch(error){if(epoch!==actionEpoch)throw error;}
+    }
+  }
+  bot.jarvisStoneScoutCount=attempt+1;
+  return {ok:false,verified:false,detail:'No safe reachable new stone terrain; resource count unchanged'};
+}
 async function autoExecute(plan,epoch){
   const before=digest(bot,leader);
   if(epoch!==actionEpoch)throw Error('Owner cancelled current action');
   switch(plan.kind){
+    case 'craft_general':{
+      if(!validCraftSpec({goal:'craft',item:plan.item,targetCount:1}))
+        return {ok:false,verified:false,detail:'Unapproved crafting target'};
+      const table=bot.findBlock({matching:b=>b?.name==='crafting_table',maxDistance:4});
+      if(!['stick','crafting_table','torch'].includes(plan.item)&&!table)
+        return {ok:false,verified:false,detail:'Required workstation not server-observed'};
+      return craftNamed(plan.item,1,epoch,table||null);
+    }
+    case 'equip_general':{
+      if(!validEquipSpec({goal:'equip',item:plan.item,destination:plan.destination}))
+        return {ok:false,verified:false,detail:'Unapproved equipment combination'};
+      const owned=bot.inventory.items().find(i=>i.name===plan.item);
+      if(!owned)return {ok:false,verified:false,detail:'Equipment item not in backpack'};
+      await bot.equip(owned,plan.destination);
+      if(epoch!==actionEpoch)throw Error('Equipment action cancelled by owner');
+      const slot=bot.getEquipmentDestSlot?.(plan.destination);
+      const observed=plan.destination==='hand'?bot.heldItem?.name:
+        Number.isInteger(slot)?bot.inventory.slots?.[slot]?.name:null;
+      return {ok:observed===plan.item,verified:observed===plan.item,
+        detail:'Server equipment '+plan.destination+': '+String(observed||'unverified')};
+    }
+    case 'harvest_wheat':case 'plant_wheat':{
+      const p=plan.position;
+      const target=new Vec3(p.x,p.y,p.z),prior=bot.blockAt(target);
+      const floor=bot.blockAt(target.offset(0,-1,0));
+      if(!prior||!floor||floor.name!=='farmland')
+        return {ok:false,verified:false,detail:'Wheat field no longer observed on tilled farmland'};
+      const pos=bot.entity.position;
+      if(pos.distanceTo(target.offset(.5,.5,.5))>12)
+        return {ok:false,verified:false,detail:'Wheat action outside 12-block local boundary'};
+      if(pos.distanceTo(target.offset(.5,.5,.5))>4.2){
+        let navigated=false;
+        for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+          const foot=safeSurveyFeet(bot,p.x+dx,p.z+dz,p.y,Vec3);
+          if(!foot)continue;
+          try{
+            if(await navigate(foot.offset(.5,0,.5),0,epoch,stanceNavTimeoutMs()) &&
+               bot.entity.position.distanceTo(target.offset(.5,.5,.5))<=4.2){
+              navigated=true;break;
+            }
+          }catch(e){if(epoch!==actionEpoch)throw e;}
+        }
+        if(!navigated)return {ok:false,verified:false,detail:'No safe reachable wheat field stance'};
+      }
+      if(epoch!==actionEpoch)throw Error('Owner cancelled wheat farming');
+      const crop=bot.blockAt(target),actualFloor=bot.blockAt(target.offset(0,-1,0));
+      if(actualFloor?.name!=='farmland')return {ok:false,verified:false,detail:'Farmland changed during travel'};
+      if(plan.kind==='harvest_wheat'){
+        const observedAge=Number(crop?.getProperties?.().age);
+        if(crop?.name!=='wheat'||!Number.isInteger(observedAge)||observedAge!==7 ||
+           !bot.canDigBlock?.(crop))
+          return {ok:false,verified:false,detail:'Wheat is no longer mature and diggable'};
+        const beforeWheat=rawCount(bot,'wheat');
+        await bot.dig(crop);
+        if(epoch!==actionEpoch)throw Error('Owner cancelled wheat harvest');
+        if(bot.blockAt(target)?.name==='wheat')
+          return {ok:false,verified:false,detail:'Mature wheat removal not observed'};
+        return collectVerifiedDrop(target,beforeWheat,()=>rawCount(bot,'wheat'),epoch,'Wheat harvest');
+      }
+      if(!crop||!['air','cave_air'].includes(crop.name))
+        return {ok:false,verified:false,detail:'Planting target is not empty farmland'};
+      const seed=bot.inventory.items().find(i=>i.name==='wheat_seeds'&&i.count>0);
+      if(!seed)return {ok:false,verified:false,detail:'No server-verified wheat seeds'};
+      const beforeSeed=rawCount(bot,'wheat_seeds');
+      await bot.equip(seed,'hand');
+      if(epoch!==actionEpoch)throw Error('Owner cancelled wheat planting');
+      await bot.placeBlock(actualFloor,new Vec3(0,1,0));
+      for(let j=0;j<8;j++){
+        if(epoch!==actionEpoch)throw Error('Owner cancelled wheat planting');
+        if(bot.blockAt(target)?.name==='wheat'&&rawCount(bot,'wheat_seeds')<beforeSeed)
+          return {ok:true,verified:true,detail:'Wheat seed consumed; crop present on verified farmland'};
+        await pause(200);
+      }
+      return {ok:false,verified:false,detail:'New wheat crop plus seed consumption not both verified'};
+    }
+    case 'place_build_block':{
+      const p=plan.position;
+      if(!validBuildSpec({goal:'build',position:p,block:plan.block,axis:'x+',length:1}))
+        return {ok:false,verified:false,detail:'Invalid bounded construction cell'};
+      const target=new Vec3(p.x,p.y,p.z);
+      if(bot.entity.position.distanceTo(target.offset(.5,.5,.5))>12)
+        return {ok:false,verified:false,detail:'Construction cell outside 12-block local authority radius'};
+      const beforeBlock=bot.blockAt(target),ground=bot.blockAt(target.offset(0,-1,0));
+      if(!beforeBlock||beforeBlock.boundingBox!=='empty'||!ground||
+        ground.boundingBox!=='block'||/lava|water|fire|magma|cactus/.test(ground.name))
+        return {ok:false,verified:false,detail:'Construction target obstructed, unloaded or lacks safe support'};
+      const stack=bot.inventory.items().find(i=>i.name===plan.block&&i.count>0);
+      if(!stack)return {ok:false,verified:false,detail:'Actual building block missing from survival inventory'};
+      const beforeCount=rawCount(bot,plan.block);
+      // Navigation is allowed only to observed safe adjacent foot locations.
+      if(bot.entity.position.distanceTo(target.offset(.5,.5,.5))>4.2){
+        const feet=[[p.x+1,p.z],[p.x-1,p.z],[p.x,p.z+1],[p.x,p.z-1]]
+          .map(([x,z])=>safeSurveyFeet(bot,x,z,p.y,Vec3)).filter(Boolean);
+        let reached=false;
+        for(const foot of feet.slice(0,4)){
+          if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
+          try{
+            if(await navigate(foot.offset(.5,0,.5),0,epoch,stanceNavTimeoutMs()) &&
+               bot.entity.position.distanceTo(target.offset(.5,.5,.5))<=4.2){reached=true;break;}
+          }catch(e){if(epoch!==actionEpoch)throw e;}
+        }
+        if(!reached)return {ok:false,verified:false,detail:'No safe reachable placement stance'};
+      }
+      if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
+      if(bot.blockAt(target)?.boundingBox!=='empty'||bot.blockAt(ground.position)?.name!==ground.name)
+        return {ok:false,verified:false,detail:'Target or floor changed before placement'};
+      await bot.equip(stack,'hand');
+      if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
+      await bot.placeBlock(ground,new Vec3(0,1,0));
+      for(let attempt=0;attempt<8;attempt++){
+        if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
+        const placed=bot.blockAt(target)?.name===plan.block;
+        const consumed=rawCount(bot,plan.block)<beforeCount;
+        if(placed&&consumed)return {ok:true,verified:true,
+          detail:'Survival block placed and inventory consumed at '+p.x+','+p.y+','+p.z};
+        await pause(200);
+      }
+      return {ok:false,verified:false,detail:'Placement not proved by BOTH block state and survival inventory consumption'};
+    }
+    case 'travel_target':{
+      const dest=plan.destination,radius=plan.range;
+      if(!dest || !['x','y','z'].every(k=>Number.isInteger(dest[k])) ||
+          !Number.isInteger(radius)||radius<1||radius>8)
+        return {ok:false,verified:false,detail:'Invalid owner-authorized travel destination'};
+      const exact=new Vec3(dest.x+.5,dest.y,dest.z+.5);
+      if(epoch!==actionEpoch)throw Error('Travel cancelled');
+      const reached=await navigate(exact,radius,epoch,15000);
+      if(epoch!==actionEpoch)throw Error('Travel cancelled');
+      const actual=bot.entity.position.clone();
+      const distance=actual.distanceTo(exact);
+      const verified=reached===true && distance<=radius;
+      return {ok:verified,verified,proof:verified?'travel_arrival':undefined,
+        detail:verified?'Reached authorized target with observed distance '+distance.toFixed(2):
+          'Travel not proven: actual distance '+distance.toFixed(2)+'; route='+String(reached)};
+    }
     case 'follow':{
       const owner=ownerEntity();if(!owner)throw Error('Owner no longer visible');
       const reached=await navigate(owner.position,plan.range||4,epoch,10000);
       return {ok:reached,verified:reached,detail:'Owner distance '+digest(bot,leader).ownerDistance};
     }
     case 'retreat':{
-      const enemy=bot.nearestEntity(e=>e && e.position && ['creeper','zombie','skeleton','spider','husk','drowned','witch'].includes(e.name) && e.position.distanceTo(bot.entity.position)<=12);
-      if(!enemy)return {ok:true,verified:true,detail:'Threat no longer nearby'};
-      const p=bot.entity.position, e=enemy.position;
-      const mag=Math.max(1,Math.hypot(p.x-e.x,p.z-e.z));
-      const dest={x:p.x+8*(p.x-e.x)/mag,y:p.y,z:p.z+8*(p.z-e.z)/mag};
-      const reached=await navigate(dest,3,epoch,9000);
-      const now=digest(bot,leader).threats[0];
-      return {ok:reached,verified:reached && (!now || now.distance>4),detail:'Retreat destination attempted, nearby threat distance '+(now?.distance||'none')};
+      // The planner and executor MUST recognize the same hostile set, even
+      // in Nether and End. Never return "threat cleared" for an observed
+      // Dragon just because an Overworld-only filter missed its entity.
+      const here=bot.entity.position.clone();
+      const threat=Object.values(bot.entities||{})
+        .filter(e=>e?.position && HOSTILES.has(e.name) &&
+          e.position.distanceTo(here)<=16)
+        .sort((a,b)=>a.position.distanceTo(here)-b.position.distanceTo(here))[0];
+      if(!threat){
+        const observed=digest(bot,leader).threats;
+        const clear=observed.length===0;
+        return {ok:clear,verified:clear,
+          detail:clear?'No hostile entity remains in loaded danger range':
+            'Threat list and live entity positions disagree; retreat unverified'};
+      }
+      const initial=here.distanceTo(threat.position);
+      const targets=retreatStances(bot,here,threat.position,Vec3);
+      if(!targets.length)return {ok:false,verified:false,
+        detail:'No server-observed safe retreat stance farther from '+threat.name};
+      let reason='No fully reached retreat route';
+      for(const target of targets.slice(0,4)){
+        if(epoch!==actionEpoch)throw Error('Retreat cancelled');
+        try{
+          const reached=await navigate(target,2,epoch,12500);
+          const current=bot.entity.position.clone();
+          const separation=current.distanceTo(threat.position);
+          if(reached && separation>=initial+2 && current.distanceTo(here)>=3){
+            return {ok:true,verified:true,
+              detail:'Real '+threat.name+' retreat from distance '+
+                initial.toFixed(1)+' to '+separation.toFixed(1)};
+          }
+          reason='Retreat path returned but actual separation did not improve';
+        }catch(err){
+          if(epoch!==actionEpoch)throw Error('Retreat cancelled');
+          reason=String(err?.message||err).slice(0,110);
+        }
+      }
+      return {ok:false,verified:false,detail:'Retreat not verified: '+reason};
     }
     case 'defend':{
       const hostile=bot.entities?.[plan.targetId];
@@ -250,6 +505,89 @@ async function autoExecute(plan,epoch){
       await bot.equip(food,'hand');await bot.consume();
       if(epoch!==actionEpoch)throw Error('Owner stopped action');
       return {ok:bot.food>old,verified:bot.food>old,detail:'Hunger '+old+' -> '+bot.food};
+    }
+    case 'recover_table':{
+      // Physically retrieve the SAME table that crafted the wooden pickaxe.
+      // If left at the surface before underground mining, the only table
+      // becomes unreachable and the planner falsely seeks more timber.
+      const existing=before.inventory.table;
+      // Do not mine another player's table. This coordinate is saved ONLY
+      // after a confirmed place_table action by our own autonomous bot.
+      const owned=bot.jarvisOwnedCraftingTablePos;
+      if(!owned)
+        return {ok:false,verified:false,detail:'No proof this crafting table belongs to the bot'};
+      const station=bot.blockAt(owned);
+      if(station?.name!=='crafting_table')
+        return {ok:false,verified:false,detail:'Previously placed crafting table no longer exists'};
+      if(epoch!==actionEpoch)throw Error('Workstation retrieval cancelled');
+      const p=station.position;
+      const distance=bot.entity.position.distanceTo(p.offset(.5,.5,.5));
+      if(distance>4.2){
+        const reached=await navigate(p,2,epoch,stanceNavTimeoutMs());
+        if(!reached) return {ok:false,verified:false,detail:'Placed crafting table is inaccessible'};
+      }
+      if(epoch!==actionEpoch)throw Error('Workstation retrieval cancelled');
+      const live=bot.blockAt(p);
+      if(live?.name!=='crafting_table' || !bot.canDigBlock?.(live))
+        return {ok:false,verified:false,detail:'Crafting table is no longer present or diggable'};
+      await bot.dig(live);
+      bot.jarvisOwnedCraftingTablePos=null; // The block is gone even if pickup fails.
+      if(epoch!==actionEpoch)throw Error('Workstation retrieval cancelled');
+      return collectVerifiedDrop(p,existing,()=>digest(bot,leader).inventory.table,
+        epoch,'Recovered crafting table');
+    }
+    case 'scout_survival':{
+      if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
+      const origin=bot.entity.position.clone();
+      const sites=surveyTargets(bot,origin,Vec3).filter(p=>p.distanceTo(origin)>4);
+      if(!sites.length)return {ok:false,verified:false,
+        detail:'No safe loaded waypoint for owner-independent survival exploration'};
+      const start=(Number.isInteger(plan.index)?Math.abs(plan.index):0)%sites.length;
+      let last='All selected safe routes inaccessible';
+      for(let attempt=0;attempt<Math.min(3,sites.length);attempt++){
+        const site=sites[(start+attempt)%sites.length];
+        try{
+          const arrived=await navigate(site,2,epoch,14000);
+          const actual=bot.entity.position.clone();
+          if(arrived && actual.distanceTo(origin)>3 && actual.distanceTo(site)<=4)
+            return {ok:true,verified:true,detail:'Independent safe exploration reached '+Math.floor(actual.x)+','+
+              Math.floor(actual.y)+','+Math.floor(actual.z)+'; no loot or combat success claimed'};
+          last='No significant observed player displacement';
+        }catch(e){
+          if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
+          last=String(e?.message||e).slice(0,110);
+        }
+      }
+      return {ok:false,verified:false,detail:'Safe independent exploration blocked: '+last};
+    }
+    case 'survey_wood':{
+      if(epoch!==actionEpoch)throw Error('Wood survey cancelled');
+      const start=bot.entity.position.clone(),used=bot.jarvisWoodSurveyVisited||new Set();
+      bot.jarvisWoodSurveyVisited=used;
+      const targets=surveyTargets(bot,start,Vec3).filter(p=>
+        !used.has([p.x,p.y,p.z].join(',')) &&
+        p.distanceTo(start)>5);
+      if(!targets.length)return {ok:false,verified:false,
+        detail:'No unvisited safe loaded wood-survey locations; no movement claimed'};
+      let last='No reachable wood survey waypoint';
+      for(const p of targets.slice(0,4)){
+        if(epoch!==actionEpoch)throw Error('Wood survey cancelled');
+        used.add([p.x,p.y,p.z].join(','));
+        try{
+          const arrived=await navigate(p,2,epoch,14000);
+          const now=bot.entity.position;
+          if(arrived && now.distanceTo(start)>4 && now.distanceTo(p)<=4){
+            return {ok:true,verified:true,detail:
+              'Observed move to new standable wood survey region '+Math.floor(now.x)+','+
+              Math.floor(now.y)+','+Math.floor(now.z)+'; NO logs claimed'};
+          }
+          last='Route ended without proved displacement to a fresh survey region';
+        }catch(err){
+          if(epoch!==actionEpoch)throw Error('Wood survey cancelled');
+          last=String(err?.message||err).slice(0,115);
+        }
+      }
+      return {ok:false,verified:false,detail:'Wood survey exhausted safe routes: '+last};
     }
     case 'collect_wood':return await gatherOneLog(epoch,Date.now()+45000);
     case 'survey_ore':{
@@ -293,51 +631,75 @@ async function autoExecute(plan,epoch){
         'Verified safe '+plan.ore+' cave advance; no exposed ore found yet'};
     }
     case 'mine_cobblestone':{
-      if(!(before.inventory.woodenPickaxe||before.inventory.stonePickaxe))throw Error('Stone mining requires pickaxe');
-      const block=bot.findBlock({matching:b=>b && ['stone','cobblestone'].includes(b.name),maxDistance:16});
-      if(!block)throw Error('No safe stone within loaded search range');
-      const p=block.position;
-      await navigate(p,2,epoch,12000);
-      if(epoch!==actionEpoch)throw Error('Mining cancelled');
-      const live=bot.blockAt(p);
-      if(!live || !['stone','cobblestone'].includes(live.name))throw Error('Stone no longer present');
-      if(bot.entity.position.distanceTo(p)>5)throw Error('Stone out of reach');
-      const pick=bot.inventory.items().find(i=>['stone_pickaxe','wooden_pickaxe'].includes(i.name));
-      if(!pick)throw Error('Pickaxe missing');
-      await bot.equip(pick,'hand');await bot.dig(live);
-      for(let i=0;i<8;i++){
-        if(epoch!==actionEpoch)throw Error('Mining cancelled');
-        await pause(350);
-        const dropped=bot.nearestEntity?.(e=>e && e.position && (e.name==='item'||e.type==='other') && e.position.distanceTo(p)<5);
-        if(dropped?.position && bot.entity.position.distanceTo(dropped.position)>1.7)
-          await navigate(dropped.position,1,epoch,2800).catch(()=>false);
-        const now=digest(bot,leader).inventory.cobblestone;
-        if(now>before.inventory.cobblestone)return {ok:true,verified:true,detail:'Cobblestone '+before.inventory.cobblestone+' -> '+now};
+      if(!(before.inventory.woodenPickaxe||before.inventory.stonePickaxe||
+         before.inventory.ironPickaxe||before.inventory.diamondPickaxe))
+        throw Error('Stone mining requires a real pickaxe');
+      const pick=bot.inventory.items().find(i=>
+        ['stone_pickaxe','wooden_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'].includes(i.name));
+      if(!pick)throw Error('Server inventory has no usable pickaxe');
+      const candidate=stoneProposal(bot,goals.GoalBlock);
+      if(!candidate){
+        // The old findBlock picked buried stone and retried impossible A*
+        // routes forever. Physically uncover nearby stone instead. No
+        // cobblestone is claimed unless inventory later increases.
+        const preparation=excavationProposal(bot);
+        if(!preparation)return scoutStoneSite(epoch);
+        const prior=bot.blockAt(preparation.position);
+        if(!prior||!bot.canDigBlock?.(prior))
+          return {ok:false,verified:false,detail:'Proposed soil excavation became unsafe'};
+        const beforeStone=before.inventory.cobblestone;
+        await bot.equip(pick,'hand');
+        await bot.dig(prior);
+        if(epoch!==actionEpoch)throw Error('Stone excavation cancelled');
+        await pause(150);
+        const changed=bot.blockAt(preparation.position);
+        if(!changed||changed.name===prior.name||/lava|water/.test(changed.name))
+          return {ok:false,verified:false,detail:'Excavation did not safely change actual server block state'};
+        if(['stone','cobblestone'].includes(prior.name)){
+          const picked=await collectVerifiedDrop(preparation.position,beforeStone,
+            ()=>digest(bot,leader).inventory.cobblestone,epoch,'Excavated cobblestone');
+          if(picked.ok&&picked.verified)bot.jarvisStoneScoutCount=0;
+          return picked;
+        }
+        return {ok:true,verified:true,detail:'Server-confirmed safe preparatory excavation; no stone drop claimed'};
       }
-      return {ok:false,verified:false,detail:'Stone dug, but cobblestone pickup not verified'};
+      if(candidate.stance){
+        const stance=candidate.stance;
+        const reached=await navigate(new Vec3(stance.x+.5,stance.y,stance.z+.5),
+          1,epoch,stanceNavTimeoutMs());
+        if(!reached)return {ok:false,verified:false,detail:'Stone mining stance not physically reached'};
+      }
+      if(epoch!==actionEpoch)throw Error('Stone mining cancelled');
+      const live=bot.blockAt(candidate.position);
+      if(!live||!['stone','cobblestone'].includes(live.name)||
+         !isExposed(bot,live.position)||!bot.canDigBlock?.(live))
+        return {ok:false,verified:false,detail:'Selected stone is not exposed and within real mining reach'};
+      const beforeStone=before.inventory.cobblestone;
+      await bot.equip(pick,'hand');
+      await bot.dig(live);
+      const picked=await collectVerifiedDrop(candidate.position,beforeStone,
+        ()=>digest(bot,leader).inventory.cobblestone,epoch,'Cobblestone');
+      if(picked.ok&&picked.verified)bot.jarvisStoneScoutCount=0;
+      return picked;
     }
     case 'mine_iron':{
       if(!before.inventory.stonePickaxe && !before.inventory.ironPickaxe)throw Error('Iron ore needs stone or better pickaxe');
       const exposed=findExposedOre(bot,['iron_ore','deepslate_iron_ore'],24);
       const target=exposed?.block;
       if(!target)throw Error('No safely exposed iron ore in loaded chunks; request cave survey');
-      const p=target.position;await navigate(exposed.stance,1,epoch,14500);
+      const p=target.position;
+      const ironReached=await navigate(exposed.stance,1,epoch,14500);
+      if(!ironReached)return {ok:false,verified:false,detail:'Iron ore stance not reached; no ore claimed'};
       if(epoch!==actionEpoch)throw Error('Mining cancelled');
-      const live=bot.blockAt(p);if(!live || !['iron_ore','deepslate_iron_ore'].includes(live.name))throw Error('Ore moved or changed');
-      if(bot.entity.position.distanceTo(p)>5)throw Error('Iron ore not within reach');
+      const live=bot.blockAt(p);
+      if(!live || !['iron_ore','deepslate_iron_ore'].includes(live.name) ||
+        !bot.canDigBlock?.(live) || bot.entity.position.distanceTo(p)>5)
+        return {ok:false,verified:false,detail:'Iron ore no longer server-observed within real dig range'};
       const pick=bot.inventory.items().find(i=>['stone_pickaxe','iron_pickaxe'].includes(i.name));
       if(!pick)throw Error('Missing valid iron mining pickaxe');
       await bot.equip(pick,'hand');await bot.dig(live);
-      for(let i=0;i<9;i++){
-        if(epoch!==actionEpoch)throw Error('Mining cancelled');
-        await pause(350);
-        const dropped=bot.nearestEntity?.(e=>e?.position && (e.name==='item'||e.type==='other') && e.position.distanceTo(p)<5);
-        if(dropped?.position && bot.entity.position.distanceTo(dropped.position)>1.7)
-          await navigate(dropped.position,1,epoch,3000).catch(()=>false);
-        const now=digest(bot,leader).inventory.rawIron;
-        if(now>before.inventory.rawIron)return {ok:true,verified:true,detail:'Raw iron '+before.inventory.rawIron+' -> '+now};
-      }
-      return {ok:false,verified:false,detail:'Iron mined, but raw iron pickup not verified'};
+       return collectVerifiedDrop(p,before.inventory.rawIron,
+         ()=>digest(bot,leader).inventory.rawIron,epoch,'Raw iron');
     }
     case 'craft_furnace':{
       const station=bot.findBlock({matching:b=>b?.name==='crafting_table',maxDistance:5});
@@ -347,36 +709,53 @@ async function autoExecute(plan,epoch){
     case 'place_furnace':{
       const furnace=bot.inventory.items().find(i=>i.name==='furnace');
       if(!furnace)throw Error('No furnace');
-      const p=bot.entity.position;
-      for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1]]){
-        const ground=bot.blockAt(p.offset(dx,-1,dz));const space=bot.blockAt(p.offset(dx,0,dz));
-        if(!ground || ground.boundingBox==='empty'||space?.name!=='air')continue;
-        await bot.equip(furnace,'hand');await bot.placeBlock(ground,{x:0,y:1,z:0});
-        if(epoch!==actionEpoch)throw Error('Placement cancelled');
-        const observed=bot.blockAt(ground.position.offset(0,1,0));
-        return {ok:observed?.name==='furnace',verified:observed?.name==='furnace',detail:'Furnace observed after placement: '+(observed?.name||'missing')};
-      }
-      throw Error('No adjacent placement surface for furnace');
+      const site=findCraftingSite(bot);
+      if(!site)return {ok:false,verified:false,
+        detail:'No loaded safe furnace site; will not place over lava, occupied blocks, or unsupported ground'};
+      const ground=bot.blockAt(site.ground);
+      if(!ground || ground.boundingBox!=='block')return {ok:false,verified:false,detail:'Furnace floor changed'};
+      await bot.equip(furnace,'hand');
+      if(epoch!==actionEpoch)throw Error('Furnace placement cancelled');
+      await bot.placeBlock(ground,new Vec3(0,1,0));
+      if(epoch!==actionEpoch)throw Error('Furnace placement cancelled');
+      await pause(170);
+      const observed=bot.blockAt(site.target);
+      return {ok:observed?.name==='furnace',verified:observed?.name==='furnace',
+        detail:'Real furnace '+(observed?.name==='furnace'?'placed and server-observed':'placement unverified')};
     }
     case 'smelt_iron':{
       const block=bot.findBlock({matching:b=>b?.name==='furnace',maxDistance:5});
-      if(!block)throw Error('Furnace out of reach');
-      const raw=bot.inventory.items().find(i=>i.name==='raw_iron');
-      const fuel=bot.inventory.items().find(i=>i.name==='coal'||i.name.endsWith('_planks'));
-      if(!raw||!fuel)throw Error('Raw iron and compatible fuel required');
+      if(!block)throw Error('Furnace not observed in reach');
+      const beforeIron=before.inventory.ironIngot||0;
       const ui=await bot.openFurnace(block);
       try{
-        await ui.putFuel(fuel.type,null,1);await ui.putInput(raw.type,null,Math.min(raw.count,3));
-        for(let i=0;i<32;i++){
+        if(!ui.outputItem() && !ui.inputItem()){
+          const raw=bot.inventory.items().find(i=>i.name==='raw_iron');
+          if(!raw)return {ok:false,verified:false,detail:'No raw iron available; furnace has no observed pending input/output'};
+          // Commit exactly one raw item per action. The previous batch-of-3
+          // behavior left two untracked ingots in an unloaded furnace.
+          await ui.putInput(raw.type,null,1);
+        }
+        if(!ui.outputItem() && !ui.fuelItem()){
+          const fuel=bot.inventory.items().find(i=>i.name==='coal'||i.name==='charcoal'||i.name.endsWith('_planks'));
+          if(!fuel)return {ok:false,verified:false,detail:'No actual furnace fuel available'};
+          await ui.putFuel(fuel.type,null,1);
+        }
+        for(let i=0;i<55;i++){
           if(epoch!==actionEpoch)throw Error('Smelting cancelled');
-          await pause(500);
           if(ui.outputItem()?.name==='iron_ingot'){
             await ui.takeOutput();
-            const after=digest(bot,leader).inventory.ironIngot;
-            return {ok:after>before.inventory.ironIngot,verified:after>before.inventory.ironIngot,detail:'Iron ingots '+before.inventory.ironIngot+' -> '+after};
+            const proof=await waitForInventoryIncrease({
+              before:beforeIron,read:()=>digest(bot,leader).inventory.ironIngot||0,
+              check:()=>{if(epoch!==actionEpoch)throw Error('Smelting cancelled')},
+              wait:pause,deadline:Date.now()+3500
+            });
+            return {ok:proof.ok,verified:proof.ok,
+              detail:'Iron furnace output '+beforeIron+' -> '+proof.after+(proof.ok?' (real inventory)':' (unverified)')};
           }
+          await pause(400);
         }
-        return {ok:false,verified:false,detail:'Furnace produced no verified ingot within 16 seconds'};
+        return {ok:false,verified:false,detail:'No confirmed iron ingot output within bounded smelt window'};
       }finally{ui.close();}
     }
     case 'mine_diamond':{
@@ -385,24 +764,18 @@ async function autoExecute(plan,epoch){
       const target=exposed?.block;
       if(!target)throw Error('No safely exposed diamond ore in loaded chunks; request cave survey');
       const p=target.position;
-      await navigate(exposed.stance,1,epoch,14500);
+      const diamondReached=await navigate(exposed.stance,1,epoch,14500);
+      if(!diamondReached)return {ok:false,verified:false,detail:'Diamond mining stance not reached; no resource claimed'};
       if(epoch!==actionEpoch)throw Error('Diamond mining cancelled');
       const live=bot.blockAt(p);
-      if(!live || !['diamond_ore','deepslate_diamond_ore'].includes(live.name))throw Error('Diamond ore changed');
-      if(bot.entity.position.distanceTo(p)>5)throw Error('Diamond ore out of reach');
+      if(!live || !['diamond_ore','deepslate_diamond_ore'].includes(live.name) ||
+        !bot.canDigBlock?.(live) || bot.entity.position.distanceTo(p)>5)
+        return {ok:false,verified:false,detail:'Diamond ore no longer within dig range or safe after route'};
       const pick=bot.inventory.items().find(i=>['diamond_pickaxe','iron_pickaxe'].includes(i.name));
       if(!pick)throw Error('Missing pickaxe');
       await bot.equip(pick,'hand');await bot.dig(live);
-      for(let i=0;i<9;i++){
-        if(epoch!==actionEpoch)throw Error('Diamond mining cancelled');
-        await pause(350);
-        const dropped=bot.nearestEntity?.(e=>e?.position && (e.name==='item'||e.type==='other') && e.position.distanceTo(p)<5);
-        if(dropped?.position && bot.entity.position.distanceTo(dropped.position)>1.7)
-          await navigate(dropped.position,1,epoch,3000).catch(()=>false);
-        const now=digest(bot,leader).inventory.diamonds;
-        if(now>before.inventory.diamonds)return {ok:true,verified:true,detail:'Diamonds '+before.inventory.diamonds+' -> '+now};
-      }
-      return {ok:false,verified:false,detail:'Diamond ore mined, but diamond pickup not verified'};
+       return collectVerifiedDrop(p,before.inventory.diamonds,
+         ()=>digest(bot,leader).inventory.diamonds,epoch,'Diamonds');
     }
     case 'craft_diamond_gear':{
       const allowed=new Set(['diamond_pickaxe','diamond_sword','diamond_helmet','diamond_chestplate','diamond_leggings','diamond_boots']);
@@ -431,18 +804,49 @@ async function autoExecute(plan,epoch){
     case 'place_table':{
       const tableItem=bot.inventory.items().find(i=>i.name==='crafting_table');
       if(!tableItem)throw Error('Crafting table not in inventory');
-      const p=bot.entity.position;
-      for(const [dx,dz] of [[1,0],[0,1],[-1,0],[0,-1]]){
-        if(epoch!==actionEpoch)throw Error('Placement cancelled');
-        const ground=bot.blockAt(p.offset(dx,-1,dz));
-        const above=bot.blockAt(p.offset(dx,0,dz));
-        if(!ground || ground.boundingBox==='empty' || above?.name!=='air')continue;
-        await bot.equip(tableItem,'hand');await bot.placeBlock(ground,{x:0,y:1,z:0});
-        const placed=bot.blockAt(ground.position.offset(0,1,0));
-        const ok=placed?.name==='crafting_table';
-        return {ok,verified:ok,detail:'Crafting table '+(ok?'placed and observed':'placement unverified')};
+      const site=findCraftingSite(bot);
+      if(!site){
+        // Underground, a narrow mined shaft can have no adjacent air cell.
+        // Create one tiny safe alcove without digging the player's own floor
+        // or anybody's placed workstations; observe the real block changes.
+        const alcove=findCarvableCraftingAlcove(bot);
+        if(alcove){
+          const pick=bot.inventory.items().find(i=>/_pickaxe$/.test(i.name));
+          if(!pick)return {ok:false,verified:false,detail:'No pickaxe to prepare underground table site'};
+          await bot.equip(pick,'hand');
+          for(const p of alcove.blocks){
+            if(epoch!==actionEpoch)throw Error('Crafting-site excavation cancelled');
+            const block=bot.blockAt(p);
+            if(!block||!bot.canDigBlock?.(block)||
+              !['stone','cobblestone','dirt','grass_block','coarse_dirt',
+               'rooted_dirt','gravel','sand','granite','andesite','diorite',
+               'tuff','deepslate','cobbled_deepslate'].includes(block.name))
+              return {ok:false,verified:false,detail:'Crafting-site block changed or cannot be safely dug'};
+            await bot.dig(block);
+            if(epoch!==actionEpoch)throw Error('Crafting-site excavation cancelled');
+            await pause(100);
+            if(bot.blockAt(p)?.boundingBox!=='empty')
+              return {ok:false,verified:false,detail:'Crafting-site excavation not confirmed by server'};
+          }
+          return {ok:true,verified:true,detail:'Verified adjacent underground crafting alcove cleared, table still NOT placed'};
+        }
+        // A tree canopy or uneven surface can surround the player. Relocate
+        // to a safe, server-confirmed clearing; do not retry four bad blocks.
+        return scoutStoneSite(epoch);
       }
-      throw Error('No safe adjacent ground for crafting table');
+      if(epoch!==actionEpoch)throw Error('Placement cancelled');
+      const ground=bot.blockAt(site.ground);
+      if(!ground || ground.boundingBox!=='block' ||
+         !bot.entity.position || bot.entity.position.distanceTo(site.target.offset(.5,.5,.5))>4.2)
+        return {ok:false,verified:false,detail:'Crafting site moved or became unreachable'};
+      await bot.equip(tableItem,'hand');
+      await bot.placeBlock(ground,new Vec3(0,1,0));
+      if(epoch!==actionEpoch)throw Error('Placement cancelled');
+      await pause(150);
+      const placed=bot.blockAt(site.target);
+      const ok=placed?.name==='crafting_table';
+      if(ok)bot.jarvisOwnedCraftingTablePos=placed.position.clone();
+      return {ok,verified:ok,detail:'Crafting table '+(ok?'placed at observed safe ground '+site.target:'placement unverified')};
     }
     case 'craft_pickaxe':{
       const station=bot.findBlock({matching:b=>b?.name==='crafting_table',maxDistance:5});
@@ -463,17 +867,32 @@ async function autoExecute(plan,epoch){
 }
 async function autoTick(){
   if(mode!=='auto'||autoBusy||!spawned)return;
-  const plan=autopilot.next(digest(bot,leader,{dragonDead:lateSkills.session.dragonDied}));
+  const gameWorld=digest(bot,leader,{dragonDead:lateSkills.session.dragonDied});
+  const active=autopilot.status();
+  if(active.goal==='farm_wheat')gameWorld.wheatCells=observeWheat(bot,
+    {goal:'farm_wheat',position:active.position,width:active.width,depth:active.depth,
+      targetCount:active.targetCount},Vec3);
+  if(active.goal==='build')gameWorld.buildCells=observeBuild(bot,
+    {goal:'build',position:active.position,block:active.block,axis:active.axis,length:active.length},Vec3);
+  if(active.goal==='sequence'){
+    gameWorld.buildCellsByStage=(active.sequence||[]).map(s=>
+      s.goal==='build'?observeBuild(bot,s,Vec3):null);
+    gameWorld.wheatCellsByStage=(active.sequence||[]).map(s=>
+      s.goal==='farm_wheat'?observeWheat(bot,s,Vec3):null);
+  }
+  const plan=autopilot.next(gameWorld);
   // Expiring a safety window must not silently claim mission completion or
   // force the owner to reissue a high-level instruction. Continue only a
   // still-authorized long mission; blocked or stopped goals remain stopped.
   if(plan.kind==='idle' && autopilot.status().status==='expired' && autopilot.renewMission(21600)){
+    try{missionCheckpoint.save(autopilot.status());}catch{lastAction='Renewed mission checkpoint could not be saved';}
     lastAction='Mission time window renewed from live world; victory still unverified';
     return;
   }
   if(['complete','blocked','idle'].includes(plan.kind)){
     if(autopilot.status().status!=='running'){
       lastAction='auto '+autopilot.status().status+': '+autopilot.status().why;
+      missionCheckpoint.clear();
       mode='stay';halt();
     }
     return;
@@ -484,11 +903,39 @@ async function autoTick(){
     const result=await autoExecute(plan,epoch);
     if(epoch===actionEpoch && mode==='auto'){
       autopilot.record(plan,result);lastAction='auto '+plan.kind+': '+result.detail;
+      if(process.env.JARVIS_MC_TRACE_AUTONOMY==='1'){
+        const snap=digest(bot,leader);
+        process.stdout.write('BOT_STEP '+JSON.stringify({
+          action:plan.kind,verified:result?.verified===true && result?.ok===true,
+          detail:String(result?.detail||'').slice(0,130),position:snap.position,
+          logs:snap.inventory.logs,cobblestone:snap.inventory.cobblestone,
+          woodenPickaxe:snap.inventory.woodenPickaxe,
+          stonePickaxe:snap.inventory.stonePickaxe,stoneSword:snap.inventory.stoneSword
+        })+'\n');
+      }
+      if(autopilot.status().goal==='dragon_then_netherite_run' &&
+         plan.kind==='exit_end' && result?.ok===true && result?.verified===true &&
+         result.proof==='end_return' &&
+         String(bot.game?.dimension||'').replace(/^minecraft:/,'')==='overworld' &&
+         lateSkills.session.dragonDied===true){
+        process.stdout.write('BOT_EVENT '+JSON.stringify({type:'end_exit',
+          at:Date.now(),dimension:'overworld',goal:autopilot.status().goal})+'\n');
+      }
+      if(autopilot.status().goal==='dragon_then_netherite_run' && plan.kind==='equip_netherite' &&
+         result?.ok===true && result?.verified===true && result?.proof==='netherite_equipped' &&
+         digest(bot,leader).wornNetherite===true){
+        process.stdout.write('BOT_EVENT '+JSON.stringify({type:'netherite_equipped',
+          at:Date.now(),worn:true,dimension:String(bot.game?.dimension||'').replace(/^minecraft:/,''),
+          goal:autopilot.status().goal})+'\n');
+      }
     }
   }catch(err){
     if(epoch===actionEpoch && mode==='auto'){
       const detail=String(err.message||err).slice(0,120);
       autopilot.record(plan,{ok:false,verified:false,detail});lastAction='auto '+plan.kind+' failed: '+detail;
+      if(process.env.JARVIS_MC_TRACE_AUTONOMY==='1')
+        process.stdout.write('BOT_STEP '+JSON.stringify({action:plan.kind,verified:false,
+          error:detail,position:digest(bot,leader).position})+'\n');
     }
   }finally{autoBusy=false;}
 }
@@ -497,6 +944,18 @@ async function action(q){
   if(bad)return {ok:false,error:bad};
   if(!spawned)return {ok:false,error:'Minecraft bot has not spawned'};
   switch(q.command){
+    case 'natural_goal':{
+      // The LLM interprets only; it cannot bypass the existing JARVIS executor.
+      if(languageBusy)return {ok:false,error:'Previous JARVIS language interpretation still active'};
+      languageBusy=true;
+      const before=actionEpoch;
+      try{
+        const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:conciseStatus()});
+        if(before!==actionEpoch)return {ok:false,error:'Superseded owner command cancelled stale language result'};
+        if(!parsed.ok)return {ok:false,error:parsed.error};
+        return await action(parsed.command);
+      }finally{languageBusy=false;}
+    }
     case 'status':return {ok:true,status:conciseStatus()};
     case 'inventory':return {ok:true,status:inventorySummary(bot)};
     case 'observe':{
@@ -506,15 +965,53 @@ async function action(q){
       return {ok:true,status:projectWorld(snapshot,loadedTargets(bot),lastAction,mode)};
     }
     case 'auto_status':return {ok:true,status:JSON.stringify(autopilot.status()).slice(0,1900)};
+    case 'auto_checkpoint':{
+      const lease=missionCheckpoint.load();
+      return {ok:true,status:JSON.stringify(lease.ok?
+        {recoverable:true,goal:lease.spec.goal,secondsRemaining:lease.remainingSeconds}:
+        {recoverable:false,reason:lease.reason})};
+    }
+    case 'auto_resume':{
+      if(autopilot.status().status==='running')
+        return {ok:false,error:'Autonomous goal already running; resume refused'};
+      const lease=missionCheckpoint.load();
+      if(!lease.ok)return {ok:false,error:lease.reason};
+      if(bot.game?.gameMode!=='survival')return {ok:false,error:'Restart recovery requires real survival mode'};
+      try{
+        // A new owner/Guardian instruction is mandatory after process restart;
+        // no old witnessed Dragon death or crafting receipt is restored.
+        halt();deathsOnCurrentGoal=0;resumeAfterSpawn=false;
+        resetDragon(lateSkills.session);
+        autopilot.start(lease.spec.goal,lease.remainingSeconds,lease.spec);
+        mode='auto';lastAction='Owner-confirmed restart recovery; milestones recheck live world';
+        return {ok:true,status:'Autonomous '+lease.spec.goal+' RESUMED from saved goal intent only; prior success proofs discarded'};
+      }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}
+    }
     case 'auto_stop':resumeAfterSpawn=false;setMode('stay');return {ok:true,status:'Autonomous gameplay stopped; movement cancelled'};
     case 'auto_goal':{
+      if(q.goal==='farm_wheat' && bot.entity.position.distanceTo(
+        new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>12)
+        return {ok:false,error:'Wheat field origin must be within 12 blocks of actual player'};
+      if(q.goal==='build' && bot.entity.position.distanceTo(
+        new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>12)
+        return {ok:false,error:'Build origin must be within 12 blocks of the actual player'};
+      // The Dragon/Netherite acceptance path is survival-only. Never allow
+      // creative/spectator/adventure game modes to generate a fake victory.
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','build','farm_wheat','sequence','craft','equip'].includes(q.goal) &&
+         bot.game?.gameMode!=='survival')
+        return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an
       // already running owner-authorized goal. Explicit auto_stop is required.
       if(autopilot.status().status==='running')
         return {ok:false,error:'Autonomous goal already running; inspect auto_status or use auto_stop before replacement'};
       halt();mode='auto';resumeAfterSpawn=false;deathsOnCurrentGoal=0;
-      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_run'||q.goal==='companion'?21600:300));lastAction='Autonomous '+st.goal+' STARTED';
-        return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; verify progress via auto_status'};
+       // Evidence from an earlier owner mission is NOT proof for a new run.
+       resetDragon(lateSkills.session);
+      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),{resource:q.resource,targetCount:q.targetCount,destination:q.destination,arrivalRange:q.arrivalRange,
+          position:q.position,block:q.block,axis:q.axis,length:q.length,
+          width:q.width,depth:q.depth,steps:q.steps,item:q.item,destination:q.destinationSlot});lastAction='Autonomous '+st.goal+' STARTED';
+        let saved=false;try{saved=missionCheckpoint.save(st);}catch{ /* Mission runs but restart recovery is unavailable. */ }
+        return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; '+(saved?'recoverable goal intent saved':'restart recovery unavailable')+'; verify progress via auto_status'};
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}
     }
     // General player primitives are owner-authorized, bounded and report observed outcomes.
@@ -566,11 +1063,16 @@ async function action(q){
             try{
               // GoalNear(...,0) targets the exact foot block; GoalNear(...,1)
               // could stop on an unreachable ledge next to the stance.
-              if(stance.route!=='already_there')await navigate(new Vec3(stance.x,stance.y,stance.z),0,jobEpoch,4500);
+              // The budget must exceed pathfinder's own A* thinkTimeout, or
+              // this leg expires while the route is still being computed.
+              if(stance.route!=='already_there'){
+                const reached=await navigate(new Vec3(stance.x,stance.y,stance.z),0,jobEpoch,stanceNavTimeoutMs());
+                if(!reached)throw Error(`Navigation ended outside stance ${stance.x},${stance.y},${stance.z}`);
+              }
               if(!alive())throw Error('Dig cancelled');
               const current=bot.entity.position;
               if(Math.floor(current.x)!==stance.x || Math.floor(current.y)!==stance.y || Math.floor(current.z)!==stance.z)
-                throw Error('Arrival at verified mining stance not confirmed');
+                throw Error(`Arrival at verified mining stance not confirmed (stood at ${Math.floor(current.x)},${Math.floor(current.y)},${Math.floor(current.z)} wanted ${stance.x},${stance.y},${stance.z})`);
               const targetCenter=target.offset(.5,.5,.5);
               const eye=current.offset(0,1.62,0);
               if(eye.distanceTo(targetCenter)>4.4)throw Error('Mining target still outside observed reach');
@@ -695,16 +1197,88 @@ bot.once('spawn',()=>{
     catch(err){lastAction='navigation error: '+String(err.message||err).slice(0,90);}
   },2000);
 });
+const CHAT_KEYWORDS=new Set(['help','auto','goal','craft','equip','pause','resume','travel','farm','build','gather',
+  'follow','come','stay','guard','stop','jump','look','status','inventory','observe','auto_status',
+  'collect_wood','say','wait']);
+function naturalChat(text){
+  action({command:'natural_goal',text}).then(r=>say(r.ok?(r.status||'Goal accepted'):(r.error||'Unavailable')))
+    .catch(()=>say('JARVIS could not interpret that owner request'));
+}
 bot.on('chat',(username,message)=>{
   if(username!==leader || !spawned || typeof message!=='string')return;
-  const match=/^jarvis(?:buddy)?[,: ]+([a-z_]+)(?:\s+(.+))?$/i.exec(message.trim());
-  if(!match)return;
+  const trimmed=message.trim();
+  const match=/^jarvis(?:buddy)?[,: ]+([a-z_]+)(?:\s+(.+))?$/i.exec(trimmed);
+  if(!match){
+    const natural=/^jarvis(?:buddy)?[,: ]+(.+)$/i.exec(trimmed);
+    if(natural)naturalChat(natural[1]);
+    return;
+  }
   const cmd=match[1].toLowerCase();
+  if(!CHAT_KEYWORDS.has(cmd)){naturalChat((match[1]+' '+(match[2]||'')).trim());return;}
   const normalized=cmd==='gather'?'collect_wood':cmd==='wait'?'stay':cmd;
-  if(cmd==='help'){say('Commands: follow, come, stay, guard, gather, auto [survive|wood|tools|stone_age|iron_age|netherite_dragon_run|dragon_run|companion|explore|follow|guard], pause, observe, status, inventory');return;}
+  if(cmd==='help'){say('Ask Jarvis in your own words, or use: follow, guard, gather [count resource], auto, pause, craft, equip, build, status');return;}
   if(cmd==='auto'||cmd==='goal') {const goal=(match[2]||'survive').trim().toLowerCase();
-    action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
+    action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_then_netherite_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
+  if(cmd==='craft' && match[2]){
+    const m=/^(\d{1,2})\s+([a-z_]{1,64})$/i.exec(match[2].trim());
+    if(!m){say('Use: jarvis craft 2 chest');return;}
+    action({command:'auto_goal',goal:'craft',item:m[2].toLowerCase(),
+      targetCount:Number(m[1]),durationSeconds:3600})
+      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start crafting goal'));
+    return;
+  }
+  if(cmd==='equip' && match[2]){
+    const m=/^([a-z_]{1,64})\s+(hand|head|torso|legs|feet|off-hand)$/i.exec(match[2].trim());
+    if(!m){say('Use: jarvis equip iron_helmet head');return;}
+    action({command:'auto_goal',goal:'equip',item:m[1].toLowerCase(),
+      destinationSlot:m[2].toLowerCase(),durationSeconds:3600})
+      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start equip goal'));
+    return;
+  }
   if(cmd==='pause') {action({command:'auto_stop'}).then(r=>say(r.status||r.error));return;}
+  if(cmd==='resume') {action({command:'auto_resume'}).then(r=>say(r.status||r.error));return;}
+  if(cmd==='travel' && match[2]){
+    const parts=/^(-?\d+)\s+(-?\d+)\s+(-?\d+)$/.exec(match[2].trim());
+    if(!parts){say('Use: jarvis travel 100 64 -50');return;}
+    action({command:'auto_goal',goal:'travel',
+      destination:{x:Number(parts[1]),y:Number(parts[2]),z:Number(parts[3])},
+      arrivalRange:2,durationSeconds:1800})
+      .then(r=>say(r.ok?r.status:r.error))
+      .catch(()=>say('Could not start travel goal'));
+    return;
+  }
+
+  if(cmd==='farm' && match[2]){
+    const a=/^(\d{1,2})\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d)\s+(\d)$/.exec(match[2].trim());
+    if(!a){say('Use: jarvis farm 2 10 65 10 2 2');return;}
+    action({command:'auto_goal',goal:'farm_wheat',targetCount:Number(a[1]),
+      position:{x:Number(a[2]),y:Number(a[3]),z:Number(a[4])},
+      width:Number(a[5]),depth:Number(a[6]),durationSeconds:3600})
+      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start wheat farming'));
+    return;
+  }
+  if(cmd==='build' && match[2]){
+    const args=/^(\d)\s+([a-z_]+)\s+(x\+|x-|z\+|z-)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)$/i.exec(match[2].trim());
+    if(!args){say('Use: jarvis build 4 cobblestone x+ 10 65 10');return;}
+    action({command:'auto_goal',goal:'build',length:Number(args[1]),block:args[2].toLowerCase(),
+      axis:args[3].toLowerCase(),position:{x:Number(args[4]),y:Number(args[5]),z:Number(args[6])},
+      durationSeconds:3600}).then(r=>say(r.ok?r.status:r.error))
+      .catch(()=>say('Could not start construction goal'));
+    return;
+  }
+  if(cmd==='gather' && match[2]){
+    // Plain owner-chat entrypoint for finite dynamic goals. The validator
+    // still checks resource names and count before changing game state.
+    const spec=/^(\d{1,2})\s+([a-z_]+)$/i.exec(match[2].trim());
+    if(!spec){say('Use: jarvis gather 16 cobblestone');return;}
+    action({command:'auto_goal',goal:'gather',
+      resource:normalizeResource(spec[2].toLowerCase()),
+      targetCount:Number(spec[1]),durationSeconds:21600})
+      .then(r=>say(r.ok?r.status:r.error))
+      .catch(()=>say('Could not start resource goal'));
+    return;
+  }
+
   const q={command:normalized};
   if(normalized==='say')q.text=match[2]||'';
   action(q).then(r=>say(r.ok?(r.status||'OK'):(r.error||'Unavailable'))).catch(()=>say('Action failed'));
@@ -716,14 +1290,26 @@ reader.on('line',line=>{
   action(q).then(r=>ack(q.id,r.ok,r.status,r.error))
     .catch(err=>ack(q.id,false,'',String(err.message||err).slice(0,120)));
 });
-bot.on('entityDead',entity=>{if(entity?.name==='ender_dragon' && lateSkills.session.dragonSeen)lateSkills.session.dragonDied=true;});
+bot.on('entityDead',entity=>{
+   // A death event is only admissible if the current mission observed a
+   // Dragon in the End, and this is the same live encounter.
+   const inEnd=String(bot.game?.dimension||'').replace(/^minecraft:/,'')==='the_end';
+   if(inEnd && acceptDragonDeath(lateSkills.session,entity,bot.game?.dimension,Date.now())){
+     if(autopilot.status().goal==='dragon_then_netherite_run' && autopilot.status().status==='running')
+       process.stdout.write('BOT_EVENT '+JSON.stringify({type:'dragon_death',
+         at:Date.now(),dimension:'the_end',entityId:entity.id??null,
+         goal:autopilot.status().goal})+'\n');
+   }
+ });
 bot.on('death',()=>{
+  resetDragon(lateSkills.session);
   const active=mode==='auto' && autopilot.status().status==='running';
   if(active){
     deathsOnCurrentGoal++;
     resumeAfterSpawn=deathsOnCurrentGoal<=3;
     autopilot.stop(resumeAfterSpawn?'Death: bounded autonomous respawn recovery pending':'Death retry budget exhausted');
   }
+  if(!resumeAfterSpawn)missionCheckpoint.clear();
   halt();mode=resumeAfterSpawn?'recover':'stay';
   lastAction=resumeAfterSpawn?'death observed: respawn and start again from actual remaining inventory':'bot died; recovery stopped';
 });
@@ -737,4 +1323,4 @@ bot.on('spawn',()=>{
 bot.on('kicked',reason=>{process.stderr.write('Bot kicked: '+String(reason).slice(0,150)+'\n');process.exitCode=1;});
 bot.on('error',err=>{process.stderr.write('Bot error: '+String(err.code||'unknown')+'\n');process.exitCode=1;});
 bot.on('end',()=>{clearInterval(followTimer);halt();process.exit(process.exitCode||0);});
-process.on('SIGTERM',()=>{clearInterval(followTimer);if(mode==='auto')autopilot.stop('Operator stopped bot');halt();bot.quit('Operator stopped JARVIS friend');});
+process.on('SIGTERM',()=>{clearInterval(followTimer);if(mode==='auto')autopilot.stop('Operator stopped bot');missionCheckpoint.clear();halt();bot.quit('Operator stopped JARVIS friend');});

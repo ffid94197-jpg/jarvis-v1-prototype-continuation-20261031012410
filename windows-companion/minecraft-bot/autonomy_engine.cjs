@@ -5,8 +5,15 @@
  * run shell commands, trust other players' chat, or claim task completion.
  */
 const {lateGamePlan} = require('./late_game.cjs');
-const GOALS = new Set(['companion','netherite_dragon_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run']);
-const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish']);
+const {RESOURCES,resourcePlan}=require('./resource_goal.cjs');
+const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
+const {validBuildSpec,buildPlan}=require('./structure_goal.cjs');
+const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
+const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
+// An owner-issued long mission has a finite authority lease across all renewals.
+const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','farm_wheat','sequence','craft','equip']);
+const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
 function itemsFrom(bot) {
@@ -68,6 +75,17 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     const idx=bot.getEquipmentDestSlot?.(slot);
     return Number.isInteger(idx) && bot.inventory?.slots?.[idx]?.name===name;
   });
+  const heldNetheriteSword=bot.heldItem?.name==='netherite_sword';
+  const equipped={hand:bot.heldItem?.name||null};
+  for(const dest of ['head','torso','legs','feet','off-hand']){
+    const slot=bot.getEquipmentDestSlot?.(dest);
+    equipped[dest]=Number.isInteger(slot)?bot.inventory?.slots?.[slot]?.name||null:null;
+  }
+  const wornDiamond=[['head','diamond_helmet'],['torso','diamond_chestplate'],
+    ['legs','diamond_leggings'],['feet','diamond_boots']].every(([slot,name])=>{
+    const idx=bot.getEquipmentDestSlot?.(slot);
+    return Number.isInteger(idx) && bot.inventory?.slots?.[idx]?.name===name;
+  });
   let strongholdMissingEyes=null;
   const nearby=name=>!!bot.findBlock?.({matching:b=>b?.name===name,maxDistance:32});
   try{
@@ -75,7 +93,8 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     strongholdPortalFrameNearby=nearby('end_portal_frame');endPortalPresent=nearby('end_portal');
     if(strongholdPortalFrameNearby && typeof bot.findBlocks==='function'){
       const frames=bot.findBlocks({matching:b=>b?.name==='end_portal_frame',maxDistance:32,count:12}) || [];
-      if(frames.length)strongholdMissingEyes=frames.reduce((n,p)=>{
+      // A partially loaded frame ring cannot prove the total missing-Eye count.
+      if(frames.length===12)strongholdMissingEyes=frames.reduce((n,p)=>{
         const frame=bot.blockAt?.(p);
         return n+(frame?.getProperties?.().eye===true?0:1);
       },0);
@@ -88,13 +107,23 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     if(dimension!=='overworld'){endPortalPresent=false;strongholdPortalFrameNearby=false;}
   }catch{}
   try{workbenchNearby=!!bot.findBlock?.({matching:block=>block?.name==='crafting_table',maxDistance:5});furnaceNearby=!!bot.findBlock?.({matching:block=>block?.name==='furnace',maxDistance:5});}catch{}
+  let workbenchRecoverySupported=false;
+  try {
+    const owned=bot.jarvisOwnedCraftingTablePos;
+    workbenchRecoverySupported=!!owned && bot.blockAt?.(owned)?.name==='crafting_table' &&
+      typeof bot.canDigBlock==='function';
+  } catch { /* missing/unloaded workstation never becomes an authorization */ }
   const dragons=Object.values(bot.entities||{}).filter(e=>e?.name==='ender_dragon' && e?.position);
   const crystals=Object.values(bot.entities||{}).filter(e=>e?.name==='end_crystal' && e?.position);
   return {joined:!!p,dimension:bot.game?.dimension||'minecraft:overworld',
     smithingTableNearby,netherPortalNearby,strongholdPortalFrameNearby,strongholdMissingEyes,endPortalPresent,endPortalActivated,
-    wornNetherite,exitPortalPresent, dragonPresent:dragons.length>0,dragonId:dragons[0]?.id||null,
+    wornNetherite,wornDiamond,heldNetheriteSword,equipped,exitPortalPresent, dragonPresent:dragons.length>0,dragonId:dragons[0]?.id||null,
     dragonDeadObserved:dragonDead,crystalsNearby:crystals.length,
-    health:number(bot.health,20),hunger:number(bot.food,20),workbenchNearby,furnaceNearby,
+    health:number(bot.health,20),hunger:number(bot.food,20),workbenchNearby,
+     // Only the native Mineflayer runtime advertises physical workstation
+     // recovery; modeled worlds never claim this capability implicitly.
+     workbenchRecoverySupported,
+     furnaceNearby,
     position:p?{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}:null,
     ownerVisible:!!owner,ownerDistance:p&&owner?Math.round(p.distanceTo(owner)):null,
     ownerPosition:owner?{x:Math.floor(owner.x),y:Math.floor(owner.y),z:Math.floor(owner.z)}:null,
@@ -107,10 +136,10 @@ function decide(goal, world, failures={}, progress={}) {
   const closest=threats[0];
   if(world.health<=8 && closest?.distance<=10)return {kind:'retreat',why:'Critical health near hostile entity'};
   if(world.hunger<=12 && (inv.food||0)>0)return {kind:'eat',why:'Hunger low; edible inventory item detected'};
-  if(['dragon_run','netherite_dragon_run'].includes(goal) && world.hunger<=9 && (inv.food||0)===0)return {kind:'obtain_food',why:'Obtain safe food before autonomous survival progression'};
+  if(['dragon_run','netherite_dragon_run','dragon_then_netherite_run'].includes(goal) && world.hunger<=9 && (inv.food||0)===0)return {kind:'obtain_food',why:'Obtain safe food before autonomous survival progression'};
   if(closest?.name==='creeper' && closest.distance<=7)return {kind:'retreat',why:'Avoid nearby creeper explosion'};
-  if(goal==='survive' && world.hunger<=7 && (inv.food||0)===0)
-    return {kind:'blocked',why:'Critically hungry with no edible supplies; autonomous food procurement not implemented'};
+  if(goal==='survive' && world.hunger<=9 && (inv.food||0)===0)
+    return {kind:'obtain_food',why:'Seek actual safe food or livestock; verify inventory pickup before consumption'};
   if(closest?.distance<=6 && world.health>=12 && ['guard','survive'].includes(goal)) {
     if(closest.name==='creeper')return {kind:'retreat',why:'Creeper explosion risk'};
     return {kind:'defend',why:'Hostile within defensive range',targetId:closest.id};
@@ -118,6 +147,30 @@ function decide(goal, world, failures={}, progress={}) {
   // An owner can give ONE high-level instruction to play together. This
   // mission remains alive until stopped; it chooses and verifies its own
   // survival, crafting and movement actions instead of requiring commands.
+  if(goal==='craft'||goal==='equip')return generalPlan(world,{...progress,goal},
+    (needed,extra)=>decide(needed,world,failures,{...progress,...extra}));
+  if(goal==='gather')return resourcePlan(world,failures,progress,needed=>decide(needed,world,failures,progress));
+  if(goal==='farm_wheat')return wheatPlan(world,{
+    goal,position:progress.position,width:progress.width,
+    depth:progress.depth,targetCount:progress.targetCount});
+  if(goal==='build'){
+    const spec={goal:'build',position:progress.position,block:progress.block,
+      axis:progress.axis,length:progress.length};
+    return buildPlan(world,spec,(needed,extra)=>decide(needed,world,failures,{...progress,...extra}));
+  }
+  if(goal==='travel'){
+    const t=progress.destination,p=world.position;
+    if(!t || !['x','y','z'].every(k=>Number.isInteger(t[k])) ||
+       !Number.isInteger(progress.arrivalRange))
+      return {kind:'blocked',why:'Missing validated travel destination'};
+    if(p && ['x','y','z'].every(k=>Number.isFinite(p[k]))){
+      const dist=Math.hypot(p.x-t.x,p.y-t.y,p.z-t.z);
+      if(dist<=progress.arrivalRange && progress.milestones?.travelArrivalVerified===true)
+        return {kind:'complete',why:'Goal target reached with independently verified physical arrival'};
+    }
+    return {kind:'travel_target',destination:t,range:progress.arrivalRange,
+      why:'Navigate to saved destination and verify actual position'};
+  }
   if(goal==='companion') {
     if(closest?.distance<=6 && world.health>=12 && closest.name!=='creeper')
       return {kind:'defend',why:'Defend against observed hostile',targetId:closest.id};
@@ -138,21 +191,34 @@ function decide(goal, world, failures={}, progress={}) {
   }
   if(goal==='guard')return world.ownerVisible?{kind:'follow',range:4,why:'Guard positioning'}:{kind:'wait',why:'Owner is not visible'};
   if(goal==='follow')return world.ownerVisible?{kind:'follow',range:3,why:'Stay near owner'}:{kind:'wait',why:'Owner not visible'};
+  if(goal==='survive'){
+    // Independent survival is not the owner-following companion mode.
+    // Advance through bounded real-game tool milestones, then scout safely;
+    // never treat an absent owner as an instruction to stop thinking.
+    const stone=decide('stone_age',world,failures,progress);
+    if(stone.kind!=='complete')return stone;
+    if(!inv.ironPickaxe){
+      const iron=decide('iron_age',world,failures,progress);
+      if(iron.kind!=='complete')return iron;
+    }
+    return {kind:'scout_survival',index:number(progress.steps),
+      why:'Basic survival equipment verified; explore independent safe loaded ground'};
+  }
   if(goal==='wood') {
     if(inv.logs>=4)return {kind:'complete',why:'Four logs verified in inventory'};
     return failures.collect_wood>=3?{kind:'blocked',why:'Wood unavailable after three attempts'}:{kind:'collect_wood',why:'Need four logs'};
   }
-  if(goal==='dragon_run' || goal==='netherite_dragon_run'){
+  if(goal==='dragon_run' || goal==='netherite_dragon_run' || goal==='dragon_then_netherite_run'){
     if((world.dimension && !String(world.dimension).includes('overworld')) || progress.milestones?.netherPortalBuilt)
-      return lateGamePlan(world,progress);
+      return lateGamePlan(world,{...progress,goal});
   }
-  if(goal==='stone_age' || goal==='iron_age' || goal==='dragon_run' || goal==='netherite_dragon_run') {
+  if(goal==='stone_age' || goal==='iron_age' || goal==='dragon_run' || goal==='netherite_dragon_run' || goal==='dragon_then_netherite_run') {
     if(inv.stonePickaxe && inv.stoneSword) {
       if(goal==='stone_age')return {kind:'complete',why:'Stone pickaxe and stone sword verified in inventory'};
       if(inv.ironPickaxe){
         if(goal==='iron_age')return {kind:'complete',why:'Iron pickaxe verified in inventory'};
         if(inv.diamondPickaxe && inv.diamondSword && inv.diamondHelmet && inv.diamondChestplate && inv.diamondLeggings && inv.diamondBoots)
-          return lateGamePlan(world,progress);
+          return lateGamePlan(world,{...progress,goal});
         // Total: pickaxe 3, sword 2, helmet 5, chestplate 8, leggings 7, boots 4 = 29 diamonds.
         const gear=[['diamond_pickaxe','diamondPickaxe',3],['diamond_sword','diamondSword',2],['diamond_chestplate','diamondChestplate',8],['diamond_leggings','diamondLeggings',7],['diamond_helmet','diamondHelmet',5],['diamond_boots','diamondBoots',4]];
         for(const [name,key,cost] of gear){
@@ -181,13 +247,46 @@ function decide(goal, world, failures={}, progress={}) {
         if(!inv.coal && !inv.planks)return {kind:'craft_planks',why:'Produce furnace fuel'};
         return {kind:'smelt_iron',why:'Smelt raw iron with verified fuel and furnace'};
       }
-      return failures.mine_iron>=2?{kind:'survey_ore',ore:'iron',index:number(progress.steps),why:'Scout for new iron-bearing terrain'}:{kind:'mine_iron',why:'Find exposed iron ore with stone pickaxe'};
+      if(!inv.table && world.workbenchNearby && world.workbenchRecoverySupported===true)
+          return {kind:'recover_table',why:'Carry crafting table before searching for distant iron'};
+       // Preflight the next long cave trip: two iron-pickaxe handles and
+       // furnace fuel must travel down with the bot, not be sought at Y<0.
+       if(!inv.ironPickaxe && !inv.rawIron && (inv.ironIngot||0)<3){
+         if(inv.sticks<2){
+           if(inv.planks>=2)return {kind:'craft_sticks',why:'Reserve iron handles before descending'};
+           if(inv.logs>=1)return {kind:'craft_planks',why:'Make iron handles while surface wood is available'};
+           return {kind:'collect_wood',why:'Acquire iron pickaxe handles before remote cave mining'};
+         }
+         if(!inv.coal && !inv.planks && !inv.logs)
+           return {kind:'collect_wood',why:'Reserve furnace fuel before iron expedition'};
+       }
+       return failures.mine_iron>=2?{kind:'survey_ore',ore:'iron',index:number(progress.steps),why:'Scout for new iron-bearing terrain'}:{kind:'mine_iron',why:'Find exposed iron ore with stone pickaxe'};
     }
+    // Reserve crafting handles BEFORE descending to mine stone. Wood can be
+    // unreachable from underground; delaying the three sticks until after
+    // collecting five cobblestone caused a real Java campaign to strand itself
+    // at Y=59 with stone but without materials for the pickaxe and sword.
+    if(inv.woodenPickaxe && !inv.stonePickaxe && inv.sticks<3){
+      if(inv.planks>=2)return {kind:'craft_sticks',why:'Reserve three stone-tool sticks before underground excavation'};
+      if(inv.logs>=1)return {kind:'craft_planks',why:'Create handle materials while wood is reachable at surface'};
+      return {kind:'collect_wood',why:'Gather stone-tool handle wood BEFORE mining underground'};
+    }
+    // Never abandon the only crafting table when leaving its radius to mine
+    // stone underground. Physically recover it while still in reach, then
+    // place it near the crafting site after the cobblestone is collected.
+    if(inv.woodenPickaxe && !inv.stonePickaxe && inv.cobblestone<5 &&
+       !inv.table && world.workbenchNearby && world.workbenchRecoverySupported===true)
+      return {kind:'recover_table',why:'Carry the actual crafting table before excavating for stone'};
     if(!inv.woodenPickaxe && !inv.stonePickaxe){
       const base=decide('tools',world,failures,progress);
       return base.kind==='complete'?{kind:'blocked',why:'Pickaxe state inconsistent'}:base;
     }
-    if(inv.cobblestone<5)return {kind:'mine_cobblestone',why:'Collect five cobblestone for stone tools'};
+    // Before upgrading, reserve 3 blocks for the pickaxe and 2 for the
+    // sword. After the pickaxe has been crafted, only two blocks are needed;
+    // insisting on five causes unnecessary mining and remote table loss.
+    const stoneNeeded=inv.stonePickaxe?2:5;
+    if(inv.cobblestone<stoneNeeded)
+      return {kind:'mine_cobblestone',why:'Collect '+stoneNeeded+' cobblestone required for remaining stone tools'};
     if(inv.sticks<3){
       if(inv.planks>=2)return {kind:'craft_sticks',why:'Need sticks for stone tools'};
       if(inv.logs>=1)return {kind:'craft_planks',why:'Need planks for sticks'};
@@ -207,6 +306,15 @@ function decide(goal, world, failures={}, progress={}) {
     // wooden pickaxe (3 planks, 2 sticks, placed table).
     if(goal==='tools') {
       if(inv.woodenPickaxe)return {kind:'complete',why:'Wooden pickaxe verified in inventory'};
+      // Secure the TOTAL 2x2/3x3 recipe budget BEFORE consuming the first log:
+      // 4 planks for table, 3 for pickaxe, 2 planks for sticks (unless already
+      // owned). Converting a single log too early stranded the live bot atop
+      // trees with planks/sticks but no new reachable wood.
+      const requiredPlanks=3+(inv.sticks>=2?0:2)+((inv.table||world.workbenchNearby)?0:4);
+      const availablePlanks=(inv.planks||0)+4*(inv.logs||0);
+      if(availablePlanks<requiredPlanks)
+        return failures.collect_wood>=3?{kind:'blocked',why:'Insufficient reachable wood for full wooden-tool recipe budget'}:
+          {kind:'collect_wood',why:'Reserve wood for whole pickaxe/sticks/workstation recipe before crafting'};
       if(inv.sticks<2 && inv.planks>=2)return {kind:'craft_sticks',why:'Produce two pickaxe sticks'};
       if(!inv.table && !world.workbenchNearby && inv.planks>=4)return {kind:'craft_table',why:'Build crafting table'};
       if((inv.table || world.workbenchNearby) && inv.planks>=3 && inv.sticks>=2) {
@@ -232,20 +340,52 @@ function decide(goal, world, failures={}, progress={}) {
 }
 function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={}) {
   let state={milestones:{},goal:null,status:'idle',since:0,deadline:0,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null};
-  function start(goal,seconds=300){
+  function start(goal,seconds=300,spec={}){
     if(!GOALS.has(goal))throw Error('Unsupported autonomous gameplay goal');
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)throw Error('Duration out of bounds');
-    const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null};return status();
+    if(goal==='farm_wheat' && !validFarmSpec({goal,position:spec?.position,
+      width:spec?.width,depth:spec?.depth,targetCount:spec?.targetCount}))
+      throw Error('Invalid bounded wheat farming goal');
+    if(goal==='build' && !validBuildSpec({goal,position:spec?.position,block:spec?.block,
+      axis:spec?.axis,length:spec?.length}))throw Error('Invalid bounded construction goal');
+    if(goal==='craft' && !validCraftSpec({goal,item:spec?.item,targetCount:spec?.targetCount}))
+      throw Error('Unsupported general crafting recipe or target quantity');
+    if(goal==='equip' && !validEquipSpec({goal,item:spec?.item,destination:spec?.destination}))
+      throw Error('Unsupported equipment item or slot');
+    if(goal==='sequence' && !validSequence(spec?.steps))
+      throw Error('Sequence requires one to eight typed valid subgoals');
+    if(goal==='travel' && (!spec?.destination ||
+       !['x','y','z'].every(k=>Number.isInteger(spec.destination[k]) &&
+         Math.abs(spec.destination[k])<=30000000) ||
+       !Number.isInteger(spec?.arrivalRange) || spec.arrivalRange<1 || spec.arrivalRange>8))
+      throw Error('Travel requires integer destination and arrivalRange 1-8');
+    if(goal==='gather' && (!RESOURCES.has(spec?.resource) ||
+        !Number.isInteger(spec?.targetCount) || spec.targetCount<1 || spec.targetCount>64))
+      throw Error('Gather requires supported resource and targetCount 1-64');
+    const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null,
+      ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{}),
+      ...(goal==='craft'?{item:spec.item,targetCount:spec.targetCount}:{}),
+      ...(goal==='equip'?{item:spec.item,destination:spec.destination}:{}),
+      ...(goal==='build'?{position:{...spec.position},block:spec.block,axis:spec.axis,length:spec.length}:{}),
+      ...(goal==='farm_wheat'?{position:{...spec.position},width:spec.width,
+        depth:spec.depth,targetCount:spec.targetCount}:{}),
+      ...(goal==='travel'?{destination:{...spec.destination},
+        arrivalRange:spec.arrivalRange}:{}),
+      ...(goal==='sequence'?{sequence:canonicalSequence(spec.steps),sequenceIndex:0}:{})};return status();
   }
   function stop(why='Owner paused autonomous gameplay'){state.status='paused';state.why=why;return status();}
   // A long-running owner-authorized mission may continue in bounded 6-hour
   // windows. This is NOT a completion, and never resumes a blocked, cancelled,
   // or owner-paused task. The next decision is recomputed from live world state.
   function renewMission(seconds=21600){
-    if(state.status!=='expired' || !['netherite_dragon_run','dragon_run','companion'].includes(state.goal))return false;
+    if(state.status!=='expired' || !['netherite_dragon_run','dragon_then_netherite_run','dragon_run','companion'].includes(state.goal))return false;
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)return false;
     const t=clock();
-    state.status='running';state.deadline=t+seconds*1000;state.steps=0;
+    if(!Number.isSafeInteger(state.since)||t<state.since)return false;
+    const remaining=Math.floor((state.since+MAX_MISSION_LIFETIME_MS-t)/1000);
+    if(remaining<10)return false;
+    const renewedSeconds=Math.min(seconds,remaining);
+    state.status='running';state.deadline=t+renewedSeconds*1000;state.steps=0;
     state.failures={};state.why='Continued authorized gameplay; goal not yet complete';
     state.lastDecision=null;state.lastResult=null;
     return true;
@@ -254,13 +394,48 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(state.status!=='paused'||!GOALS.has(state.goal)||clock()>=state.deadline)return false;
     state.status='running';state.why='Restarted after respawn; no inventory or completion proof assumed';
     state.failures={};state.milestones={};state.steps=0;state.lastDecision=null;state.lastResult=null;
+    // Death may have destroyed inventory. Recheck earlier stages from live
+    // state instead of blindly resuming a stale sequence checkpoint.
+    if(state.goal==='sequence')state.sequenceIndex=0;
     return true;
   }
   function status(){return JSON.parse(JSON.stringify(state));}
   function next(world){
     if(state.status!=='running')return {kind:'idle',why:'Automation not running'};
     if(clock()>=state.deadline||state.steps>=maxSteps){state.status='expired';state.why='Goal time/step budget exhausted';return {kind:'idle',why:state.why};}
-    const d=decide(state.goal,world,state.failures,state);state.lastDecision=d;
+    let d;
+    if(state.goal==='sequence'){
+      // Do not mark a composed goal complete by merely issuing the steps.
+      // Recompute every stage against the current server-backed world and
+      // advance across at most eight already-proven stages in one tick.
+      for(let n=0;n<=state.sequence.length;n++){
+        if(state.sequenceIndex>=state.sequence.length){
+          d={kind:'complete',why:'All authorized sequence stages independently verified'};
+          break;
+        }
+        const stage=state.sequence[state.sequenceIndex];
+        const stageWorld=stage.goal==='build'?
+          {...world,buildCells:world.buildCellsByStage?.[state.sequenceIndex]}:
+          stage.goal==='farm_wheat'?
+          {...world,wheatCells:world.wheatCellsByStage?.[state.sequenceIndex]}:world;
+        d=decide(stage.goal,stageWorld,state.failures,{...state,...stage});
+        if(d.kind!=='complete')break;
+        state.sequenceIndex++;
+        state.failures={};
+        // An arrival proof for a prior target must never prove the next one.
+        state.milestones.travelArrivalVerified=false;
+      }
+      if(!d)d={kind:'blocked',why:'No valid stage decision'};
+    }else d=decide(state.goal,world,state.failures,state);
+    // Autonomous wood recovery remains bounded. A successful scout must
+    // observe real movement; it does not fake resource acquisition.
+    if(d.kind==='collect_wood' && (state.failures.collect_wood||0)>=2){
+      d=(state.milestones.woodSurveyTrips||0)>=8
+        ?{kind:'blocked',why:'Eight proven alternate wood-search regions exhausted'}
+        :{kind:'survey_wood',index:state.steps,
+          why:'Two failed tree approaches: scout fresh safe ground before retrying wood'};
+    }
+    state.lastDecision=d;
     if(d.kind==='complete'){state.status='complete';state.why=d.why;}
     if(d.kind==='blocked'){state.status='blocked';state.why=d.why;}
     if(!['wait','idle','complete','blocked'].includes(d.kind))state.steps++;
@@ -269,20 +444,34 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   function record(decision, outcome){
     if(state.status!=='running' || !decision)return;
     const ok=outcome?.ok===true && outcome?.verified===true;
-    if(ok){state.successes++;
+    if(ok){
+      // Only CONSECUTIVE unresolved attempts should exhaust an action's
+      // bounded retry budget. Previously verified success left old failures
+      // accumulated, falsely blocking long multi-recipe missions.
+      state.failures[decision.kind]=0;
+      state.successes++;
       if(outcome.proof==='nether_portal')state.milestones.netherPortalBuilt=true;
       if(outcome.proof==='dragon_seen')state.milestones.dragonSeen=true;
       // A portal observation alone never proves a dragon death. The combined
       // victory proof is emitted only by the live skill after seeing the dragon,
       // observing its entityDead event and finding an End exit portal.
-      if(outcome.proof==='dragon_death' ||
-         (decision.kind==='verify_dragon' && outcome.proof==='dragon_victory'))
+      if((decision.kind==='fight_dragon' && outcome.proof==='dragon_death' && state.milestones.dragonSeen===true) ||
+         (decision.kind==='verify_dragon' && outcome.proof==='dragon_victory' && state.milestones.dragonSeen===true))
         state.milestones.dragonKilled=true;
       if(outcome.proof==='end_exit_portal' ||
          (decision.kind==='verify_dragon' && outcome.proof==='dragon_victory'))
         state.milestones.exitPortalObserved=true;
+      if(decision.kind==='track_stronghold')state.milestones.strongholdSearchStarted=true;
+      if(outcome.proof==='end_return' && decision.kind==='exit_end')
+        state.milestones.endReturned=true;
       if(outcome.proof==='netherite_equipped')state.milestones.netheriteEquipped=true;
-      if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':'mine_diamond']=0;}}
+      if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':'mine_diamond']=0;}
+      if(decision.kind==='travel_target' && outcome.proof==='travel_arrival')
+        state.milestones.travelArrivalVerified=true;
+      if(decision.kind==='survey_wood'){
+        state.milestones.woodSurveyTrips=(state.milestones.woodSurveyTrips||0)+1;
+        state.failures.collect_wood=0;
+      }}
     else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;
     state.lastResult={kind:decision.kind,verified:ok,detail:String(outcome?.detail||'unverified').slice(0,140)};
     if(!ok && !['mine_iron','mine_diamond','mine_obsidian','mine_ancient_debris','hunt_blazes','hunt_endermen','track_stronghold','search_dragon','collect_flint','collect_gold','loot_bastion_template','prepare_archery','obtain_food','mine_netherrack','survey_ore'].includes(decision.kind) && (state.failures[decision.kind]||0)>=3){

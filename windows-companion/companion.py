@@ -461,7 +461,7 @@ def validate_action(body):
         if os.environ.get('JARVIS_MINECRAFT_LAN_ENABLED') != '1':
             return 'Minecraft LAN integration is not enabled.'
         if body.get('command') not in ('follow','stop','jump','move','look','status','come','stay','guard','collect_wood','inventory','say','observe','auto_goal','auto_status','auto_stop',
-            'inspect_block','navigate','dig_block','equip_item','craft_item','place_block','interact_block','interact_entity','use_item'):
+            'inspect_block','navigate','dig_block','equip_item','craft_item','place_block','interact_block','interact_entity','use_item','natural_goal'):
             return 'Unsupported Minecraft command.'
         if body.get('command') == 'auto_goal' and (body.get('goal') not in ('survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','netherite_dragon_run','companion') or
             (body.get('durationSeconds') is not None and (type(body['durationSeconds']) is not int or not 10 <= body['durationSeconds'] <= 43200))):
@@ -474,6 +474,12 @@ def validate_action(body):
         def mc_item(value):
             return isinstance(value,str) and re.fullmatch(r'[a-z0-9_]{1,64}',value) is not None
         command=body.get('command')
+        if command == 'natural_goal':
+            text=body.get('text')
+            if (not isinstance(text,str) or not 1 <= len(text.strip()) <= 600 or
+                re.search(r'[\x00-\x1f\x7f]',text) or
+                set(body) - {'operation','taskId','command','text'}):
+                return 'Invalid natural-language Minecraft instruction.'
         if command == 'navigate' and (not mc_position(body.get('position')) or
             ('range' in body and (type(body['range']) is not int or not 1 <= body['range'] <= 8))):
             return 'Invalid bounded Minecraft navigation.'
@@ -611,6 +617,14 @@ def minecraft_action(op):
             child_env.update({'JARVIS_MINECRAFT_LAN_PORT':os.environ.get('JARVIS_MINECRAFT_LAN_PORT',''),
                               'JARVIS_MINECRAFT_LAN_HOST':os.environ.get('JARVIS_MINECRAFT_LAN_HOST','127.0.0.1'),
                               'JARVIS_MINECRAFT_PLAYER':os.environ.get('JARVIS_MINECRAFT_PLAYER','')})
+            # Only the already-selected LOCAL JARVIS inference provider may be
+            # handed to the JARVIS-native language adapter. No BYOK/cloud
+            # credentials, tokens or provider configuration are copied.
+            if engine == 'jarvis' and os.environ.get('JARVIS_MODEL_BACKEND') == 'ollama':
+                child_env['JARVIS_MODEL_BACKEND']='ollama'
+                for key in ('JARVIS_OLLAMA_MODEL','JARVIS_OLLAMA_BASE_URL'):
+                    if key in os.environ:
+                        child_env[key]=os.environ[key]
             bot_proc = subprocess.Popen(['node', str(script)],cwd=str(script.parent), shell=False,
                                          env=child_env,stdin=subprocess.PIPE,
                                          stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
@@ -657,7 +671,7 @@ def minecraft_command(body):
             message['id']=request_id
             bot_proc.stdin.write(json.dumps(message)+'\n')
             bot_proc.stdin.flush()
-            if not pending['event'].wait(8):
+            if not pending['event'].wait(16 if body.get('command') == 'natural_goal' else 8):
                 return {'ok':False,'error':'Minecraft bot did not acknowledge action within deadline; outcome unknown.'}
             ack=pending['result']
             if not ack.get('ok'):

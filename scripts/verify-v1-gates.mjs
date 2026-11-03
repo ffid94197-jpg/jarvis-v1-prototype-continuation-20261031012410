@@ -43,6 +43,7 @@ const checks=[
  // Windows companion gate diagnosability. Guards the fabricated-success class
  // where an actionable objective settled `completed` after zero tool calls.
  ['CORE-CONVERSATIONAL-SEPARATION',['scripts/verify-core-conversational-separation.cjs']],
+ ['MINECRAFT-NATURAL-LANGUAGE',['scripts/verify-minecraft-natural-language-routing.cjs']],
  // One launcher authorization context must satisfy BOTH the startup preflight
  // and the runtime companion gate. Guards the observed defect where an
  // owner-authorized minecraft_companion_join was denied three times because the

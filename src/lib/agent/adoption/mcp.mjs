@@ -199,5 +199,14 @@ export async function mcpOperation(owner,id,serverName,operation,name,args={}){
   if(operation==='list_prompts'){const result=await request('prompts/list',{});return {prompts:(result?.prompts||[]).slice(0,40).map(p=>({name:p.name,description:String(p.description||'').slice(0,200)}))};}
   throw new AdoptionError('Unsupported MCP operation');
  };
- return server.type==='http'?withHttp(server.url,run):withStdio(server.command,server.args,server.cwd,run);
+ if(server.type==='stdio' &&
+    process.env.JARVIS_UNSANDBOXED_MCP_STDIO_ALLOWED!=='1') {
+   // Owner approval of untrusted source is not Windows LPAC isolation.
+   // An arbitrary Node/Python MCP server has host process authority.
+   throw new AdoptionError(
+     'Unisolated MCP subprocess execution is disabled. Local development requires explicit operator opt-in; use remote MCP or an isolated worker.',
+     403);
+ }
+ return server.type==='http'?withHttp(server.url,run):
+   withStdio(server.command,server.args,server.cwd,run);
 }

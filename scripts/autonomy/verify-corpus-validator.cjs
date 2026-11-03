@@ -56,6 +56,19 @@ try{
  check(r.status===2 && r.stderr.includes('SOURCE_ATTESTATION_INVALID'),'corrupted pinned source snapshot digest rejected');
  r=run(valid,200000);
  check(r.status===2 && r.stderr.includes('SOURCE_ATTESTATION_REQUIRED'),'200K certification without source manifest denied');
+ const escapeRoot=path.join(tmp,'attestation-root');fs.mkdirSync(escapeRoot,{recursive:true});
+ const outside=path.join(tmp,'outside-original.jsonl');
+ const outsideRaw=JSON.stringify({record_id:'1',prompt:valid[0].prompt,difficulty:'very_hard'})+'\\n';
+ fs.writeFileSync(outside,outsideRaw);
+ const escapeManifest=path.join(escapeRoot,'upstream-manifest.json');
+ fs.writeFileSync(escapeManifest,JSON.stringify({schema:'jarvis.autonomy.upstream-attestation.v1',
+  datasets:[{name:'fixture-source',revision:'a'.repeat(40),license_spdx:'CC0-1.0',
+   path:'../outside-original.jsonl',sha256:hash(outsideRaw),records:1}]}));
+ r=run(valid,3,['--source-manifest',escapeManifest]);
+ check(r.status===2 && r.stderr.includes('SOURCE_ATTESTATION_INVALID') &&
+       r.stderr.includes('escapes'),'source snapshot path traversal rejected');
+ r=run([{...valid[0],source:{...valid[0].source,url:'http://example.org/task'}},valid[1],valid[2]],3);
+ check(r.status!==0,'non-HTTPS source URL rejected');
 }finally{fs.rmSync(tmp,{recursive:true,force:true});}
-console.log(`CORPUS VALIDATOR SELF-TEST: ${10-failures}/10 PASS`);
+console.log(`CORPUS VALIDATOR SELF-TEST: ${12-failures}/12 PASS`);
 if(failures)process.exitCode=1;

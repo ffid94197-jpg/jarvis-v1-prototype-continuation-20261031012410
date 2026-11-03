@@ -71,12 +71,14 @@ const modules={
  '@/lib/db':{db},
  './policy':{},
  '../windows/policy':{validateDesktopTool:()=>({ok:false,reason:'denied'})},
+ '../tools/localProjectBuild':{prepareLocalProjectBuild:async()=>({ok:false,reason:'sandbox build disabled in recall fixture'})},
 };
 const guardian=load('src/lib/agent/guardian/guardian.ts',modules);
 const contract=load('src/lib/agent/memory/contracts.ts');
 const executor=load('src/lib/agent/tools/executor.ts',{
  '@/lib/db':{db},
  '../memory/contracts':contract,
+ './localProjectBuild':{executeLocalProjectBuild:async()=>({ok:false,tool:'local_project_build',error:'disabled in recall fixture'})},
  './edit':{editWorkspaceTextFile:async()=>{throw Error('wrong edit operation')}},
  '../guardian/policy':{MAX_READ_BYTES:65536,MAX_WRITE_BYTES:65536,WORKSPACE_ROOT:'/tmp/test',COMMAND_TIMEOUT_MS:1000},
  '../windows/bridge':{companionAction:async()=>{throw Error('unexpected OS operation')}},

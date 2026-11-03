@@ -48,7 +48,9 @@
     "typecheck": "tsc --noEmit",
     "test:production-build-artifacts": "node scripts/verify-production-build.mjs --self-test",
     "test:production-build-gate": "node scripts/verify-production-build.mjs --self-test && node scripts/verify-production-build-wiring.cjs",
-    "test:corpus-validator": "node scripts/autonomy/verify-corpus-validator.cjs"
+    "test:corpus-validator": "node scripts/autonomy/verify-corpus-validator.cjs",
+    "test:cua-driver-offline": "node scripts/verify-cua-driver-offline.mjs",
+    "test:cua-driver-windows-live": "node scripts/verify-cua-driver-windows-live.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

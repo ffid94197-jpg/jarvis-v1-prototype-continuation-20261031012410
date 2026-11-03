@@ -378,7 +378,7 @@ class CuaDriverBackend:
         return _action_record(result)
 
     async def _keys(self, op: dict[str, Any]) -> dict[str, Any]:
-        from cua_driver import ActionTarget, HotkeyInput, PressKeyInput
+        from cua_driver import HotkeyInput, PressKeyInput
         aliases = {
             "enter": "ENTER", "esc": "ESC", "tab": "TAB", "space": "SPACE",
             "backspace": "BACKSPACE", "delete": "DELETE", "up": "UP",

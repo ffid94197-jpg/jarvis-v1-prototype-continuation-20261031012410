@@ -19,6 +19,12 @@ checks++;
 const out={};vm.runInNewContext(js,{exports:out,console,JSON,Number,Object,Array,Math,Set,String,RegExp});
 const {isMinecraftAiObjective,isMinecraftObservationOnlyObjective,MinecraftAiGate,MINECRAFT_AI_INSTRUCTIONS}=out;
 const ok=(v,label)=>{assert.equal(v,true,label);checks++;};
+const botSource=fs.readFileSync(path.join(root,'windows-companion/minecraft-bot/bot.cjs'),'utf8');
+ok(botSource.includes("const match=/^(?:hey\\s+)?jarvis(?:buddy)?"),'owner command parser accepts Hey Jarvis wake prefix');
+ok(botSource.includes("const natural=/^(?:hey\\s+)?jarvis(?:buddy)?"),'free-form owner chat accepts Hey Jarvis wake prefix');
+const chatWake=/^(?:hey\\s+)?jarvis(?:buddy)?[,: ]+(.+)$/i;
+for(const message of ['jarvis complete it fully','hey jarvis, complete it fully','jarvisbuddy: gather 16 cobblestone','hey jarvisbuddy, explore the cave'])
+ ok(chatWake.test(message),'owner Minecraft chat wake prefix: '+message);
 const no=(v,label)=>{assert.equal(v,false,label);checks++;};
 for(const s of [
  'Jarvis, can you mine diamonds in Minecraft?','Please build a small house in Minecraft',

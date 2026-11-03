@@ -76,7 +76,7 @@ function directIntent(raw){
   return fail('Negative instruction needs clarification; no action taken');
  const rules=[
   [/^(stop|pause|halt|cancel)( now| everything| that| the mission)?$/,{command:'auto_stop'}],
-  [/^(?:continue|resume|keep going|carry on)(?:\\s+(?:where we left(?: off)?|from (?:the )?(?:last|latest) checkpoint|(?:with\\s+)?(?:(?:the|my|current|previous|last|saved)\\s+)*(?:mission|goal|task|campaign|run|(?:netherite|dragon|minecraft)\\s+(?:mission|goal|task|campaign|run))))?$/,{command:'auto_resume'}],
+  [/^(?:continue|resume|keep going|carry on)(?:\s+(?:where we left(?: off)?|from (?:the )?(?:last|latest) checkpoint|(?:with\s+)?(?:(?:the|my|current|previous|last|saved)\s+)*(?:mission|goal|task|campaign|run|(?:netherite|dragon|minecraft)\s+(?:mission|goal|task|campaign|run))))?$/,{command:'auto_resume'}],
   [/^(follow me|follow along|stay with me)$/,{command:'follow'}],
   [/^(come here|come to me|come over)$/,{command:'come'}],
   [/^(stay here|stay put|wait here)$/,{command:'stay'}],

@@ -44,7 +44,7 @@ def _valid_element_target(op: dict[str, Any]) -> bool:
         type(op.get("pid")) is int
         and 0 < op["pid"] < 2**32
         and isinstance(op.get("cuaWindowId"), str)
-        and re.fullmatch(r"[0-9]{1,20}", op["cuaWindowId"]) is not None
+        and re.fullmatch(r"[1-9][0-9]{0,19}", op["cuaWindowId"]) is not None
         and 0 < int(op["cuaWindowId"]) < 2**64
         and isinstance(op.get("elementToken"), str)
         and re.fullmatch(r"[A-Za-z0-9:_-]{1,128}", op["elementToken"]) is not None
@@ -359,7 +359,7 @@ class CuaDriverBackend:
                 type(op.get("pid")) is not int
                 or not 0 < op["pid"] < 2**32
                 or not isinstance(op.get("cuaWindowId"), str)
-                or re.fullmatch(r"[0-9]{1,20}", op["cuaWindowId"]) is None
+                or re.fullmatch(r"[1-9][0-9]{0,19}", op["cuaWindowId"]) is None
                 or not 0 < int(op["cuaWindowId"]) < 2**64
             ):
                 raise ValueError("Invalid exact-window CUA target.")

@@ -43,7 +43,9 @@ Supported artifact markers are .next/BUILD_ID, dist/index.html, build/index.html
 - Requires the Node installation to include its npm CLI under node_modules/npm.
 - Dependencies must be available in the host npm content cache. Installation is offline by design; missing cached packages cause a truthful build failure, not a network fallback.
 - This is an OS-level disposable VM boundary for prototype use. It is not the same as the JARVIS Phase 6 LPAC/AppContainer boundary and is not a production security certification.
-- Build output is untrusted data. The host stores it in the workspace and hashes it; it does not execute, publish or deploy the artifact.
+- The guest build process and trusted bootstrap share the Windows Sandbox guest account. The run-scoped writable output mapping is visible to guest build code, not only the bootstrap. A malicious build script could alter files or guest-reported status in that mapping. The host treats all guest output and status as untrusted, validates path types/counts/bytes, independently hashes the copied artifact, and never executes, publishes or deploys it. The receipt is a host observation of copied bytes, NOT a cryptographic attestation that the declared build command was honest.
+- Windows Sandbox logon commands run as the guest account, which should be an administrator account. This is a disposable VM boundary, not a least-privilege per-process sandbox. Do not use this adapter for hostile multi-tenant code or as release certification.
+- Windows documents that writable mapped-folder changes persist to the host and can be affected by sandbox apps. Only the run-scoped output folder is writable; source/runtime/cache are read-only. See [Microsoft's Windows Sandbox configuration guidance](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file).
 - The guest can read the staged project and staged npm cache. Although common secrets are excluded and host credentials are not forwarded, the owner should review build artifacts before sharing them.
 
 ## Verification

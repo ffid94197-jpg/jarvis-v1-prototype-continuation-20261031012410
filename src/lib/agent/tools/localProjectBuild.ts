@@ -5,7 +5,10 @@
  * disposable VM), with networking/clipboard/devices disabled. The only host
  * folders mapped into the guest are a secret-filtered read-only source
  * snapshot, read-only Node/npm runtime and package cache, and one run-scoped
- * writable output folder. There is no direct-process fallback.
+ * writable output folder. The guest build process can also write within that
+ * output share, so guest output/status is untrusted and is never treated as a
+ * signed build attestation. The host independently checks and hashes artifacts
+ * and never executes or deploys them. There is no direct-process fallback.
  *
  * This is a prototype isolation boundary, not LPAC/AppContainer or release
  * security certification. Owner must explicitly opt in.

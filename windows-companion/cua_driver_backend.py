@@ -139,6 +139,7 @@ class CuaDriverBackend:
         self._loop.close()
 
     async def _initialize(self) -> None:
+        os.environ.setdefault("CUA_DRIVER_RS_TELEMETRY_ENABLED", "0")
         import cua_driver
         if getattr(cua_driver, "__version__", None) != "0.38.0":
             raise CuaDriverUnavailable("Expected pinned cua-driver 0.38.0.")
@@ -195,8 +196,12 @@ class CuaDriverBackend:
                     raise CuaDriverOutcomeUnknown(
                         "The prior action outcome is unknown. Run desktop_observe before another action."
                     )
-                if observation:
-                    self._outcome_unknown = False
+            if self._outcome_unknown and not observation:
+                raise CuaDriverOutcomeUnknown(
+                    "The prior action outcome is unknown. Run desktop_observe before another action."
+                )
+            if observation:
+                self._outcome_unknown = False
 
             assert self._loop is not None
             future = asyncio.run_coroutine_threadsafe(factory(), self._loop)
@@ -215,7 +220,7 @@ class CuaDriverBackend:
         listed = await self._driver.list_windows(
             ListWindowsInput(pid=None, on_screen_only=True)
         )
-        windows = list(getattr(listed, "windows", None) or [])[:8]
+        windows = list(getattr(listed, "windows", None) or [])[:6]
         records: list[dict[str, Any]] = []
         controls: list[dict[str, Any]] = []
         self._tokens.clear()
@@ -236,7 +241,7 @@ class CuaDriverBackend:
                         include_accessibility_tree=True,
                         include_screenshot=False,
                         screenshot_out_file=None,
-                        max_elements=40,
+                        max_elements=24,
                         max_depth=8,
                         max_dimension=None,
                         max_image_dimension=None,
@@ -251,7 +256,7 @@ class CuaDriverBackend:
                 truncated = bool(getattr(state, "truncated", False))
                 complete = getattr(state, "elements_complete", None)
                 tokens_usable = not degraded and not truncated and complete is True
-                elements = list(getattr(state, "elements", None) or [])[:24]
+                elements = list(getattr(state, "elements", None) or [])[:12]
                 local_controls = []
                 for element in elements:
                     item = _element_record(element, pid, window_id, tokens_usable)
@@ -262,14 +267,14 @@ class CuaDriverBackend:
                 controls.extend(local_controls)
                 record.update({
                     "snapshotId": getattr(state, "snapshot_id", None),
-                    "treeMarkdown": str(getattr(state, "tree_markdown", "") or "")[:4500],
+                    "treeMarkdown": str(getattr(state, "tree_markdown", "") or "")[:1800],
                     "elementCount": getattr(state, "element_count", None),
                     "elementsComplete": complete,
                     "degraded": degraded,
                     "degradedReason": getattr(state, "degraded_reason", None),
                     "truncated": truncated,
                     "truncationReason": getattr(state, "truncation_reason", None),
-                    "controls": local_controls,
+                    "controlCount": len(local_controls),
                 })
             except Exception as exc:
                 record["inspectionError"] = type(exc).__name__
@@ -278,9 +283,9 @@ class CuaDriverBackend:
         return {
             "source": "Cua Driver accessibility snapshots",
             "visibleWindows": records,
-            "foregroundControls": controls[:60],
+            "foregroundControls": controls[:40],
             "windowCount": len(records),
-            "controlCount": min(len(controls), 60),
+            "controlCount": min(len(controls), 40),
             "note": (
                 "Element tokens are exact-window and snapshot scoped. Use the token, pid and "
                 "cuaWindowId from the same row. Any new observation invalidates old tokens. "

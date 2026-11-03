@@ -26,7 +26,7 @@ export const MAX_GOALS = 8;
  * This is NOT an authorization to run tools or a substitute for a real verifier.
  */
 export function requiresExternalActionEvidence(objective: string): boolean {
-  const s=objective.trim().replace(/^(?:please\s+|jarvis[,!: ]+)+/i,'');
+  const s=objective.trim().replace(/^(?:please\s+|(?:hey\s+)?jarvis[,!: ]+)+/i,'');
   if (!s || s.length>5000) return false;
   if (/^(?:what|why|who|when|where|how|explain|describe|tell me|give me|summarize|translate|compare|what is|which is)\b/i.test(s) ||
       /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:explain|describe|tell me how|show me how|teach me how|walk me through|give me instructions|tell me about)\b/i.test(s)) return false;
@@ -43,7 +43,7 @@ export function requiresExternalActionEvidence(objective: string): boolean {
 
 
 export function requiresGoalPlan(objective: string): boolean {
-  const s = objective.trim();
+  const s = objective.trim().replace(/^(?:please\s+|(?:hey\s+)?jarvis[,!: ]+)+/i, '');
   if (s.length > 5000 || /^(what|why|explain|tell me|how do|how to)\b/i.test(s)) return false;
   const continuation = /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:(?:do|complete|finish)\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task)\b|(?:continue|resume|keep\s+going|carry\s+on)\b)/i.test(s);
   if (continuation) return true;

@@ -40,6 +40,7 @@ class CuaDriverOfflineTests(unittest.TestCase):
         healthy = _element_record(element, 42, 9001, True)
         degraded = _element_record(element, 42, 9001, False)
         self.assertEqual(healthy["elementToken"], "s00000001:2")
+        self.assertNotIn("value", healthy)
         self.assertNotIn("elementToken", degraded)
 
     def test_element_target_requires_matching_typed_fields(self):

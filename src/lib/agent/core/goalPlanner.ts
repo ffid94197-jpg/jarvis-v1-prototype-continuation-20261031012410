@@ -44,7 +44,7 @@ export function requiresExternalActionEvidence(objective: string): boolean {
 export function requiresGoalPlan(objective: string): boolean {
   const s = objective.trim();
   if (s.length > 5000 || /^(what|why|explain|tell me|how do|how to)\b/i.test(s)) return false;
-  const continuation = /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:do|complete|finish|continue|resume|keep\s+going|carry\s+on)(?:\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task|where\s+we\s+left(?:\s+off)?|from\s+(?:the\s+)?(?:last|latest)\s+checkpoint))?\b/i.test(s);
+  const continuation = /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:help\s+me\s+(?:to\s+)?|)|please\s+)?(?:(?:do|complete|finish)\s+(?:it|this|that|the\s+rest|the\s+remaining|the\s+remainder|everything|all\s+of\s+it|the\s+work|the\s+task)\b|(?:continue|resume|keep\s+going|carry\s+on)\b)/i.test(s);
   if (continuation) return true;
   if (s.length < 12) return false;
   return /\b(autonom(?:ous|ously)|end.to.end|from scratch|entire|complete (?:the |a )?(?:mission|project|workflow)|full (?:netherite|minecraft)|defeat (?:the )?ender dragon|netherite|stronghold|multi.step|long.running|research and (?:build|implement))\b/i.test(s) || (requiresExternalActionEvidence(s) && /\b(?:and|then|after|before|next|first|finally|,|three tasks|multiple steps)\b/i.test(s));

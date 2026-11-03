@@ -166,6 +166,11 @@ const priorCandidates = [
 ];
 ok(selectPriorTask('complete it fully', priorCandidates)?.id === 'latest-jarvis',
   'unqualified completion follow-up resolves to the newest owner task');
+ok(selectPriorTask('hey jarvis, complete it fully', [
+  { id: 'latest-minecraft', objective: 'Complete Minecraft survival campaign.' },
+  { id: 'older-jarvis', objective: 'Update JARVIS tool catalogue.' }
+])?.id === 'latest-minecraft',
+  'spoken wake-name is not mistaken for a project topic during prior-task selection');
 ok(selectPriorTask('complete the remaining Minecraft work', [
   { id: 'unrelated', objective: 'Prepare a spreadsheet report.' },
   { id: 'minecraft', objective: 'Defeat the Ender Dragon and equip full Netherite.' }

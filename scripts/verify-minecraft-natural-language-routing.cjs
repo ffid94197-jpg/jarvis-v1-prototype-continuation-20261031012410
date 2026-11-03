@@ -94,4 +94,53 @@ ok(MINECRAFT_AI_INSTRUCTIONS.includes('ordinary language'),'main JARVIS natural-
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('same main JARVIS model'),'single JARVIS brain');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('single Minecraft planning capability'),'one native JARVIS capability');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('NEVER start a second bot'),'no second bot');
+
+// Persistent native mission may start only after a REAL fresh observation,
+// when the goal matches the owner instruction and both contract gates agree.
+const native=new MinecraftAiGate('In Minecraft, gather 5 diamonds');
+const nativeWorld={joined:true,busy:false,position:{x:0,y:64,z:0},health:20,hunger:20,
+ inventory:{logs:0,raw:{wooden_pickaxe:1}},nearbyBlocks:[]};
+const feedNative=world=>native.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(world)}});
+const validNative={command:'auto_goal',goal:'gather',resource:'diamond',targetCount:5,durationSeconds:300};
+no(native.check('minecraft_companion_command',validNative).ok,'native goal requires initial observe');
+feedNative(nativeWorld);
+ok(native.check('minecraft_companion_command',validNative).ok,'owner-requested gather admitted after fresh observe');
+no(native.check('minecraft_companion_command',{...validNative,targetCount:50}).ok,
+ 'AI must not silently expand requested quantity');
+no(native.check('minecraft_companion_command',{command:'auto_goal',goal:'dragon_then_netherite_run',durationSeconds:21600}).ok,
+ 'Do not promote ordinary diamond mining into dragon/Netherite mission');
+no(native.check('minecraft_companion_command',{...validNative,shell:'cmd /c evil'}).ok,
+ 'No extra model-supplied tool parameters');
+native.record('minecraft_companion_command',validNative,{ok:true,detail:{botAcknowledged:true}});
+no(native.check('minecraft_companion_command',validNative).ok,'cannot repeat persistent mission without observing');
+ok(native.check('minecraft_companion_command',{command:'auto_status'}).ok,'mission polling is always read-only');
+const incoming=new MinecraftAiGate('Jarvis, can you defeat the Ender Dragon in Minecraft?');
+incoming.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(incoming.check('minecraft_companion_command',
+ {command:'auto_goal',goal:'dragon_run',durationSeconds:21600}).ok,'explicit owner dragon mission allowed');
+no(incoming.check('minecraft_companion_command',
+ {command:'auto_goal',goal:'dragon_then_netherite_run',durationSeconds:21600}).ok,'dragon goal cannot add Netherite objective');
+const coord=new MinecraftAiGate('In Minecraft, travel to 100 64 -50');
+coord.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(coord.check('minecraft_companion_command',{command:'auto_goal',goal:'travel',
+ destination:{x:100,y:64,z:-50},arrivalRange:2}).ok,'literal requested travel coordinates permitted');
+no(coord.check('minecraft_companion_command',{command:'auto_goal',goal:'travel',
+ destination:{x:100,y:64,z:-51},arrivalRange:2}).ok,'model-invented coordinates refused');
+const lineBuild=new MinecraftAiGate('In Minecraft, build a cobblestone wall');
+lineBuild.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(lineBuild.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
+ block:'cobblestone',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,'bounded wall skill permitted');
+no(lineBuild.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
+ block:'obsidian',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,'unspecified build material refused');
+const house=new MinecraftAiGate('In Minecraft, build me a complete castle');
+house.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+no(house.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
+ block:'cobblestone',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,
+ 'One short line may not be reported as a complete castle');
+
 console.log('MINECRAFT_NATURAL_LANGUAGE '+checks+'/'+checks+' PASS (offline gate/prompt tests; no live game)');

@@ -24,9 +24,11 @@ const ENABLE_FLAG = "JARVIS_LOCAL_PROJECT_BUILD_ENABLED";
 const MAX_SOURCE_BYTES = 256 * 1024 * 1024;
 const MAX_CACHE_BYTES = 1024 * 1024 * 1024;
 const MAX_RUNTIME_BYTES = 128 * 1024 * 1024;
-const MAX_OUTPUT_BYTES = 512 * 1024 * 1024;
+const MAX_ARTIFACT_BYTES = 512 * 1024 * 1024;
+const MAX_OUTPUT_BYTES = 520 * 1024 * 1024;
 const MAX_FILES = 50_000;
-const MAX_OUTPUT_FILES = 25_000;
+const MAX_ARTIFACT_FILES = 25_000;
+const MAX_OUTPUT_FILES = 25_016;
 const MAX_RUN_MS = 27 * 60 * 1000;
 
 export interface LocalProjectBuildPrepared {
@@ -247,6 +249,7 @@ async function treeCopy(
   destination: string,
   limits: TreeLimits,
   exclude?: (relativePath: string) => boolean,
+  isCancelled?: () => boolean,
 ): Promise<TreeStats> {
   const sourceRoot = await requireDirectory(source);
   await fs.mkdir(destination, { recursive: false });
@@ -254,6 +257,7 @@ async function treeCopy(
   async function visit(src: string, dst: string, relative: string): Promise<void> {
     const entries = await fs.readdir(src, { withFileTypes: true });
     for (const entry of entries) {
+      if (isCancelled?.()) throw new Error("Build cancelled during file snapshot");
       if (!isSafeSandboxEntryName(entry.name)) throw new Error("Unsafe filename in project snapshot");
       const childRel = relative ? relative + "/" + entry.name : entry.name;
       if (exclude?.(childRel)) continue;
@@ -279,12 +283,15 @@ async function treeCopy(
   await visit(sourceRoot, destination, "");
   return stats;
 }
-async function measureDirectory(root: string, limits: TreeLimits): Promise<TreeStats> {
+async function measureDirectory(
+  root: string, limits: TreeLimits, isCancelled?: () => boolean,
+): Promise<TreeStats> {
   const rootReal = await requireDirectory(root);
   const stats: TreeStats = { bytes: 0, files: 0, entries: [] };
   async function visit(dir: string, relative: string): Promise<void> {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
+      if (isCancelled?.()) throw new Error("Build cancelled during output inspection");
       if (!isSafeSandboxEntryName(entry.name)) throw new Error("Unsafe output filename");
       const childRel = relative ? relative + "/" + entry.name : entry.name;
       const child = path.join(dir, entry.name);
@@ -444,20 +451,24 @@ async function copyVerifiedArtifact(
   source: string,
   destination: string,
   kind: string,
+  isCancelled: () => boolean,
 ): Promise<{ files: number; bytes: number; sha256: string }> {
-  const stats = await measureDirectory(source, { maxBytes: MAX_OUTPUT_BYTES, maxFiles: MAX_OUTPUT_FILES });
+  const stats = await measureDirectory(source, {
+    maxBytes: MAX_ARTIFACT_BYTES, maxFiles: MAX_ARTIFACT_FILES,
+  }, isCancelled);
   const required = kind === ".next" ? path.join(source, "BUILD_ID") : path.join(source, "index.html");
   const marker = await regularFile(required, 2 * 1024 * 1024);
   if (!marker.length) throw new Error("Build artifact marker is empty");
   await fs.mkdir(destination, { recursive: false });
   const copied = await treeCopy(source, destination, {
-    maxBytes: MAX_OUTPUT_BYTES, maxFiles: MAX_OUTPUT_FILES,
-  });
+    maxBytes: MAX_ARTIFACT_BYTES, maxFiles: MAX_ARTIFACT_FILES,
+  }, undefined, isCancelled);
   if (copied.files !== stats.files || copied.bytes !== stats.bytes) {
     throw new Error("Build artifact changed during host-side verification");
   }
   const digest = createHash("sha256");
   for (const entry of copied.entries.sort((a, b) => a.rel.localeCompare(b.rel))) {
+    if (isCancelled()) throw new Error("Build cancelled during artifact hashing");
     const file = path.join(destination, ...entry.rel.split("/"));
     const handle = await fs.open(file, "r");
     const fileHash = createHash("sha256");
@@ -515,10 +526,12 @@ export async function executeLocalProjectBuild(
     await fs.mkdir(cacheInput);
     await fs.mkdir(output);
 
+    if (isCancelled()) return { ok: false, tool, evidence: "", error: "Build cancelled before source snapshot" };
     const sourceStats = await treeCopy(
       prepared.projectAbs, input,
       { maxBytes: MAX_SOURCE_BYTES, maxFiles: MAX_FILES },
       isExcludedProjectPath,
+      isCancelled,
     );
     const packageAfterCopy = await regularFile(path.join(input, "package.json"), 1024 * 1024);
     const lockAfterCopy = await regularFile(path.join(input, "package-lock.json"), 16 * 1024 * 1024);
@@ -530,14 +543,14 @@ export async function executeLocalProjectBuild(
     await copyRegularFile(prepared.nodeExeAbs, path.join(tools, "node.exe"), 64 * 1024 * 1024);
     await treeCopy(prepared.npmRootAbs, path.join(tools, "npm"), {
       maxBytes: MAX_RUNTIME_BYTES, maxFiles: 20_000,
-    });
+    }, undefined, isCancelled);
     const cacheRoot = await fs.realpath(prepared.npmCacheAbs).catch(() => "");
     if (cacheRoot) {
       const cacache = path.join(cacheRoot, "_cacache");
       try {
         await treeCopy(cacache, path.join(cacheInput, "_cacache"), {
           maxBytes: MAX_CACHE_BYTES, maxFiles: 100_000,
-        });
+        }, undefined, isCancelled);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
         await fs.mkdir(path.join(cacheInput, "_cacache"));
@@ -594,7 +607,7 @@ export async function executeLocalProjectBuild(
       try {
         const current = await measureDirectory(output, {
           maxBytes: MAX_OUTPUT_BYTES, maxFiles: MAX_OUTPUT_FILES,
-        });
+        }, isCancelled);
         if (current.bytes > MAX_OUTPUT_BYTES || current.files > MAX_OUTPUT_FILES) {
           quotaFailure = "Sandbox output quota exceeded";
           await terminateSandbox(launchedChild);
@@ -650,7 +663,9 @@ export async function executeLocalProjectBuild(
     partialResultRoot = runRoot;
     await fs.mkdir(runRoot, { recursive: false });
     const artifactRoot = path.join(runRoot, "artifact");
-    const artifact = await copyVerifiedArtifact(outputArtifact, artifactRoot, kind);
+    if (isCancelled()) return { ok: false, tool, evidence: "", error: "Build cancelled before artifact collection" };
+    const artifact = await copyVerifiedArtifact(outputArtifact, artifactRoot, kind, isCancelled);
+    if (isCancelled()) return { ok: false, tool, evidence: "", error: "Build cancelled during artifact collection" };
     if (artifact.files !== guestResult.artifactFiles || artifact.bytes !== guestResult.artifactBytes) {
       throw new Error("Host artifact count/size does not match the guest build receipt");
     }
@@ -697,7 +712,8 @@ export async function executeLocalProjectBuild(
   } catch (error) {
     return {
       ok: false, tool, evidence: "",
-      error: error instanceof Error ? error.message.slice(0, 500) : "Local project build failed closed",
+      error: isCancelled() ? "Build cancelled" :
+        error instanceof Error ? error.message.slice(0, 500) : "Local project build failed closed",
     };
   } finally {
     if (partialResultRoot && !keepResult) {

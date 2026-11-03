@@ -36,7 +36,7 @@ async function fixture({logs=[],unreachable=[],neverArrive=false,fireDeadline=fa
   const mocks={mineflayer:{createBot:()=>bot},readline:{createInterface:()=>stdin},
     vec3:{Vec3:class{constructor(x,y,z){Object.assign(this,{x,y,z});} distanceTo(p){return Math.hypot(this.x-p.x,this.y-p.y,this.z-p.z);} plus(p){return new this.constructor(this.x+p.x,this.y+p.y,this.z+p.z);}}},
     'mineflayer-pathfinder':{pathfinder(){},Movements:class{},goals:{GoalFollow,GoalNear}}};
-  vm.runInNewContext(source,{require:name=>mocks[name]||require(name),process:{env:{JARVIS_MINECRAFT_LAN_PORT:'54321',JARVIS_MINECRAFT_PLAYER:'Owner'},stdout:{write:x=>output.push(x)},stderr:{write:x=>output.push(x)},on(){}},console,Buffer,setTimeout:timer,clearTimeout(){},setInterval(){},clearInterval(){}});
+  vm.runInNewContext(source,{require:name=>mocks[name]||require(name),__dirname:fs.mkdtempSync(path.join(require('node:os').tmpdir(),'jarvis-mc-path-fixture-')),process:{env:{JARVIS_MINECRAFT_LAN_PORT:'54321',JARVIS_MINECRAFT_PLAYER:'Owner'},stdout:{write:x=>output.push(x)},stderr:{write:x=>output.push(x)},on(){}},console,Buffer,setTimeout:timer,clearTimeout(){},setInterval(){},clearInterval(){}});
   const send=async(command)=>{
     const start=output.length;
     stdin.emit('line',JSON.stringify({id:'a'.repeat(16),command}));

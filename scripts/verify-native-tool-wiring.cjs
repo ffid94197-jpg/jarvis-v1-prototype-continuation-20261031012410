@@ -16,6 +16,14 @@ vm.runInNewContext(policy.outputText,{exports:testExports,URL,process:{platform:
 const gate=testExports.validateDesktopTool;
 const permit=(name,args)=>gate(name,args).ok;
 check(permit('windows_native_inspect',{}),'UIA inspection accepted in isolated test mode');
+const grounded=gate('windows_native_inspect',{query:'Save'});
+check(grounded.ok && grounded.prepared.query==='Save','UFO2 read-only control query stays in native Guardian contract');
+check(!permit('windows_native_inspect',{query:' '}) &&
+      !permit('windows_native_inspect',{query:'x'.repeat(161)}) &&
+      !permit('windows_native_inspect',{query:'Save\\nsecret'}),
+      'Empty, oversized, and control-character UIA query denied');
+check(!permit('windows_native_inspect',{query:'Save',shell:'cmd'}),
+      'No alternate unapproved effect parameters may accompany UIA query');
 check(permit('windows_native_open_url',{url:'https://www.youtube.com/@MrBeast/videos'}),'native browser opens public site');
 check(!permit('windows_native_open_url',{url:'http://127.0.0.1:20189'}),'native browser rejects local backend');
 check(permit('windows_native_action',{elementId:'f'.repeat(24),action:'set_text',text:'hello'}),'UIA text tool accepts bounded input');

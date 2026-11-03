@@ -16,6 +16,9 @@ version and both Windows wheel SHA-256 values in requirements-cua.txt and
 installs with pip --require-hashes from the official PyPI index. This reduces
 artifact-substitution risk but is not a substitute for upstream provenance
 or independent binary review.
+PyPI classifies this release as Beta. The JARVIS backend therefore remains
+opt-in; the SDK preflight and real Windows acceptance must pass before any
+default enablement decision.
 
 Inspected upstream source revisions:
 - Hermes Agent: NousResearch/hermes-agent at fd267bb3242a14c33d4899cffc60ee4be816f14d

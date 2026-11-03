@@ -145,7 +145,8 @@ class CuaDriverBackend:
     async def _initialize(self) -> None:
         os.environ.setdefault("CUA_DRIVER_RS_TELEMETRY_ENABLED", "0")
         import cua_driver
-        if getattr(cua_driver, "__version__", None) != "0.38.0":
+        from importlib.metadata import version as package_version
+        if package_version("cua-driver") != "0.38.0":
             raise CuaDriverUnavailable("Expected pinned cua-driver 0.38.0.")
         self._sdk = cua_driver
         self._driver = cua_driver.CuaDriver.create()

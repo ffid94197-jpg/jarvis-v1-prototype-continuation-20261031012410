@@ -35,6 +35,17 @@ node windows-companion/minecraft-bot/verify_real_java_full_campaign.cjs
 ```
 The gate must prove a genuine Java spawn, server-backed survival and empty inventory; autonomous progression without owner intervention; witnessed Dragon death in the End; witnessed End exit to Overworld; and **subsequently** all four Netherite armor pieces actually worn plus Netherite sword actually held. The written live evidence JSON and SHA-256 digest must be reviewed, not accepted solely from process exit or a simulator.
 
+## Targeted post-merge engineering corrections (2026-11-03)
+
+- Fixed an actual `bot.cjs` execution bug: the autonomous travel destination had been overwritten by the equipment destination slot. A typed-goal dispatch helper now distinguishes travel coordinates from the equipment slot and clones nested parameters.
+- Replaced `auto_status` character truncation with a bounded, always-valid JSON receipt. Crucial milestones `dragonKilled`, `exitPortalObserved` and `netheriteEquipped` survive oversized intermediate state.
+- Fixed loaded ore observations: buried iron/diamond ore is no longer advertised as an exposed mining target; compact inventories prioritize evidence-relevant items.
+- Added conservative independently observed resource quantities for simple inventory goals. Compound tasks are not marked complete from possession of only one ingredient.
+- Added main-JARVIS model access to existing finite `auto_goal` missions **only** after genuine `observe`, strict owner-intent/quantity matching and Guardian validation. Unrelated Dragon/Netherite escalation, invented travel coordinates, ungrounded build/farm positions and low-health nondefensive missions fail closed.
+- Added new tests to the existing **offline-only** runner, without requiring another bot, code-generated tools or GitHub Actions.
+
+Source-isolated checks actually executed in this development session: `verify_goal_dispatch` 29/29; equipment/ore observation checks 24/24; status receipts 22/22; six language adapter prototype-denial checks plus one normal craft; native goal matcher 13/13 after fixes. These checks are **not** a full installed TypeScript/Windows build or a live Minecraft Java victory, and should not be represented as release certification.
+
 ## Remaining limitations and release blockers
 - Real Windows companion + Node + LLM + Java server end-to-end acceptance has not been performed in this chat; private test PC and live world are unavailable here.
 - Unknown Minecraft world seeds, prolonged navigation/recovery, new items/recipes, advanced redstone builds, villager trading, enchanting, modded/online servers, arbitrary instructions, general-purpose skill creation and indefinite autonomy are **not certified**.

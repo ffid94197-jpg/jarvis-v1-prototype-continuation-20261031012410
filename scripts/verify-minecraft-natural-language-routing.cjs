@@ -24,7 +24,7 @@ for(const s of [
  'Jarvis, can you mine diamonds in Minecraft?','Please build a small house in Minecraft',
  'Follow me and protect me in Minecraft','Collect 16 cobblestone using my wooden pickaxe',
  'I want to farm wheat in Minecraft','Find diamond ore in Minecraft','Trade with villagers in Minecraft',
- 'Jarvis, explore Minecraft caves','Can you gather ender pearls in Minecraft?','Can you guard me in Minecraft?','Stop the Minecraft companion'
+ 'Jarvis, explore Minecraft caves','Can you gather ender pearls in Minecraft?','Can you guard me in Minecraft?','In Minecraft, wear an iron helmet','Stop the Minecraft companion'
 ])ok(isMinecraftAiObjective(s),'natural language route: '+s);
 for(const s of [
  'Explain how to mine diamonds in Minecraft','How do I craft a sword in Minecraft?','Do not mine diamonds in Minecraft',
@@ -33,6 +33,39 @@ for(const s of [
 ok(isMinecraftObservationOnlyObjective('Observe my Minecraft inventory'),'read-only observation objective');
 no(isMinecraftObservationOnlyObjective('Observe and follow me in Minecraft'),'follow is an effect');
 no(isMinecraftObservationOnlyObjective('Observe Minecraft and mine diamonds'),'mining is an effect');
+const {singleInventoryResourceGoal}=out;
+const expected=[
+ ['Collect 2 logs in Minecraft',{resource:'logs',quantity:2}],
+ ['Mine six diamonds in Minecraft',{resource:'diamond',quantity:6}],
+ ['Get 3 iron ingots in Minecraft',{resource:'iron_ingot',quantity:3}],
+ ['Collect obsidian in Minecraft',{resource:'obsidian',quantity:1}],
+ ['Gather 65 diamonds in Minecraft',null],
+ ['Collect 3 diamonds and make a sword in Minecraft',null],
+ ['Get 4 diamonds and 5 iron ingots in Minecraft',null],
+ ['Mine a stack of diamonds in Minecraft',null],
+ ['Build a diamond house in Minecraft',null]
+];
+for(const [objective,wanted] of expected){
+ const actual=singleInventoryResourceGoal(objective);
+ ok(JSON.stringify(actual)===JSON.stringify(wanted),'bounded single-resource predicate '+objective);
+}
+const resourceGate=new MinecraftAiGate('Mine six diamonds in Minecraft');
+const resourceScene={joined:true,busy:false,position:{x:0,y:64,z:0},health:20,hunger:20,
+ inventory:{logs:0,raw:{diamond:5}},nearbyBlocks:[]};
+const observeResource=world=>resourceGate.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(world)}});
+observeResource(resourceScene);
+no(resourceGate.proof('Mine six diamonds in Minecraft').verified,'five diamonds cannot satisfy six');
+observeResource({...resourceScene,inventory:{...resourceScene.inventory,raw:{diamond:6}}});
+ok(resourceGate.proof('Mine six diamonds in Minecraft').verified,'six actual inventory diamonds satisfy six');
+no(resourceGate.proof('Collect 3 diamonds and make a sword in Minecraft').verified,
+ 'Compound objective cannot be proven from just an item count');
+const logGate=new MinecraftAiGate('Collect 2 logs in Minecraft');
+logGate.record('minecraft_companion_command',{command:'observe'},{ok:true,detail:{
+ botAcknowledged:true,command:'observe',status:JSON.stringify({...resourceScene,
+ inventory:{logs:2,raw:{}}})}});
+ok(logGate.proof('Collect 2 logs in Minecraft').verified,'aggregate server log count is valid even if raw inventory trimmed');
+
 const gate=new MinecraftAiGate('Follow me and protect me in Minecraft');
 ok(gate.check('minecraft_companion_command',{command:'auto_stop'}).ok,'safety stop without observation');
 no(gate.check('minecraft_companion_command',{command:'follow'}).ok,'follow requires fresh observation');
@@ -61,4 +94,99 @@ ok(MINECRAFT_AI_INSTRUCTIONS.includes('ordinary language'),'main JARVIS natural-
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('same main JARVIS model'),'single JARVIS brain');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('single Minecraft planning capability'),'one native JARVIS capability');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('NEVER start a second bot'),'no second bot');
+
+// Persistent native mission may start only after a REAL fresh observation,
+// when the goal matches the owner instruction and both contract gates agree.
+const native=new MinecraftAiGate('In Minecraft, gather 5 diamonds');
+const nativeWorld={joined:true,busy:false,position:{x:0,y:64,z:0},health:20,hunger:20,
+ inventory:{logs:0,raw:{wooden_pickaxe:1}},nearbyBlocks:[]};
+const feedNative=world=>native.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(world)}});
+const validNative={command:'auto_goal',goal:'gather',resource:'diamond',targetCount:5,durationSeconds:300};
+no(native.check('minecraft_companion_command',validNative).ok,'native goal requires initial observe');
+feedNative(nativeWorld);
+ok(native.check('minecraft_companion_command',validNative).ok,'owner-requested gather admitted after fresh observe');
+no(native.check('minecraft_companion_command',{...validNative,targetCount:50}).ok,
+ 'AI must not silently expand requested quantity');
+no(native.check('minecraft_companion_command',{command:'auto_goal',goal:'dragon_then_netherite_run',durationSeconds:21600}).ok,
+ 'Do not promote ordinary diamond mining into dragon/Netherite mission');
+no(native.check('minecraft_companion_command',{...validNative,shell:'cmd /c evil'}).ok,
+ 'No extra model-supplied tool parameters');
+native.record('minecraft_companion_command',validNative,{ok:true,detail:{botAcknowledged:true}});
+no(native.check('minecraft_companion_command',validNative).ok,'cannot repeat persistent mission without observing');
+ok(native.check('minecraft_companion_command',{command:'auto_status'}).ok,'mission polling is always read-only');
+const injured=new MinecraftAiGate('In Minecraft, gather 5 diamonds');
+injured.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',
+ status:JSON.stringify({...nativeWorld,health:5})}});
+no(injured.check('minecraft_companion_command',validNative).ok,
+ 'Low health must deny non-defensive long-running mining');
+const survival=new MinecraftAiGate('In Minecraft, survive');
+survival.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',
+ status:JSON.stringify({...nativeWorld,health:5})}});
+ok(survival.check('minecraft_companion_command',
+ {command:'auto_goal',goal:'survive'}).ok,'Owner-authorized survival recovery permitted when injured');
+
+const wearable=new MinecraftAiGate('In Minecraft, wear an iron helmet');
+wearable.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(wearable.check('minecraft_companion_command',{command:'auto_goal',goal:'equip',
+ item:'iron_helmet',destinationSlot:'head'}).ok,'wear phrasing maps to owner-requested equip goal');
+
+const tooMany=new MinecraftAiGate('In Minecraft, gather 65 diamonds');
+tooMany.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+no(tooMany.check('minecraft_companion_command',{command:'auto_goal',
+ goal:'gather',resource:'diamond',targetCount:64}).ok,
+ 'Model must not silently reduce a request for 65 diamonds to 64');
+const crafting=new MinecraftAiGate('In Minecraft, craft two chests');
+crafting.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(crafting.check('minecraft_companion_command',{command:'auto_goal',goal:'craft',
+ item:'chest',targetCount:2}).ok,'Spoken two-chest count preserved');
+no(crafting.check('minecraft_companion_command',{command:'auto_goal',goal:'craft',
+ item:'chest',targetCount:1}).ok,'Model must not silently undercraft the owner request');
+
+const incoming=new MinecraftAiGate('Jarvis, can you defeat the Ender Dragon in Minecraft?');
+incoming.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(incoming.check('minecraft_companion_command',
+ {command:'auto_goal',goal:'dragon_run',durationSeconds:21600}).ok,'explicit owner dragon mission allowed');
+no(incoming.check('minecraft_companion_command',
+ {command:'auto_goal',goal:'dragon_then_netherite_run',durationSeconds:21600}).ok,'dragon goal cannot add Netherite objective');
+const coord=new MinecraftAiGate('In Minecraft, travel to 100 64 -50');
+coord.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(coord.check('minecraft_companion_command',{command:'auto_goal',goal:'travel',
+ destination:{x:100,y:64,z:-50},arrivalRange:2}).ok,'literal requested travel coordinates permitted');
+no(coord.check('minecraft_companion_command',{command:'auto_goal',goal:'travel',
+ destination:{x:100,y:64,z:-51},arrivalRange:2}).ok,'model-invented coordinates refused');
+const lineBuild=new MinecraftAiGate('In Minecraft, build a cobblestone wall');
+lineBuild.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(lineBuild.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
+ block:'cobblestone',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,'bounded wall skill permitted');
+no(lineBuild.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
+ block:'obsidian',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,'unspecified build material refused');
+no(lineBuild.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
+ block:'cobblestone',axis:'x+',length:3,position:{x:200,y:64,z:200}}).ok,
+ 'Model must not invent distant building origin');
+const wheat=new MinecraftAiGate('In Minecraft, farm wheat');
+wheat.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(wheat.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_wheat',
+ position:{x:2,y:64,z:2},width:2,depth:2,targetCount:2}).ok,
+ 'Nearby owner-requested bounded wheat skill admitted');
+no(wheat.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_wheat',
+ position:{x:3000,y:64,z:3000},width:2,depth:2,targetCount:2}).ok,
+ 'Remote wheat field cannot be invented by model');
+
+const house=new MinecraftAiGate('In Minecraft, build me a complete castle');
+house.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+no(house.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
+ block:'cobblestone',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,
+ 'One short line may not be reported as a complete castle');
+
 console.log('MINECRAFT_NATURAL_LANGUAGE '+checks+'/'+checks+' PASS (offline gate/prompt tests; no live game)');

@@ -10,6 +10,13 @@ server. This is a transport/lifecycle adaptation, not a copy of Hermes's
 process manager or permission UI. JARVIS does not import the Hermes Agent
 runtime, planner, model routing, credentials, or independent agent loop.
 
+The upstream PyPI 0.38.0 release advertises Windows x64 and ARM64 wheels but
+does not publish PyPI provenance attestations. JARVIS therefore pins the
+version and both Windows wheel SHA-256 values in requirements-cua.txt and
+installs with pip --require-hashes from the official PyPI index. This reduces
+artifact-substitution risk but is not a substitute for upstream provenance
+or independent binary review.
+
 Inspected upstream source revisions:
 - Hermes Agent: NousResearch/hermes-agent at fd267bb3242a14c33d4899cffc60ee4be816f14d
 - Cua Driver: trycua/cua at 07460674e1924ba2ed1219e858c31647bc206669

@@ -4,7 +4,7 @@
 
 ## No more automatic hosted-runner jobs
 
-The two Minecraft workflows on this isolated branch are now MANUAL-ONLY. Neither push nor pull_request events can start these workflows from this branch. Do not manually dispatch GitHub-hosted jobs until the repository owner explicitly reauthorizes GitHub Actions spending. No changes were made to the PC Work JARVIS worktree.
+The Minecraft live workflow and the Prototype Windows build workflow are MANUAL-ONLY on `main`; do not dispatch hosted jobs unless the owner explicitly reauthorizes GitHub Actions spending. The local runner below is available from a clean Prototype JARVIS `main` checkout. Never use the dirty primary PC Work JARVIS checkout.
 
 Instead, the Windows PowerShell runner below invokes Node.js and Mineflayer directly on your PC. Direct execution consumes **zero GitHub Actions minutes**, although it uses local CPU, game memory, electricity, and network access.
 

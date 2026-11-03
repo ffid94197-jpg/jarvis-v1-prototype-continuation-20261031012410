@@ -104,6 +104,9 @@ export async function stageGitHub(owner,url){
    const temp=await fs.mkdtemp(path.join(os.tmpdir(),'jarvis-openclaw-skill-'));
    try{
      await fs.writeFile(path.join(temp,'SKILL.md'),body,{mode:0o600});
+     // Preserve OpenClaw's MIT notice in each independently staged skill.
+     await fs.copyFile(path.join(process.cwd(),'src','lib','agent','adoption',
+       'licenses','OPENCLAW_MIT_LICENSE.txt'),path.join(temp,'LICENSE'));
      return await stageFromDirectory(owner,temp,
        'https://github.com/openclaw/openclaw/tree/'+pin+'/'+spec.subPath);
    }finally{await fs.rm(temp,{recursive:true,force:true});}

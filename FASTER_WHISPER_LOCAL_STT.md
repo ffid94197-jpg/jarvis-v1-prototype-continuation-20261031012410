@@ -43,9 +43,14 @@ cuDNN 9 for CUDA 12. CPU INT8 is the conservative first acceptance target.
 GPU mode remains disabled until the exact CUDA/cuDNN stack is installed and
 tested on the actual machine.
 
-Place a converted CTranslate2 model in a local directory. The folder must
-contain at least `model.bin` and `config.json`; tokenizer/preprocessor files
-must also be present if required by the model. No model is bundled.
+Place a converted CTranslate2 model in a local directory. The adapter
+requires `model.bin`, `config.json` and `tokenizer.json`. The tokenizer is
+mandatory: upstream faster-whisper can otherwise fall back to
+`Tokenizer.from_pretrained("openai/whisper-tiny")` when the local tokenizer
+file is absent, and that fallback is not prevented by the local-directory
+model-loading flag. JARVIS rejects an incomplete folder before loading the
+runtime. Include `preprocessor_config.json` when supplied by the model.
+No model is bundled.
 
 ## Enable only on the owner's isolated Windows PC
 
@@ -63,8 +68,9 @@ type such as `float16` only after installing the matching NVIDIA CUDA/cuBLAS
 runtime and testing it on the actual GPU. Invalid combinations fail closed.
 
 The adapter accepts only the existing validated mono 16 kHz signed PCM WAV
-path (0.1–12 seconds), bounds threads to 1–16, uses beam size 1 and VAD, and
-caps text to 1,500 characters. Transcripts are suggestions, not identity or
+path (0.1–12 seconds), requires local model and tokenizer assets before import,
+bounds threads to 1–16, uses beam size 1 and VAD, normalizes segment whitespace,
+and caps text to 1,500 characters. Transcripts are suggestions, not identity or
 authorization: wake/command text still follows the existing owner/session,
 review, Core and Guardian path. No transcription automatically executes a
 command.

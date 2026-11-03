@@ -34,6 +34,10 @@ def run():
         fake_vosk=types.SimpleNamespace(
             Model=lambda p:p,KaldiRecognizer=FakeVoskRecognizer,
             SetLogLevel=lambda value:None)
+        with mock.patch.dict(os.environ,{},clear=True):
+            check('Vosk is the default when no STT engine is configured',
+                  lambda: (_ for _ in ()).throw(AssertionError())
+                  if backend.active_stt_engine()!='vosk' else None)
         with mock.patch.dict(os.environ,{'JARVIS_STT_ENGINE':'vosk',
           'JARVIS_PERCEPTION_MODELS':tmp},clear=False):
             with mock.patch.dict(sys.modules,{'vosk':fake_vosk}):

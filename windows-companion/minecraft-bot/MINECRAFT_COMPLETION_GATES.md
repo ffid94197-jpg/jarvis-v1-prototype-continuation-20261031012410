@@ -1,7 +1,7 @@
 # Minecraft JARVIS — code-only completion gate
 
 **Status:** DEVELOPMENT IN PROGRESS; NOT 100% IMPLEMENTATION-READY; NOT LIVE-CERTIFIED.
-**Track:** Isolated GLM prototype feature branch and draft PR #8 only, not production PC Work JARVIS.
+**Track:** Prototype JARVIS `main`; this is not the primary PC Work JARVIS product and does not certify a production release.
 **Owner constraint:** Do not start/rerun/schedule/enable GitHub Actions workflows. Do not consume GitHub-hosted runner minutes. Run tests locally on the owner's PC when authorized.
 
 ## Scope of currently implemented campaign

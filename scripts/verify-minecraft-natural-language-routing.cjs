@@ -149,6 +149,19 @@ ok(lineBuild.check('minecraft_companion_command',{command:'auto_goal',goal:'buil
  block:'cobblestone',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,'bounded wall skill permitted');
 no(lineBuild.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
  block:'obsidian',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,'unspecified build material refused');
+no(lineBuild.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
+ block:'cobblestone',axis:'x+',length:3,position:{x:200,y:64,z:200}}).ok,
+ 'Model must not invent distant building origin');
+const wheat=new MinecraftAiGate('In Minecraft, farm wheat');
+wheat.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(wheat.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_wheat',
+ position:{x:2,y:64,z:2},width:2,depth:2,targetCount:2}).ok,
+ 'Nearby owner-requested bounded wheat skill admitted');
+no(wheat.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_wheat',
+ position:{x:3000,y:64,z:3000},width:2,depth:2,targetCount:2}).ok,
+ 'Remote wheat field cannot be invented by model');
+
 const house=new MinecraftAiGate('In Minecraft, build me a complete castle');
 house.record('minecraft_companion_command',{command:'observe'},
  {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});

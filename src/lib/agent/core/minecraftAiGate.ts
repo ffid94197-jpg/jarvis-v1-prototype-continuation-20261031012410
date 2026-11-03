@@ -169,6 +169,14 @@ export function mayStartNativeMinecraftGoal(
   Number.isInteger(v) && (v as number)>=min && (v as number)<=max;
  const itemLabel=(x:unknown):boolean=>typeof x==='string'&&
   /^[a-z_]{2,64}$/.test(x) && s.includes(x.replace(/_/g,' '));
+ const localField=(p:unknown):boolean=>{
+  if(!p||typeof p!=='object'||Array.isArray(p))return false;
+  const v=p as Record<string,unknown>;
+  if(!['x','y','z'].every(k=>amount(v[k],-30000000,30000000)))return false;
+  const origin=observed.position;
+  return Math.hypot((v.x as number)-origin.x,(v.y as number)-origin.y,
+    (v.z as number)-origin.z)<=11.5;
+ };
  const resources:Record<string,RegExp>={
   logs:/\b(?:logs?|wood|timber)\b/,planks:/\bplanks?\b/,
   sticks:/\bsticks?\b/,cobblestone:/\bcobblestone\b/,
@@ -202,10 +210,10 @@ export function mayStartNativeMinecraftGoal(
   return !!xyz && Number(xyz[1])===p.x && Number(xyz[2])===p.y && Number(xyz[3])===p.z;
  }
  if(goal==='build')return /\b(?:build|construct)\b/.test(s) &&
-  /\b(?:wall|line|row)\b/.test(s)&&
+  /\b(?:wall|line|row)\b/.test(s)&&localField(args.position)&&
   amount(args.length,1,8) && typeof args.block==='string' &&
   s.includes(args.block.replace(/_/g,' '));
- if(goal==='farm_wheat')return /\b(?:farm|grow|plant|harvest)\b/.test(s)&&/\bwheat\b/.test(s);
+ if(goal==='farm_wheat')return /\b(?:farm|grow|plant|harvest)\b/.test(s)&&/\bwheat\b/.test(s)&&localField(args.position);
  if(goal==='dragon_then_netherite_run')return /\bdragon\b/.test(s) &&
   /\bnetherite\b/.test(s) && /\b(?:then|after|following)\b/.test(s);
  if(goal==='netherite_dragon_run')return /\bdragon\b/.test(s)&&/\bnetherite\b/.test(s);

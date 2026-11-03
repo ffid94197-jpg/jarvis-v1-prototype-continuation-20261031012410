@@ -54,6 +54,7 @@ def run():
         model_dir=root/'whisper-small-ct2';model_dir.mkdir()
         (model_dir/'model.bin').write_bytes(b'local-model-fixture')
         (model_dir/'config.json').write_text('{}',encoding='utf8')
+        (model_dir/'tokenizer.json').write_text('{}',encoding='utf8')
         captured={}
         class Segment:
             def __init__(self,text):self.text=text
@@ -112,6 +113,11 @@ def run():
             raise AssertionError('invalid configuration was accepted')
         check('Missing local model is rejected without attempting download',
               lambda: must_fail({'JARVIS_FASTER_WHISPER_MODEL_DIR':str(root/'missing')}))
+        incomplete=root/'incomplete-tokenizer';incomplete.mkdir()
+        (incomplete/'model.bin').write_bytes(b'local-model-fixture')
+        (incomplete/'config.json').write_text('{}',encoding='utf8')
+        check('Missing tokenizer is rejected before any remote tokenizer fallback',
+              lambda: must_fail({'JARVIS_FASTER_WHISPER_MODEL_DIR':str(incomplete)}))
         check('Unsupported device is rejected',lambda:must_fail({'JARVIS_FASTER_WHISPER_DEVICE':'remote'}))
         check('Invalid compute type is rejected',lambda:must_fail({'JARVIS_FASTER_WHISPER_COMPUTE_TYPE':'float16'}))
         check('Invalid CPU thread budget is rejected',lambda:must_fail({'JARVIS_FASTER_WHISPER_CPU_THREADS':'99'}))

@@ -280,7 +280,9 @@ async function craftNamed(name,count,epoch,table=null){
   // real planks/sticks, then retried a spent log and deadlocked the mission.
   if(epoch!==actionEpoch)throw Error('Craft cancelled by owner');
   const result=await waitForInventoryIncrease({
-    before,read:()=>digest(bot,leader).inventory.raw[name]||0,
+    // Don't settle on the FIRST one-item increment when the owner requested
+    // several. Wait until the actual inventory reaches the full target.
+    before:before+count-1,read:()=>digest(bot,leader).inventory.raw[name]||0,
     check:()=>{if(epoch!==actionEpoch)throw Error('Craft cancelled by owner')},
     wait:pause,deadline:Date.now()+3500,
   });

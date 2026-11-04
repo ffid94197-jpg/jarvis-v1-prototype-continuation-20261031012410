@@ -52,16 +52,24 @@ function generalPlan(world,progress={},delegate){
  }
  if(progress.goal!=='craft'||!validCraftSpec({goal:'craft',item:progress.item,targetCount:progress.targetCount}))
   return act('blocked','Unsupported autonomous crafting goal');
- // Port of Mindcraft's recursive item prerequisite planning, deliberately
- // constrained to the local Minecraft version's recipe registry. Unknown
- // ingredients or unavailable acquisition paths block instead of cheating.
- if(!Object.hasOwn(RECIPES,progress.item))
-  return planRecipeStep(world?.recipeCatalog,inv.raw,progress.item,progress.targetCount,{
+ // Real inventory proves completion even when the recipe catalog is
+ // temporarily unavailable (e.g. client reconnect). Never claim an item
+ // from a dispatched craft or missing registry data.
+ if(count(inv,progress.item)>=progress.targetCount)
+  return act('complete','Server inventory confirms requested crafted item quantity');
+ // Prefer the actual installed Minecraft version's recipes (including
+ // alternatives such as spruce planks for a chest) over the eight historic
+ // single-ingredient recipes. Fall back to the old list ONLY if the exact
+ // target has no usable versioned recipe; unknown targets fail closed.
+ const catalog=world?.recipeCatalog;
+ const hasVersionedRecipe=catalog?.root===progress.item &&
+   Array.isArray(catalog?.nodes?.[progress.item]) &&
+   catalog.nodes[progress.item].length>0;
+ if(hasVersionedRecipe || !Object.hasOwn(RECIPES,progress.item))
+  return planRecipeStep(catalog,inv.raw,progress.item,progress.targetCount,{
    workbenchNearby:world?.workbenchNearby===true,logs:inv.logs||0,planks:inv.planks||0,
    delegate
   });
- if(count(inv,progress.item)>=progress.targetCount)
-  return act('complete','Server inventory confirms requested crafted item quantity');
  const recipe=RECIPES[progress.item];
  for(const [ingredient,amount] of Object.entries(recipe)){
   if(ingredient==='oak_planks'){

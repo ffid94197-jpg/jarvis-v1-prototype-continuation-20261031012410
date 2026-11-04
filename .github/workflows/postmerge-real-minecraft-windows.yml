@@ -4,6 +4,7 @@ on:
     branches: [test/postmerge-full-windows-acceptance-20261104]
     paths:
       - ".github/workflows/postmerge-real-minecraft-windows.yml"
+      - "windows-companion/minecraft-bot/**"
   workflow_dispatch:
 permissions:
   contents: read

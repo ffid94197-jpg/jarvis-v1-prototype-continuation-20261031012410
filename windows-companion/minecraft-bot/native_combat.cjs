@@ -11,6 +11,35 @@ const ALLOWED_HOSTILES=new Set([
  'magma_cube','zoglin','hoglin','phantom','wither_skeleton'
 ]);
 const MAX_SWINGS=4;
+// Only owned vanilla melee weapons; no invented loadout or durability claims.
+// Weapon selection stays a JARVIS subroutine, not a second agent.
+const MELEE_PRIORITY=Object.freeze([
+ 'netherite_sword','diamond_sword','iron_sword','stone_sword',
+ 'wooden_sword','golden_sword'
+]);
+function chooseObservedMelee(bot){
+ const inventory=bot?.inventory?.items?.();
+ if(!Array.isArray(inventory))return null;
+ for(const name of MELEE_PRIORITY){
+  const owned=inventory.find(item=>item?.name===name&&item.count>0);
+  if(owned)return owned;
+ }
+ return null;
+}
+async function equipObservedMelee(bot,allowed=()=>true){
+ const wanted=chooseObservedMelee(bot);
+ if(!wanted)return {ok:true,weapon:null,detail:'No authorized owned sword; bare-hand defense only'};
+ if(bot?.heldItem?.name===wanted.name)
+  return {ok:true,weapon:wanted.name,detail:'Best owned melee weapon already held'};
+ if(typeof bot?.equip!=='function')
+  return {ok:false,detail:'Cannot verify melee equipment capability'};
+ if(allowed()===false)throw Error('Owner cancelled combat');
+ await bot.equip(wanted,'hand');
+ if(allowed()===false)throw Error('Owner cancelled combat');
+ if(bot.heldItem?.name!==wanted.name)
+  return {ok:false,detail:'Sword equip requested but live hand slot did not confirm item'};
+ return {ok:true,weapon:wanted.name,detail:'Server-observed owned melee weapon equipped'};
+}
 const int=(value,low,high)=>Number.isInteger(value)&&value>=low&&value<=high;
 function validHostileTarget(bot,entityId){
  if(!int(entityId,0,200000)||!bot?.entity?.position)return null;
@@ -31,6 +60,12 @@ async function fightObserved({bot,entityId,maxSwings=3,
  if(typeof bot.attack!=='function'||typeof bot.on!=='function'||
     typeof bot.removeListener!=='function')
   return {ok:false,verified:false,detail:'Server death event tracking unavailable'};
+ const preparation=await equipObservedMelee(bot,allowed);
+ if(!preparation.ok)
+  return {ok:false,verified:false,detail:preparation.detail};
+ target=validHostileTarget(bot,entityId);
+ if(!target||bot.health<9)
+  return {ok:false,verified:false,detail:'Target moved out of range or health became unsafe while equipping'};
  let deathObserved=false,attacks=0;
  const died=e=>{if(e?.id===entityId&&e?.name===target.name)deathObserved=true;};
  bot.on('entityDead',died);
@@ -53,4 +88,5 @@ async function fightObserved({bot,entityId,maxSwings=3,
     'Bounded '+attacks+' combat inputs dispatched; target death not independently verified'};
  }finally{bot.removeListener('entityDead',died);}
 }
-module.exports={ALLOWED_HOSTILES,MAX_SWINGS,validHostileTarget,fightObserved};
+module.exports={ALLOWED_HOSTILES,MAX_SWINGS,MELEE_PRIORITY,
+ chooseObservedMelee,equipObservedMelee,validHostileTarget,fightObserved};

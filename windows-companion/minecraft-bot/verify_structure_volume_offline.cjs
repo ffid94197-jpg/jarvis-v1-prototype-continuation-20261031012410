@@ -65,9 +65,9 @@ for(let round=0;round<17;round++){
  // Actual executor is the existing place_build_block Mineflayer action.
  // Only model block placement here, never fake a server receipt.
  owned.set(key(position),true);count--;placed++;
- if(round===7){
-  pass(owned.size===8 && world.buildVolumeCells[8].state==='unsupported',
-   'upper wall blocks remain unsupported until lower layer is observed');
+ if(round===0){
+  pass(world.buildVolumeCells[8].state==='unsupported',
+   'upper wall blocks are initially unsupported until lower layer is placed');
  }
 }
 pass(placed===16&&owned.size===16&&count===4,

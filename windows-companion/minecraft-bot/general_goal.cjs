@@ -57,7 +57,8 @@ function generalPlan(world,progress={},delegate){
  // ingredients or unavailable acquisition paths block instead of cheating.
  if(!Object.hasOwn(RECIPES,progress.item))
   return planRecipeStep(world?.recipeCatalog,inv.raw,progress.item,progress.targetCount,{
-   workbenchNearby:world?.workbenchNearby===true,logs:inv.logs||0,planks:inv.planks||0
+   workbenchNearby:world?.workbenchNearby===true,logs:inv.logs||0,planks:inv.planks||0,
+   delegate
   });
  if(count(inv,progress.item)>=progress.targetCount)
   return act('complete','Server inventory confirms requested crafted item quantity');

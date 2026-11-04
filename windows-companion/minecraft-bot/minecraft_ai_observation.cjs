@@ -3,7 +3,8 @@
  * No model calls, network effects or game mutations. Derives solely from a
  * Mineflayer digest and optional loaded block positions.
  */
-const INTERESTING=/^(?:[a-z_]+_log|stone|cobblestone|deepslate|cobbled_deepslate|(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore|crafting_table|furnace|smithing_table|nether_portal|end_portal_frame)$/;
+const INTERACTIVE=/^(?:chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|crafting_table|furnace|smithing_table)$/;
+const INTERESTING=/^(?:[a-z_]+_log|stone|cobblestone|deepslate|cobbled_deepslate|(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore|crafting_table|furnace|smithing_table|chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|nether_portal|end_portal_frame)$/;
 // Small, deliberately bounded sample of everyday loaded blocks for
 // general-purpose Minecraft tasks. Never mine blindly or infer world terrain.
 const GENERAL=/^(?:dirt|grass_block|sand|red_sand|gravel|clay|netherrack|mud|coarse_dirt|rooted_dirt|snow|snow_block|cobblestone|[a-z_]+_planks|[a-z_]+_wool|[a-z_]+_log)$/;
@@ -45,9 +46,12 @@ function loadedTargets(bot,{includeGeneral=false}={}){
   // crowd every ore or workstation out of the observation.
   const primary=ranked.filter(b=>INTERESTING.test(b.name));
   const byPriority=[
+    // Keep observed containers/doors visible to the same JARVIS planner.
+    // Never infer a location or open a block from an unobserved name.
+    ...primary.filter(b=>INTERACTIVE.test(b.name)).slice(0,3),
     ...primary.filter(b=>ORES.test(b.name)).slice(0,3),
-    ...primary.filter(b=>MINABLE_STONE.has(b.name)).slice(0,3),
-    ...primary.filter(b=>!ORES.test(b.name)&&!MINABLE_STONE.has(b.name))
+    ...primary.filter(b=>MINABLE_STONE.has(b.name)).slice(0,2),
+    ...primary.filter(b=>!INTERACTIVE.test(b.name)&&!ORES.test(b.name)&&!MINABLE_STONE.has(b.name))
   ];
   const core=byPriority.slice(0,8);
   const keys=new Set(core.map(b=>b.x+','+b.y+','+b.z));

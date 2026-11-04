@@ -22,6 +22,7 @@ const blocks=[
  ...Array.from({length:10},(_,i)=>({name:'dirt',x:1,y:64,z:i+1})),
  {name:'diamond_ore',x:6,y:64,z:2},{name:'gold_ore',x:7,y:64,z:2},
  {name:'coal_ore',x:6,y:64,z:3},{name:'crafting_table',x:2,y:64,z:3},
+ {name:'chest',x:3,y:64,z:4},{name:'oak_door',x:4,y:64,z:4},
  {name:'oak_log',x:3,y:64,z:2},{name:'oak_planks',x:4,y:64,z:2}
 ];
 const bot={
@@ -37,6 +38,8 @@ pass(expanded.length<=12 && expanded.some(x=>x.name==='dirt'),
  'general-purpose observations show visible dirt');
 pass(expanded.some(x=>x.name==='diamond_ore') && expanded.some(x=>x.name==='gold_ore'),
  'ore candidates do not disappear behind abundant ordinary blocks');
+pass(expanded.some(x=>x.name==='chest') && expanded.some(x=>x.name==='oak_door'),
+ 'observed chest and door targets survive bounded sampling');
 pass(expanded.filter(x=>x.name==='dirt').length<=4,
  'general block sampling is explicitly capped');
 pass(new Set(expanded.map(x=>[x.x,x.y,x.z].join(','))).size===expanded.length,

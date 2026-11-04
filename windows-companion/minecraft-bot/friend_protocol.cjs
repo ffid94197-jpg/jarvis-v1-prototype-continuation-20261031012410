@@ -96,7 +96,7 @@ function validateCommand(input) {
     move:['directionInput','durationMs'],say:['text'],
     inspect_villager:['entityId'],trade_villager:['entityId','tradeIndex','times'],
     transfer_container:['position','item','count','operation'],
-    enchant_item:['position','item','choice']
+    enchant_item:['position','item','choice'],attack_hostile:['entityId','maxSwings']
   };
   if(Object.hasOwn(primitiveFields,input.command)&&!exactFields(primitiveFields[input.command]))
     return 'Unexpected parameter on game primitive';
@@ -128,6 +128,10 @@ function validateCommand(input) {
     return ['forward','back','left','right'].includes(input.directionInput) &&
       Number.isInteger(input.durationMs) && input.durationMs >= 100 && input.durationMs <= 3000
       ? null : 'Movement must specify direction and 100–3000ms';
+  if(input.command==='attack_hostile')
+    return Number.isInteger(input.entityId)&&input.entityId>=0&&input.entityId<=200000 &&
+      Number.isInteger(input.maxSwings)&&input.maxSwings>=1&&input.maxSwings<=4?
+      null:'Attack needs observed hostile ID and 1-4 bounded attempts';
   if(input.command==='inspect_villager')
     return Number.isInteger(input.entityId)&&input.entityId>=0&&input.entityId<=200000?
       null:'Villager inspect needs one observed entity ID';

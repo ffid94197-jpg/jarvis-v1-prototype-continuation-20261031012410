@@ -86,6 +86,39 @@ ok(planned.kind==='craft_general'&&planned.item==='oak_door',
 const completion=generalPlan({...world,inventory:{raw:{oak_door:3}}},
  {goal:'craft',item:'oak_door',targetCount:3});
 ok(completion.kind==='complete','production planner requires observed final item inventory');
+const upstreamDecisions=[];
+const delegate=(goal,arguments_)=>{
+ upstreamDecisions.push({goal,args:arguments_});
+ return {kind:'mine_iron',why:'Existing JARVIS native iron ore plan (modeled)'};
+};
+const ironWorld={joined:true,inventory:{raw:{stick:2},planks:0,logs:0},
+ workbenchNearby:true,recipeCatalog:catalog('iron_pickaxe')};
+const ironPlan=generalPlan(ironWorld,{goal:'craft',item:'iron_pickaxe',
+ targetCount:1},delegate);
+ok(ironPlan.kind==='mine_iron'&&upstreamDecisions[0]?.goal==='gather'&&
+ upstreamDecisions[0]?.args.resource==='iron_ingot'&&
+ upstreamDecisions[0]?.args.targetCount===3,
+ 'recipe graph delegates exactly three missing ingots to native JARVIS gathering');
+const readyIron=generalPlan({...ironWorld,inventory:{raw:{iron_ingot:3,stick:2}}},
+ {goal:'craft',item:'iron_pickaxe',targetCount:1});
+ok(readyIron.kind==='craft_general'&&readyIron.item==='iron_pickaxe'&&
+ readyIron.requiresTable===true,
+ 'after observed iron acquisition, planner proposes verified gear crafting');
+const missingDiamond=generalPlan({joined:true,inventory:{raw:{stick:1}},
+ workbenchNearby:true,recipeCatalog:catalog('diamond_sword')},
+ {goal:'craft',item:'diamond_sword',targetCount:1},
+ (goal,args)=>({kind:'mine_diamond',why:goal+args.resource+args.targetCount}));
+ok(missingDiamond.kind==='mine_diamond',
+ 'diamond-sword ingredients reuse existing ore progression, not fake drops');
+const readySword=generalPlan({joined:true,inventory:{raw:{diamond:2,stick:1}},
+ workbenchNearby:true,recipeCatalog:catalog('diamond_sword')},
+ {goal:'craft',item:'diamond_sword',targetCount:1});
+ok(readySword.kind==='craft_general'&&readySword.item==='diamond_sword',
+ 'server-observed diamond and stick ingredients permit bounded sword craft');
+const falseDelegate=generalPlan(ironWorld,{goal:'craft',item:'iron_pickaxe',
+ targetCount:1},()=>({kind:'complete'}));
+ok(falseDelegate.kind==='blocked',
+ 'a delegated subgoal claiming complete without inventory is never trusted');
 const natural=directIntent('please craft three oak doors');
 ok(natural?.ok===true&&natural.command.command==='auto_goal'&&
  natural.command.goal==='craft'&&natural.command.item==='oak_door'&&

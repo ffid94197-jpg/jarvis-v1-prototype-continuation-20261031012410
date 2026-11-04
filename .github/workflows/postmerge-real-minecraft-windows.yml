@@ -21,7 +21,11 @@ jobs:
       JARVIS_MC_TEST_PORT: '25565'
       JARVIS_MC_TEST_STONE: '1'
       JARVIS_MC_TEST_IRON: '0'
+      JARVIS_MC_TEST_NATURAL_LANGUAGE: '1'
       JARVIS_MC_TRACE_AUTONOMY: '1'
+      JARVIS_MODEL_BACKEND: ollama
+      JARVIS_OLLAMA_BASE_URL: http://127.0.0.1:11434
+      JARVIS_OLLAMA_MODEL: qwen2.5:1.5b
       GIT_TERMINAL_PROMPT: '0'
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +45,37 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Minecraft companion lockfile dependency installation failed" }
           node --check windows-companion/minecraft-bot/bot.cjs
           if ($LASTEXITCODE -ne 0) { throw "Minecraft bot syntax invalid" }
+      - name: Install and start the JARVIS-owned local language model
+        timeout-minutes: 12
+        run: |
+          $ErrorActionPreference='Stop'
+          if (!(Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget unavailable for Ollama install' }
+          winget install --id Ollama.Ollama --exact --silent --accept-package-agreements --accept-source-agreements
+          if ($LASTEXITCODE -ne 0) { throw 'Ollama installation failed' }
+          $cli=Get-Command ollama.exe -ErrorAction SilentlyContinue
+          if (!$cli) {
+            $alt=Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe'
+            if (Test-Path $alt) { $cli=Get-Item $alt }
+          }
+          if (!$cli) { throw 'Installed Ollama executable not found' }
+          $exe=$cli.Source
+          if (!$exe) { $exe=$cli.FullName }
+          if (!(Test-Path $exe)) { throw 'Ollama executable path invalid' }
+          $exe=(Resolve-Path $exe).Path
+          Start-Process -FilePath $exe -ArgumentList 'serve' -WindowStyle Hidden
+          $ready=$false
+          for($i=0;$i -lt 60;$i++){
+            try { Invoke-RestMethod 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 | Out-Null; $ready=$true; break }
+            catch { Start-Sleep -Seconds 2 }
+          }
+          if (!$ready) { throw 'JARVIS local language model service unavailable' }
+          & $exe pull qwen2.5:1.5b
+          if ($LASTEXITCODE -ne 0) { throw 'JARVIS local language model download failed' }
+          $tags=Invoke-RestMethod 'http://127.0.0.1:11434/api/tags' -TimeoutSec 10
+          if (!(@($tags.models | Where-Object { $_.name -like 'qwen2.5:1.5b*' }).Count)) {
+            throw 'Required natural-language model is not installed'
+          }
+          Write-Output 'JARVIS_NATURAL_LANGUAGE_MODEL_READY qwen2.5:1.5b'
       - name: Download and authenticate official Mojang Java 1.21.1 survival server
         run: |
           $ErrorActionPreference='Stop'

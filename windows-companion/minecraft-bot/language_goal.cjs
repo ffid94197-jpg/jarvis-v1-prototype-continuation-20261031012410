@@ -139,14 +139,11 @@ function directIntent(raw){
   const resource=normalizeResource(g[2].trim().replace(/ blocks?$/,''));
   if(resource)return canonicalIntent({command:'auto_goal',goal:'gather',resource,targetCount:asCount(g[1])});
  }
- const c=new RegExp('^(?:craft|make)(?: me)? ('+COUNT_PATTERN+') ([a-z_ ]{2,35})$').exec(s);
- if(c){
-  let item=c[2].trim().replace(/ /g,'_');
-  if(!Object.hasOwn(RECIPES,item)&&item.endsWith('s'))item=item.slice(0,-1);
-  if(Object.hasOwn(RECIPES,item))return canonicalIntent({command:'auto_goal',goal:'craft',item,targetCount:asCount(c[1])});
- }
  const primitive=parseOwnerPrimitive(s);
-  return primitive?canonicalIntent(primitive):null; // Otherwise use configured owner model.
+ if(primitive?.command==='craft_item')
+  return canonicalIntent({command:'auto_goal',goal:'craft',item:primitive.item,
+    targetCount:primitive.count}); // Durable resource planning, not immediate failure.
+ return primitive?canonicalIntent(primitive):null; // Otherwise use configured owner model.
 }
 /**
  * Common owner requests can refer to a single observed object by name.

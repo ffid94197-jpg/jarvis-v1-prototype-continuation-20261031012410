@@ -10,24 +10,36 @@ const AXES=Object.freeze({'x+':[1,0],'x-':[-1,0],
 const DANGER=/lava|water|fire|magma|cactus|powder_snow|campfire/;
 function validBuildSpec(s){
  if(!s||typeof s!=='object'||Array.isArray(s)||
-    Object.keys(s).some(k=>!['goal','position','length','axis','block'].includes(k))||
+    Object.keys(s).some(k=>!['goal','position','length','height','axis','block'].includes(k))||
     !BLOCKS.has(s.block)||!Object.hasOwn(AXES,s.axis)||
-    !Number.isInteger(s.length)||s.length<1||s.length>8)return false;
+    !Number.isInteger(s.length)||s.length<1||s.length>8||
+    (s.height!==undefined&&(!Number.isInteger(s.height)||s.height<1||s.height>4)))return false;
  const p=s.position;
  if(!p||typeof p!=='object'||Array.isArray(p)||
     Object.keys(p).some(k=>!['x','y','z'].includes(k))||
     !['x','y','z'].every(k=>Number.isInteger(p[k])))return false;
  const [dx,dz]=AXES[s.axis];
  const endX=p.x+dx*(s.length-1),endZ=p.z+dz*(s.length-1);
- return p.y>=-62&&p.y<=318&&
+ const height=s.height===undefined?1:s.height;
+ return p.y>=-62&&p.y+height-1<=318&&
    [p.x,p.z,endX,endZ].every(n=>Math.abs(n)<=29999984);
+}
+function validWallSpec(s){
+ return !!s&&typeof s==='object'&&!Array.isArray(s)&&s.goal==='wall'&&
+   Object.keys(s).every(k=>['goal','block','length','height'].includes(k))&&
+   (s.block===undefined||BLOCKS.has(s.block))&&
+   (s.length===undefined||(Number.isInteger(s.length)&&s.length>=1&&s.length<=8))&&
+   (s.height===undefined||(Number.isInteger(s.height)&&s.height>=1&&s.height<=4));
 }
 function buildPositions(spec){
  if(!validBuildSpec(spec))throw Error('Invalid bounded construction goal');
  const [dx,dz]=AXES[spec.axis];
- return Array.from({length:spec.length},(_,i)=>({
-   x:spec.position.x+dx*i,y:spec.position.y,z:spec.position.z+dz*i
- }));
+ const height=spec.height===undefined?1:spec.height;
+ const positions=[];
+ for(let y=0;y<height;y++)for(let i=0;i<spec.length;i++)positions.push({
+   x:spec.position.x+dx*i,y:spec.position.y+y,z:spec.position.z+dz*i
+ });
+ return positions;
 }
 function observeBuild(bot,spec,Vec3){
  if(!validBuildSpec(spec)||!bot?.entity?.position||!bot.blockAt||!Vec3)return null;
@@ -68,4 +80,4 @@ function buildPlan(world,progress={},delegate){
  }
  return {kind:'complete',why:'All '+cells.length+' requested blocks observed in live Minecraft world'};
 }
-module.exports={BLOCKS,AXES,validBuildSpec,buildPositions,observeBuild,buildPlan};
+module.exports={BLOCKS,AXES,validBuildSpec,validWallSpec,buildPositions,observeBuild,buildPlan};

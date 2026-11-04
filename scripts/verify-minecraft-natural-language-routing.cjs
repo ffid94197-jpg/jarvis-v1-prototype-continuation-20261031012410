@@ -18,7 +18,7 @@ transpile('prompts.ts',promptSource);
 assert.ok(promptSource.includes('Minecraft natural-language tasks'),'main tool catalog documents natural language');
 checks++;
 const out={};vm.runInNewContext(js,{exports:out,console,JSON,Number,Object,Array,Math,Set,String,RegExp});
-const {isMinecraftAiObjective,isMinecraftObservationOnlyObjective,MinecraftAiGate,MINECRAFT_AI_INSTRUCTIONS}=out;
+const {isMinecraftAiObjective,isMinecraftObservationOnlyObjective,MinecraftAiGate,MINECRAFT_AI_INSTRUCTIONS,mayStartNativeMinecraftGoal}=out;
 const ok=(v,label)=>{assert.equal(v,true,label);checks++;};
 const botSource=fs.readFileSync(path.join(root,'windows-companion/minecraft-bot/bot.cjs'),'utf8');
 ok(botSource.includes("const match=/^(?:hey\\s+)?jarvis(?:buddy)?"),'owner command parser accepts Hey Jarvis wake prefix');
@@ -219,5 +219,69 @@ house.record('minecraft_companion_command',{command:'observe'},
 no(house.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
  block:'cobblestone',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,
  'One short line may not be reported as a complete castle');
+
+// Independent Core goal/target integrity: one accepted action is not a
+// substitute for the user's entire ordered Dragon + Netherite mission.
+const combinedObjective='In Minecraft, defeat the Ender Dragon then get full Netherite armor';
+const reverseObjective='In Minecraft, get full Netherite armor then defeat the Ender Dragon';
+const sameWorld={...nativeWorld,nearbyBlocks:[
+ {name:'chest',x:2,y:64,z:2},
+ {name:'oak_door',x:3,y:64,z:2},
+ {name:'lever',x:4,y:64,z:2}
+]};
+const nativeGoal=goal=>({command:'auto_goal',goal,durationSeconds:21600});
+no(mayStartNativeMinecraftGoal(combinedObjective,nativeGoal('dragon_run'),sameWorld),
+ 'Core must not reduce combined Dragon+Netherite mission to Dragon only');
+ok(mayStartNativeMinecraftGoal(combinedObjective,nativeGoal('dragon_then_netherite_run'),sameWorld),
+ 'Core retains explicit Dragon-then-Netherite ordering');
+no(mayStartNativeMinecraftGoal(combinedObjective,nativeGoal('netherite_dragon_run'),sameWorld),
+ 'Core rejects reverse ordering for Dragon-first mission');
+ok(mayStartNativeMinecraftGoal(reverseObjective,nativeGoal('netherite_dragon_run'),sameWorld),
+ 'Core retains explicit Netherite-then-Dragon ordering');
+no(mayStartNativeMinecraftGoal(reverseObjective,nativeGoal('dragon_then_netherite_run'),sameWorld),
+ 'Core rejects reverse ordering for Netherite-first mission');
+ok(mayStartNativeMinecraftGoal('In Minecraft, defeat the Ender Dragon',
+ nativeGoal('dragon_run'),sameWorld),'Standalone Dragon goal remains valid');
+ok(mayStartNativeMinecraftGoal('In Minecraft, craft a chest',
+ {command:'auto_goal',goal:'craft',item:'chest',targetCount:1},sameWorld),
+ 'Core admits an unambiguous single chest');
+no(mayStartNativeMinecraftGoal('In Minecraft, craft several chests',
+ {command:'auto_goal',goal:'craft',item:'chest',targetCount:1},sameWorld),
+ 'Core rejects unsupported vague quantity rather than undercrafting');
+no(mayStartNativeMinecraftGoal('In Minecraft, craft a chest',
+ {command:'auto_goal',goal:'craft',item:'chest',targetCount:16},sameWorld),
+ 'Core cannot invent a quantity of sixteen for a single requested item');
+
+const entry=(objective)=>{
+ const gate=new MinecraftAiGate(objective);
+ gate.record('minecraft_companion_command',{command:'observe'},{ok:true,detail:{
+  botAcknowledged:true,command:'observe',status:JSON.stringify(sameWorld)
+ }});
+ return gate;
+};
+const chestGate=entry('Open the Minecraft chest');
+ok(chestGate.check('minecraft_companion_command',
+ {command:'interact_block',position:{x:2,y:64,z:2}}).ok,
+ 'Core may interact with freshly observed chest on explicit owner request');
+no(chestGate.check('minecraft_companion_command',
+ {command:'interact_block',position:{x:3,y:64,z:2}}).ok,
+ 'Core cannot open an observed door when owner asked for chest');
+const doorGate=entry('Open the Minecraft door');
+ok(doorGate.check('minecraft_companion_command',
+ {command:'interact_block',position:{x:3,y:64,z:2}}).ok,
+ 'Core admits owner-requested door at observed coordinates');
+no(doorGate.check('minecraft_companion_command',
+ {command:'interact_block',position:{x:2,y:64,z:2}}).ok,
+ 'Core rejects nearby chest in place of owner-requested door');
+no(doorGate.check('minecraft_companion_command',
+ {command:'interact_block',position:{x:3,y:64,z:2,hidden:true}}).ok,
+ 'Core rejects noncanonical coordinate metadata');
+no(doorGate.check('minecraft_companion_command',
+ {command:'interact_block',position:{x:99,y:64,z:2}}).ok,
+ 'Core rejects unobserved block interaction target');
+const mineGate=entry('Mine stone in Minecraft');
+no(mineGate.check('minecraft_companion_command',
+ {command:'interact_block',position:{x:2,y:64,z:2}}).ok,
+ 'A mining request cannot authorize a block activation');
 
 console.log('MINECRAFT_NATURAL_LANGUAGE '+checks+'/'+checks+' PASS (offline gate/prompt tests; no live game)');

@@ -24,7 +24,7 @@ function validateCommand(input) {
   if (input.command === 'auto_goal') {
     const fixed=['survive','wood','tools','explore','follow','guard','stone_age','iron_age',
       'dragon_run','netherite_dragon_run','dragon_then_netherite_run',
-      'netherite_armor_run','netherite_gear_run','companion'];
+      'netherite_armor_run','netherite_gear_run','shelter','companion'];
     const position=target=>target && typeof target==='object' &&
       !Array.isArray(target) && Object.keys(target).length===3 &&
       ['x','y','z'].every(k=>Number.isInteger(target[k]) &&

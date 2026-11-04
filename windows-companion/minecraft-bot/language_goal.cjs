@@ -148,6 +148,44 @@ function directIntent(raw){
  const primitive=parseOwnerPrimitive(s);
   return primitive?canonicalIntent(primitive):null; // Otherwise use configured owner model.
 }
+/**
+ * Common owner requests can refer to a single observed object by name.
+ * Never invent coordinates, resolve ambiguous objects, or run effects from
+ * untrusted signs/chat. The caller already authorizes the owner and the
+ * game executor independently verifies the fresh live block before effect.
+ */
+function contextualIntent(text,context){
+ if(typeof text!=='string')return null;
+ const instruction=text.toLowerCase().trim()
+   .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
+   .replace(/\s+(?:please|for me)$/,'');
+ const request=/^(?:open|close|activate|press|toggle|interact with|use) (?:the |a |an |that |this |my )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table)$/.exec(instruction);
+ if(!request)return null;
+ let scene;
+ try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve a nearby object without a fresh game observation');}
+ if(!scene||scene.joined!==true||scene.busy!==false||!Array.isArray(scene.nearbyBlocks))
+   return fail('A fresh idle joined-game observation is required to act on a named object');
+ const types={
+  chest:/^(?:chest|trapped_chest)$/,
+  barrel:/^barrel$/,
+  door:/^[a-z_]+_door$/,
+  trapdoor:/^[a-z_]+_trapdoor$/,
+  lever:/^lever$/,
+  button:/^[a-z_]+_button$/,
+  furnace:/^furnace$/,
+  'crafting table':/^crafting_table$/,
+  'smithing table':/^smithing_table$/
+ };
+ const candidates=scene.nearbyBlocks.filter(b=>b && typeof b.name==='string' &&
+   types[request[1]].test(b.name) &&
+   ['x','y','z'].every(k=>Number.isInteger(b[k]) && Math.abs(b[k])<=30000000));
+ if(candidates.length!==1)
+  return fail(candidates.length===0?
+    'No matching block present in the fresh nearby world observation':
+    'Multiple matching blocks are visible; specify the exact block or coordinates');
+ const {x,y,z}=candidates[0];
+ return canonicalIntent({command:'interact_block',position:{x,y,z}});
+}
 function modelConfig(env){
  if(env?.JARVIS_MODEL_BACKEND!=='ollama'||!env.JARVIS_OLLAMA_MODEL)return null;
  const base=env.JARVIS_OLLAMA_BASE_URL||'http://127.0.0.1:11434';
@@ -160,6 +198,8 @@ function modelConfig(env){
 async function interpretOwnerInstruction(input,{env=process.env,context='',fetchImpl}={}){
  const text=clean(input);if(!text)return fail('Owner text must be 1-600 printable characters');
  const direct=directIntent(text);if(direct)return direct;
+ const contextual=contextualIntent(text,context);
+ if(contextual)return contextual;
  // An information question cannot become a game effect through model JSON.
  if(/^(?:how(?: do| can| to)|what|why|when|where|which|explain|tell me about)\b/i.test(text))
   return fail('Information request is not a gameplay instruction; no action taken');

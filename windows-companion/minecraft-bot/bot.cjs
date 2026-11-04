@@ -604,7 +604,25 @@ async function autoExecute(plan,epoch){
     }
     case 'collect_wood':return await gatherOneLog(epoch,Date.now()+45000);
     case 'survey_ore':{
-      if(!['iron','diamond'].includes(plan.ore))throw Error('Unsupported ore survey');
+      if(!['iron','diamond','coal'].includes(plan.ore))throw Error('Unsupported ore survey');
+      if(plan.ore==='coal'){
+        const origin=bot.entity.position.clone();
+        const sites=surveyTargets(bot,origin,Vec3).filter(p=>p.distanceTo(origin)>4);
+        let last='No safe coal survey waypoint';
+        for(const site of sites.slice(0,4)){
+          if(epoch!==actionEpoch)throw Error('Coal survey cancelled');
+          try{
+            const reached=await navigate(site,2,epoch,14000);
+            const actual=bot.entity.position.clone();
+            if(reached===true && actual.distanceTo(origin)>4 && actual.distanceTo(site)<=4){
+              const coal=findExposedOre(bot,['coal_ore','deepslate_coal_ore'],24);
+              return {ok:true,verified:true,detail:coal?'Verified new terrain and exposed coal ore at '+coal.block.position:'Verified new safe terrain; no coal claimed'};
+            }
+            last='Survey waypoint arrival or displacement was not verified';
+          }catch(error){if(epoch!==actionEpoch)throw error;last=String(error?.message||error).slice(0,100);}
+        }
+        return {ok:false,verified:false,detail:'Coal survey exhausted safe routes: '+last};
+      }
       if(String(bot.game?.dimension||'').replace(/^minecraft:/,'')!=='overworld')
         throw Error('Ore excavation only authorized in overworld');
       const oreNames=plan.ore==='iron'?['iron_ore','deepslate_iron_ore']:['diamond_ore','deepslate_diamond_ore'];
@@ -694,6 +712,25 @@ async function autoExecute(plan,epoch){
         ()=>digest(bot,leader).inventory.cobblestone,epoch,'Cobblestone');
       if(picked.ok&&picked.verified)bot.jarvisStoneScoutCount=0;
       return picked;
+    }
+    case 'mine_coal':{
+      if(!(before.inventory.woodenPickaxe||before.inventory.stonePickaxe||before.inventory.ironPickaxe||before.inventory.diamondPickaxe))
+        throw Error('Coal mining requires a real pickaxe');
+      const exposed=findExposedOre(bot,['coal_ore','deepslate_coal_ore'],24);
+      if(!exposed)throw Error('No safely exposed coal ore in loaded chunks; request a safe terrain survey');
+      const target=exposed.block,p=target.position;
+      const reached=await navigate(exposed.stance,1,epoch,14500);
+      if(!reached)return {ok:false,verified:false,detail:'Coal ore stance not reached; no coal claimed'};
+      if(epoch!==actionEpoch)throw Error('Coal mining cancelled');
+      const live=bot.blockAt(p);
+      if(!live||!['coal_ore','deepslate_coal_ore'].includes(live.name)||
+         !bot.canDigBlock?.(live)||bot.entity.position.distanceTo(p)>5)
+        return {ok:false,verified:false,detail:'Coal ore no longer server-observed within real dig range'};
+      const pick=bot.inventory.items().find(i=>['wooden_pickaxe','stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'].includes(i.name));
+      if(!pick)throw Error('Missing valid coal mining pickaxe');
+      const beforeCoal=rawCount(bot,'coal');
+      await bot.equip(pick,'hand');await bot.dig(live);
+      return collectVerifiedDrop(p,beforeCoal,()=>digest(bot,leader).inventory.coal,epoch,'Coal');
     }
     case 'mine_iron':{
       if(!before.inventory.stonePickaxe && !before.inventory.ironPickaxe)throw Error('Iron ore needs stone or better pickaxe');

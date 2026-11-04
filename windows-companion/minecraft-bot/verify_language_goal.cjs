@@ -14,6 +14,7 @@ ok(L.directIntent('Can you please protect me?').command.goal==='guard','polite v
 ok(L.directIntent('Could you craft 2 chests?').command.item==='chest','polite natural craft');
 ok(L.directIntent('mine 6 diamonds').command.resource==='diamond','natural gather');
 ok(L.directIntent('make 2 chests').command.item==='chest','natural craft');
+ok(L.directIntent('Could you please make me 3 torches?').command.item==='torch','natural plural torch craft');
 ok(L.directIntent('do not gather wood').ok===false,'negation fail closed');
 ok(L.canonicalIntent({command:'auto_goal',goal:'craft',item:'chest',targetCount:2}).ok,'typed craft');
 ok(!L.canonicalIntent({command:'run_shell',script:'evil'}).ok,'unknown tool denied');

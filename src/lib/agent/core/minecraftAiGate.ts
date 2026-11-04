@@ -161,7 +161,7 @@ export function mayStartNativeMinecraftGoal(
   gather:['resource','targetCount'],craft:['item','targetCount'],
   equip:['item','destinationSlot'],travel:['destination','arrivalRange'],
   build:['position','block','axis','length'],
-  farm_wheat:['position','width','depth','targetCount']
+  farm_wheat:['position','width','depth','targetCount'],sequence:['steps']
  };
  const fixed=new Set(['survive','wood','tools','explore','follow','guard',
   'stone_age','iron_age','dragon_run','netherite_dragon_run',
@@ -204,6 +204,27 @@ export function mayStartNativeMinecraftGoal(
   dirt:/\bdirt\b/,sand:/\bsands?\b/,red_sand:/\bred sand\b/,
   gravel:/\bgravel\b/,mud:/\bmud\b/
  };
+ if(goal==='sequence'){
+  // A model may propose a durable sequence ONLY when each requested stage
+  // maps one-to-one to an authorized existing companion subgoal. The actual
+  // companion independently revalidates validSequence before execution.
+  if(!Array.isArray(args.steps)||args.steps.length<2||args.steps.length>8)return false;
+  const stages=s.split(/\s+(?:and then|then|after that)\s+/);
+  if(stages.length!==args.steps.length)return false;
+  const supported=new Set(['tools','stone_age','iron_age','gather','craft','equip','travel']);
+  return args.steps.every((stage,index)=>{
+   if(!stage||typeof stage!=='object'||Array.isArray(stage))return false;
+   const step=stage as Record<string,unknown>;
+   if(typeof step.goal!=='string'||!supported.has(step.goal))return false;
+   // Wire sequence stages use destination; temporary proof candidate uses
+   // destinationSlot for the existing equip goal validator.
+   const candidate:Record<string,unknown>={command:'auto_goal',...step};
+   if(step.goal==='equip'){
+    candidate.destinationSlot=step.destination;delete candidate.destination;
+   }
+   return mayStartNativeMinecraftGoal(stages[index]+' in Minecraft',candidate,observed);
+  });
+ }
  if(goal==='gather'){
   const resource=args.resource;
   if(resource==='sand' && /\bred sand\b/.test(s))return false;
@@ -253,7 +274,10 @@ export function mayStartNativeMinecraftGoal(
   // A Dragon-only action cannot satisfy a compound Dragon + Netherite mission.
   if(goal==='dragon_run')return dragon&&!netherite;
   if(!dragon||!netherite)return false;
-  const explicitOrder=/\b(?:then|after|following)\b/.test(s);
+  // Avoid reversing "get Netherite AFTER defeating Dragon", where mention
+  // order is the opposite of execution order; require a clearer request.
+  if(/\b(?:after|following)\b/.test(s) && !/\bthen\b/.test(s))return false;
+  const explicitOrder=/\bthen\b/.test(s);
   const dragonFirst=s.indexOf('dragon')<s.indexOf('netherite');
   if(goal==='dragon_then_netherite_run')return explicitOrder&&dragonFirst;
   return !explicitOrder||!dragonFirst;

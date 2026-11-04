@@ -32,6 +32,10 @@ function extractGoal(state){
    spec.destination=state.destination;spec.arrivalRange=state.arrivalRange;
  }else if(goal==='build'){
    spec.position=state.position;spec.block=state.block;spec.axis=state.axis;spec.length=state.length;
+ }else if(goal==='build_volume'){
+   spec.position=state.position;spec.block=state.block;
+   spec.width=state.width;spec.depth=state.depth;
+   spec.height=state.height;spec.shape=state.shape;
  }else if(goal==='farm_wheat'){
    spec.position=state.position;spec.width=state.width;spec.depth=state.depth;
    spec.targetCount=state.targetCount;
@@ -52,7 +56,7 @@ function validateLease(data,identity,now=Date.now()){
     data.deadline-now>MAX_LEASE_MS)
    return {ok:false,reason:'Missing, expired or mismatched mission lease'};
  if(!data.spec||typeof data.spec!=='object'||Array.isArray(data.spec)||
-    Object.keys(data.spec).some(k=>!['goal','resource','targetCount','destination','arrivalRange','steps','position','block','axis','length','width','depth','item','destinationSlot'].includes(k))||
+    Object.keys(data.spec).some(k=>!['goal','resource','targetCount','destination','arrivalRange','steps','position','block','axis','length','width','depth','height','shape','item','destinationSlot'].includes(k))||
     validateCommand({command:'auto_goal',...data.spec})!==null)
    return {ok:false,reason:'Checkpoint contains unsupported goal parameters'};
  const remainingSeconds=Math.floor((data.deadline-now)/1000);

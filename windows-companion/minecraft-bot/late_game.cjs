@@ -95,6 +95,11 @@ function lateGamePlan(world,progress={}){
     if(world.endPortalPresent && world.endPortalActivated){
       if(!has(i,'bow') || qty(i,'arrow')<32)
         return prepareArchery();
+      // The spawn platform can be a few blocks from the main island.
+      // Carry real, ordinary cobblestone to allow finite observed bridging;
+      // DO NOT invent blocks after the portal transition.
+      if(qty(i,'cobblestone')<8)
+        return action('mine_cobblestone','Reserve eight actual survival blocks for a possible End spawn gap');
       return action('enter_end','Enter actual already-open End portal');
     }
     const neededInFrames=world.strongholdPortalFrameNearby &&
@@ -307,7 +312,11 @@ function lateGamePlan(world,progress={}){
     return action('enter_nether','Obtain remaining blaze rods and pearls for Eyes of Ender');
   if(!has(i,'bow') || qty(i,'arrow')<32)
     return prepareArchery();
-  if(alreadyOpen)return action('enter_end','Enter actual activated portal; verify End dimension');
+  if(alreadyOpen){
+    if(qty(i,'cobblestone')<8)
+      return action('mine_cobblestone','Carry eight real End-island bridge blocks before portal transition');
+    return action('enter_end','Enter actual activated portal; verify End dimension');
+  }
   if(eyeCount(i)<neededEyes){
     if(qty(i,'blaze_powder')<1)return action('craft_blaze_powder','Craft blaze powder from real rods');
     return action('craft_eyes','Craft Eye of Ender with pearl and powder');

@@ -46,7 +46,23 @@ function generalPlan(world,progress={},delegate){
     return act('complete','Currently server-observed '+progress.item+' equipped in '+progress.destination);
   // The inventory digest can include items worn in other slots. This is an
   // authorization check only; the executor verifies backpack ownership.
-  if(count(inv,progress.item)<1)return act('blocked','Requested equipment item not owned');
+  if(count(inv,progress.item)<1){
+   // Reuse the same versioned crafting + resource acquisition planner as
+   // explicit craft goals. A single owner equipment objective is an approved
+   // durable *goal*, not permission for arbitrary model-selected effects.
+   const catalog=world?.recipeCatalog;
+   if(catalog?.root!==progress.item ||
+      !Array.isArray(catalog?.nodes?.[progress.item]) ||
+      catalog.nodes[progress.item].length===0)
+     return act('blocked','Requested equipment item not owned and no verified survival crafting recipe available');
+   const prerequisite=planRecipeStep(catalog,inv.raw,progress.item,1,{
+     workbenchNearby:world?.workbenchNearby===true,
+     logs:inv.logs||0,planks:inv.planks||0,delegate
+   });
+   return prerequisite.kind==='complete'?
+     act('blocked','Cannot prove requested equipment exists despite recipe result'):
+     prerequisite;
+  }
   return act('equip_general','Equip exact owner-authorized item and verify physical slot',
     {item:progress.item,destination:progress.destination});
  }

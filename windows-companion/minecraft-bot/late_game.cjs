@@ -22,6 +22,12 @@ function lateGamePlan(world,progress={}){
   const i=world.inventory||{},m=progress.milestones||{};
   const dimension=String(world.dimension||'minecraft:overworld').replace(/^minecraft:/,'');
   const dragonFirst=progress.goal==='dragon_then_netherite_run';
+  const armorOnly=progress.goal==='netherite_armor_run';
+  const equipmentOnly=progress.goal==='netherite_gear_run';
+  const gearOnly=armorOnly||equipmentOnly;
+  // Reuse the existing Netherite progression machinery for an explicitly
+  // requested loadout without adding End/Dragon objectives to its authority.
+  const wantedNetherite=armorOnly?NETHERITE.slice(0,4):NETHERITE;
   // Physical bow/arrow crafting requires a real 3x3 workstation and sticks.
   // Never send a craft action into a world where the recipe cannot run.
   const prepareArchery=()=>{
@@ -41,6 +47,8 @@ function lateGamePlan(world,progress={}){
     return action('prepare_archery','Acquire observed bow and arrows for the End');
   };
   const dragonVictory=m.dragonKilled===true && m.exitPortalObserved===true;
+  if(gearOnly && dimension==='the_end')
+    return action('blocked','An armor-only mission cannot enter the End or imply Dragon authorization');
   // This separate user-authorized mission enforces a strict temporal order:
   // dragon death and the End exit portal FIRST, full worn Netherite LAST.
   // It never accepts entity disappearance or a planner receipt as proof.
@@ -138,7 +146,7 @@ function lateGamePlan(world,progress={}){
     // Track what is STILL missing, not 20 new scraps/gold every time.
     // Previously a partially upgraded inventory (four Netherite pieces and
     // one pre-crafted ingot) restarted the 20-debris grind indefinitely.
-    const upgradesRemaining=NETHERITE.filter(n=>!has(i,n)).length;
+    const upgradesRemaining=wantedNetherite.filter(n=>!has(i,n)).length;
     const uncraftedIngotCount=Math.max(0,upgradesRemaining-qty(i,'netherite_ingot'));
     const materialUnits=uncraftedIngotCount*4;
     if(qty(i,'netherite_scrap')+qty(i,'ancient_debris')<materialUnits)
@@ -150,15 +158,15 @@ function lateGamePlan(world,progress={}){
     if(convertibleGold<materialUnits)
       return action('collect_gold','Acquire '+(materialUnits-convertibleGold)+
         ' additional real gold ingot equivalents');
-    if(!(dragonFirst && dragonVictory) && qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8)
+    if(!gearOnly && !(dragonFirst && dragonVictory) && qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8)
       return action('hunt_blazes','Locate Nether fortress and collect eight actual Blaze rods');
-    if(!(dragonFirst && dragonVictory) && qty(i,'ender_pearl')+eyeCount(i)<16)
+    if(!gearOnly && !(dragonFirst && dragonVictory) && qty(i,'ender_pearl')+eyeCount(i)<16)
       return action('hunt_endermen','Collect Ender pearls through real mob drops or trading');
     if(qty(i,'netherrack')<4)return action('mine_netherrack','Carry at least four netherrack for smithing template duplication');
     return action('enter_overworld','Take observed Nether portal back to Overworld with loot');
   }
   if(dimension!=='overworld')return action('blocked','Unknown game dimension: '+dimension);
-  const missing=NETHERITE.filter(n=>!has(i,n));
+  const missing=wantedNetherite.filter(n=>!has(i,n));
   if(missing.length){
     // Existing portal may be reconstructed from saved position after returning.
     if(!m.netherPortalBuilt && !world.netherPortalNearby){
@@ -175,7 +183,7 @@ function lateGamePlan(world,progress={}){
       qty(i,'ancient_debris')+qty(i,'netherite_scrap')+4*qty(i,'netherite_ingot') < 4*missing.length ||
       qty(i,'gold_ingot')+qty(i,'raw_gold')+Math.floor(qty(i,'gold_nugget')/9)+
        4*qty(i,'netherite_ingot') < 4*missing.length ||
-      (!(dragonFirst && dragonVictory) && (qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8 ||
+      (!gearOnly && !(dragonFirst && dragonVictory) && (qty(i,'blaze_rod')+Math.floor(qty(i,'blaze_powder')/2)<8 ||
       qty(i,'ender_pearl')+eyeCount(i)<16)))
       return action('enter_nether','Collect missing Netherite/End progression materials in Nether');
     if(qty(i,'ancient_debris')>0){
@@ -240,8 +248,21 @@ function lateGamePlan(world,progress={}){
       if(!world.workbenchNearby)return has(i,'crafting_table')?action('place_table','Place crafting table'):action('craft_table','Make crafting table');
       return action('craft_smithing_table','Craft smithing table using server recipe');
     }
-    const idx=NETHERITE.findIndex(n=>!has(i,n));
+    const idx=NETHERITE.findIndex(n=>!has(i,n) && wantedNetherite.includes(n));
+    if(idx<0)return action('blocked','Netherite smithing target inconsistent with authorized equipment set');
     return action('smith_netherite','Upgrade diamond equipment using ingot and template at smithing table',{item:NETHERITE[idx],base:DIAMOND[idx]});
+  }
+  // An armor request is complete only when four physical armor slots show
+  // Netherite; an equipment request additionally requires the held sword.
+  // Neither mission automatically opens an End portal or attacks a dragon.
+  if(gearOnly){
+    if(world.wornNetherite===true && (armorOnly || world.heldNetheriteSword===true))
+      return action('complete',armorOnly?
+        'Four Netherite armor slots presently verified in real survival inventory':
+        'Full Netherite armor worn and Netherite sword held in real survival inventory');
+    return armorOnly?
+      action('equip_netherite_armor','Equip the four authorized Netherite armor slots'):
+      action('equip_netherite','Equip full Netherite armor and sword');
   }
   if(!m.netheriteEquipped || world.wornNetherite!==true || world.heldNetheriteSword!==true)
     return action('equip_netherite','Equip and reverify four Netherite armor slots and sword');

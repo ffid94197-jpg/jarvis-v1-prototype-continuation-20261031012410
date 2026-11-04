@@ -132,6 +132,9 @@ function modelConfig(env){
 async function interpretOwnerInstruction(input,{env=process.env,context='',fetchImpl}={}){
  const text=clean(input);if(!text)return fail('Owner text must be 1-600 printable characters');
  const direct=directIntent(text);if(direct)return direct;
+ // An information question cannot become a game effect through model JSON.
+ if(/^(?:how(?: do| can| to)|what|why|when|where|which|explain|tell me about)\b/i.test(text))
+  return fail('Information request is not a gameplay instruction; no action taken');
  let config;
  try{config=modelConfig(env);}catch(e){return fail(String(e.message||e));}
  if(!config)return fail('Natural goal requires a configured JARVIS-owned Ollama model or a supported typed instruction');

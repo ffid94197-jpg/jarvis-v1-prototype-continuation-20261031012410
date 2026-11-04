@@ -568,6 +568,20 @@ async function autoExecute(plan,epoch){
       }
       return {ok:false,verified:false,detail:'Retreat not verified: '+reason};
     }
+    case 'fight_bound_hostile':{
+      const live=validHostileTarget(bot,plan.targetId);
+      if(!live||live.name!==plan.mob)
+        return {ok:false,verified:false,detail:'Owner-bound hostile ID no longer matches an in-reach approved target'};
+      const result=await fightObserved({bot,entityId:plan.targetId,
+        maxSwings:4,pause,allowed:()=>spawned&&epoch===actionEpoch});
+      if(epoch!==actionEpoch)throw Error('Owner stopped target-bound combat');
+      const killed=result.ok===true&&result.verified===true;
+      return {ok:killed,verified:killed,
+        ...(killed?{proof:'bound_hostile_death',targetId:plan.targetId,mob:plan.mob}:{}),
+        detail:killed?'Target-specific server death event recorded for '+plan.mob+
+          ' ID '+plan.targetId+'; kill attribution not inferred':
+          'Target-bound combat remains unresolved: '+String(result.detail||'no death proof')};
+    }
     case 'defend':{
       const hostile=bot.entities?.[plan.targetId];
       if(!hostile?.position)
@@ -1178,6 +1192,11 @@ async function action(q){
     }
     case 'auto_stop':resumeAfterSpawn=false;setMode('stay');return {ok:true,status:'Autonomous gameplay stopped; movement cancelled'};
     case 'auto_goal':{
+      if(q.goal==='defeat_hostile'){
+        const bound=validHostileTarget(bot,q.entityId);
+        if(!bound||bound.name!==q.mob)
+          return {ok:false,error:'Target hostile identity and melee range must be freshly server-observed before starting'};
+      }
       if(q.goal==='farm_wheat' && bot.entity.position.distanceTo(
         new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>12)
         return {ok:false,error:'Wheat field origin must be within 12 blocks of actual player'};
@@ -1197,7 +1216,7 @@ async function action(q){
       }
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
-      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip'].includes(q.goal) &&
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip'].includes(q.goal) &&
          bot.game?.gameMode!=='survival')
         return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an

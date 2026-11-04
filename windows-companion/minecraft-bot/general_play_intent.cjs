@@ -5,6 +5,7 @@
  * bot.cjs checks actual world state. No arbitrary scripts or admin commands.
  */
 const {roofedRoomSteps}=require('./structure_goal.cjs');
+const {SMELT_RECIPES}=require('./smelt_goal.cjs');
 // A whole armor set is an owner-defined four-slot objective, not permission
 // to select arbitrary equipment or execute raw Minecraft actions.
 function armorEquipSteps(ownerText){
@@ -339,6 +340,21 @@ function modelGoalGrounded(q,ownerText,context=''){
   }
   case 'craft':return has(/\b(?:craft|make)\b/)&&
     itemMention(q.item)&&quantityMatches(q.targetCount);
+  case 'smelt':{
+   const rule=SMELT_RECIPES[q.item];
+   if(!rule||!has(/\b(?:smelt|cook|refine|bake)\b/) ||
+      !quantityMatches(q.targetCount))return false;
+   const product=q.item.replace(/_/g,' ');
+   const origin=rule.input.replace(/_/g,' ');
+   const source=rule.input==='raw_iron'?/\b(?:raw iron|iron ore|iron ingot)\b/:
+      rule.input==='raw_gold'?/\b(?:raw gold|gold ore|gold ingot)\b/:
+      rule.input==='raw_copper'?/\b(?:raw copper|copper ore|copper ingot)\b/:
+      rule.input==='ancient_debris'?/\b(?:ancient debris|netherite scrap)\b/:
+      new RegExp('\\b'+origin.replace(/ /g,'\\s+')+'\\b');
+   if(!source.test(s)&&!s.includes(product))return false;
+   const named=/\b(?:into|to make|for)\s+([a-z ]{2,35})$/.exec(s.trim());
+   return !named || named[1].trim().replace(/s$/,'')===product;
+  }
   case 'equip':return has(/\b(?:wear|equip|wield|hold|put on)\b/)&&itemMention(q.item);
   case 'travel':{
    if(!has(/\b(?:travel|walk|go|navigate|reach|head)\b/)||

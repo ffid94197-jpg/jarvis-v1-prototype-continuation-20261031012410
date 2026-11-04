@@ -16,8 +16,10 @@ const {validateCommand, inventorySummary} = require('./friend_protocol.cjs');
 const {goalSpecFromCommand}=require('./goal_dispatch.cjs');
 const {compactAutonomyStatus}=require('./status_receipt.cjs');
 const {interpretOwnerInstruction} = require('./language_goal.cjs');
+const {itemName:normalizeCraftItemName}=require('./general_play_intent.cjs');
 const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
+const {compileRecipeCatalog}=require('./mindcraft_recipe_graph.cjs');
 const {planSurveyStep}=require('./terrain_survey.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
@@ -339,9 +341,14 @@ async function autoExecute(plan,epoch){
       if(!validCraftSpec({goal:'craft',item:plan.item,targetCount:1}))
         return {ok:false,verified:false,detail:'Unapproved crafting target'};
       const table=bot.findBlock({matching:b=>b?.name==='crafting_table',maxDistance:4});
-      if(!['stick','crafting_table','torch'].includes(plan.item)&&!table)
+      const needsTable=plan.requiresTable===undefined?
+        !['stick','crafting_table','torch'].includes(plan.item):
+        plan.requiresTable===true;
+      if(needsTable&&!table)
         return {ok:false,verified:false,detail:'Required workstation not server-observed'};
-      return craftNamed(plan.item,1,epoch,table||null);
+      // The live recipe registry and actual inventory, not a language-model
+      // message, determine whether this crafting effect is possible.
+      return craftNamed(plan.item,1,epoch,needsTable?table:null);
     }
     case 'equip_general':{
       if(!validEquipSpec({goal:'equip',item:plan.item,destination:plan.destination}))
@@ -903,6 +910,11 @@ async function autoTick(){
     gameWorld.wheatCellsByStage=(active.sequence||[]).map(s=>
       s.goal==='farm_wheat'?observeWheat(bot,s,Vec3):null);
   }
+  // Only the active, owner-authorized craft target is indexed. No broad
+  // repository searches, no third-party bot, no AI code execution.
+  const stage=active.goal==='sequence'?active.sequence?.[active.sequenceIndex]:active;
+  if(stage?.goal==='craft'&&typeof stage.item==='string')
+    gameWorld.recipeCatalog=compileRecipeCatalog(bot,stage.item);
   const plan=autopilot.next(gameWorld);
   // Expiring a safety window must not silently claim mission completion or
   // force the owner to reissue a high-level instruction. Continue only a
@@ -1311,7 +1323,8 @@ bot.on('chat',(username,message)=>{
   if(cmd==='craft' && match[2]){
     const m=/^(\d{1,2})\s+([a-z_]{1,64})$/i.exec(match[2].trim());
     if(!m){freeForm();return;}
-    const q={command:'auto_goal',goal:'craft',item:m[2].toLowerCase(),
+    const q={command:'auto_goal',goal:'craft',
+      item:normalizeCraftItemName(m[2])||m[2].toLowerCase(),
       targetCount:Number(m[1]),durationSeconds:3600};
     if(validateCommand(q)){freeForm();return;}
     action(q).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start crafting goal'));

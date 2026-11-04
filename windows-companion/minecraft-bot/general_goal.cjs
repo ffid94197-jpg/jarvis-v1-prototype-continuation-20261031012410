@@ -3,6 +3,7 @@
  * free-form action execution. The bot proves completion from live inventory
  * and observed equipment slots, not from successful dispatch.
  */
+const {planRecipeStep}=require('./mindcraft_recipe_graph.cjs');
 const RECIPES=Object.freeze({
  stick:{oak_planks:2},
  crafting_table:{oak_planks:4},
@@ -26,7 +27,8 @@ const exact=(o,keys)=>!!o&&typeof o==='object'&&!Array.isArray(o)&&
   Object.keys(o).every(k=>keys.includes(k));
 function validCraftSpec(s){
  return exact(s,['goal','item','targetCount'])&&s.goal==='craft'&&
-  Object.hasOwn(RECIPES,s.item)&&Number.isInteger(s.targetCount)&&
+  typeof s.item==='string'&&/^[a-z][a-z0-9_]{0,63}$/.test(s.item)&&
+  Number.isInteger(s.targetCount)&&
   s.targetCount>=1&&s.targetCount<=16;
 }
 function validEquipSpec(s){
@@ -50,6 +52,14 @@ function generalPlan(world,progress={},delegate){
  }
  if(progress.goal!=='craft'||!validCraftSpec({goal:'craft',item:progress.item,targetCount:progress.targetCount}))
   return act('blocked','Unsupported autonomous crafting goal');
+ // Port of Mindcraft's recursive item prerequisite planning, deliberately
+ // constrained to the local Minecraft version's recipe registry. Unknown
+ // ingredients or unavailable acquisition paths block instead of cheating.
+ if(!Object.hasOwn(RECIPES,progress.item))
+  return planRecipeStep(world?.recipeCatalog,inv.raw,progress.item,progress.targetCount,{
+   workbenchNearby:world?.workbenchNearby===true,logs:inv.logs||0,planks:inv.planks||0,
+   delegate
+  });
  if(count(inv,progress.item)>=progress.targetCount)
   return act('complete','Server inventory confirms requested crafted item quantity');
  const recipe=RECIPES[progress.item];

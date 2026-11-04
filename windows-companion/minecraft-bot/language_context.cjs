@@ -6,7 +6,7 @@
  */
 function safeText(value, max = 48) {
   return typeof value === 'string'
-    ? value.replace(/[\\x00-\\x1f\\x7f]/g, ' ').slice(0, max)
+    ? value.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, max)
     : null;
 }
 function safePosition(value) {
@@ -77,12 +77,21 @@ function buildLanguageContext(world, runtime = {}) {
   };
   let text = JSON.stringify(snapshot);
   if (text.length <= 4000) return text;
-  // Inventory and threat detail are the only expandable collections. Keep the
-  // JSON valid and retain all control-relevant fields when applying the cap.
-  snapshot.inventory = Object.fromEntries(Object.entries(inventory).slice(0, 12));
+  snapshot.inventory = Object.fromEntries(Object.entries(inventory).slice(0, 8));
   snapshot.nearbyThreats = threats.slice(0, 1);
   snapshot.lastAction = null;
   text = JSON.stringify(snapshot);
-  return text.slice(0, 4000);
+  if (text.length <= 4000) return text;
+  // Last-resort bounded fallback remains valid JSON rather than truncating it.
+  return JSON.stringify({
+    gameMode: snapshot.gameMode,
+    dimension: snapshot.dimension,
+    position: snapshot.position,
+    health: snapshot.health,
+    hunger: snapshot.hunger,
+    owner: snapshot.owner,
+    inventory: {},
+    activeMission: snapshot.activeMission
+  });
 }
 module.exports = { buildLanguageContext, safePosition };

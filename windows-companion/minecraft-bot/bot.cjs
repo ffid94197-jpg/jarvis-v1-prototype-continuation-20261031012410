@@ -604,21 +604,41 @@ async function autoExecute(plan,epoch){
     case 'scout_survival':{
       if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
       const origin=bot.entity.position.clone();
-      const sites=surveyTargets(bot,origin,Vec3).filter(p=>p.distanceTo(origin)>4);
+      const persistent=plan.kind==='scout_survival';
+      const visited=persistent?
+        (bot.jarvisSafeSurveyVisited instanceof Set?bot.jarvisSafeSurveyVisited:new Set()):new Set();
+      if(persistent)bot.jarvisSafeSurveyVisited=visited;
+      // A safe standable floor is not enough when a creeper or other hostile
+      // is already physically present at the proposed landing point.
+      const danger=Object.values(bot.entities||{}).filter(e=>
+        HOSTILES.has(e?.name)&&e?.position);
+      const sites=surveyTargets(bot,origin,Vec3).filter(p=>
+        p.distanceTo(origin)>4 &&
+        !visited.has([Math.floor(p.x),Math.floor(p.y),Math.floor(p.z)].join(',')) &&
+        !danger.some(e=>p.distanceTo(e.position)<7));
       if(!sites.length)return {ok:false,verified:false,
-        detail:'No safe loaded waypoint for owner-independent survival exploration'};
+        detail:'No new hazard-free loaded waypoint for independent survival exploration'};
       const start=(Number.isInteger(plan.index)?Math.abs(plan.index):0)%sites.length;
       let last='All selected safe routes inaccessible';
-      for(let attempt=0;attempt<Math.min(3,sites.length);attempt++){
+      for(let attempt=0;attempt<Math.min(4,sites.length);attempt++){
+        if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
         const site=sites[(start+attempt)%sites.length];
+        const key=[Math.floor(site.x),Math.floor(site.y),Math.floor(site.z)].join(',');
+        visited.add(key);
         try{
           const arrived=await navigate(site,2,epoch,14000);
           const actual=bot.entity.position.clone();
-          if(arrived && actual.distanceTo(origin)>3 && actual.distanceTo(site)<=4)
+          if(arrived && actual.distanceTo(origin)>3 && actual.distanceTo(site)<=4){
+            if(persistent){
+              visited.add([Math.floor(actual.x),Math.floor(actual.y),Math.floor(actual.z)].join(','));
+              if(visited.size>160)return {ok:false,verified:false,
+                detail:'Bounded exploration history exhausted; no unlimited terrain search'};
+            }
             return {ok:true,verified:true,
               proof:plan.kind==='survey_workstation'?'workstation_scout_move':'safe_scout_move',
               detail:'Independent safe exploration reached '+Math.floor(actual.x)+','+
               Math.floor(actual.y)+','+Math.floor(actual.z)+'; no loot or combat success claimed'};
+          }
           last='No significant observed player displacement';
         }catch(e){
           if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
@@ -1144,6 +1164,8 @@ async function action(q){
       if(autopilot.status().status==='running')
         return {ok:false,error:'Autonomous goal already running; inspect auto_status or use auto_stop before replacement'};
       halt();mode='auto';resumeAfterSpawn=false;deathsOnCurrentGoal=0;
+      bot.jarvisSafeSurveyVisited=new Set();
+      bot.jarvisStoneScoutCount=0;
        // Evidence from an earlier owner mission is NOT proof for a new run.
        resetDragon(lateSkills.session);
       try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),goalSpecFromCommand(q));lastAction='Autonomous '+st.goal+' STARTED';

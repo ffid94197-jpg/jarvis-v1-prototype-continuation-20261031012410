@@ -82,6 +82,30 @@ ok(!modelPrimitiveGrounded({command:'interact_entity',entityId:99},
  'interact with the zombie',scene),'entity must be observed');
 ok(modelPrimitiveGrounded({command:'interact_entity',entityId:40},
  'interact with the zombie',scene),'observed entity target admitted');
+const namedScene=JSON.stringify({joined:true,nearbyBlocks:[
+ {name:'chest',x:1,y:64,z:2},{name:'oak_door',x:2,y:64,z:2},
+ {name:'stone',x:3,y:64,z:2},{name:'diamond_ore',x:4,y:64,z:2}],
+ threats:[{id:10,name:'zombie'},{id:11,name:'cow'}]});
+ok(modelPrimitiveGrounded({command:'interact_block',position:{x:1,y:64,z:2}},
+ 'open the chest',namedScene),'language may open the requested observed chest');
+ok(!modelPrimitiveGrounded({command:'interact_block',position:{x:2,y:64,z:2}},
+ 'open the chest',namedScene),'language may not substitute an adjacent door for chest');
+ok(modelPrimitiveGrounded({command:'interact_block',position:{x:2,y:64,z:2}},
+ 'open the door',namedScene),'language may open the requested observed door');
+ok(!modelPrimitiveGrounded({command:'dig_block',position:{x:4,y:64,z:2}},
+ 'mine stone',namedScene),'language may not dig diamond ore for requested stone');
+ok(modelPrimitiveGrounded({command:'dig_block',position:{x:3,y:64,z:2}},
+ 'mine stone',namedScene),'language may dig actual observed stone');
+ok(!modelPrimitiveGrounded({command:'interact_entity',entityId:10},
+ 'interact with the cow',namedScene),'language may not select a zombie for requested cow');
+ok(modelPrimitiveGrounded({command:'interact_entity',entityId:11},
+ 'interact with the cow',namedScene),'language can select the observed named animal');
+
+const {validSequence}=require('./mission_sequence.cjs');
+ok(validSequence([{goal:'travel',destination:{x:1,y:64,z:2},arrivalRange:2}]),
+ 'Companion admits canonical travel stage');
+ok(!validSequence([{goal:'travel',destination:{x:1,y:64,z:2,admin:true},arrivalRange:2}]),
+ 'Companion rejects extra hidden nested coordinate fields');
 const env={JARVIS_MODEL_BACKEND:'ollama',JARVIS_OLLAMA_MODEL:'verified-local-model'};
 const respond=(payload)=>async()=>({ok:true,text:async()=>JSON.stringify({
  message:{content:JSON.stringify(payload)}

@@ -465,7 +465,9 @@ export class MinecraftAiGate {
   private fresh=false;
   private sameIdleObservations=0;
   private lastSceneSignature: string|null=null;
-  constructor(private readonly objective: string = '') {}
+  private bootstrapJoinConsumed=false;
+  constructor(private readonly objective: string = '',
+              private readonly allowBootstrapJoin=false) {}
   get lastObservation(){return this.observed;}
 
   /** Advice only. No actions and no bypass of the validator or Guardian. */
@@ -489,7 +491,17 @@ export class MinecraftAiGate {
       blocks:o.nearbyBlocks??[],villagers:o.villagers??[],threats:o.threats??[],last:o.lastAction??''});
   }
   check(tool:string,args:Record<string,unknown>):{ok:boolean;reason:string} {
-    if(tool!=='minecraft_companion_command')return {ok:false,reason:'Minecraft AI tasks are limited to the managed companion; other tools and joining another bot are denied'};
+    if(tool==='minecraft_companion_join'){
+      // Only the Core-scheduled first join may use this exception, exactly
+      // once and only before any observation. No arbitrary model-selected
+      // process launch, remote host, credentials or extra args.
+      const valid=this.allowBootstrapJoin&&!this.bootstrapJoinConsumed &&
+        this.observed===null&&Object.keys(args).length===0;
+      if(!valid)return {ok:false,reason:'Only one Core-authored owner-authorized Minecraft LAN join is permitted'};
+      this.bootstrapJoinConsumed=true;
+      return {ok:true,reason:'Initial companion join; Guardian and spawn receipt still required'};
+    }
+    if(tool!=='minecraft_companion_command')return {ok:false,reason:'Minecraft AI tasks are limited to the managed companion and current trusted game scene'};
     const command=args?.command;
     if(typeof command!=='string' || (!READ_ONLY.has(command) && !CONTROLLED_EFFECTS.has(command)))
       return {ok:false,reason:'Unsupported/unverified AI gameplay command; do not start scripted auto_goal or issue unverifiable inputs'};

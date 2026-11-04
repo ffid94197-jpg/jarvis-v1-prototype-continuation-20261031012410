@@ -257,7 +257,13 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     for(let attempt=0;attempt<15;attempt++){
       check(epoch);
       if(count(bot,'arrow')<beforeArrows){
-        if(target.name==='ender_dragon')noteDragonAttack(session,target);
+        if(target.name==='ender_dragon'){
+          noteDragonAttack(session,target);
+          // Receipt proves ONE actual survival arrow was fired, NEVER a
+          // hit or death. Change positions after a finite attempt count.
+          return observed(true,'Dragon bow attempt: arrow inventory reduced; target damage unverified',
+            'dragon_bow_fired');
+        }
         return observed(true,'Bow fired: actual arrow inventory consumed; target damage unverified');
       }
       await delay(150);

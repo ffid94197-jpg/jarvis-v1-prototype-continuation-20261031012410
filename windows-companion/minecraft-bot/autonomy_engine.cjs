@@ -657,8 +657,19 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
        (state.milestones.dragonApproachTrips||0)>=24)
       d={kind:'blocked',why:'Twenty-four proven safe Dragon approach regions failed to bring combat into range'};
     if(d.kind==='fight_dragon' &&
+       (state.milestones.dragonRangedShots||0)>=48)
+      d={kind:'blocked',why:'Forty-eight real arrows fired without confirmed Dragon death; do not invent a hit'};
+    if(d.kind==='fight_dragon' &&
+       (state.milestones.dragonRangedShots||0)>=8*
+       ((state.milestones.dragonStanceTrips||0)+1)){
+      d=(state.milestones.dragonStanceTrips||0)>=6?
+        {kind:'blocked',why:'Six physically verified alternate Dragon bow positions exhausted'}:
+        {kind:'scout_survival',reason:'dragon_stance',index:state.steps,
+          why:'Eight real Dragon arrows without proven victory; seek a safe loaded shooting stance'};
+    }
+    if(d.kind==='fight_dragon' &&
        (state.milestones.dragonAttackInputs||0)>=96)
-      d={kind:'blocked',why:'Ninety-six observed Dragon attack attempts did not prove the real Dragon death'};
+      d={kind:'blocked',why:'Ninety-six observed Dragon melee attempts did not prove the real Dragon death'};
     state.lastDecision=d;
     if(d.kind==='complete'){state.status='complete';state.why=d.why;}
     if(d.kind==='blocked'){state.status='blocked';state.why=d.why;}
@@ -682,6 +693,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         outcome.proof==='dragon_approach') &&
       (decision.kind!=='bridge_end_gap' ||
         outcome.proof==='end_bridge_tile') &&
+      (decision.kind!=='fight_dragon' ||
+        ['dragon_seen','dragon_bow_fired','dragon_death'].includes(outcome.proof)) &&
       (decision.kind!=='smelt_resource' ||
         !['smelt','sequence'].includes(state.goal) ||
         outcome.proof==='smelt_output') &&
@@ -709,6 +722,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       if(decision.kind==='advance_dragon'&&outcome.proof==='dragon_approach')
         state.milestones.dragonApproachTrips=Math.min(24,
           (state.milestones.dragonApproachTrips||0)+1);
+      if(decision.kind==='fight_dragon'&&outcome.proof==='dragon_bow_fired')
+        state.milestones.dragonRangedShots=Math.min(48,
+          (state.milestones.dragonRangedShots||0)+1);
       if(decision.kind==='bridge_end_gap'&&outcome.proof==='end_bridge_tile'){
         state.milestones.endBridgeTiles=Math.min(8,
           (state.milestones.endBridgeTiles||0)+1);
@@ -794,6 +810,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           state.milestones.crystalRecoveryTrips=Math.min(6,(state.milestones.crystalRecoveryTrips||0)+1);
           state.failures.destroy_end_crystal=0;
         }
+        if(decision.reason==='dragon_stance')
+          state.milestones.dragonStanceTrips=Math.min(6,
+            (state.milestones.dragonStanceTrips||0)+1);
       }}
     else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;
     state.lastResult={kind:decision.kind,verified:ok,detail:String(outcome?.detail||'unverified').slice(0,140)};

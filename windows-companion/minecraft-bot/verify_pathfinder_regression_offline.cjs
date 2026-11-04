@@ -10,14 +10,14 @@ const source=fs.readFileSync(path.join(__dirname,'bot.cjs'),'utf8');
 const pos=(x,y,z)=>({x,y,z,offset(dx,dy,dz){return pos(x+dx,y+dy,z+dz);},clone(){return pos(x,y,z);},distanceTo(p){return Math.hypot(x-p.x,y-p.y,z-p.z);}});
 let checks=0;
 function ok(x,desc){assert.ok(x,desc);console.log('PASS',desc);checks++;}
-async function fixture({logs=[],unreachable=[],neverArrive=false,fireDeadline=false}={}){
+async function fixture({logs=[],unreachable=[],neverArrive=false,fireDeadline=false,emitSpawn=true,controls=true}={}){
   const stdin=new EventEmitter(), bot=new EventEmitter(), output=[], blocks=logs.map((at)=>({name:'oak_log',position:pos(...at)}));
   let count=0,pendingReject;
   const blocked=new Set(unreachable.map(x=>x.join(',')));
   bot.players={Owner:{entity:{position:pos(5,64,5)}}};bot.entity={position:pos(0,64,0)};
   bot.entities={};bot.health=20;bot.food=20;bot.inventory={items:()=>count?[{name:'oak_log',count}]:[]};
   bot.game={dimension:'minecraft:overworld'};bot.loadPlugin=()=>{};
-  bot.setControlState=()=>{};bot.chat=()=>{};bot.quit=()=>{};
+  if(controls)bot.setControlState=()=>{};bot.chat=()=>{};bot.quit=()=>{};
   bot.findBlocks=()=>blocks.map(x=>x.position);
   bot.findBlock=({matching})=>blocks.find(matching)||null;
   bot.blockAt=p=>blocks.find(x=>x.position.distanceTo(p)<.01)||{name:'air',position:p};
@@ -31,12 +31,12 @@ async function fixture({logs=[],unreachable=[],neverArrive=false,fireDeadline=fa
     }};
   class GoalFollow {constructor(entity,r){this.entity=entity;this.range=r;}}
   class GoalNear {constructor(x,y,z,range){Object.assign(this,{x,y,z,range});}}
-  let id=0;
+  let id=0;const exits=[];
   const timer=(fn,ms)=>{if(ms<=350 || (fireDeadline && ms>1000))queueMicrotask(fn);return ++id;};
   const mocks={mineflayer:{createBot:()=>bot},readline:{createInterface:()=>stdin},
     vec3:{Vec3:class{constructor(x,y,z){Object.assign(this,{x,y,z});} distanceTo(p){return Math.hypot(this.x-p.x,this.y-p.y,this.z-p.z);} plus(p){return new this.constructor(this.x+p.x,this.y+p.y,this.z+p.z);}}},
     'mineflayer-pathfinder':{pathfinder(){},Movements:class{},goals:{GoalFollow,GoalNear}}};
-  vm.runInNewContext(source,{require:name=>mocks[name]||require(name),process:{env:{JARVIS_MINECRAFT_LAN_PORT:'54321',JARVIS_MINECRAFT_PLAYER:'Owner'},stdout:{write:x=>output.push(x)},stderr:{write:x=>output.push(x)},on(){}},console,Buffer,setTimeout:timer,clearTimeout(){},setInterval(){},clearInterval(){}});
+  vm.runInNewContext(source,{require:name=>mocks[name]||require(name),process:{env:{JARVIS_MINECRAFT_LAN_PORT:'54321',JARVIS_MINECRAFT_PLAYER:'Owner'},stdout:{write:x=>output.push(x)},stderr:{write:x=>output.push(x)},on(){},exitCode:0,exit:code=>exits.push(code)},console,Buffer,setTimeout:timer,clearTimeout(){},setInterval(){},clearInterval(){}});
   const send=async(command)=>{
     const start=output.length;
     stdin.emit('line',JSON.stringify({id:'a'.repeat(16),command}));
@@ -45,8 +45,8 @@ async function fixture({logs=[],unreachable=[],neverArrive=false,fireDeadline=fa
     assert.ok(received,`expected receipt for ${command}`);
     return JSON.parse(received.slice(8));
   };
-  bot.emit('spawn');
-  return {send,bot,getCount:()=>count};
+  if(emitSpawn)bot.emit('spawn');
+  return {send,bot,getCount:()=>count,exits,output};
 }
 (async()=>{
   const a=await fixture({logs:[[2,64,0],[4,64,0]]});
@@ -72,5 +72,21 @@ async function fixture({logs=[],unreachable=[],neverArrive=false,fireDeadline=fa
   await e.send('collect_wood');status=(await e.send('status')).status;
   ok(/timeout/i.test(status),'navigation timeout is reported explicitly instead of generic stopped path');
   ok(status.includes('"mode":"stay"'),'timed out task safely releases exclusive movement control');
+  // Reproduce the real Java LAN startup failure class: Mineflayer may end
+  // before its movement API is available. This must be a clean, nonzero,
+  // diagnostic outcome, not an uncaught TypeError or a claimed live join.
+  const f=await fixture({emitSpawn:false,controls:false});
+  f.bot.emit('end');
+  ok(f.exits[0]===1 && f.output.some(s=>s.includes('ended before spawn')),
+    'disconnect before spawn exits nonzero without calling missing control API');
+  const g=await fixture({emitSpawn:false,controls:false});
+  g.bot.emit('spawn');
+  ok(g.output.some(s=>s.includes('movement API unavailable at spawn')) &&
+    !g.output.some(s=>s.includes('MINECRAFT_COMPANION_JOINED')),
+    'missing movement API never claims successful live join');
+  const h=await fixture();
+  delete h.bot.setControlState;
+  h.bot.emit('end');
+  ok(h.exits[0]===1,'movement API disappearance after spawn is a failure');
   console.log(`MINECRAFT_PATHFINDER_REGRESSION ${checks}/${checks} PASS (offline mock only)`);
 })().catch(err=>{console.error(err);process.exitCode=1;});

@@ -71,6 +71,13 @@ function ack(id,ok,status,error){
 }
 function stopInput(){
   if(moveTimer){clearTimeout(moveTimer);moveTimer=undefined;}
+  // Mineflayer may emit 'end' before it finishes constructing movement
+  // controls. Shutdown must not replace the underlying connection error with
+  // "bot.setControlState is not a function".
+  if(typeof bot.setControlState!=='function'){
+    if(spawned){process.exitCode=1;lastAction='Mineflayer movement API disappeared after spawn';}
+    return;
+  }
   for(const key of ['forward','back','left','right','jump'])bot.setControlState(key,false);
 }
 // A stance leg must outlive pathfinder's own A* think budget plus walking time.
@@ -1185,6 +1192,14 @@ async function action(q){
   }
 }
 bot.once('spawn',()=>{
+  // Never claim a successful live Minecraft join if the actual movement API
+  // is missing. This also catches an incompatible Mineflayer runtime early.
+  if(typeof bot.setControlState!=='function'){
+    process.stderr.write('Minecraft movement API unavailable at spawn; rejecting live gameplay acceptance\n');
+    process.exitCode=1;
+    if(typeof bot.quit==='function')bot.quit('Unsupported Mineflayer movement API');
+    return;
+  }
   spawned=true;const movement=new Movements(bot);
   // Resource gathering must not acquire random dirt by mining its path.
   movement.canDig=false;
@@ -1349,5 +1364,13 @@ bot.on('spawn',()=>{
 });
 bot.on('kicked',reason=>{process.stderr.write('Bot kicked: '+String(reason).slice(0,150)+'\n');process.exitCode=1;});
 bot.on('error',err=>{process.stderr.write('Bot error: '+String(err.code||'unknown')+'\n');process.exitCode=1;});
-bot.on('end',()=>{clearInterval(followTimer);halt();process.exit(process.exitCode||0);});
+bot.on('end',()=>{
+  clearInterval(followTimer);
+  if(!spawned){
+    process.stderr.write('Minecraft connection ended before spawn; no in-game action was verified\n');
+    process.exitCode=1;
+  }
+  halt();
+  process.exit(process.exitCode||0);
+});
 process.on('SIGTERM',()=>{clearInterval(followTimer);if(mode==='auto')autopilot.stop('Operator stopped bot');missionCheckpoint.clear();halt();bot.quit('Operator stopped JARVIS friend');});

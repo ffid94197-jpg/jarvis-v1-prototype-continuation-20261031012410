@@ -6,7 +6,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {directIntent,canonicalIntent,interpretOwnerInstruction}=require('./language_goal.cjs');
-const {modelPrimitiveGrounded}=require('./general_play_intent.cjs');
+const {modelPrimitiveGrounded,modelGoalGrounded}=require('./general_play_intent.cjs');
 const {validateCommand}=require('./friend_protocol.cjs');
 let count=0;
 function ok(value,label){assert.ok(value,label);count++;console.log('PASS',label);}

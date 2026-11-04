@@ -1060,9 +1060,13 @@ async function action(q){
         const choices=q.block?[q.block]:['cobblestone','oak_planks','spruce_planks','birch_planks','stone_bricks','dirt','netherrack'];
         const block=choices.find(name=>BLOCKS.has(name)&&rawCount(bot,name)>0);
         if(!block)return {ok:false,error:'No supported building block is currently owned; gather a safe block material first'};
+        const wallLength=q.length||4,wallHeight=q.height||2;
+        const wallBlocks=wallLength*wallHeight;
+        if(rawCount(bot,block)<wallBlocks)
+          return {ok:false,error:'Wall needs '+wallBlocks+' '+block+' blocks; only '+rawCount(bot,block)+' are owned'};
         q={command:'auto_goal',goal:'build',position:{
           x:Math.floor(player.x)+dx*2,y:Math.floor(player.y),z:Math.floor(player.z)+dz*2
-        },block,axis,length:q.length||4,height:q.height||2,durationSeconds:q.durationSeconds||1800};
+        },block,axis,length:wallLength,height:wallHeight,durationSeconds:q.durationSeconds||1800};
         const normalizedError=validateCommand(q);
         if(normalizedError)return {ok:false,error:normalizedError};
       }

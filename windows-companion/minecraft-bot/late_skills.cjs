@@ -529,22 +529,52 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     return observed(true,`Eye flight observed: heading ${session.bearing.x.toFixed(2)},${session.bearing.z.toFixed(2)}`);
   }
   async function approachBuriedStronghold(goalPosition,epoch){
-    const tool=bot.inventory.items().find(i=>['diamond_pickaxe','netherite_pickaxe','iron_pickaxe'].includes(i.name));
-    if(!tool)return observed(false,'No mining pickaxe for underground stronghold stairs');
+    const tool=bot.inventory.items().find(i=>['diamond_pickaxe','netherite_pickaxe','iron_pickaxe'].includes(i.name))||
+      (['diamond_pickaxe','netherite_pickaxe','iron_pickaxe'].includes(bot.heldItem?.name)?
+        bot.heldItem:null);
+    if(!tool)return observed(false,'No real mining pickaxe for underground stronghold stairs');
     let dug=0;
     for(let n=0;n<5;n++){
       check(epoch);
       const current=bot.entity.position;
       if(Math.floor(current.y)<=Math.floor(goalPosition.y)+3)break;
-      const dir=session.eyesThrown%4;
-      const [dx,dz]=[[1,0],[0,1],[-1,0],[0,-1]][dir];
-      const next=new Vec3(Math.floor(current.x)+dx,Math.floor(current.y)-1,Math.floor(current.z)+dz);
-      if(!solid(bot.blockAt(next.offset(0,-1,0))))return observed(false,'Void or liquid beneath stronghold stairs');
-      const clear=[bot.blockAt(next.offset(0,1,0)),bot.blockAt(next)];
-      if(clear.some(b=>!b||['water','lava','bedrock','end_portal_frame','end_portal'].includes(b.name)))
-        return observed(false,'Cannot safely excavate observed stronghold staircase');
-      const around=[next.offset(-1,0,0),next.offset(1,0,0),next.offset(0,0,-1),next.offset(0,0,1)];
-      if(around.some(p=>bot.blockAt(p)?.name==='lava'))return observed(false,'Lava alongside proposed staircase');
+      // A staircase descends one layer per horizontal step. Prefer actual
+      // loaded positions whose horizontal distance to the real observed
+      // portal frame becomes SMALLER. The old direction came from the
+      // count of Eyes thrown, unrelated to stronghold geometry.
+      const floorX=Math.floor(current.x),floorY=Math.floor(current.y),
+        floorZ=Math.floor(current.z);
+      const options=[[1,0],[0,1],[-1,0],[0,-1]].map(([dx,dz])=>{
+        const next=new Vec3(floorX+dx,floorY-1,floorZ+dz);
+        const dy=goalPosition.y-next.y;
+        const forward=Math.hypot(goalPosition.x-next.x,goalPosition.z-next.z);
+        return {next,score:forward+Math.abs(dy)*.01,dx,dz};
+      }).sort((a,b)=>a.score-b.score);
+      let chosen=null;
+      for(const option of options){
+        const next=option.next;
+        const foot=bot.blockAt(next.offset(0,-1,0));
+        if(!solid(foot))continue;
+        const clear=[bot.blockAt(next.offset(0,1,0)),bot.blockAt(next)];
+        if(clear.some(b=>!b || ['water','lava','bedrock','end_portal_frame',
+          'end_portal','spawner'].includes(b.name)))continue;
+        // Reject unloaded sides and all known liquid/fire hazards before
+        // exposing a diagonal underground cavity to the player.
+        const around=[next.offset(-1,0,0),next.offset(1,0,0),
+          next.offset(0,0,-1),next.offset(0,0,1),
+          next.offset(0,2,0)];
+        if(around.some(p=>{
+          const block=bot.blockAt(p);
+          return !block||['lava','water','fire','magma_block'].includes(block.name);
+        }))continue;
+        if(clear.some(b=>b.boundingBox!=='empty'&&!bot.canDigBlock?.(b)))continue;
+        chosen={next,clear};break;
+      }
+      if(!chosen)return observed(false,
+        'No fully observed, lava-free supported descending stair toward actual End frame');
+      const {next,clear}=chosen;
+      if(bot.health<10)return observed(false,
+        'Stronghold excavation paused due to unsafe observed player health');
       await bot.equip(tool,'hand');
       for(const block of clear){
         if(block.boundingBox!=='empty'){

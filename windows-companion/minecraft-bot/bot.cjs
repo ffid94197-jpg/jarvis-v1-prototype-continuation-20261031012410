@@ -1232,17 +1232,19 @@ bot.on('chat',(username,message)=>{
   if(cmd==='craft' && match[2]){
     const m=/^(\d{1,2})\s+([a-z_]{1,64})$/i.exec(match[2].trim());
     if(!m){freeForm();return;}
-    action({command:'auto_goal',goal:'craft',item:m[2].toLowerCase(),
-      targetCount:Number(m[1]),durationSeconds:3600})
-      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start crafting goal'));
+    const q={command:'auto_goal',goal:'craft',item:m[2].toLowerCase(),
+      targetCount:Number(m[1]),durationSeconds:3600};
+    if(validateCommand(q)){freeForm();return;}
+    action(q).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start crafting goal'));
     return;
   }
   if(cmd==='equip' && match[2]){
     const m=/^([a-z_]{1,64})\s+(hand|head|torso|legs|feet|off-hand)$/i.exec(match[2].trim());
     if(!m){freeForm();return;}
-    action({command:'auto_goal',goal:'equip',item:m[1].toLowerCase(),
-      destinationSlot:m[2].toLowerCase(),durationSeconds:3600})
-      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start equip goal'));
+    const q={command:'auto_goal',goal:'equip',item:m[1].toLowerCase(),
+      destinationSlot:m[2].toLowerCase(),durationSeconds:3600};
+    if(validateCommand(q)){freeForm();return;}
+    action(q).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start equip goal'));
     return;
   }
   if(cmd==='pause') {action({command:'auto_stop'}).then(r=>say(r.status||r.error));return;}
@@ -1250,10 +1252,11 @@ bot.on('chat',(username,message)=>{
   if(cmd==='travel' && match[2]){
     const parts=/^(-?\d+)\s+(-?\d+)\s+(-?\d+)$/.exec(match[2].trim());
     if(!parts){freeForm();return;}
-    action({command:'auto_goal',goal:'travel',
+    const q={command:'auto_goal',goal:'travel',
       destination:{x:Number(parts[1]),y:Number(parts[2]),z:Number(parts[3])},
-      arrivalRange:2,durationSeconds:1800})
-      .then(r=>say(r.ok?r.status:r.error))
+      arrivalRange:2,durationSeconds:1800};
+    if(validateCommand(q)){freeForm();return;}
+    action(q).then(r=>say(r.ok?r.status:r.error))
       .catch(()=>say('Could not start travel goal'));
     return;
   }
@@ -1261,19 +1264,21 @@ bot.on('chat',(username,message)=>{
   if(cmd==='farm' && match[2]){
     const a=/^(\d{1,2})\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d)\s+(\d)$/.exec(match[2].trim());
     if(!a){freeForm();return;}
-    action({command:'auto_goal',goal:'farm_wheat',targetCount:Number(a[1]),
+    const q={command:'auto_goal',goal:'farm_wheat',targetCount:Number(a[1]),
       position:{x:Number(a[2]),y:Number(a[3]),z:Number(a[4])},
-      width:Number(a[5]),depth:Number(a[6]),durationSeconds:3600})
-      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start wheat farming'));
+      width:Number(a[5]),depth:Number(a[6]),durationSeconds:3600};
+    if(validateCommand(q)){freeForm();return;}
+    action(q).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start wheat farming'));
     return;
   }
   if(cmd==='build' && match[2]){
     const args=/^(\d)\s+([a-z_]+)\s+(x\+|x-|z\+|z-)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)$/i.exec(match[2].trim());
     if(!args){freeForm();return;}
-    action({command:'auto_goal',goal:'build',length:Number(args[1]),block:args[2].toLowerCase(),
+    const q={command:'auto_goal',goal:'build',length:Number(args[1]),block:args[2].toLowerCase(),
       axis:args[3].toLowerCase(),position:{x:Number(args[4]),y:Number(args[5]),z:Number(args[6])},
-      durationSeconds:3600}).then(r=>say(r.ok?r.status:r.error))
-      .catch(()=>say('Could not start construction goal'));
+      durationSeconds:3600};
+    if(validateCommand(q)){freeForm();return;}
+    action(q).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start construction goal'));
     return;
   }
   if(cmd==='gather' && match[2]){
@@ -1281,10 +1286,11 @@ bot.on('chat',(username,message)=>{
     // still checks resource names and count before changing game state.
     const spec=/^(\d{1,2})\s+([a-z_]+)$/i.exec(match[2].trim());
     if(!spec){freeForm();return;}
-    action({command:'auto_goal',goal:'gather',
+    const q={command:'auto_goal',goal:'gather',
       resource:normalizeResource(spec[2].toLowerCase()),
-      targetCount:Number(spec[1]),durationSeconds:21600})
-      .then(r=>say(r.ok?r.status:r.error))
+      targetCount:Number(spec[1]),durationSeconds:21600};
+    if(validateCommand(q)){freeForm();return;}
+    action(q).then(r=>say(r.ok?r.status:r.error))
       .catch(()=>say('Could not start resource goal'));
     return;
   }

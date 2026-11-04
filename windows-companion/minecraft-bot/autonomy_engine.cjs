@@ -255,7 +255,13 @@ function decide(goal, world, failures={}, progress={}) {
         if(goal==='iron_age')return {kind:'complete',why:'Iron-tier or better pickaxe verified in inventory'};
         const armorOnly=goal==='netherite_armor_run';
         const canReuseUpgrades=['netherite_armor_run','netherite_gear_run'].includes(goal);
-        const sufficient=name=>!!(inv.raw?.[name]>0) ||
+        const digestNames={
+          diamond_pickaxe:'diamondPickaxe',diamond_sword:'diamondSword',
+          diamond_helmet:'diamondHelmet',diamond_chestplate:'diamondChestplate',
+          diamond_leggings:'diamondLeggings',diamond_boots:'diamondBoots'
+        };
+        const sufficient=name=>(inv.raw?.[name]||0)>0 ||
+          (Object.hasOwn(digestNames,name)&&!!inv[digestNames[name]]) ||
           (canReuseUpgrades && name.startsWith('diamond_') &&
             (inv.raw?.[name.replace('diamond_','netherite_')]||0)>0);
         if((sufficient('diamond_pickaxe')||sufficient('netherite_pickaxe')) &&

@@ -5,6 +5,19 @@
  * bot.cjs checks actual world state. No arbitrary scripts or admin commands.
  */
 const {roofedRoomSteps}=require('./structure_goal.cjs');
+// A whole armor set is an owner-defined four-slot objective, not permission
+// to select arbitrary equipment or execute raw Minecraft actions.
+function armorEquipSteps(ownerText){
+ if(typeof ownerText!=='string'||ownerText.length>600)return null;
+ const s=ownerText.toLowerCase().trim().replace(/^in minecraft[, :]+/,'')
+   .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
+   .replace(/\s+in minecraft$/,'').replace(/\s+/g,' ');
+ const m=/^(?:equip|wear|put on)(?: me)? (?:a |the |my )?(?:full |complete )?(?:set of )?(leather|iron|gold|golden|diamond) (?:armor|armour)(?: set)?$/.exec(s);
+ if(!m)return null;
+ const tier=m[1]==='gold'?'golden':m[1];
+ return [['helmet','head'],['chestplate','torso'],['leggings','legs'],['boots','feet']]
+   .map(([part,destination])=>({goal:'equip',item:tier+'_'+part,destination}));
+}
 const NUMBER_WORDS=Object.freeze({a:1,an:1,one:1,two:2,three:3,four:4,five:5,
  six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,
  fourteen:14,fifteen:15,sixteen:16});
@@ -128,6 +141,23 @@ function modelPrimitiveGrounded(command,ownerText,context){
   b&&b.x===p?.x&&b.y===p?.y&&b.z===p?.z);
  const target=command.command==='place_block'?command.reference:command.position;
  if(target!==undefined && !(exactOwnerTriplet(target)||sceneBlock(target)))return false;
+ // A model may choose an observed nearby object only when its actual type
+ // appears in the owner's request. "Go somewhere" or "mine something" is
+ // not permission to select a random live coordinate.
+ if(['navigate','dig_block','inspect_block'].includes(command.command) &&
+    !exactOwnerTriplet(target)){
+   const observed=Array.isArray(scene?.nearbyBlocks)?scene.nearbyBlocks.find(b=>
+     b?.x===target?.x&&b?.y===target?.y&&b?.z===target?.z):null;
+   if(!observed?.name)return false;
+   const noun=String(observed.name).replace(/_/g,' ');
+   const aliases=String(observed.name)==='trapped_chest'?['chest']:
+     /_door$/.test(observed.name)?['door']:
+     /_trapdoor$/.test(observed.name)?['trapdoor']:
+     /_button$/.test(observed.name)?['button']:
+     /^(?:deepslate_)?(?:iron|diamond)_ore$/.test(observed.name)?
+       [String(observed.name).includes('diamond')?'diamond':'iron','ore']:[];
+   if(![noun,...aliases].some(label=>s.includes(label)))return false;
+ }
  if(command.command==='attack_hostile'){
   const threat=Number.isInteger(command.entityId)&&Array.isArray(scene?.threats)?
     scene.threats.find(t=>t.id===command.entityId):null;
@@ -239,6 +269,13 @@ function modelGoalGrounded(q,ownerText){
   return count===null?qty===1:qty===count;
  };
  switch(q.goal){
+  case 'netherite_armor_run':case 'netherite_gear_run':{
+   const explicitlyNamed=/\bnetherite\s+(?:armor|armour)\b/.test(s);
+   const approved=/\b(?:get|obtain|make|craft|equip|wear|put on)\b/.test(s);
+   const wantsSword=/\bnetherite\s+sword\b/.test(s);
+   return explicitlyNamed && approved && !has(/\b(?:dragon|ender dragon)\b/) &&
+     (q.goal==='netherite_gear_run'?wantsSword:!wantsSword);
+  }
   case 'dragon_run':return !has(/\bnetherite\b/) &&
    has(/\b(?:defeat|beat|kill|slay|fight)\b/)&&has(/\bdragon\b/);
   case 'netherite_dragon_run':case 'dragon_then_netherite_run':{
@@ -251,6 +288,10 @@ function modelGoalGrounded(q,ownerText){
      return q.goal===(dragonFirst?'dragon_then_netherite_run':'netherite_dragon_run');
    }
    return true;
+  }
+  case 'shelter':{
+   const sentence=s.replace(/^in minecraft[, :]+/,'').replace(/\s+in minecraft$/,'');
+   return /^(?:build|construct|make)(?: me)? (?:a |the )?(?:small|simple|basic) (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?$/.test(sentence);
   }
   case 'survive':return has(/\b(?:survive|survival|stay alive)\b/);
   case 'wood':return has(/\b(?:collect|gather|get|mine|find)\b/)&&has(/\b(?:wood|logs?)\b/);
@@ -266,6 +307,10 @@ function modelGoalGrounded(q,ownerText){
    const aliases=q.resource==='logs'?/\b(?:wood|logs?|timber)\b/:
      q.resource==='iron_ingot'?/\biron ingots?\b/:
      q.resource==='raw_iron'?/\braw iron\b/:
+     q.resource==='raw_copper'?/\b(?:raw )?copper\b/:
+     q.resource==='raw_gold'?/\b(?:raw )?gold\b/:
+     q.resource==='lapis_lazuli'?/\b(?:lapis lazuli|lapis)\b/:
+     q.resource==='quartz'?/\b(?:nether )?quartz\b/:
      new RegExp('\\b'+String(q.resource||'').replace(/_/g,' ')+'s?\\b');
    return has(/\b(?:gather|mine|collect|obtain|find|get|bring|dig)\b/)&&
      aliases.test(s)&&quantityMatches(q.targetCount);
@@ -305,6 +350,17 @@ function modelGoalGrounded(q,ownerText){
     itemMention(q.block)&&has(/\b(?:wall|line|row)\b/);
   case 'farm_wheat':return has(/\b(?:farm|grow|plant|harvest)\b/)&&has(/\bwheat\b/);
   case 'sequence':{
+   const armor=armorEquipSteps(s);
+   if(armor){
+    return Array.isArray(q.steps)&&q.steps.length===4&&
+     armor.every((expected,i)=>{
+      const got=q.steps[i];
+      return got&&typeof got==='object'&&!Array.isArray(got)&&
+       Object.keys(got).length===3&&
+       Object.keys(got).every(k=>Object.hasOwn(expected,k))&&
+       Object.keys(expected).every(k=>got[k]===expected[k]);
+     });
+   }
    // Validate a model-proposed compact room plan against the *owner's*
    // exact dimensions, material and origin. Three stages must be identical
    // to the independent deterministic native recipe; no added side effects.
@@ -363,4 +419,4 @@ function modelSimpleGrounded(command,ownerText){
  };
  return Object.hasOwn(patterns,command)&&patterns[command].test(text);
 }
-module.exports={parseOwnerPrimitive,PRIMITIVE_FIELDS,GENERAL_ACTIONS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName};
+module.exports={parseOwnerPrimitive,PRIMITIVE_FIELDS,GENERAL_ACTIONS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName,armorEquipSteps};

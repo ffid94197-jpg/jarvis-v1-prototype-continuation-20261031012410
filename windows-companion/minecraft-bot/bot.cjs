@@ -22,6 +22,7 @@ const {createLateSkills} = require('./late_skills.cjs');
 const {createAdvancedActions}=require('./advanced_survival_actions.cjs');
 const {validHostileTarget,fightObserved,equipObservedMelee}=require('./native_combat.cjs');
 const {compileRecipeCatalog}=require('./mindcraft_recipe_graph.cjs');
+const {chooseNativeShelterSite}=require('./native_shelter.cjs');
 const {planSurveyStep}=require('./terrain_survey.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
@@ -70,6 +71,7 @@ const autopilot=createController({maxSeconds:43200,maxSteps:20000});
 const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-mission.json'),{host,port,owner:leader});
 let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
 let advancedBusy=false;
+let guardBusy=false;
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const MOB_NAMES=new Set(['zombie','skeleton','spider','husk','drowned']);
 function ack(id,ok,status,error){
@@ -222,15 +224,41 @@ async function collectWood(alive){
   return `Wood collection verified: inventory logs ${before} -> ${after}`;
 }
 function guardTick(){
+  if(guardBusy||mode!=='guard'||!spawned)return;
   const owner=ownerEntity();
   if(!owner){lastAction='guard paused: owner not in loaded range';return;}
   if(Date.now()>guardUntil){setMode('follow');return;}
+  if(bot.health<10){
+    lastAction='guard avoiding combat: health too low';
+    doFollow();return;
+  }
   const hostile=bot.nearestEntity(e=>e && MOB_NAMES.has(e.name) &&
-    e.position.distanceTo(owner.position)<=12 && e.position.distanceTo(bot.entity.position)<=12);
+    e.type!=='player'&&!e.username&&e.position &&
+    e.position.distanceTo(owner.position)<=12 &&
+    e.position.distanceTo(bot.entity.position)<=12);
   if(!hostile){doFollow();return;}
   const distance=hostile.position.distanceTo(bot.entity.position);
-  if(distance>3.1)bot.pathfinder.setGoal(new goals.GoalFollow(hostile,2),true);
-  else {bot.pathfinder.setGoal(null);bot.attack(hostile);lastAction='guard engaged '+hostile.name;}
+  if(distance>3.4){
+    if(distance>8){
+      lastAction='guard tracking distant hostile without attacking';
+      doFollow();return;
+    }
+    bot.pathfinder.setGoal(new goals.GoalFollow(hostile,3),true);
+    return;
+  }
+  if(!validHostileTarget(bot,hostile.id))return;
+  const epoch=actionEpoch;
+  guardBusy=true;
+  stopPathfinder(bot);
+  void fightObserved({bot,entityId:hostile.id,maxSwings:4,pause,
+    allowed:()=>spawned&&mode==='guard'&&epoch===actionEpoch})
+    .then(outcome=>{
+      if(epoch===actionEpoch&&mode==='guard')
+        lastAction='guard: '+String(outcome.detail||'Defensive combat unproven').slice(0,160);
+    }).catch(error=>{
+      if(epoch===actionEpoch&&mode==='guard')
+        lastAction='guard inconclusive: '+String(error?.message||error).slice(0,120);
+    }).finally(()=>{guardBusy=false;});
 }
 // Every automatic operation is bounded, cancellable, and checked against in-world state.
 async function navigate(p,range,epoch,limitMs=12000){
@@ -540,28 +568,44 @@ async function autoExecute(plan,epoch){
       }
       return {ok:false,verified:false,detail:'Retreat not verified: '+reason};
     }
+    case 'fight_bound_hostile':{
+      const live=validHostileTarget(bot,plan.targetId);
+      if(!live||live.name!==plan.mob)
+        return {ok:false,verified:false,detail:'Owner-bound hostile ID no longer matches an in-reach approved target'};
+      const result=await fightObserved({bot,entityId:plan.targetId,
+        maxSwings:4,pause,allowed:()=>spawned&&epoch===actionEpoch});
+      if(epoch!==actionEpoch)throw Error('Owner stopped target-bound combat');
+      const killed=result.ok===true&&result.verified===true;
+      return {ok:killed,verified:killed,
+        ...(killed?{proof:'bound_hostile_death',targetId:plan.targetId,mob:plan.mob}:{}),
+        detail:killed?'Target-specific server death event recorded for '+plan.mob+
+          ' ID '+plan.targetId+'; kill attribution not inferred':
+          'Target-bound combat remains unresolved: '+String(result.detail||'no death proof')};
+    }
     case 'defend':{
       const hostile=bot.entities?.[plan.targetId];
-      if(!hostile || !hostile.position)
-        return {ok:true,verified:true,detail:'Observed hostile no longer visible; local danger cleared'};
+      if(!hostile?.position)
+        return {ok:true,verified:true,
+          detail:'Target no longer in loaded danger range; no kill attributed'};
       if(!validHostileTarget(bot,plan.targetId))
-        return {ok:false,verified:false,detail:'Unsafe or out-of-range hostile; no blind attack'};
-      const equipped=await equipObservedMelee(bot,()=>epoch===actionEpoch&&spawned);
-      if(!equipped.ok)return {ok:false,verified:false,detail:'Defensive weapon not verified: '+equipped.detail};
-      // Equipment changes take time: recheck the observed target AND health
-      // before dispatching even a single attack.
-      const live=validHostileTarget(bot,plan.targetId);
-      if(epoch!==actionEpoch)throw Error('Owner cancelled defensive action');
-      if(!live||bot.health<9)
-        return {ok:false,verified:false,detail:'Defensive target moved or health fell while equipping'};
-      bot.attack(live);await pause(300);
-      if(epoch!==actionEpoch)throw Error('Owner cancelled defensive action');
+        return {ok:false,verified:false,
+          detail:'Unsafe or out-of-range hostile; do not blindly attack'};
+      // Reuse the independent, bounded melee executor rather than marking
+      // a single input as a successful defense. This enforces live weapon
+      // readback, target identity/range/health checks, cancellation and an
+      // actual target-specific entityDead receipt when a death is claimed.
+      const result=await fightObserved({bot,entityId:plan.targetId,
+        maxSwings:4,pause,allowed:()=>spawned&&epoch===actionEpoch});
+      if(epoch!==actionEpoch)throw Error('Defensive action cancelled');
       const remaining=bot.entities?.[plan.targetId];
-      const safe=!remaining?.position||
+      const clear=!remaining?.position ||
         remaining.position.distanceTo(bot.entity.position)>6;
-      return {ok:safe,verified:safe,detail:safe?
-        'Server now shows previous hostile outside 6-block defensive range':
-        'Attack dispatched; threat still present and defensive result NOT VERIFIED'};
+      const proven=result.verified===true||clear;
+      return {ok:proven,verified:proven,
+        detail:result.verified===true?
+          'Target-specific server death observed during bounded defense; attribution not claimed':
+          clear?'Original hostile moved beyond observed defensive range; death not claimed':
+          'Defensive attacks bounded; hostile still present: '+String(result.detail||'unknown')};
     }
     case 'eat':{
       const food=bot.inventory.items().find(i=>FOOD.test(i.name));if(!food)throw Error('No edible item');
@@ -604,21 +648,41 @@ async function autoExecute(plan,epoch){
     case 'scout_survival':{
       if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
       const origin=bot.entity.position.clone();
-      const sites=surveyTargets(bot,origin,Vec3).filter(p=>p.distanceTo(origin)>4);
+      const persistent=plan.kind==='scout_survival';
+      const visited=persistent?
+        (bot.jarvisSafeSurveyVisited instanceof Set?bot.jarvisSafeSurveyVisited:new Set()):new Set();
+      if(persistent)bot.jarvisSafeSurveyVisited=visited;
+      // A safe standable floor is not enough when a creeper or other hostile
+      // is already physically present at the proposed landing point.
+      const danger=Object.values(bot.entities||{}).filter(e=>
+        HOSTILES.has(e?.name)&&e?.position);
+      const sites=surveyTargets(bot,origin,Vec3).filter(p=>
+        p.distanceTo(origin)>4 &&
+        !visited.has([Math.floor(p.x),Math.floor(p.y),Math.floor(p.z)].join(',')) &&
+        !danger.some(e=>p.distanceTo(e.position)<7));
       if(!sites.length)return {ok:false,verified:false,
-        detail:'No safe loaded waypoint for owner-independent survival exploration'};
+        detail:'No new hazard-free loaded waypoint for independent survival exploration'};
       const start=(Number.isInteger(plan.index)?Math.abs(plan.index):0)%sites.length;
       let last='All selected safe routes inaccessible';
-      for(let attempt=0;attempt<Math.min(3,sites.length);attempt++){
+      for(let attempt=0;attempt<Math.min(4,sites.length);attempt++){
+        if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
         const site=sites[(start+attempt)%sites.length];
+        const key=[Math.floor(site.x),Math.floor(site.y),Math.floor(site.z)].join(',');
+        visited.add(key);
         try{
           const arrived=await navigate(site,2,epoch,14000);
           const actual=bot.entity.position.clone();
-          if(arrived && actual.distanceTo(origin)>3 && actual.distanceTo(site)<=4)
+          if(arrived && actual.distanceTo(origin)>3 && actual.distanceTo(site)<=4){
+            if(persistent){
+              visited.add([Math.floor(actual.x),Math.floor(actual.y),Math.floor(actual.z)].join(','));
+              if(visited.size>160)return {ok:false,verified:false,
+                detail:'Bounded exploration history exhausted; no unlimited terrain search'};
+            }
             return {ok:true,verified:true,
               proof:plan.kind==='survey_workstation'?'workstation_scout_move':'safe_scout_move',
               detail:'Independent safe exploration reached '+Math.floor(actual.x)+','+
               Math.floor(actual.y)+','+Math.floor(actual.z)+'; no loot or combat success claimed'};
+          }
           last='No significant observed player displacement';
         }catch(e){
           if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
@@ -735,7 +799,8 @@ async function autoExecute(plan,epoch){
     }
     case 'mine_cobblestone':{
       if(!(before.inventory.woodenPickaxe||before.inventory.stonePickaxe||
-         before.inventory.ironPickaxe||before.inventory.diamondPickaxe))
+         before.inventory.ironPickaxe||before.inventory.diamondPickaxe||
+         (before.inventory.raw?.netherite_pickaxe||0)>0))
         throw Error('Stone mining requires a real pickaxe');
       const pick=bot.inventory.items().find(i=>
         ['stone_pickaxe','wooden_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'].includes(i.name));
@@ -786,7 +851,9 @@ async function autoExecute(plan,epoch){
       return picked;
     }
     case 'mine_iron':{
-      if(!before.inventory.stonePickaxe && !before.inventory.ironPickaxe)throw Error('Iron ore needs stone or better pickaxe');
+      if(!before.inventory.stonePickaxe && !before.inventory.ironPickaxe &&
+         !before.inventory.diamondPickaxe && !(before.inventory.raw?.netherite_pickaxe>0))
+        throw Error('Iron ore needs stone or better pickaxe');
       const exposed=findExposedOre(bot,['iron_ore','deepslate_iron_ore'],24);
       const target=exposed?.block;
       if(!target)throw Error('No safely exposed iron ore in loaded chunks; request cave survey');
@@ -798,7 +865,8 @@ async function autoExecute(plan,epoch){
       if(!live || !['iron_ore','deepslate_iron_ore'].includes(live.name) ||
         !bot.canDigBlock?.(live) || bot.entity.position.distanceTo(p)>5)
         return {ok:false,verified:false,detail:'Iron ore no longer server-observed within real dig range'};
-      const pick=bot.inventory.items().find(i=>['stone_pickaxe','iron_pickaxe'].includes(i.name));
+      const pick=bot.inventory.items().find(i=>
+        ['stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'].includes(i.name));
       if(!pick)throw Error('Missing valid iron mining pickaxe');
       await bot.equip(pick,'hand');await bot.dig(live);
        return collectVerifiedDrop(p,before.inventory.rawIron,
@@ -862,7 +930,9 @@ async function autoExecute(plan,epoch){
       }finally{ui.close();}
     }
     case 'mine_diamond':{
-      if(!before.inventory.ironPickaxe && !before.inventory.diamondPickaxe)throw Error('Diamond mining requires iron or diamond pickaxe');
+      if(!before.inventory.ironPickaxe && !before.inventory.diamondPickaxe &&
+         !(before.inventory.raw?.netherite_pickaxe>0))
+        throw Error('Diamond mining requires iron-grade or better pickaxe');
       const exposed=findExposedOre(bot,['diamond_ore','deepslate_diamond_ore'],24);
       const target=exposed?.block;
       if(!target)throw Error('No safely exposed diamond ore in loaded chunks; request cave survey');
@@ -874,8 +944,9 @@ async function autoExecute(plan,epoch){
       if(!live || !['diamond_ore','deepslate_diamond_ore'].includes(live.name) ||
         !bot.canDigBlock?.(live) || bot.entity.position.distanceTo(p)>5)
         return {ok:false,verified:false,detail:'Diamond ore no longer within dig range or safe after route'};
-      const pick=bot.inventory.items().find(i=>['diamond_pickaxe','iron_pickaxe'].includes(i.name));
-      if(!pick)throw Error('Missing pickaxe');
+      const pick=bot.inventory.items().find(i=>
+        ['netherite_pickaxe','diamond_pickaxe','iron_pickaxe'].includes(i.name));
+      if(!pick)throw Error('Missing real diamond-grade mining pickaxe');
       await bot.equip(pick,'hand');await bot.dig(live);
        return collectVerifiedDrop(p,before.inventory.diamonds,
          ()=>digest(bot,leader).inventory.diamonds,epoch,'Diamonds');
@@ -982,17 +1053,21 @@ async function autoTick(){
       goal:'build_volume',position:active.position,block:active.block,
       width:active.width,depth:active.depth,height:active.height,shape:active.shape
     },Vec3);
-  if(active.goal==='sequence'){
-    gameWorld.buildCellsByStage=(active.sequence||[]).map(s=>
+  if(active.goal==='shelter' && !active.sequence)
+    gameWorld.shelterSite=chooseNativeShelterSite(bot,Vec3);
+  if(active.goal==='sequence'||active.goal==='shelter'){
+    const stages=active.sequence||gameWorld.shelterSite?.steps||[];
+    gameWorld.buildCellsByStage=stages.map(s=>
       s.goal==='build'?observeBuild(bot,s,Vec3):null);
-    gameWorld.buildVolumeCellsByStage=(active.sequence||[]).map(s=>
+    gameWorld.buildVolumeCellsByStage=stages.map(s=>
       s.goal==='build_volume'?observeVolume(bot,s,Vec3):null);
-    gameWorld.wheatCellsByStage=(active.sequence||[]).map(s=>
+    gameWorld.wheatCellsByStage=stages.map(s=>
       s.goal==='farm_wheat'?observeWheat(bot,s,Vec3):null);
   }
   // Only the active, owner-authorized craft target is indexed. No broad
   // repository searches, no third-party bot, no AI code execution.
-  const stage=active.goal==='sequence'?active.sequence?.[active.sequenceIndex]:active;
+  const stage=['sequence','shelter'].includes(active.goal)?
+    (active.sequence?.[active.sequenceIndex]||gameWorld.shelterSite?.steps?.[0]):active;
   if(['craft','equip'].includes(stage?.goal)&&typeof stage.item==='string')
     gameWorld.recipeCatalog=compileRecipeCatalog(bot,stage.item);
   const plan=autopilot.next(gameWorld);
@@ -1117,6 +1192,11 @@ async function action(q){
     }
     case 'auto_stop':resumeAfterSpawn=false;setMode('stay');return {ok:true,status:'Autonomous gameplay stopped; movement cancelled'};
     case 'auto_goal':{
+      if(q.goal==='defeat_hostile'){
+        const bound=validHostileTarget(bot,q.entityId);
+        if(!bound||bound.name!==q.mob)
+          return {ok:false,error:'Target hostile identity and melee range must be freshly server-observed before starting'};
+      }
       if(q.goal==='farm_wheat' && bot.entity.position.distanceTo(
         new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>12)
         return {ok:false,error:'Wheat field origin must be within 12 blocks of actual player'};
@@ -1136,7 +1216,7 @@ async function action(q){
       }
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
-      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip'].includes(q.goal) &&
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip'].includes(q.goal) &&
          bot.game?.gameMode!=='survival')
         return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an
@@ -1144,9 +1224,11 @@ async function action(q){
       if(autopilot.status().status==='running')
         return {ok:false,error:'Autonomous goal already running; inspect auto_status or use auto_stop before replacement'};
       halt();mode='auto';resumeAfterSpawn=false;deathsOnCurrentGoal=0;
+      bot.jarvisSafeSurveyVisited=new Set();
+      bot.jarvisStoneScoutCount=0;
        // Evidence from an earlier owner mission is NOT proof for a new run.
        resetDragon(lateSkills.session);
-      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),goalSpecFromCommand(q));lastAction='Autonomous '+st.goal+' STARTED';
+      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='netherite_armor_run'||q.goal==='netherite_gear_run'||q.goal==='shelter'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),goalSpecFromCommand(q));lastAction='Autonomous '+st.goal+' STARTED';
         let saved=false;try{saved=missionCheckpoint.save(st);}catch{ /* Mission runs but restart recovery is unavailable. */ }
         return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; '+(saved?'recoverable goal intent saved':'restart recovery unavailable')+'; verify progress via auto_status'};
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}

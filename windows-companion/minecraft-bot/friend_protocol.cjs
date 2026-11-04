@@ -6,6 +6,7 @@ const {validSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,validVolumeSpec}=require('./structure_goal.cjs');
 const {validFarmSpec}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
+const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop','auto_checkpoint','auto_resume']);
 function validateCommand(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return 'Invalid command';
@@ -23,7 +24,8 @@ function validateCommand(input) {
     return exactFields([])?null:'Unexpected parameter on simple game command';
   if (input.command === 'auto_goal') {
     const fixed=['survive','wood','tools','explore','follow','guard','stone_age','iron_age',
-      'dragon_run','netherite_dragon_run','dragon_then_netherite_run','companion'];
+      'dragon_run','netherite_dragon_run','dragon_then_netherite_run',
+      'netherite_armor_run','netherite_gear_run','shelter','companion'];
     const position=target=>target && typeof target==='object' &&
       !Array.isArray(target) && Object.keys(target).length===3 &&
       ['x','y','z'].every(k=>Number.isInteger(target[k]) &&
@@ -38,7 +40,10 @@ function validateCommand(input) {
       height:input.height,shape:input.shape});
     const validFarm=input.goal==='farm_wheat'&&validFarmSpec({goal:'farm_wheat',
       position:input.position,width:input.width,depth:input.depth,targetCount:input.targetCount});
-    const validGoal=fixed.includes(input.goal)||validTravel||validBuild||validVolume||validFarm||
+    const validBoundHostile=input.goal==='defeat_hostile' &&
+      ALLOWED_HOSTILES.has(input.mob)&&Number.isInteger(input.entityId)&&
+      input.entityId>=0&&input.entityId<=200000;
+    const validGoal=fixed.includes(input.goal)||validBoundHostile||validTravel||validBuild||validVolume||validFarm||
       (input.goal==='craft' && validCraftSpec({goal:'craft',item:input.item,targetCount:input.targetCount}))||
       (input.goal==='equip' && validEquipSpec({goal:'equip',item:input.item,destination:input.destinationSlot}))||
       (input.goal==='gather' && RESOURCES.has(input.resource) &&
@@ -46,9 +51,14 @@ function validateCommand(input) {
         input.targetCount>=1&&input.targetCount<=64)||
       (input.goal==='sequence' && validSequence(input.steps));
     const allowedKeys=new Set(['command','goal','durationSeconds','resource','targetCount',
-      'destination','arrivalRange','steps','position','block','axis','length','width','depth','height','shape','item','destinationSlot']);
+      'destination','arrivalRange','steps','position','block','axis','length','width','depth','height','shape','item','destinationSlot','mob','entityId']);
     if(Object.keys(input).some(key=>!allowedKeys.has(key)))return 'Unexpected autonomous parameter';
     const noUnrelatedParameters=
+      (input.goal==='defeat_hostile' &&
+        input.steps===undefined&&input.destination===undefined&&input.arrivalRange===undefined&&input.resource===undefined&&
+        input.targetCount===undefined&&input.item===undefined&&input.position===undefined&&
+        input.block===undefined&&input.width===undefined&&input.depth===undefined&&
+        input.height===undefined&&input.shape===undefined&&input.destinationSlot===undefined) ||
       (input.goal==='craft' && input.steps===undefined&&input.destination===undefined&&
         input.arrivalRange===undefined&&input.position===undefined&&input.resource===undefined&&
         input.block===undefined&&input.axis===undefined&&input.length===undefined&&
@@ -74,6 +84,7 @@ function validateCommand(input) {
         input.targetCount===undefined&&input.destination===undefined &&
         input.arrivalRange===undefined);
     return validGoal && noUnrelatedParameters &&
+      (input.goal==='defeat_hostile'||(input.mob===undefined&&input.entityId===undefined)) &&
       (['craft','equip'].includes(input.goal)||input.item===undefined) &&
       (input.goal==='equip'||input.destinationSlot===undefined) &&
       (['craft','gather','farm_wheat'].includes(input.goal)||input.targetCount===undefined) &&

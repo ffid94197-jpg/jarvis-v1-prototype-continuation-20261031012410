@@ -20,7 +20,11 @@ const MELEE_PRIORITY=Object.freeze([
 function chooseObservedMelee(bot){
  const inventory=bot?.inventory?.items?.();
  if(!Array.isArray(inventory))return null;
+ // The live held slot may not appear in backpack item listings. Do not
+ // replace an already-held stronger sword with a weaker backpack sword.
+ const held=bot?.heldItem;
  for(const name of MELEE_PRIORITY){
+  if(held?.name===name)return held;
   const owned=inventory.find(item=>item?.name===name&&item.count>0);
   if(owned)return owned;
  }

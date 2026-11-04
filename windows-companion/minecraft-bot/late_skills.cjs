@@ -4,13 +4,15 @@
  * No commands/creative mode/seed inspection/teleports. Failure is explicit.
  */
 const {NETHERITE}=require('./late_game.cjs');
-const {SAFE_GENERIC_RESOURCES,PICKAXE_GENERIC_RESOURCES}=require('./resource_goal.cjs');
+const {SAFE_GENERIC_RESOURCES,PICKAXE_GENERIC_RESOURCES,PICKAXES,ORE_RESOURCE_RULES}=require('./resource_goal.cjs');
 const {observeDragon,noteDragonAttack}=require('./dragon_engagement.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
 const {collectObservedDrop}=require('./drop_pickup.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {findPortalLayout,pos:portalCell}=require('./portal_layout.cjs');
+const {surveyTargets}=require('./wood_navigation.cjs');
+const {ALLOWED_HOSTILES,equipObservedMelee}=require('./native_combat.cjs');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const solid=b=>b && b.boundingBox!=='empty' && !['air','cave_air','void_air','lava','water','fire','nether_portal'].includes(b.name);
 const count=(bot,name)=>(bot.inventory?.items?.()||[]).reduce((n,i)=>n+(i.name===name?i.count:0),0);
@@ -19,7 +21,7 @@ const observed=(ok,detail,proof)=>({ok:!!ok,verified:!!ok,detail, ...(ok&&proof?
 const lookup=(bot,names,radius=28)=>bot.findBlock({matching:b=>b && names.includes(b.name),maxDistance:radius});
 const item=(bot,name)=>bot.inventory.items().find(i=>i.name===name);
 function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3}){
-  const session={portalBase:null,portalPosition:null,homePortalPosition:null,netherPortalPosition:null,eyesThrown:0,bearing:null,dragonSeen:false,dragonDied:false,dragonEntityId:null,dragonAttackAt:null,dragonAttempts:0,visitedChests:new Set(),surveyIndex:0};
+  const session={portalBase:null,portalPosition:null,homePortalPosition:null,netherPortalPosition:null,eyesThrown:0,bearing:null,dragonSeen:false,dragonDied:false,dragonEntityId:null,dragonAttackAt:null,dragonAttempts:0,visitedChests:new Set(),surveyIndex:0,surveyVisited:new Map()};
   const check=epoch=>{if(getEpoch()!==epoch)throw Error('Minecraft action cancelled by owner');};
   async function move(position,range,epoch,timeout=20000){
     check(epoch);
@@ -43,7 +45,8 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     // buried in the loaded chunk cache. Surface obsidian, netherrack, gravel
     // and other terrain can legitimately be mined from above, so retain their
     // original reachability checks rather than requiring a horizontal cave.
-    const needsFace=names.every(n=>['iron_ore','deepslate_iron_ore','diamond_ore','deepslate_diamond_ore'].includes(n));
+    const needsFace=names.every(n=>/^(?:deepslate_)?(?:iron|diamond|coal|copper|gold|redstone|lapis|emerald)_ore$/.test(n) ||
+      n==='nether_quartz_ore');
     const exposed=needsFace?findExposedOre(bot,names,searchRadius):null;
     const block=needsFace?exposed?.block:bot.findBlock({matching:b=>b && names.includes(b.name) && (!visibleOnly ||
       [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].some(([x,y,z])=>
@@ -52,7 +55,8 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     // Bare-hand gathering is allowed only for an audited catalog of common,
     // harvestable surface blocks. Valuable ores still need a real pickaxe.
     const handSafe=toolNames.length===0 && names.length===1 && SAFE_GENERIC_RESOURCES.has(names[0]);
-    const pick=bot.inventory.items().find(i=>toolNames.includes(i.name));
+    const pick=bot.inventory.items().find(i=>toolNames.includes(i.name))||
+      (toolNames.includes(bot.heldItem?.name)?bot.heldItem:null);
     if(!pick&&!handSafe)return observed(false,'Missing appropriate tool for '+names[0]);
     const before=count(bot,drop), p=block.position.clone();
     await move(needsFace?exposed.stance:p,needsFace?1:3,epoch,19000);
@@ -64,18 +68,49 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
   }
   async function walkScout(epoch,kind){
     check(epoch);
-    const here=bot.entity.position.clone();
-    const vectors=[[16,0],[0,16],[-16,0],[0,-16],[16,16],[-16,16],[-16,-16],[16,-16]];
-    const [dx,dz]=vectors[session.surveyIndex++%vectors.length];
-    const d=here.offset(dx,0,dz);
-    const moved=await move(d,3,epoch,18000);
-    check(epoch);
-    const actual=bot.entity.position;
-    const verified=moved===true && actual?.distanceTo(d)<=5 &&
-      actual.distanceTo(here)>=4;
-    return observed(verified,verified?
-      `Server-observed scouting displacement for ${kind} (no loot claimed)`:
-      `No confirmed safe scouting arrival for ${kind}; world state unchanged`);
+    if(typeof kind!=='string'||kind.length>80)
+      return observed(false,'Unrecognized or oversized exploration goal');
+    const here=bot.entity?.position?.clone();
+    if(!here)return observed(false,'No server-observed player position for scouting');
+    // Reuse the native no-digging survey geometry. The previous hardcoded
+    // offsets could route to lava, unloaded cliffs or nonexistent ground.
+    const dimension=String(bot.game?.dimension||'unknown');
+    const key=dimension+'|'+kind;
+    const seen=session.surveyVisited.get(key)||new Set();
+    if(seen.size>=48)return observed(false,'Forty-eight bounded '+kind+
+      ' survey sites exhausted; no loot or discovery claimed');
+    session.surveyVisited.set(key,seen);
+    const hazardNames=new Set([...ALLOWED_HOSTILES,'creeper','ender_dragon','wither']);
+    const hazards=Object.values(bot.entities||{}).filter(e=>
+      hazardNames.has(e?.name)&&e?.position);
+    const candidates=surveyTargets(bot,here,Vec3).filter(p=>
+      p.distanceTo(here)>=4 &&
+      !seen.has([p.x,p.y,p.z].join(',')) &&
+      !hazards.some(e=>p.distanceTo(e.position)<8));
+    if(!candidates.length)return observed(false,
+      'No new safe loaded '+kind+' survey position; will not invent remote terrain');
+    const start=session.surveyIndex++%candidates.length;
+    let last='No physical progress to a safe observed '+kind+' waypoint';
+    for(let i=0;i<Math.min(4,candidates.length);i++){
+      check(epoch);
+      const p=candidates[(start+i)%candidates.length];
+      seen.add([p.x,p.y,p.z].join(','));
+      try{
+        await move(p,2,epoch,18000);
+        check(epoch);
+        const actual=bot.entity?.position;
+        if(actual&&actual.distanceTo(here)>=4&&actual.distanceTo(p)<=4){
+          return observed(true,'Observed movement to fresh safe '+kind+
+            ' terrain at '+Math.floor(actual.x)+','+Math.floor(actual.y)+','+
+            Math.floor(actual.z)+'; no item or objective completion claimed','safe_scout_move');
+        }
+        last='Server did not confirm new '+kind+' region';
+      }catch(err){
+        check(epoch);
+        last=String(err?.message||err).slice(0,100);
+      }
+    }
+    return observed(false,'Loaded '+kind+' search positions inaccessible: '+last);
   }
   async function placeItem(target,itemName,epoch){
     check(epoch);
@@ -294,22 +329,52 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     return observed(arrived,arrived?'Observed server dimension: '+bot.game.dimension:'Portal transition not verified');
   }
   async function hunt(name,drop,epoch){
-    const e=bot.nearestEntity(e=>e?.name===name&&e?.position);
+    // Only the existing explicitly planned survival resource targets are
+    // eligible for this routine. Unknown model-suggested entity names never
+    // become attack authority and players are excluded.
+    const eligible=new Set(['blaze','enderman','spider','skeleton',
+      'cow','pig','sheep','hoglin']);
+    if(!eligible.has(name)||!bot.entity?.position)
+      return observed(false,'Unapproved or unobserved survival hunting target');
+    check(epoch);
+    if(bot.health<10)return observed(false,'Unsafe health for survival hunt');
+    const e=bot.nearestEntity(t=>t?.name===name && t?.position &&
+      t?.type!=='player' && !t?.username);
     if(!e)return walkScout(epoch,name);
-    if(name==='enderman'){
-      // avoid attacking players and avoid hits without an observed target
-      await bot.lookAt(e.position.offset(0,2.5,0),true);
-    }
+    if(bot.entity.position.distanceTo(e.position)>18)
+      return observed(false,'Observed target exceeds bounded hunting approach range');
+    // Avoid starting melee with multiple additional hostiles in range.
+    const hazards=Object.values(bot.entities||{}).filter(t=>t?.id!==e.id&&t?.position&&
+      (ALLOWED_HOSTILES.has(t.name)||['creeper','wither','ender_dragon'].includes(t.name))&&
+      t.position.distanceTo(bot.entity.position)<8);
+    if(hazards.length)return observed(false,'Multiple observed hostiles: hunting postponed');
     const start=count(bot,drop);
     await move(e.position,3,epoch,20000);
-    const sword=bot.inventory.items().find(i=>/_sword$/.test(i.name));if(sword)await bot.equip(sword,'hand');
-    for(let j=0;j<16;j++){
+    check(epoch);
+    const live=bot.entities?.[e.id];
+    if(!live?.position||live.name!==name||bot.entity.position.distanceTo(live.position)>4)
+      return observed(false,'Target identity or physical melee range changed during approach');
+    const gear=await equipObservedMelee(bot,()=>getEpoch()===epoch);
+    if(!gear.ok)return observed(false,'Hunt weapon could not be server-verified: '+gear.detail);
+    check(epoch);
+    for(let j=0;j<12;j++){
       check(epoch);
+      if(bot.health<9)return observed(false,'Health dropped during hunt; retreat required');
       const current=bot.entities?.[e.id];
       if(!current?.position)break;
-      if(bot.entity.position.distanceTo(current.position)>4)await move(current.position,3,epoch,9000);
+      if(current.name!==name||current.type==='player'||current.username)
+        return observed(false,'Target identity changed during hunt');
+      if(bot.entity.position.distanceTo(current.position)>4){
+        if(bot.entity.position.distanceTo(current.position)>9)
+          return observed(false,'Hostile moved beyond bounded melee pursuit range');
+        await move(current.position,3,epoch,9000);
+        check(epoch);
+      }
+      if(bot.entity.position.distanceTo(current.position)>4)
+        return observed(false,'Physical melee reach not confirmed');
       bot.attack(current);await delay(630);
     }
+    check(epoch);
     return collectDrop(drop,start,e.position,epoch);
   }
   async function searchEye(epoch){
@@ -428,14 +493,48 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
   }
   async function destroyCrystal(epoch){
     const c=bot.nearestEntity(e=>e?.name==='end_crystal' && e?.position);
-    if(!c)return observed(false,'No End crystal observed');
-    if(bot.entity.position.distanceTo(c.position)>4.5){
-      const shot=await shootVisibleEntity(c,epoch);
-      if(!shot.ok)return shot;
-      return observed(!bot.entities?.[c.id],!bot.entities?.[c.id]?'Crystal gone after bow shot':'Shot fired; crystal destruction not yet verified');
+    if(!c||!bot.entity?.position)return observed(false,'No End crystal observed');
+    check(epoch);
+    let current=bot.entities?.[c.id];
+    if(!current?.position||current.name!=='end_crystal')
+      return observed(false,'Crystal identity changed before controlled attack');
+    // End crystals explode on close-range impact. NEVER melee a crystal in
+    // survival, even when the current weapon is powerful. Reuse physically
+    // observed standable terrain to retreat before any bounded bow shot.
+    if(bot.entity.position.distanceTo(current.position)<9){
+      const here=bot.entity.position.clone();
+      const safe=surveyTargets(bot,here,Vec3).filter(p=>
+        p.distanceTo(here)>=3 && p.distanceTo(current.position)>=10);
+      if(!safe.length)return observed(false,
+        'No observed safe standoff for End crystal; refusing self-damaging melee attack');
+      let separated=false;
+      for(const site of safe.slice(0,4)){
+        check(epoch);
+        try{
+          await move(site,2,epoch,16000);
+          const live=bot.entities?.[c.id];
+          if(live?.name==='end_crystal' && live.position &&
+             bot.entity.position.distanceTo(live.position)>=9){
+            separated=true;break;
+          }
+        }catch(err){check(epoch);}
+      }
+      if(!separated)return observed(false,
+        'Could not physically reach a safe bow position; crystal left untouched');
     }
-    bot.attack(c);await delay(350);check(epoch);
-    return observed(!bot.entities?.[c.id],'End crystal removal '+(!bot.entities?.[c.id]?'observed':'unverified'));
+    check(epoch);
+    current=bot.entities?.[c.id];
+    if(!current?.position||current.name!=='end_crystal')
+      return observed(false,'Crystal disappeared before ranged attack; destruction unproven');
+    if(bot.entity.position.distanceTo(current.position)<9)
+      return observed(false,'Crystal still too close to safely attack');
+    const shot=await shootVisibleEntity(current,epoch);
+    if(!shot.ok)return shot;
+    await delay(250);check(epoch);
+    const destroyed=!bot.entities?.[c.id];
+    return observed(destroyed,destroyed?
+      'Server no longer reports the selected crystal after a verified ranged shot':
+      'Verified survival arrow consumed, but crystal destruction still unproven');
   }
   async function smithGear(plan,epoch){
     if(!NETHERITE.includes(plan.item) || plan.base!==plan.item.replace('netherite_','diamond_'))
@@ -544,7 +643,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const good=pieces.every(([name,slot])=>bot.inventory.slots?.[bot.getEquipmentDestSlot(slot)]?.name===name);
     return observed(good,good?'Four diamond armor slots verified by server':'Diamond equipment verification incomplete');
   }
-  async function equipNetherite(epoch){
+  async function equipNetherite(epoch,armorOnly=false){
     const pieces=[['netherite_helmet','head'],['netherite_chestplate','torso'],['netherite_leggings','legs'],['netherite_boots','feet']];
     for(const [name,slot] of pieces){
       check(epoch);
@@ -555,14 +654,36 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       await bot.equip(piece,slot);
       if(bot.inventory.slots?.[idx]?.name!==name)return observed(false,'Server did not equip '+name);
     }
-    const sword=item(bot,'netherite_sword');if(!sword)return observed(false,'Netherite sword missing');
-    await bot.equip(sword,'hand');check(epoch);
-    const good=pieces.every(([name,slot])=>bot.inventory.slots?.[bot.getEquipmentDestSlot(slot)]?.name===name) && bot.heldItem?.name==='netherite_sword';
+    const armorGood=pieces.every(([name,slot])=>
+      bot.inventory.slots?.[bot.getEquipmentDestSlot(slot)]?.name===name);
+    if(!armorGood)return observed(false,'Netherite armor slots not fully confirmed');
+    if(armorOnly)return observed(true,
+      'All four Netherite armor slots physically observed; no sword/Dragon implied',
+      'netherite_armor_equipped');
+    const sword=item(bot,'netherite_sword');
+    if(!sword && bot.heldItem?.name!=='netherite_sword')
+      return observed(false,'Netherite sword missing');
+    if(bot.heldItem?.name!=='netherite_sword')await bot.equip(sword,'hand');
+    check(epoch);
+    const good=armorGood&&bot.heldItem?.name==='netherite_sword';
     return observed(good,good?'Netherite armor worn and sword held, verified via server inventory':'Netherite equipment not fully verified',good?'netherite_equipped':undefined);
   }
   async function run(plan,epoch){
     check(epoch);
     switch(plan.kind){
+      case 'mine_resource_ore':{
+        const rule=ORE_RESOURCE_RULES[plan.resource];
+        if(!rule)return observed(false,'Unsupported generic ore resource');
+        const dimension=String(bot.game?.dimension||'').replace(/^minecraft:/,'');
+        if(dimension!==rule.dimension)
+          return observed(false,'Wrong live dimension for '+plan.resource+' ore');
+        return mineKnown(rule.blocks,rule.drop,PICKAXES[rule.tier],epoch,26);
+      }
+      case 'survey_resource':{
+        if(!Object.hasOwn(ORE_RESOURCE_RULES,plan.resource))
+          return observed(false,'Unsupported generic ore survey target');
+        return walkScout(epoch,'resource '+plan.resource);
+      }
       case 'mine_obsidian':{
         const b=lookup(bot,['obsidian'],28);
         if(!b)return walkScout(epoch,'obsidian near surface lava/water');
@@ -626,6 +747,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       case 'smith_netherite':return smithGear(plan,epoch);
       case 'equip_diamond':return equipDiamond(epoch);
       case 'equip_netherite':return equipNetherite(epoch);
+      case 'equip_netherite_armor':return equipNetherite(epoch,true);
       case 'hunt_blazes':return hunt('blaze','blaze_rod',epoch);
       case 'hunt_endermen':return hunt('enderman','ender_pearl',epoch);
       case 'craft_blaze_powder':return craft('blaze_powder',epoch);

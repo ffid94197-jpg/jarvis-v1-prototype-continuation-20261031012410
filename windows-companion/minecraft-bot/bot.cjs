@@ -592,6 +592,7 @@ async function autoExecute(plan,epoch){
       return collectVerifiedDrop(p,existing,()=>digest(bot,leader).inventory.table,
         epoch,'Recovered crafting table');
     }
+    case 'survey_workstation':
     case 'scout_survival':{
       if(epoch!==actionEpoch)throw Error('Survival scouting cancelled');
       const origin=bot.entity.position.clone();
@@ -606,7 +607,9 @@ async function autoExecute(plan,epoch){
           const arrived=await navigate(site,2,epoch,14000);
           const actual=bot.entity.position.clone();
           if(arrived && actual.distanceTo(origin)>3 && actual.distanceTo(site)<=4)
-            return {ok:true,verified:true,detail:'Independent safe exploration reached '+Math.floor(actual.x)+','+
+            return {ok:true,verified:true,
+              proof:plan.kind==='survey_workstation'?'workstation_scout_move':'safe_scout_move',
+              detail:'Independent safe exploration reached '+Math.floor(actual.x)+','+
               Math.floor(actual.y)+','+Math.floor(actual.z)+'; no loot or combat success claimed'};
           last='No significant observed player displacement';
         }catch(e){

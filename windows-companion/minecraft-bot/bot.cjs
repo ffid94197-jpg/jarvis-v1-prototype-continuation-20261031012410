@@ -1080,7 +1080,16 @@ async function action(q){
       }
       startAction('dig_block',async alive=>{
         const jobEpoch=actionEpoch;
-        const dropMap={stone:'cobblestone',cobblestone:'cobblestone',deepslate:'cobbled_deepslate',cobbled_deepslate:'cobbled_deepslate',iron_ore:'raw_iron',deepslate_iron_ore:'raw_iron',diamond_ore:'diamond',deepslate_diamond_ore:'diamond',gold_ore:'raw_gold',deepslate_gold_ore:'raw_gold'};
+        const dropMap={stone:'cobblestone',cobblestone:'cobblestone',deepslate:'cobbled_deepslate',cobbled_deepslate:'cobbled_deepslate',
+          grass_block:'dirt',iron_ore:'raw_iron',deepslate_iron_ore:'raw_iron',
+          copper_ore:'raw_copper',deepslate_copper_ore:'raw_copper',
+          diamond_ore:'diamond',deepslate_diamond_ore:'diamond',
+          gold_ore:'raw_gold',deepslate_gold_ore:'raw_gold',
+          coal_ore:'coal',deepslate_coal_ore:'coal',
+          redstone_ore:'redstone',deepslate_redstone_ore:'redstone',
+          lapis_ore:'lapis_lazuli',deepslate_lapis_ore:'lapis_lazuli',
+          emerald_ore:'emerald',deepslate_emerald_ore:'emerald',
+          nether_gold_ore:'gold_nugget',nether_quartz_ore:'quartz'};
         const dropName=dropMap[block.name]||block.name;
         const before=rawCount(bot,dropName);
         let lastFailure='no reachable standable approach';
@@ -1117,9 +1126,28 @@ async function action(q){
           if(!arrived)throw Error('No reachable mining stance; '+lastFailure);
           const live=bot.blockAt(target);
           if(!live || live.name!==block.name)throw Error('Stone changed before digging; fresh observation required');
-          const pick=bot.inventory.items().find(i=>/^(?:wooden|stone|iron|golden|diamond|netherite)_pickaxe$/.test(i.name));
-          if(!pick)throw Error('No pickaxe in inventory');
-          await bot.equip(pick,'hand');
+          // General gameplay must not demand a pickaxe for dirt, sand, logs,
+          // planks, or wool. Ores still require the correct tier; otherwise
+          // a seemingly successful dig can destroy a valuable block without
+          // dropping an item. Never claim a harvest from dispatch alone.
+          const inventoryItems=bot.inventory.items();
+          const byNames=names=>inventoryItems.find(i=>names.includes(i.name));
+          const name=live.name;
+          const picks=['netherite_pickaxe','diamond_pickaxe','iron_pickaxe','stone_pickaxe','wooden_pickaxe','golden_pickaxe'];
+          const valuable=/^(?:deepslate_)?(?:diamond|redstone|emerald|gold)_ore$|^(?:ancient_debris|obsidian)$/;
+          const ironOre=/^(?:deepslate_)?(?:iron|copper|lapis)_ore$/;
+          const hardStone=/^(?:stone|cobblestone|cobbled_deepslate|deepslate|stone_bricks|netherrack|(?:deepslate_)?[a-z_]+_ore|ancient_debris|obsidian)$/;
+          let tool=null;
+          if(valuable.test(name))tool=byNames(['netherite_pickaxe','diamond_pickaxe','iron_pickaxe']);
+          else if(ironOre.test(name))tool=byNames(['netherite_pickaxe','diamond_pickaxe','iron_pickaxe','stone_pickaxe']);
+          else if(hardStone.test(name))tool=byNames(picks);
+          else if(/(?:_log|_wood|_planks)$/.test(name))
+            tool=inventoryItems.find(i=>/_axe$/.test(i.name))||null;
+          else if(/^(?:dirt|grass_block|coarse_dirt|rooted_dirt|gravel|sand|red_sand|mud|clay|snow_block)$/.test(name))
+            tool=inventoryItems.find(i=>/_shovel$/.test(i.name))||null;
+          if((valuable.test(name)||ironOre.test(name)||hardStone.test(name))&&!tool)
+            throw Error('Appropriate mining tool tier unavailable; no block broken');
+          if(tool)await bot.equip(tool,'hand');
           if(!alive())throw Error('Dig cancelled');
           await bot.dig(live);
           if(!alive())throw Error('Dig cancelled');

@@ -71,6 +71,7 @@ const autopilot=createController({maxSeconds:43200,maxSteps:20000});
 const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-mission.json'),{host,port,owner:leader});
 let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
 let advancedBusy=false;
+let guardBusy=false;
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const MOB_NAMES=new Set(['zombie','skeleton','spider','husk','drowned']);
 function ack(id,ok,status,error){
@@ -223,15 +224,41 @@ async function collectWood(alive){
   return `Wood collection verified: inventory logs ${before} -> ${after}`;
 }
 function guardTick(){
+  if(guardBusy||mode!=='guard'||!spawned)return;
   const owner=ownerEntity();
   if(!owner){lastAction='guard paused: owner not in loaded range';return;}
   if(Date.now()>guardUntil){setMode('follow');return;}
+  if(bot.health<10){
+    lastAction='guard avoiding combat: health too low';
+    doFollow();return;
+  }
   const hostile=bot.nearestEntity(e=>e && MOB_NAMES.has(e.name) &&
-    e.position.distanceTo(owner.position)<=12 && e.position.distanceTo(bot.entity.position)<=12);
+    e.type!=='player'&&!e.username&&e.position &&
+    e.position.distanceTo(owner.position)<=12 &&
+    e.position.distanceTo(bot.entity.position)<=12);
   if(!hostile){doFollow();return;}
   const distance=hostile.position.distanceTo(bot.entity.position);
-  if(distance>3.1)bot.pathfinder.setGoal(new goals.GoalFollow(hostile,2),true);
-  else {bot.pathfinder.setGoal(null);bot.attack(hostile);lastAction='guard engaged '+hostile.name;}
+  if(distance>3.4){
+    if(distance>8){
+      lastAction='guard tracking distant hostile without attacking';
+      doFollow();return;
+    }
+    bot.pathfinder.setGoal(new goals.GoalFollow(hostile,3),true);
+    return;
+  }
+  if(!validHostileTarget(bot,hostile.id))return;
+  const epoch=actionEpoch;
+  guardBusy=true;
+  stopPathfinder(bot);
+  void fightObserved({bot,entityId:hostile.id,maxSwings:4,pause,
+    allowed:()=>spawned&&mode==='guard'&&epoch===actionEpoch})
+    .then(outcome=>{
+      if(epoch===actionEpoch&&mode==='guard')
+        lastAction='guard: '+String(outcome.detail||'Defensive combat unproven').slice(0,160);
+    }).catch(error=>{
+      if(epoch===actionEpoch&&mode==='guard')
+        lastAction='guard inconclusive: '+String(error?.message||error).slice(0,120);
+    }).finally(()=>{guardBusy=false;});
 }
 // Every automatic operation is bounded, cancellable, and checked against in-world state.
 async function navigate(p,range,epoch,limitMs=12000){

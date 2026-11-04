@@ -12,6 +12,7 @@
  * still dispatches EVERY real effect and verifies Minecraft receipts.
  */
 const ITEM=/^[a-z0-9_]{1,64}$/;
+const {RESOURCES}=require('./resource_goal.cjs');
 const MAX_DEPTH=5, MAX_NODES=64, MAX_ALTERNATIVES=6;
 const int=(n,min,max)=>Number.isInteger(n)&&n>=min&&n<=max;
 function lookupName(registry,id){
@@ -76,7 +77,7 @@ function compileRecipeCatalog(bot,root){
  visit(root,0,[]);
  return {root,nodes};
 }
-function planRecipeStep(catalog,raw,goalName,targetCount,{workbenchNearby=false,logs=0,planks=0}={}){
+function planRecipeStep(catalog,raw,goalName,targetCount,{workbenchNearby=false,logs=0,planks=0,delegate=null}={}){
  if(!catalog||catalog.root!==goalName||!catalog.nodes||
    !ITEM.test(String(goalName))||!int(targetCount,1,16))
   return {kind:'blocked',why:'No supported, server-version recipe catalog for requested item'};
@@ -99,6 +100,13 @@ function planRecipeStep(catalog,raw,goalName,targetCount,{workbenchNearby=false,
    if(name==='cobblestone')return {kind:'mine_cobblestone',why:'Acquire actual cobblestone before crafting'};
    if(name==='oak_log'||name==='spruce_log'||name==='birch_log')
     return {kind:'collect_wood',why:'Acquire actual loaded tree logs before crafting'};
+   // Reuse EXISTING JARVIS resource planner (not Mindcraft's unguarded
+   // combat or autonomous code interpreter), with exact item and quantity.
+   if(RESOURCES.has(name)&&int(need,1,64)&&typeof delegate==='function'){
+    const result=delegate('gather',{resource:name,targetCount:need});
+    if(result&&typeof result.kind==='string'&&
+      !['complete','idle','wait'].includes(result.kind))return result;
+   }
    return {kind:'blocked',why:'No approved autonomous acquisition source for '+name};
   }
   // Choose the recipe with the smallest current ingredient deficit. Never

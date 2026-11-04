@@ -59,7 +59,7 @@ const bot={
   ['fight the zombie up to 2 times',true],
   ['kill the creeper',false],
   ['attack the villager',false],
-  ['kill the ender dragon',false],
+
   ['attack the zombie up to 5 times',false]
  ]){
   const v=await interpretOwnerInstruction(words,{env:{},context:JSON.stringify(obs),
@@ -67,6 +67,10 @@ const bot={
   ok(expected?v.ok&&v.command.command==='attack_hostile':!v.ok,
      'natural-language owner intent is bounded: '+words);
  }
+ const dragon=await interpretOwnerInstruction('kill the ender dragon',{env:{},
+  context:JSON.stringify(obs),fetchImpl:async()=>{throw Error('No model needed')}});
+ ok(dragon.ok&&dragon.command.command==='auto_goal'&&dragon.command.goal==='dragon_run',
+   'existing long-horizon Dragon mission remains the only boss route');
  const multiple={...obs,threats:[...obs.threats,{id:15,name:'zombie',distance:2}]};
  const uncertain=await interpretOwnerInstruction('attack the zombie',{
   env:{},context:JSON.stringify(multiple)});

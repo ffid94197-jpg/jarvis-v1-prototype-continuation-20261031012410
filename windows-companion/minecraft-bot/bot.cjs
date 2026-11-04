@@ -1325,7 +1325,7 @@ bot.on('spawn',()=>{
     mode='auto';lastAction='Server respawn observed; autonomous mission restarted from actual inventory';
   }else{mode='stay';lastAction='Respawn observed, autonomous deadline expired';}
 });
-bot.on('kicked',reason=>{process.stderr.write('Bot kicked: '+String(reason).slice(0,150)+'\n');process.exitCode=1;});
-bot.on('error',err=>{process.stderr.write('Bot error: '+String(err.code||'unknown')+'\n');process.exitCode=1;});
-bot.on('end',()=>{clearInterval(followTimer);halt();process.exit(process.exitCode||0);});
+bot.on('kicked',reason=>{process.stderr.write('Bot kicked: '+String(reason?.value??reason).slice(0,1200)+'\n');process.exitCode=1;});
+bot.on('error',err=>{process.stderr.write('Bot error: '+String(err?.stack||err)+'\n');process.exitCode=1;});
+bot.on('end',()=>{clearInterval(followTimer);halt();process.stderr.write('MINECRAFT_COMPANION_DISCONNECTED spawned='+String(spawned)+' exitCode='+String(process.exitCode||0)+'\n');process.exit(process.exitCode||0);});
 process.on('SIGTERM',()=>{clearInterval(followTimer);if(mode==='auto')autopilot.stop('Operator stopped bot');missionCheckpoint.clear();halt();bot.quit('Operator stopped JARVIS friend');});

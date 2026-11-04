@@ -225,7 +225,9 @@ export function mayStartNativeMinecraftGoal(
   if(!/\b(?:craft|make)\b/.test(s) || !itemLabel(args.item) ||
      !amount(args.targetCount,1,16))return false;
   const requested=explicitQuantity([String(args.item)]);
-  return requested===null||requested===args.targetCount;
+  // No explicit quantity means one item, not an arbitrary model-selected amount.
+  if(/\b(?:stacks?|many|several|some|lots|enough)\b/.test(s))return false;
+  return requested===null?args.targetCount===1:requested===args.targetCount;
  }
  if(goal==='equip')return /\b(?:equip|wear|put on|hold|wield)\b/.test(s) &&
   itemLabel(args.item)&&typeof args.destinationSlot==='string';
@@ -244,11 +246,18 @@ export function mayStartNativeMinecraftGoal(
   amount(args.length,1,8) && typeof args.block==='string' &&
   s.includes(args.block.replace(/_/g,' '));
  if(goal==='farm_wheat')return /\b(?:farm|grow|plant|harvest)\b/.test(s)&&/\bwheat\b/.test(s)&&localField(args.position);
- if(goal==='dragon_then_netherite_run')return /\bdragon\b/.test(s) &&
-  /\bnetherite\b/.test(s) && /\b(?:then|after|following)\b/.test(s);
- if(goal==='netherite_dragon_run')return /\bdragon\b/.test(s)&&/\bnetherite\b/.test(s);
- if(goal==='dragon_run')return /\b(?:ender dragon|dragon)\b/.test(s) &&
-  /\b(?:defeat|kill|beat|slay|fight)\b/.test(s);
+ if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run'].includes(goal)){
+  const dragon=/\b(?:ender dragon|dragon)\b/.test(s) &&
+   /\b(?:defeat|kill|beat|slay|fight)\b/.test(s);
+  const netherite=/\bnetherite\b/.test(s);
+  // A Dragon-only action cannot satisfy a compound Dragon + Netherite mission.
+  if(goal==='dragon_run')return dragon&&!netherite;
+  if(!dragon||!netherite)return false;
+  const explicitOrder=/\b(?:then|after|following)\b/.test(s);
+  const dragonFirst=s.indexOf('dragon')<s.indexOf('netherite');
+  if(goal==='dragon_then_netherite_run')return explicitOrder&&dragonFirst;
+  return !explicitOrder||!dragonFirst;
+ }
  if(goal==='stone_age')return /\bstone\b/.test(s)&&/\b(?:tools?|pickaxe|sword)\b/.test(s);
  if(goal==='iron_age')return /\biron\b/.test(s)&&/\b(?:tools?|pickaxe|sword|armor|armour)\b/.test(s);
  if(goal==='wood')return /\b(?:gather|collect|mine|get)\b/.test(s)&&/\b(?:wood|logs?)\b/.test(s);
@@ -338,13 +347,29 @@ export class MinecraftAiGate {
         return {ok:false,reason:'Interactive block position must have exactly x, y and z'};
       if(!/\b(?:open|close|activate|interact|press|toggle|switch|use)\b/i.test(this.objective))
         return {ok:false,reason:'Interacting with a block requires an explicit owner action request'};
-      const observed=(this.observed.nearbyBlocks||[]).some(b=>
+      const observed=(this.observed.nearbyBlocks||[]).find(b=>
         b && typeof b.name==='string' &&
         /^(?:chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|crafting_table|furnace|smithing_table)$/.test(b.name) &&
         point(b) && point(target) &&
         Number.isInteger(target.x) && Number.isInteger(target.y) && Number.isInteger(target.z) &&
         b.x===target.x && b.y===target.y && b.z===target.z);
       if(!observed)return {ok:false,reason:'Block interaction requires a freshly observed interactive block at the exact location; no invented target'};
+      // A request to open a door does not authorize opening an adjacent chest,
+      // even when both blocks are freshly observed at different coordinates.
+      const instruction=this.objective.toLowerCase();
+      const requestedTypes:Array<[RegExp,RegExp]>=[
+       [/\bchests?\b/,/^(?:chest|trapped_chest)$/],
+       [/\bbarrels?\b/,/^barrel$/],
+       [/\btrapdoors?\b/,/^[a-z_]+_trapdoor$/],
+       [/\bdoors?\b/,/^[a-z_]+_door$/],
+       [/\blevers?\b/,/^lever$/],
+       [/\bbuttons?\b/,/^[a-z_]+_button$/],
+       [/\bfurnaces?\b/,/^furnace$/],
+       [/\bcrafting tables?\b/,/^crafting_table$/],
+       [/\bsmithing tables?\b/,/^smithing_table$/]
+      ];
+      if(requestedTypes.some(([noun,kind])=>noun.test(instruction)&&!kind.test(observed.name)))
+        return {ok:false,reason:'Observed block type does not match the owner requested object'};
       if(Object.keys(args).some(k=>k!=='command'&&k!=='position'))
         return {ok:false,reason:'Unexpected block interaction parameter'};
     }

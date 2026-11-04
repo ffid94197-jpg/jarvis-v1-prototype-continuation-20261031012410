@@ -340,6 +340,18 @@ export function mayStartNativeMinecraftGoal(
     if(Object.keys(step).some(k=>!['goal','item','destination'].includes(k)))return false;
     candidate.destinationSlot=step.destination;delete candidate.destination;
    }
+   if(index>0&&step.goal==='smelt'&&
+      /^(?:smelt|cook|bake|refine) (?:it|them)$/.test(stages[index].trim())){
+     const previous=args.steps[index-1] as Record<string,unknown>;
+     const outputByInput:Record<string,string>={
+       raw_iron:'iron_ingot',raw_gold:'gold_ingot',
+       raw_copper:'copper_ingot',sand:'glass',cobblestone:'stone'
+     };
+     return previous?.goal==='gather'&&typeof previous.resource==='string'&&
+       step.item===outputByInput[previous.resource]&&
+       amount(previous.targetCount,1,16)&&
+       step.targetCount===previous.targetCount;
+   }
    return mayStartNativeMinecraftGoal(stages[index]+' in Minecraft',candidate,observed);
   });
  }

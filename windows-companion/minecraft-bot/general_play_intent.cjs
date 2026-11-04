@@ -74,7 +74,8 @@ const PRIMITIVE_FIELDS=Object.freeze({
  move:['directionInput','durationMs'],use_item:['hand'],say:['text'],
  inspect_villager:['entityId'],trade_villager:['entityId','tradeIndex','times'],
  transfer_container:['position','item','count','operation'],
- enchant_item:['position','item','choice']
+ enchant_item:['position','item','choice'],
+ attack_hostile:['entityId','maxSwings']
 });
 const GENERAL_ACTIONS=Object.freeze(Object.keys(PRIMITIVE_FIELDS));
 function modelPrimitiveGrounded(command,ownerText,context){
@@ -92,7 +93,8 @@ function modelPrimitiveGrounded(command,ownerText,context){
   inspect_villager:/\b(?:inspect|show|view|check|list)\b/,
   trade_villager:/\b(?:trade|buy|purchase|exchange)\b/,
   transfer_container:/\b(?:store|deposit|put|take|withdraw|retrieve)\b/,
-  enchant_item:/\b(?:enchant|enchantment)\b/
+  enchant_item:/\b(?:enchant|enchantment)\b/,
+  attack_hostile:/\b(?:attack|fight|defeat|slay|kill)\b/
  };
  if(!verbs[command.command]?.test(s))return false;
  if(['craft_item','equip_item','place_block'].includes(command.command)){
@@ -125,6 +127,15 @@ function modelPrimitiveGrounded(command,ownerText,context){
   b&&b.x===p?.x&&b.y===p?.y&&b.z===p?.z);
  const target=command.command==='place_block'?command.reference:command.position;
  if(target!==undefined && !(exactOwnerTriplet(target)||sceneBlock(target)))return false;
+ if(command.command==='attack_hostile'){
+  const threat=Number.isInteger(command.entityId)&&Array.isArray(scene?.threats)?
+    scene.threats.find(t=>t.id===command.entityId):null;
+  if(!threat||typeof threat.name!=='string'||!s.includes(threat.name.replace(/_/g,' '))||
+     !Number.isInteger(command.maxSwings)||command.maxSwings<1||command.maxSwings>4)
+    return false;
+  const count=s.match(/\b(?:up to )?(\d{1,2}) (?:hits|swings|times)\b/);
+  if(count?Number(count[1])!==command.maxSwings:command.maxSwings!==4)return false;
+ }
  if(['inspect_villager','trade_villager'].includes(command.command)){
   if(!Number.isInteger(command.entityId)||
      !Array.isArray(scene?.villagers)||

@@ -20,6 +20,7 @@ const {itemName:normalizeCraftItemName}=require('./general_play_intent.cjs');
 const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
 const {createAdvancedActions}=require('./advanced_survival_actions.cjs');
+const {validHostileTarget,fightObserved}=require('./native_combat.cjs');
 const {compileRecipeCatalog}=require('./mindcraft_recipe_graph.cjs');
 const {planSurveyStep}=require('./terrain_survey.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
@@ -526,10 +527,18 @@ async function autoExecute(plan,epoch){
     }
     case 'defend':{
       const hostile=bot.entities?.[plan.targetId];
-      if(!hostile || !hostile.position)return {ok:true,verified:true,detail:'Threat is no longer visible'};
-      if(hostile.position.distanceTo(bot.entity.position)>3)return {ok:false,verified:false,detail:'Target moved away; no blind attack'};
+      if(!hostile || !hostile.position)
+        return {ok:true,verified:true,detail:'Observed hostile no longer visible; local danger cleared'};
+      if(!validHostileTarget(bot,plan.targetId))
+        return {ok:false,verified:false,detail:'Unsafe or out-of-range hostile; no blind attack'};
       bot.attack(hostile);await pause(300);
-      return {ok:true,verified:true,detail:'Attack input dispatched at observed hostile (no damage claim)'};
+      if(epoch!==actionEpoch)throw Error('Owner cancelled defensive action');
+      const remaining=bot.entities?.[plan.targetId];
+      const safe=!remaining?.position||
+        remaining.position.distanceTo(bot.entity.position)>6;
+      return {ok:safe,verified:safe,detail:safe?
+        'Server now shows previous hostile outside 6-block defensive range':
+        'Attack dispatched; threat still present and defensive result NOT VERIFIED'};
     }
     case 'eat':{
       const food=bot.inventory.items().find(i=>FOOD.test(i.name));if(!food)throw Error('No edible item');
@@ -1073,6 +1082,19 @@ async function action(q){
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}
     }
     // General player primitives are owner-authorized, bounded and report observed outcomes.
+    case 'attack_hostile':{
+      if(mode==='auto'||autoBusy||advancedBusy)
+        return {ok:false,error:'Explicitly stop ongoing autonomous work or transaction before attacking'};
+      setMode('stay');const epoch=actionEpoch;advancedBusy=true;
+      try{
+        const result=await fightObserved({bot,entityId:q.entityId,maxSwings:q.maxSwings,
+          pause,allowed:()=>spawned&&epoch===actionEpoch});
+        return {ok:result.ok===true,verified:result.verified===true,
+          status:String(result.detail||'Combat outcome unknown').slice(0,800)};
+      }catch(err){
+        return {ok:false,verified:false,error:'Combat unresolved: '+String(err.message||err).slice(0,150)};
+      }finally{advancedBusy=false;}
+    }
     case 'inspect_villager':case 'trade_villager':case 'transfer_container':case 'enchant_item':{
       if(mode==='auto'||autoBusy||advancedBusy)
         return {ok:false,error:'Active autonomous mission or another transaction must finish or be stopped explicitly'};

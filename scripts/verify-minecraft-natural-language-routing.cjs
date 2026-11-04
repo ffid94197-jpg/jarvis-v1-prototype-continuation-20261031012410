@@ -312,6 +312,33 @@ no(mayStartNativeMinecraftGoal('In Minecraft equip iron helmet then craft a ches
  sequenceArgs([{...equipStages[0],destinationSlot:'head'},equipStages[1]]),sameWorld),
  'Core refuses extra equipment-stage parameters');
 
+// One explicit dimensioned owner instruction may authorize only the exact
+// deterministic floor -> two-high entrance walls -> roof sequence.
+const roomObjective='In Minecraft, build a 3 by 3 by 2 cobblestone roofed room at 1 64 2';
+const roomParsed=languageGoal.directIntent('build a 3 by 3 by 2 cobblestone roofed room at 1 64 2');
+ok(roomParsed?.ok&&roomParsed.command.goal==='sequence'&&roomParsed.command.steps.length===3,
+ 'owner roofed-room instruction produces exactly three typed native structure steps');
+const roomSteps=roomParsed.command.steps;
+ok(mayStartNativeMinecraftGoal(roomObjective,sequenceArgs(roomSteps),sameWorld),
+ 'Core admits exactly owner-specified local roofed-room geometry');
+no(mayStartNativeMinecraftGoal(roomObjective,sequenceArgs(roomSteps.slice(0,2)),sameWorld),
+ 'Core refuses silently omitting roof from requested room');
+no(mayStartNativeMinecraftGoal(roomObjective,sequenceArgs([...roomSteps].reverse()),sameWorld),
+ 'Core refuses reordered floor, walls and roof');
+no(mayStartNativeMinecraftGoal(roomObjective,sequenceArgs([
+ {...roomSteps[0],block:'dirt'},roomSteps[1],roomSteps[2]]),sameWorld),
+ 'Core refuses unrequested construction material substitution');
+no(mayStartNativeMinecraftGoal(roomObjective,sequenceArgs([
+ {...roomSteps[0],position:{x:100,y:64,z:2}},roomSteps[1],roomSteps[2]]),sameWorld),
+ 'Core refuses model-invented distant room origin');
+no(mayStartNativeMinecraftGoal(roomObjective,sequenceArgs([
+ {...roomSteps[0],command:'run_shell'},roomSteps[1],roomSteps[2]]),sameWorld),
+ 'Core refuses unrelated instructions embedded in construction stage');
+no(mayStartNativeMinecraftGoal(
+ 'In Minecraft, build a 5 by 5 by 2 cobblestone roofed room at 1 64 2',
+ sequenceArgs(roomSteps),sameWorld),
+ 'Core refuses mismatched owner dimensions and unsafe total block budget');
+
 const entry=(objective)=>{
  const gate=new MinecraftAiGate(objective);
  gate.record('minecraft_companion_command',{command:'observe'},{ok:true,detail:{

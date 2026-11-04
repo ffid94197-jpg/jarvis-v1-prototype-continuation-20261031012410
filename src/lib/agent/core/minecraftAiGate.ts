@@ -333,6 +333,9 @@ export class MinecraftAiGate {
     if(['navigate','dig_block','place_block','interact_block'].includes(command) && target===undefined)
       return {ok:false,reason:'Explicit nearby observed coordinates required'};
     if(command==='interact_block'){
+      if(!target || typeof target!=='object' || Array.isArray(target) ||
+         Object.keys(target).length!==3)
+        return {ok:false,reason:'Interactive block position must have exactly x, y and z'};
       if(!/\b(?:open|close|activate|interact|press|toggle|switch|use)\b/i.test(this.objective))
         return {ok:false,reason:'Interacting with a block requires an explicit owner action request'};
       const observed=(this.observed.nearbyBlocks||[]).some(b=>

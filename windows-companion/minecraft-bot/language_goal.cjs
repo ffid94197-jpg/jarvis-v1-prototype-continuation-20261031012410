@@ -29,6 +29,9 @@ const SYSTEM=[
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
  'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
  'Example: {"command":"auto_goal","goal":"gather","resource":"diamond","targetCount":3}.',
+ 'Examples of ordinary speech: "get me some coal" means one coal; "make me a stone pickaxe" means one stone_pickaxe; "collect five diamonds" means gather diamond targetCount 5.',
+ 'For a compound request such as preparing basic stone tools, use a short validated sequence only when each stage is supported; otherwise choose one safe next goal or return unsupported.',
+ 'Never output internal commands for the owner to type. The owner speaks naturally; typed JSON is only the private adapter contract.'
  'When impossible, output {"command":"unsupported"}. Nothing besides ONE JSON object.'
 ].join('\n');
 // From Mindcraft src/utils/text.js strictFormat, adapted to avoid input mutation.

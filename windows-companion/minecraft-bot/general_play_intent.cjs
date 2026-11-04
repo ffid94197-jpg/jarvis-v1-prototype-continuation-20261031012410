@@ -185,4 +185,20 @@ function modelGoalGrounded(q,ownerText){
   default:return false;
  }
 }
-module.exports={parseOwnerPrimitive,PRIMITIVE_FIELDS,GENERAL_ACTIONS,modelPrimitiveGrounded,modelGoalGrounded,itemName};
+function modelSimpleGrounded(command,ownerText){
+ const text=String(ownerText||'').toLowerCase();
+ const patterns={
+  follow:/\b(?:follow|stay with me)\b/,
+  come:/\b(?:come here|come to me|come over)\b/,
+  stay:/\b(?:stay|wait here|don't move)\b/,
+  guard:/\b(?:guard|protect|defend)\b/,
+  status:/\b(?:status|how are you|progress)\b/,
+  inventory:/\b(?:inventory|items do you have)\b/,
+  observe:/\b(?:observe|look around|what do you see)\b/,
+  auto_status:/\b(?:status|progress|how far)\b/,
+  auto_stop:/\b(?:stop|pause|cancel|halt)\b/,
+  auto_resume:/\b(?:continue|resume|carry on|keep going)\b/
+ };
+ return Object.hasOwn(patterns,command)&&patterns[command].test(text);
+}
+module.exports={parseOwnerPrimitive,PRIMITIVE_FIELDS,GENERAL_ACTIONS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName};

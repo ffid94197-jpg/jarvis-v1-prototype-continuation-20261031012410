@@ -14,7 +14,7 @@ const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
 const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','farm_wheat','sequence','craft','equip']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
-const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
+const FOOD = /^(bread|baked_potato|cooked_.*|beef|porkchop|mutton|rabbit|chicken|cod|salmon|tropical_fish|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
 function itemsFrom(bot) {
   const a = [...(bot.inventory?.items?.() || [])];

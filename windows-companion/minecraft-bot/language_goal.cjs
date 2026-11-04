@@ -6,6 +6,7 @@
 const {validateCommand}=require('./friend_protocol.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
 const {RECIPES}=require('./general_goal.cjs');
+const {validStep}=require('./mission_sequence.cjs');
 const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded}=require('./general_play_intent.cjs');
 const SIMPLE=new Set(['follow','come','stay','guard','status','inventory','observe','auto_status','auto_stop','auto_resume']);
 const FIXED=new Set(['survive','wood','tools','explore','follow','guard','stone_age','iron_age','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run']);
@@ -91,6 +92,26 @@ function directIntent(raw){
  const s=t.toLowerCase().replace(/\s+/g,' ').replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'');
  if(/\b(?:don't|do not|never|must not|not to|without)\b/.test(s))
   return fail('Negative instruction needs clarification; no action taken');
+ // Compose small independent, verifiable subgoals using the existing
+ // goal-controller sequence. Generic one-off primitives are NOT silently
+ // promoted to an open-ended mission, and all stage parameters are validated.
+ const parts=s.split(/\s+(?:and then|then|after that)\s+/);
+ if(parts.length>1){
+  if(parts.length>8||parts.some(p=>!p.trim()))
+   return fail('Sequence must contain two to eight clear gameplay objectives');
+  const steps=[];
+  for(const part of parts){
+   const candidate=directIntent(part);
+   if(!candidate?.ok || candidate.command?.command!=='auto_goal')
+    return fail('Cannot safely build a long-horizon sequence from unsupported subgoals');
+   const {command,durationSeconds,destinationSlot,...step}=candidate.command;
+   if(destinationSlot!==undefined)step.destination=destinationSlot;
+   if(!validStep(step))
+    return fail('Unverified or unsupported composed gameplay stage');
+   steps.push(step);
+  }
+  return canonicalIntent({command:'auto_goal',goal:'sequence',steps});
+ }
  const rules=[
   [/^(stop|pause|halt|cancel)( now| everything| that| the mission)?$/,{command:'auto_stop'}],
   [/^(?:continue|resume|keep going|carry on)(?:\s+(?:where we left(?: off)?|from (?:the )?(?:last|latest) checkpoint|(?:with\s+)?(?:(?:the|my|current|previous|last|saved)\s+)*(?:mission|goal|task|campaign|run|(?:netherite|dragon|minecraft)\s+(?:mission|goal|task|campaign|run))))?$/,{command:'auto_resume'}],

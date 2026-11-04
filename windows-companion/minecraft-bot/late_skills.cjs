@@ -11,6 +11,8 @@ const {confirmedMove}=require('./movement_proof.cjs');
 const {collectObservedDrop}=require('./drop_pickup.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {findPortalLayout,pos:portalCell}=require('./portal_layout.cjs');
+const {surveyTargets}=require('./wood_navigation.cjs');
+const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const solid=b=>b && b.boundingBox!=='empty' && !['air','cave_air','void_air','lava','water','fire','nether_portal'].includes(b.name);
 const count=(bot,name)=>(bot.inventory?.items?.()||[]).reduce((n,i)=>n+(i.name===name?i.count:0),0);
@@ -19,7 +21,7 @@ const observed=(ok,detail,proof)=>({ok:!!ok,verified:!!ok,detail, ...(ok&&proof?
 const lookup=(bot,names,radius=28)=>bot.findBlock({matching:b=>b && names.includes(b.name),maxDistance:radius});
 const item=(bot,name)=>bot.inventory.items().find(i=>i.name===name);
 function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3}){
-  const session={portalBase:null,portalPosition:null,homePortalPosition:null,netherPortalPosition:null,eyesThrown:0,bearing:null,dragonSeen:false,dragonDied:false,dragonEntityId:null,dragonAttackAt:null,dragonAttempts:0,visitedChests:new Set(),surveyIndex:0};
+  const session={portalBase:null,portalPosition:null,homePortalPosition:null,netherPortalPosition:null,eyesThrown:0,bearing:null,dragonSeen:false,dragonDied:false,dragonEntityId:null,dragonAttackAt:null,dragonAttempts:0,visitedChests:new Set(),surveyIndex:0,surveyVisited:new Map()};
   const check=epoch=>{if(getEpoch()!==epoch)throw Error('Minecraft action cancelled by owner');};
   async function move(position,range,epoch,timeout=20000){
     check(epoch);
@@ -64,18 +66,49 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
   }
   async function walkScout(epoch,kind){
     check(epoch);
-    const here=bot.entity.position.clone();
-    const vectors=[[16,0],[0,16],[-16,0],[0,-16],[16,16],[-16,16],[-16,-16],[16,-16]];
-    const [dx,dz]=vectors[session.surveyIndex++%vectors.length];
-    const d=here.offset(dx,0,dz);
-    const moved=await move(d,3,epoch,18000);
-    check(epoch);
-    const actual=bot.entity.position;
-    const verified=moved===true && actual?.distanceTo(d)<=5 &&
-      actual.distanceTo(here)>=4;
-    return observed(verified,verified?
-      `Server-observed scouting displacement for ${kind} (no loot claimed)`:
-      `No confirmed safe scouting arrival for ${kind}; world state unchanged`);
+    if(typeof kind!=='string'||kind.length>80)
+      return observed(false,'Unrecognized or oversized exploration goal');
+    const here=bot.entity?.position?.clone();
+    if(!here)return observed(false,'No server-observed player position for scouting');
+    // Reuse the native no-digging survey geometry. The previous hardcoded
+    // offsets could route to lava, unloaded cliffs or nonexistent ground.
+    const dimension=String(bot.game?.dimension||'unknown');
+    const key=dimension+'|'+kind;
+    const seen=session.surveyVisited.get(key)||new Set();
+    if(seen.size>=48)return observed(false,'Forty-eight bounded '+kind+
+      ' survey sites exhausted; no loot or discovery claimed');
+    session.surveyVisited.set(key,seen);
+    const hazardNames=new Set([...ALLOWED_HOSTILES,'creeper','ender_dragon','wither']);
+    const hazards=Object.values(bot.entities||{}).filter(e=>
+      hazardNames.has(e?.name)&&e?.position);
+    const candidates=surveyTargets(bot,here,Vec3).filter(p=>
+      p.distanceTo(here)>=4 &&
+      !seen.has([p.x,p.y,p.z].join(',')) &&
+      !hazards.some(e=>p.distanceTo(e.position)<8));
+    if(!candidates.length)return observed(false,
+      'No new safe loaded '+kind+' survey position; will not invent remote terrain');
+    const start=session.surveyIndex++%candidates.length;
+    let last='No physical progress to a safe observed '+kind+' waypoint';
+    for(let i=0;i<Math.min(4,candidates.length);i++){
+      check(epoch);
+      const p=candidates[(start+i)%candidates.length];
+      seen.add([p.x,p.y,p.z].join(','));
+      try{
+        await move(p,2,epoch,18000);
+        check(epoch);
+        const actual=bot.entity?.position;
+        if(actual&&actual.distanceTo(here)>=4&&actual.distanceTo(p)<=4){
+          return observed(true,'Observed movement to fresh safe '+kind+
+            ' terrain at '+Math.floor(actual.x)+','+Math.floor(actual.y)+','+
+            Math.floor(actual.z)+'; no item or objective completion claimed','safe_scout_move');
+        }
+        last='Server did not confirm new '+kind+' region';
+      }catch(err){
+        check(epoch);
+        last=String(err?.message||err).slice(0,100);
+      }
+    }
+    return observed(false,'Loaded '+kind+' search positions inaccessible: '+last);
   }
   async function placeItem(target,itemName,epoch){
     check(epoch);
@@ -294,22 +327,52 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     return observed(arrived,arrived?'Observed server dimension: '+bot.game.dimension:'Portal transition not verified');
   }
   async function hunt(name,drop,epoch){
-    const e=bot.nearestEntity(e=>e?.name===name&&e?.position);
+    // Only the existing explicitly planned survival resource targets are
+    // eligible for this routine. Unknown model-suggested entity names never
+    // become attack authority and players are excluded.
+    const eligible=new Set(['blaze','enderman','spider','skeleton',
+      'cow','pig','sheep','hoglin']);
+    if(!eligible.has(name)||!bot.entity?.position)
+      return observed(false,'Unapproved or unobserved survival hunting target');
+    check(epoch);
+    if(bot.health<10)return observed(false,'Unsafe health for survival hunt');
+    const e=bot.nearestEntity(t=>t?.name===name && t?.position &&
+      t?.type!=='player' && !t?.username);
     if(!e)return walkScout(epoch,name);
-    if(name==='enderman'){
-      // avoid attacking players and avoid hits without an observed target
-      await bot.lookAt(e.position.offset(0,2.5,0),true);
-    }
+    if(bot.entity.position.distanceTo(e.position)>18)
+      return observed(false,'Observed target exceeds bounded hunting approach range');
+    // Avoid starting melee with multiple additional hostiles in range.
+    const hazards=Object.values(bot.entities||{}).filter(t=>t?.id!==e.id&&t?.position&&
+      (ALLOWED_HOSTILES.has(t.name)||['creeper','wither','ender_dragon'].includes(t.name))&&
+      t.position.distanceTo(bot.entity.position)<8);
+    if(hazards.length)return observed(false,'Multiple observed hostiles: hunting postponed');
     const start=count(bot,drop);
     await move(e.position,3,epoch,20000);
-    const sword=bot.inventory.items().find(i=>/_sword$/.test(i.name));if(sword)await bot.equip(sword,'hand');
-    for(let j=0;j<16;j++){
+    check(epoch);
+    const live=bot.entities?.[e.id];
+    if(!live?.position||live.name!==name||bot.entity.position.distanceTo(live.position)>4)
+      return observed(false,'Target identity or physical melee range changed during approach');
+    const sword=bot.inventory.items().find(i=>/_sword$/.test(i.name));
+    if(sword)await bot.equip(sword,'hand');
+    check(epoch);
+    for(let j=0;j<12;j++){
       check(epoch);
+      if(bot.health<9)return observed(false,'Health dropped during hunt; retreat required');
       const current=bot.entities?.[e.id];
       if(!current?.position)break;
-      if(bot.entity.position.distanceTo(current.position)>4)await move(current.position,3,epoch,9000);
+      if(current.name!==name||current.type==='player'||current.username)
+        return observed(false,'Target identity changed during hunt');
+      if(bot.entity.position.distanceTo(current.position)>4){
+        if(bot.entity.position.distanceTo(current.position)>9)
+          return observed(false,'Hostile moved beyond bounded melee pursuit range');
+        await move(current.position,3,epoch,9000);
+        check(epoch);
+      }
+      if(bot.entity.position.distanceTo(current.position)>4)
+        return observed(false,'Physical melee reach not confirmed');
       bot.attack(current);await delay(630);
     }
+    check(epoch);
     return collectDrop(drop,start,e.position,epoch);
   }
   async function searchEye(epoch){

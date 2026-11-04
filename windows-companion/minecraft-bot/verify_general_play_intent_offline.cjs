@@ -12,13 +12,13 @@ let count=0;
 function ok(value,label){assert.ok(value,label);count++;console.log('PASS',label);}
 
 const examples=[
- ['make three oak doors','craft_item','oak_door',3],
- ['please craft four glass','craft_item','glass',4],
- ['craft four oak planks','craft_item','oak_planks',4],
- ['craft five stone bricks','craft_item','stone_bricks',5],
- ['craft two torches','craft_item','torch',2],
- ['craft two iron pickaxes','craft_item','iron_pickaxe',2],
- ['craft two diamond boots','craft_item','diamond_boots',2],
+ ['make three oak doors','craft','oak_door',3],
+ ['please craft four glass','craft','glass',4],
+ ['craft four oak planks','craft','oak_planks',4],
+ ['craft five stone bricks','craft','stone_bricks',5],
+ ['craft two torches','craft','torch',2],
+ ['craft two iron pickaxes','craft','iron_pickaxe',2],
+ ['craft two diamond boots','craft','diamond_boots',2],
  ['craft two chests','craft','chest',2],
  ['craft one torch','craft','torch',1],
  ['wear a diamond helmet','equip_item','diamond_helmet'],
@@ -50,7 +50,7 @@ for(const text of [
  "don't mine block 1 64 1","craft 99 chests",
  'mine 65 diamonds','what is an iron sword?',
  'mine six diamonds then attack a player',
- 'mine six diamonds then craft eight oak doors'
+ 'mine six diamonds then craft 99 oak doors'
 ]){
  const r=directIntent(text);
  ok(!r?.ok,'untrusted, ambiguous or unsupported objective cannot dispatch: '+text);

@@ -596,6 +596,41 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       ? observed(true,`Verified ${inserted} newly filled frame(s); portal not yet activated`)
       : observed(false,'No new eye states or active End portal were observed');
   }
+  async function approachDragon(epoch){
+    check(epoch);
+    if(String(bot.game?.dimension||'').replace(/^minecraft:/,'')!=='the_end' ||
+       !bot.entity?.position || bot.health<11)
+      return observed(false,'Dragon approach requires live End survival state and safe health');
+    const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon'&&e?.position);
+    if(!dragon)return observed(false,'No observed Dragon direction for horizontal approach');
+    const here=bot.entity.position.clone();
+    const dx=dragon.position.x-here.x,dz=dragon.position.z-here.z;
+    const mag=Math.hypot(dx,dz);
+    if(!Number.isFinite(mag)||mag<6)
+      return observed(false,'No safe horizontal Dragon approach bearing');
+    const heading={x:dx/mag,z:dz/mag};
+    const threats=Object.values(bot.entities||{}).filter(e=>e?.position&&
+      (ALLOWED_HOSTILES.has(e.name)||e.name==='end_crystal'));
+    const waypoints=surveyTargets(bot,here,Vec3).map(p=>{
+      const along=(p.x-here.x)*heading.x+(p.z-here.z)*heading.z;
+      const sideways=Math.abs((p.x-here.x)*heading.z-(p.z-here.z)*heading.x);
+      return {p,along,sideways};
+    }).filter(o=>o.along>=4&&o.sideways<=Math.max(5,o.along*.8)&&
+       !threats.some(t=>o.p.distanceTo(t.position)<9))
+      .sort((a,b)=>b.along-a.along||a.sideways-b.sideways).slice(0,4);
+    if(!waypoints.length)
+      return observed(false,'No real standable loaded End waypoint toward Dragon');
+    for(const {p} of waypoints){
+      check(epoch);
+      try{
+        await move(p,2,epoch,14000);check(epoch);
+        const actual=bot.entity?.position;
+        if(actual&&actual.distanceTo(here)>=3&&actual.distanceTo(p)<=4)
+          return observed(true,'Server-observed horizontal approach on safe End-island ground; no Dragon damage claimed','dragon_approach');
+      }catch(error){check(epoch);}
+    }
+    return observed(false,'Bounded Dragon approach did not reach observed safe terrain');
+  }
   async function fightDragon(epoch){
     const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon'&&e?.position);
     if(!dragon)return observed(false,'No live dragon entity in loaded world');
@@ -951,6 +986,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       }
       case 'destroy_end_crystal':return destroyCrystal(epoch);
       case 'fight_dragon':return fightDragon(epoch);
+      case 'advance_dragon':return approachDragon(epoch);
       case 'observe_dragon':{const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon');
         if(!dragon)return observed(false,'No dragon entity to observe');
         if(!observeDragon(session,dragon))return observed(false,'Dragon identity unverified');

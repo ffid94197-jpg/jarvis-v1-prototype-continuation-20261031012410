@@ -637,7 +637,8 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
           if(bot.nearestEntity(e=>e?.name===name&&e?.position))
             return hunt(name,drop,epoch);
         }
-        return walkScout(epoch,inNether?'safe hoglin food source':'passive livestock food source');
+        await walkScout(epoch,inNether?'safe hoglin food source':'passive livestock food source');
+        return observed(false,'No livestock food drop was observed; scouting does not count as collected food');
       }
       case 'obtain_food':{
         const safeRaw=bot.inventory.items().find(i=>['beef','porkchop','mutton','rabbit'].includes(i.name));

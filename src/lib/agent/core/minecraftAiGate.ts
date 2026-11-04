@@ -230,9 +230,25 @@ export function mayStartNativeMinecraftGoal(
   // deterministic floor -> two-high entrance walls -> roof composition.
   // All three 3D coordinates originate from the owner's explicit start,
   // never the model or an untrusted in-game message.
-  const roomPhrase=s.replace(/^in minecraft[, :]*/,'')
+  const roomPhrase=s.replace(/^jarvis(?:buddy)?[, :]+/,'')
+    .replace(/^in minecraft[, :]*/,'')
     .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
     .replace(/\s+in minecraft$/,'').trim();
+  const armor=/^(?:equip|wear|put on)(?: me)? (?:a |the |my )?(?:full |complete )?(?:set of )?(leather|iron|gold|golden|diamond|netherite) (?:armor|armour)(?: set)?$/.exec(roomPhrase);
+  if(armor){
+   if(args.steps.length!==4)return false;
+   const tier=armor[1]==='gold'?'golden':armor[1];
+   const expected=[['helmet','head'],['chestplate','torso'],
+    ['leggings','legs'],['boots','feet']];
+   return args.steps.every((stage,index)=>{
+    if(!stage||typeof stage!=='object'||Array.isArray(stage))return false;
+    const v=stage as Record<string,unknown>;
+    return Object.keys(v).length===3&&
+     Object.keys(v).every(k=>['goal','item','destination'].includes(k))&&
+     v.goal==='equip'&&v.item===tier+'_'+expected[index][0]&&
+     v.destination===expected[index][1];
+   });
+  }
   const room=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2}) by (\d{1,2}) ([a-z_ ]{2,35}?) (?:roofed room|roofed shelter|shelter) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(roomPhrase);
   if(room){
    if(args.steps.length!==3)return false;

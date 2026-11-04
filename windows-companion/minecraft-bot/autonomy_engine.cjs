@@ -183,8 +183,12 @@ function decide(goal, world, failures={}, progress={}) {
       why:'Previously selected hostile is no longer observed; death NOT independently proven'};
     if(!ALLOWED_HOSTILES.has(target.name))
       return {kind:'blocked',why:'Selected entity no longer an authorized hostile'};
-    if(target.distance>3.4)return {kind:'blocked',
-      why:'Selected hostile moved outside observed safe melee range; no blind pursuit'};
+    if(target.distance>12)return {kind:'blocked',
+      why:'Selected hostile moved beyond its authorized twelve-block pursuit envelope'};
+    if(world.health<12)return {kind:'retreat',why:'Insufficient health for target-bound pursuit'};
+    if(target.distance>3.4)return {kind:'approach_bound_hostile',targetId:progress.entityId,
+      mob:progress.mob,why:'Move within bounded observed reach of the original allowed hostile'};
+
     if(world.health<12)return {kind:'retreat',why:'Insufficient health for bounded target-specific combat'};
     return {kind:'fight_bound_hostile',targetId:progress.entityId,mob:progress.mob,
       why:'Continue target-bound guarded melee only while same hostile is observed'};
@@ -589,6 +593,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           outcome.proof==='safe_scout_move')) &&
       (decision.kind!=='fight_bound_hostile' ||
         (outcome.proof==='bound_hostile_death' &&
+          outcome.targetId===state.entityId && outcome.mob===state.mob)) &&
+      (decision.kind!=='approach_bound_hostile' ||
+        (outcome.proof==='bound_hostile_approach' &&
           outcome.targetId===state.entityId && outcome.mob===state.mob));
     if(ok){
       // Only CONSECUTIVE unresolved attempts should exhaust an action's

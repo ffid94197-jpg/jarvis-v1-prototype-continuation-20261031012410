@@ -5,6 +5,19 @@
  * bot.cjs checks actual world state. No arbitrary scripts or admin commands.
  */
 const {roofedRoomSteps}=require('./structure_goal.cjs');
+// A whole armor set is an owner-defined four-slot objective, not permission
+// to select arbitrary equipment or execute raw Minecraft actions.
+function armorEquipSteps(ownerText){
+ if(typeof ownerText!=='string'||ownerText.length>600)return null;
+ const s=ownerText.toLowerCase().trim().replace(/^in minecraft[, :]+/,'')
+   .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
+   .replace(/\s+in minecraft$/,'').replace(/\s+/g,' ');
+ const m=/^(?:equip|wear|put on)(?: me)? (?:a |the |my )?(?:full |complete )?(?:set of )?(leather|iron|gold|golden|diamond|netherite) (?:armor|armour)(?: set)?$/.exec(s);
+ if(!m)return null;
+ const tier=m[1]==='gold'?'golden':m[1];
+ return [['helmet','head'],['chestplate','torso'],['leggings','legs'],['boots','feet']]
+   .map(([part,destination])=>({goal:'equip',item:tier+'_'+part,destination}));
+}
 const NUMBER_WORDS=Object.freeze({a:1,an:1,one:1,two:2,three:3,four:4,five:5,
  six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,
  fourteen:14,fifteen:15,sixteen:16});
@@ -305,6 +318,17 @@ function modelGoalGrounded(q,ownerText){
     itemMention(q.block)&&has(/\b(?:wall|line|row)\b/);
   case 'farm_wheat':return has(/\b(?:farm|grow|plant|harvest)\b/)&&has(/\bwheat\b/);
   case 'sequence':{
+   const armor=armorEquipSteps(s);
+   if(armor){
+    return Array.isArray(q.steps)&&q.steps.length===4&&
+     armor.every((expected,i)=>{
+      const got=q.steps[i];
+      return got&&typeof got==='object'&&!Array.isArray(got)&&
+       Object.keys(got).length===3&&
+       Object.keys(got).every(k=>Object.hasOwn(expected,k))&&
+       Object.keys(expected).every(k=>got[k]===expected[k]);
+     });
+   }
    // Validate a model-proposed compact room plan against the *owner's*
    // exact dimensions, material and origin. Three stages must be identical
    // to the independent deterministic native recipe; no added side effects.
@@ -363,4 +387,4 @@ function modelSimpleGrounded(command,ownerText){
  };
  return Object.hasOwn(patterns,command)&&patterns[command].test(text);
 }
-module.exports={parseOwnerPrimitive,PRIMITIVE_FIELDS,GENERAL_ACTIONS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName};
+module.exports={parseOwnerPrimitive,PRIMITIVE_FIELDS,GENERAL_ACTIONS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName,armorEquipSteps};

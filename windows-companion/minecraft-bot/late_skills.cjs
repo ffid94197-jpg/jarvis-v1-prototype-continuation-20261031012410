@@ -580,15 +580,27 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const live=digest(bot,getOwner());
     if(live.wornDiamond!==true && live.wornNetherite!==true)
       return observed(false,'Four diamond or Netherite armor slots must be server-observed as worn');
-    const sword=bot.inventory.items().find(i=>i.name==='netherite_sword'||i.name==='diamond_sword');
-    if(!sword)return observed(false,'Diamond or Netherite sword not available');
-    if(bot.entity.position.distanceTo(dragon.position)>5){
+    const sword=bot.inventory.items().find(i=>
+      i.name==='netherite_sword'||i.name==='diamond_sword')||
+      (['netherite_sword','diamond_sword'].includes(bot.heldItem?.name)?bot.heldItem:null);
+    if(!sword)return observed(false,'Diamond or Netherite sword not physically owned');
+    if(!bot.entity?.position)return observed(false,'Player position not observed for dragon battle');
+    const distance=bot.entity.position.distanceTo(dragon.position);
+    if(distance>54)return observed(false,'Dragon outside maximum actual bow range');
+    if(distance>5){
       return shootVisibleEntity(dragon,epoch);
     }
-    await bot.equip(sword,'hand');bot.attack(dragon);check(epoch);
-    noteDragonAttack(session,dragon);
+    if(bot.health<10)return observed(false,'Health too low for melee at dragon perch');
+    if(bot.heldItem?.name!==sword.name)await bot.equip(sword,'hand');
+    check(epoch);
+    const current=bot.entities?.[dragon.id];
+    if(!current?.position||current.name!=='ender_dragon' ||
+       bot.entity.position.distanceTo(current.position)>5)
+      return observed(false,'Original observed Dragon changed before actual melee strike');
+    bot.attack(current);check(epoch);
+    noteDragonAttack(session,current);
     await delay(350);check(epoch);
-    return observed(true,'Melee attack dispatched at visible dragon; death not claimed','dragon_seen');
+    return observed(true,'Bounded melee attack dispatched at the observed Dragon; no damage or death claimed','dragon_seen');
   }
   async function destroyCrystal(epoch){
     const c=bot.nearestEntity(e=>e?.name==='end_crystal' && e?.position);

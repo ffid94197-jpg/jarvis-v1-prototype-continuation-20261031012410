@@ -491,14 +491,48 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
   }
   async function destroyCrystal(epoch){
     const c=bot.nearestEntity(e=>e?.name==='end_crystal' && e?.position);
-    if(!c)return observed(false,'No End crystal observed');
-    if(bot.entity.position.distanceTo(c.position)>4.5){
-      const shot=await shootVisibleEntity(c,epoch);
-      if(!shot.ok)return shot;
-      return observed(!bot.entities?.[c.id],!bot.entities?.[c.id]?'Crystal gone after bow shot':'Shot fired; crystal destruction not yet verified');
+    if(!c||!bot.entity?.position)return observed(false,'No End crystal observed');
+    check(epoch);
+    let current=bot.entities?.[c.id];
+    if(!current?.position||current.name!=='end_crystal')
+      return observed(false,'Crystal identity changed before controlled attack');
+    // End crystals explode on close-range impact. NEVER melee a crystal in
+    // survival, even when the current weapon is powerful. Reuse physically
+    // observed standable terrain to retreat before any bounded bow shot.
+    if(bot.entity.position.distanceTo(current.position)<9){
+      const here=bot.entity.position.clone();
+      const safe=surveyTargets(bot,here,Vec3).filter(p=>
+        p.distanceTo(here)>=3 && p.distanceTo(current.position)>=10);
+      if(!safe.length)return observed(false,
+        'No observed safe standoff for End crystal; refusing self-damaging melee attack');
+      let separated=false;
+      for(const site of safe.slice(0,4)){
+        check(epoch);
+        try{
+          await move(site,2,epoch,16000);
+          const live=bot.entities?.[c.id];
+          if(live?.name==='end_crystal' && live.position &&
+             bot.entity.position.distanceTo(live.position)>=9){
+            separated=true;break;
+          }
+        }catch(err){check(epoch);}
+      }
+      if(!separated)return observed(false,
+        'Could not physically reach a safe bow position; crystal left untouched');
     }
-    bot.attack(c);await delay(350);check(epoch);
-    return observed(!bot.entities?.[c.id],'End crystal removal '+(!bot.entities?.[c.id]?'observed':'unverified'));
+    check(epoch);
+    current=bot.entities?.[c.id];
+    if(!current?.position||current.name!=='end_crystal')
+      return observed(false,'Crystal disappeared before ranged attack; destruction unproven');
+    if(bot.entity.position.distanceTo(current.position)<9)
+      return observed(false,'Crystal still too close to safely attack');
+    const shot=await shootVisibleEntity(current,epoch);
+    if(!shot.ok)return shot;
+    await delay(250);check(epoch);
+    const destroyed=!bot.entities?.[c.id];
+    return observed(destroyed,destroyed?
+      'Server no longer reports the selected crystal after a verified ranged shot':
+      'Verified survival arrow consumed, but crystal destruction still unproven');
   }
   async function smithGear(plan,epoch){
     if(!NETHERITE.includes(plan.item) || plan.base!==plan.item.replace('netherite_','diamond_'))

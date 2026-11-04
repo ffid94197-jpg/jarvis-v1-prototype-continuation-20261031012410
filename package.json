@@ -60,6 +60,7 @@
     "test:minecraft-native-combat": "node windows-companion/minecraft-bot/verify_native_combat_offline.cjs",
     "test:minecraft-expanded-materials": "node windows-companion/minecraft-bot/verify_expanded_materials_offline.cjs",
     "test:minecraft-generic-survey-recovery": "node windows-companion/minecraft-bot/verify_generic_survey_recovery_offline.cjs",
+    "test:minecraft-durable-structure": "node windows-companion/minecraft-bot/verify_durable_structure_offline.cjs",
     "test:minecraft-pathfinder-lifecycle": "node windows-companion/minecraft-bot/verify_pathfinder_lifecycle_offline.cjs && node windows-companion/minecraft-bot/verify_pathfinder_regression_offline.cjs",
     "test:minecraft-bridge-e2e": "node windows-companion/minecraft-bot/verify_mine_ai_mcp_live_bridge.cjs",
     "verify:v1-release": "node scripts/verify-v1-gates.mjs",

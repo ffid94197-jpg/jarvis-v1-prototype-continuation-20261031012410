@@ -11,7 +11,7 @@ const COUNT='(?:\\d{1,2}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|e
 const coord='(-?\\d{1,8})[\\s,]+(-?\\d{1,8})[\\s,]+(-?\\d{1,8})';
 const validItem=/^[a-z0-9_]{1,64}$/;
 function itemName(value){
- if(typeof value!=='string')return null;
+ if(typeof value!=='string'||/\b(?:stack|stacks|some|many|several|lots|enough|all)\b/i.test(value))return null;
  let s=value.toLowerCase().trim().replace(/[\s-]+/g,'_');
  // Many vanilla IDs are intentionally plural; a blind trailing-'s'
  // removal changes oak_planks to the nonexistent oak_plank.
@@ -28,7 +28,7 @@ const amount=v=>/^\d+$/.test(v)?Number(v):NUMBER_WORDS[v];
 const point=m=>({x:Number(m[1]),y:Number(m[2]),z:Number(m[3])});
 function parseOwnerPrimitive(text){
  if(typeof text!=='string'||text.length>600)return null;
- const s=text.toLowerCase().trim().replace(/\s+/g,' ');
+ const s=text.toLowerCase().trim().replace(/\s+/g,' ').replace(/\s+(?:for me|please)$/,'');
  if(/\b(?:don't|do not|never|must not|not to|without)\b/.test(s))return null;
  // Coordinates must come from the owner's actual words, not the model's guess.
  let m=new RegExp('^(?:go|walk|move|travel|navigate)(?: to)? (?:coordinates? )?'+coord+'$').exec(s);

@@ -456,6 +456,12 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         :{kind:'survey_wood',index:state.steps,
           why:'Two failed tree approaches: scout fresh safe ground before retrying wood'};
     }
+    if(d.kind==='place_table'&&(state.failures.place_table||0)>=2){
+      d=(state.milestones.workstationSurveyTrips||0)>=6?
+        {kind:'blocked',why:'Six verified alternate crafting work areas exhausted; workstation cannot safely be placed'}:
+        {kind:'survey_workstation',index:state.steps,
+         why:'Failed workstation placement: search different safe loaded work area before retrying'};
+    }
     state.lastDecision=d;
     if(d.kind==='complete'){state.status='complete';state.why=d.why;}
     if(d.kind==='blocked'){state.status='blocked';state.why=d.why;}
@@ -467,7 +473,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     const ok=outcome?.ok===true && outcome?.verified===true &&
       (decision.kind!=='survey_generic'||(
         SAFE_GENERIC_RESOURCES.has(decision.resource)&&
-        outcome.proof==='generic_survey_move'));
+        outcome.proof==='generic_survey_move')) &&
+      (decision.kind!=='survey_workstation' ||
+        outcome.proof==='workstation_scout_move');
     if(ok){
       // Only CONSECUTIVE unresolved attempts should exhaust an action's
       // bounded retry budget. Previously verified success left old failures
@@ -505,6 +513,12 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         trips[material]=Math.min(8,(Number.isInteger(trips[material])?trips[material]:0)+1);
         state.milestones.genericSurveyTrips=trips;
         state.failures.mine_generic=0;
+      }
+      if(decision.kind==='survey_workstation'){
+        state.milestones.workstationSurveyTrips=Math.min(6,
+          (Number.isInteger(state.milestones.workstationSurveyTrips)?
+            state.milestones.workstationSurveyTrips:0)+1);
+        state.failures.place_table=0;
       }
       if(decision.kind==='survey_wood'){
         state.milestones.woodSurveyTrips=(state.milestones.woodSurveyTrips||0)+1;

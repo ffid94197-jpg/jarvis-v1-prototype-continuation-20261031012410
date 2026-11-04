@@ -518,6 +518,17 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           break;
         }
         const stage=state.sequence[state.sequenceIndex];
+        // autoTick compiles the LIVE Minecraft recipe catalog only for the
+        // previously active craft/equip stage. When a stage has just been
+        // proven and the sequence index advances during this same tick, the
+        // next item may have a completely different versioned recipe.
+        // Yield one observation tick rather than using stale recipe evidence
+        // to falsely block a valid multi-stage owner instruction.
+        if(n>0 && ['craft','equip'].includes(stage.goal) &&
+           world.recipeCatalog?.root!==stage.item){
+          d={kind:'wait',why:'Refresh live recipe catalog for next authorized sequence item'};
+          break;
+        }
         const stageWorld=stage.goal==='build'?
           {...world,buildCells:world.buildCellsByStage?.[state.sequenceIndex]}:
           stage.goal==='build_volume'?

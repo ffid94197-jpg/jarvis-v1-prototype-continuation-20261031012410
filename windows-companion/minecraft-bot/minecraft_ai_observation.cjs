@@ -3,8 +3,8 @@
  * No model calls, network effects or game mutations. Derives solely from a
  * Mineflayer digest and optional loaded block positions.
  */
-const INTERACTIVE=/^(?:chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|crafting_table|furnace|smithing_table)$/;
-const INTERESTING=/^(?:[a-z_]+_log|stone|cobblestone|deepslate|cobbled_deepslate|(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore|crafting_table|furnace|smithing_table|chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|nether_portal|end_portal_frame)$/;
+const INTERACTIVE=/^(?:chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|crafting_table|furnace|smithing_table|enchanting_table)$/;
+const INTERESTING=/^(?:[a-z_]+_log|stone|cobblestone|deepslate|cobbled_deepslate|(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore|crafting_table|furnace|smithing_table|enchanting_table|chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|nether_portal|end_portal_frame)$/;
 // Small, deliberately bounded sample of everyday loaded blocks for
 // general-purpose Minecraft tasks. Never mine blindly or infer world terrain.
 const GENERAL=/^(?:dirt|grass_block|sand|red_sand|gravel|clay|netherrack|mud|coarse_dirt|rooted_dirt|snow|snow_block|cobblestone|[a-z_]+_planks|[a-z_]+_wool|[a-z_]+_log)$/;
@@ -75,6 +75,7 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay'){
     dragonDeadObserved:world.dragonDeadObserved===true,
     exitPortalPresent:world.exitPortalPresent===true,dragonPresent:world.dragonPresent===true,
     threats:Array.isArray(world.threats)?world.threats.slice(0,2):[],
+    villagers:Array.isArray(world.villagers)?world.villagers.slice(0,2):[],
     nearbyBlocks:Array.isArray(nearby)?nearby.slice(0,12):[],lastAction:String(lastAction).slice(0,100)
   };
   let result=JSON.stringify(slim);
@@ -82,6 +83,7 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay'){
   // trim optional facts first so evidence remains well-formed.
   while(result.length>1750 && slim.nearbyBlocks.length){slim.nearbyBlocks.pop();result=JSON.stringify(slim);}
   while(result.length>1750 && ordered.length>8){ordered.pop();slim.inventory.raw=Object.fromEntries(ordered);result=JSON.stringify(slim);}
+  if(result.length>1750){slim.villagers=[];result=JSON.stringify(slim);}
   if(result.length>1750){slim.threats=[];slim.lastAction='';result=JSON.stringify(slim);}
   if(result.length>1750)throw Error('Minecraft observation too large to attest');
   return result;

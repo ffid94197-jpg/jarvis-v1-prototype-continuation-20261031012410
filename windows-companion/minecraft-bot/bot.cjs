@@ -1220,7 +1220,7 @@ bot.on('chat',(username,message)=>{
   // Legacy one-word commands cannot consume arbitrary owner modifiers:
   // "follow the dragon" must not silently become "follow the owner".
   if(match[2] && ['follow','come','stay','guard','jump','look','status','inventory',
-                   'observe','auto_status','auto_resume','collect_wood'].includes(cmd)){
+                   'observe','auto_status','auto_resume','resume','collect_wood'].includes(cmd)){
     freeForm();return;
   }
   const normalized=cmd==='gather'?'collect_wood':cmd==='wait'?'stay':cmd;

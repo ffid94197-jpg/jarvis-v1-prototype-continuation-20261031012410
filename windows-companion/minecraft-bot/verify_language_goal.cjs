@@ -14,6 +14,10 @@ ok(L.directIntent('Can you please protect me?').command.goal==='guard','polite v
 ok(L.directIntent('Could you craft 2 chests?').command.item==='chest','polite natural craft');
 ok(L.directIntent('mine 6 diamonds').command.resource==='diamond','natural gather');
 ok(L.directIntent('collect 7 iron ingots').command.resource==='iron_ingot','natural iron-ingot alias');
+ok(L.directIntent('gather coal').command.resource==='coal','natural coal request without a numeric command');
+ok(L.directIntent('get me some logs').command.targetCount===1,'natural resource request defaults to one safe unit');
+ok(L.directIntent('make me a stone pickaxe').command.item==='stone_pickaxe','natural recipe request defaults to one item');
+ok(L.directIntent('craft an iron helmet').command.item==='iron_helmet','natural armor recipe request');
 ok(L.directIntent('make 2 chests').command.item==='chest','natural craft');
 ok(L.directIntent('Could you please make me 3 torches?').command.item==='torch','natural plural torch craft');
 ok(L.directIntent('do not gather wood').ok===false,'negation fail closed');

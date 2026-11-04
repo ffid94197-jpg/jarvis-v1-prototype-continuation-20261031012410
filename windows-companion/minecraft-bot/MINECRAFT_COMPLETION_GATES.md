@@ -181,3 +181,10 @@ Separately, the Internet-corpus validator's Node.js 22.16.0 regression harness p
 - New live Java smoke gate: .github/workflows/postmerge-real-minecraft-windows.yml installs local Ollama qwen2.5:1.5b, starts official Mojang vanilla Java 1.21.1 survival, and requires a normal-language owner sentence to be interpreted as stone_age before actual Mineflayer wood/stone progression. The current natural-language live run is PENDING; do not claim it passed until the saved workflow log shows both the interpreted goal and server-backed stone pickaxe+sword.
 - Scope boundary: natural language is the owner interface; it does not create capabilities the executor does not implement. The action vocabulary remains finite. For example, arbitrary house architecture, a river-side build plan, novel recipes, trading, or every possible biome task are not yet accepted. Unsupported or ambiguous goals must fail closed rather than invent coordinates or pretend to complete them.
 - Full acceptance still requires one uninterrupted real empty-inventory Java survival campaign with server-observed Ender Dragon death, End return, and four equipped Netherite armor pieces plus held Netherite sword. Natural-language admission, an Ollama test, or a stone-age smoke does not satisfy that final campaign.
+
+## 2026-11-04 build-only additions (live acceptance pending)
+
+- Expanded the native recipe allowlist for wooden/stone/iron/diamond tools and armor, common utility recipes, coal acquisition, and resource-aware crafting.
+- Added bounded natural-language defaults for common gathering and crafting requests, plus a sanitized observed-world context for the local model.
+- Added simple wall and flat-platform construction, derived from live player position/facing and limited to owned blocks on observed safe support. Unsupported bridges, floating builds, complex houses, redstone, trading and enchanting remain unsupported.
+- These changes are implementation work only. Do not mark Minecraft complete until real vanilla Java acceptance proves autonomous survival progression, actual Ender Dragon death, End return, and four worn Netherite armor pieces plus held Netherite sword.

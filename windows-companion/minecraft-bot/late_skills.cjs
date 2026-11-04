@@ -300,13 +300,59 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
   async function enterPortal(targetDimension,epoch){
     const previous=String(bot.game?.dimension||'');
     if(previous.includes(targetDimension))return observed(true,'Already in '+targetDimension);
+    if(!['nether','overworld'].includes(targetDimension))
+      return observed(false,'Unknown or unauthorized portal destination');
     let portal=lookup(bot,['nether_portal'],36);
     if(!portal){
       const saved=targetDimension==='overworld'?session.netherPortalPosition:session.homePortalPosition;
-      if(saved){await move(saved,3,epoch,30000);portal=lookup(bot,['nether_portal'],36);}
+      if(saved){
+        const here=bot.entity?.position?.clone();
+        if(!here)return observed(false,'Cannot locate player to recover saved portal');
+        if(here.distanceTo(saved)>26){
+          // Portals remembered from real prior visits may be hundreds of
+          // blocks away. Do not issue a blind 30-second pathfinder request
+          // to unknown, unloaded ground: advance in short physically
+          // observed stages, never claiming a dimension change from travel.
+          const vx=saved.x-here.x,vz=saved.z-here.z;
+          const length=Math.hypot(vx,vz);
+          if(length<1)return observed(false,'Saved portal position has no safe horizontal bearing');
+          const heading={x:vx/length,z:vz/length};
+          const threats=Object.values(bot.entities||{}).filter(e=>e?.position &&
+            (ALLOWED_HOSTILES.has(e.name)||['creeper','ghast','wither','piglin_brute'].includes(e.name)));
+          const candidates=surveyTargets(bot,here,Vec3).map(p=>{
+            const along=(p.x-here.x)*heading.x+(p.z-here.z)*heading.z;
+            const sideways=Math.abs((p.x-here.x)*heading.z-(p.z-here.z)*heading.x);
+            return {p,along,sideways};
+          }).filter(x=>x.along>=4 && x.sideways<=Math.max(5,x.along*.9) &&
+            !threats.some(t=>x.p.distanceTo(t.position)<8))
+            .sort((a,b)=>b.along-a.along||a.sideways-b.sideways).slice(0,4);
+          for(const {p} of candidates){
+            check(epoch);
+            try{
+              await move(p,2,epoch,18000);check(epoch);
+              const actual=bot.entity?.position;
+              const advance=actual?
+                (actual.x-here.x)*heading.x+(actual.z-here.z)*heading.z:0;
+              if(actual&&advance>=3&&actual.distanceTo(p)<=4)
+                return observed(true,'Physically approached saved portal via loaded safe waypoint; dimension unchanged',
+                  'portal_waypoint');
+            }catch(error){check(epoch);}
+          }
+          return observed(false,'No loaded, safe route toward previously observed portal');
+        }
+        // Recheck the actual loaded block. A remembered coordinate is not
+        // proof the portal survived a block update or chunk unload.
+        const storedBlock=bot.blockAt(saved);
+        if(!storedBlock)
+          return observed(false,'Saved portal location is not in loaded world data');
+        await move(saved,3,epoch,30000);
+        portal=lookup(bot,['nether_portal'],36);
+      }
     }
     if(!portal)return observed(false,'No observed Nether portal in loaded range or stored waypoint');
     session.portalPosition=portal.position.clone();
+    if(targetDimension==='nether' && previous.includes('overworld'))
+      session.homePortalPosition=portal.position.clone();
     await move(portal.position,2,epoch,18000);
     // Minecraft requires remaining inside an existing portal for a transition.
     let arrived=false;

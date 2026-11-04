@@ -65,6 +65,7 @@
     "test:minecraft-roof-placement": "node windows-companion/minecraft-bot/verify_roof_placement_offline.cjs",
     "test:minecraft-workstation-recovery": "node windows-companion/minecraft-bot/verify_workstation_recovery_offline.cjs",
     "test:minecraft-verified-melee": "node windows-companion/minecraft-bot/verify_melee_selection_offline.cjs",
+    "test:minecraft-roofed-room": "node windows-companion/minecraft-bot/verify_roofed_room_composition_offline.cjs",
     "test:minecraft-pathfinder-lifecycle": "node windows-companion/minecraft-bot/verify_pathfinder_lifecycle_offline.cjs && node windows-companion/minecraft-bot/verify_pathfinder_regression_offline.cjs",
     "test:minecraft-bridge-e2e": "node windows-companion/minecraft-bot/verify_mine_ai_mcp_live_bridge.cjs",
     "verify:v1-release": "node scripts/verify-v1-gates.mjs",

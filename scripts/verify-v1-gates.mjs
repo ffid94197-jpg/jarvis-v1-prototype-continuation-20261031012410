@@ -46,6 +46,7 @@ const checks=[
  ['MINECRAFT-NATURAL-LANGUAGE',['scripts/verify-minecraft-natural-language-routing.cjs']],
  ['MINECRAFT-FREEFORM-OWNER-CHAT',['windows-companion/minecraft-bot/verify_freeform_owner_chat_offline.cjs']],
  ['MINECRAFT-GENERAL-PLAY-INTENT',['windows-companion/minecraft-bot/verify_general_play_intent_offline.cjs']],
+ ['MINECRAFT-GENERAL-OBSERVATION',['windows-companion/minecraft-bot/verify_general_observation_offline.cjs']],
  // One launcher authorization context must satisfy BOTH the startup preflight
  // and the runtime companion gate. Guards the observed defect where an
  // owner-authorized minecraft_companion_join was denied three times because the

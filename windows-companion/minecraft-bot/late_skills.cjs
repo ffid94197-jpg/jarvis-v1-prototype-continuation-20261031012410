@@ -326,7 +326,8 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     if(arrived && targetDimension==='overworld'){
       session.homePortalPosition=lookup(bot,['nether_portal'],32)?.position?.clone()||bot.entity.position.clone();
     }
-    return observed(arrived,arrived?'Observed server dimension: '+bot.game.dimension:'Portal transition not verified');
+    return observed(arrived,arrived?'Observed server dimension: '+bot.game.dimension:'Portal transition not verified',
+      arrived?(targetDimension==='nether'?'nether_entered':'overworld_return'):undefined);
   }
   async function hunt(name,drop,epoch){
     // Only the existing explicitly planned survival resource targets are

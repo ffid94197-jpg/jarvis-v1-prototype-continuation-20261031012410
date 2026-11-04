@@ -133,6 +133,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     if(!furnace)return observed(false,'Furnace not loaded/in reach');
     const before=count(bot,output);
     const ui=await bot.openFurnace(furnace);
+    let loadedByThisAction=false;
     try{
       // Check existing furnace contents before taking more ingredients.
       // One item at a time prevents a mission from abandoning a bulk input
@@ -140,7 +141,15 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       if(!ui.outputItem() && !ui.inputItem()){
         const material=item(bot,input);
         if(!material)return observed(false,'No '+input+' in inventory or existing furnace input');
+        const rawBefore=count(bot,input);
         await ui.putInput(material.type,null,1);
+        check(epoch);
+        // A pre-existing output in somebody else's furnace is genuine loot,
+        // but it is NOT proof that this current owner's SMELT goal produced
+        // that item. Credit the action only when a real input item was
+        // consumed from this bot's inventory into this furnace.
+        loadedByThisAction=count(bot,input)<rawBefore &&
+          (ui.inputItem()?.name===input || ui.outputItem()?.name===output);
       }
       if(!ui.outputItem() && !ui.fuelItem()){
         const fuel=bot.inventory.items().find(i=>
@@ -155,7 +164,8 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
           for(let attempt=0;attempt<18;attempt++){
             check(epoch);
             if(count(bot,output)>before)
-              return observed(true,`${output} real inventory ${before} -> ${count(bot,output)}`);
+              return observed(true,`${output} real inventory ${before} -> ${count(bot,output)}`,
+                loadedByThisAction?'smelt_output':undefined);
             await delay(140);
           }
           return observed(false,`${output} output withdrawn but inventory receipt still unverified`);

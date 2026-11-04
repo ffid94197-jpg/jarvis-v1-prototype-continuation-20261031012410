@@ -32,13 +32,18 @@ function smeltPlan(world,progress,delegate){
  if(!validSmeltSpec(spec))return action('blocked','Invalid or unsupported owner-approved furnace output');
  const recipe=SMELT_RECIPES[spec.item],inv=world?.inventory||{};
  const current=quantity(inv,spec.item);
- if(current>=spec.targetCount)
-  return action('complete','Physical survival inventory has '+current+' verified '+spec.item);
+ const created=Number.isSafeInteger(progress?.milestones?.smeltedOutput)?
+   progress.milestones.smeltedOutput:0;
+ if(created>=spec.targetCount && current>=spec.targetCount)
+  return action('complete','Server inventory contains '+current+' '+spec.item+
+    ' and this current smelting stage has '+created+' physically verified furnace outputs');
+ if(created>=spec.targetCount && current<spec.targetCount)
+  return action('blocked','Verified smelting output was later consumed/lost; physical inventory no longer meets requested quantity');
  if(quantity(inv,recipe.input)<1){
   if(!recipe.source || typeof delegate!=='function')
    return action('blocked','Missing actual '+recipe.input+' for '+spec.item+
      '; no owner-approved generic raw material acquisition exists');
-  const needed=Math.min(64,spec.targetCount-current);
+  const needed=Math.min(64,spec.targetCount-created);
   const subgoal=delegate('gather',{resource:recipe.source,targetCount:needed});
   if(subgoal?.kind&&subgoal.kind!=='complete')return subgoal;
   return action('blocked','Source ingredient unavailable after bounded acquisition plan');

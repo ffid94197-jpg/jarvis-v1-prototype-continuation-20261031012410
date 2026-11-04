@@ -1320,7 +1320,7 @@ async function action(q){
       }
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
-      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip'].includes(q.goal) &&
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','smelt','equip'].includes(q.goal) &&
          bot.game?.gameMode!=='survival')
         return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an
@@ -1332,7 +1332,7 @@ async function action(q){
       bot.jarvisStoneScoutCount=0;
        // Evidence from an earlier owner mission is NOT proof for a new run.
        resetDragon(lateSkills.session);
-      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='netherite_armor_run'||q.goal==='netherite_gear_run'||q.goal==='shelter'||q.goal==='companion'||q.goal==='gather'||q.goal==='sequence'?21600:300),goalSpecFromCommand(q));lastAction='Autonomous '+st.goal+' STARTED';
+      try{const st=autopilot.start(q.goal,q.durationSeconds||(q.goal==='netherite_dragon_run'||q.goal==='dragon_then_netherite_run'||q.goal==='dragon_run'||q.goal==='netherite_armor_run'||q.goal==='netherite_gear_run'||q.goal==='shelter'||q.goal==='companion'||q.goal==='gather'||q.goal==='smelt'||q.goal==='sequence'?21600:300),goalSpecFromCommand(q));lastAction='Autonomous '+st.goal+' STARTED';
         let saved=false;try{saved=missionCheckpoint.save(st);}catch{ /* Mission runs but restart recovery is unavailable. */ }
         return {ok:true,status:'Autonomous '+st.goal+' STARTED, expires in '+Math.floor((st.deadline-Date.now())/1000)+'s; '+(saved?'recoverable goal intent saved':'restart recovery unavailable')+'; verify progress via auto_status'};
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}

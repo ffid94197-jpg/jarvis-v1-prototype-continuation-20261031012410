@@ -564,6 +564,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         d=decide(stage.goal,stageWorld,state.failures,{...state,...stage});
         if(d.kind!=='complete')break;
         state.sequenceIndex++;
+        // Each ordered furnace stage must earn its own actual verified
+        // outputs; earlier stage receipts never satisfy a later request.
+        state.milestones.smeltedOutput=0;
         state.failures={};
         // An arrival proof for a prior target must never prove the next one.
         state.milestones.travelArrivalVerified=false;
@@ -679,6 +682,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         outcome.proof==='dragon_approach') &&
       (decision.kind!=='bridge_end_gap' ||
         outcome.proof==='end_bridge_tile') &&
+      (decision.kind!=='smelt_resource' ||
+        !['smelt','sequence'].includes(state.goal) ||
+        outcome.proof==='smelt_output') &&
       (decision.kind!=='fight_bound_hostile' ||
         (outcome.proof==='bound_hostile_death' &&
           outcome.targetId===state.entityId && outcome.mob===state.mob)) &&
@@ -692,6 +698,14 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       state.failures[decision.kind]=0;
       state.successes++;
       // A verified receipt from the wrong action cannot grant a victory milestone.
+      if(decision.kind==='smelt_resource'&&outcome.proof==='smelt_output'){
+        const pending=state.goal==='smelt'?state.item:
+          state.goal==='sequence'&&state.sequence?.[state.sequenceIndex]?.goal==='smelt'?
+            state.sequence[state.sequenceIndex].item:null;
+        if(pending===decision.output)
+          state.milestones.smeltedOutput=Math.min(16,
+            (state.milestones.smeltedOutput||0)+1);
+      }
       if(decision.kind==='advance_dragon'&&outcome.proof==='dragon_approach')
         state.milestones.dragonApproachTrips=Math.min(24,
           (state.milestones.dragonApproachTrips||0)+1);

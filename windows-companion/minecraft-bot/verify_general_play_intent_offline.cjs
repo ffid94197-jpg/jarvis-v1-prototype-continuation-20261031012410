@@ -156,6 +156,44 @@ const respond=(payload)=>async()=>({ok:true,text:async()=>JSON.stringify({
   env,context:scene,fetchImpl:respond({command:'follow'})
  });
  ok(realFollow.ok&&realFollow.command.command==='follow','model owner-matched follow request admitted');
+ let contextualModelCalls=0;
+ const forbidModel=async()=>{contextualModelCalls++;throw Error('Contextual request must not invoke model');};
+ const oneChest=JSON.stringify({joined:true,busy:false,nearbyBlocks:[
+  {name:'chest',x:2,y:64,z:3},{name:'oak_door',x:3,y:64,z:3}]});
+ const chest=await interpretOwnerInstruction('Could you open the chest?',{
+  env:{},context:oneChest,fetchImpl:forbidModel
+ });
+ ok(chest.ok&&chest.command.command==='interact_block'&&
+    chest.command.position.x===2&&chest.command.position.z===3,
+    'single observed chest resolves to typed block interaction without model');
+ const door=await interpretOwnerInstruction('Please open that door',{
+  env:{},context:oneChest,fetchImpl:forbidModel
+ });
+ ok(door.ok&&door.command.position.x===3,
+    'owner-mentioned door resolves to correct observed position');
+ const multiple=await interpretOwnerInstruction('Open the chest',{
+  env:{},context:JSON.stringify({joined:true,busy:false,nearbyBlocks:[
+   {name:'chest',x:2,y:64,z:3},{name:'chest',x:5,y:64,z:4}]}),
+  fetchImpl:forbidModel
+ });
+ ok(!multiple.ok&&/Multiple matching blocks/.test(multiple.error),
+    'multiple observed chests require disambiguation, not guessing');
+ const absent=await interpretOwnerInstruction('Open the chest',{
+  env:{},context:oneChest.replace('"chest"','"stone"'),fetchImpl:forbidModel
+ });
+ ok(!absent.ok&&/No matching block/.test(absent.error),
+    'missing target is blocked without inventing coordinates');
+ const busyChest=await interpretOwnerInstruction('Open the chest',{
+  env:{},context:oneChest.replace('"busy":false','"busy":true'),fetchImpl:forbidModel
+ });
+ ok(!busyChest.ok&&/fresh idle joined/.test(busyChest.error),
+    'busy bot refuses concurrent object interaction');
+ const negated=await interpretOwnerInstruction("Don't open the chest",{
+  env:{},context:oneChest,fetchImpl:forbidModel
+ });
+ ok(!negated.ok,'negative owner request cannot be executed');
+ ok(contextualModelCalls===0,'unique contextual request never invokes model');
+
 
  // Execute the REAL craftNamed function from bot.cjs with Mineflayer-shaped
  // inventory/recipe stubs, without making any packets. This checks the

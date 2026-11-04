@@ -497,7 +497,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         state.milestones.travelArrivalVerified=false;
       }
       if(!d)d={kind:'blocked',why:'No valid stage decision'};
-    }else d=decide(state.goal,world,state.failures,state);
+    }else if(!d) d=decide(state.goal,world,state.failures,state);
     // Replan from a different *observed safe* travel waypoint after repeated
     // pathfinder failure. Never change the owner's destination or silently
     // declare arrival from a successful detour.

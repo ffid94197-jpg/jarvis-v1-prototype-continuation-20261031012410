@@ -255,7 +255,7 @@ function modelGoalGrounded(q,ownerText,context=''){
  // into one model-selected subgoal. The typed sequence controller must
  // verify every constituent stage independently.
  const multiPart=has(/\b(?:then|after that|afterwards?|next)\b/)||
-   has(/\band(?:\s+then)?\s+(?:mine|craft|make|build|gather|collect|equip|wear|defeat|beat|fight|travel|go|place)\b/);
+   has(/\band(?:\s+then)?\s+(?:mine|craft|smelt|cook|bake|refine|make|build|gather|collect|equip|wear|defeat|beat|fight|travel|go|place)\b/);
  // A full Netherite armor AND sword request is one explicit loadout
  // outcome handled by the native smithing goal. It is not an unrelated
  // model-invented two-step sequence. All other conjunctions still require
@@ -429,14 +429,21 @@ function modelGoalGrounded(q,ownerText,context=''){
    }
    if(!Array.isArray(q.steps)||!(
    has(/\b(?:then|after that|next)\b/)||
-   has(/\band\s+(?:mine|craft|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b/)
+   has(/\band\s+(?:mine|craft|smelt|cook|bake|refine|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b/)
   ))return false;
-   const pieces=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
+   const pieces=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|smelt|cook|bake|refine|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
    if(pieces.length!==q.steps.length)return false;
    return q.steps.every((step,i)=>{
     const normalized={command:'auto_goal',...step};
     if(step.goal==='equip'&&step.destination!==undefined){
       normalized.destinationSlot=step.destination;delete normalized.destination;
+    }
+    if(i>0&&step.goal==='smelt'&&
+       /^(?:smelt|cook|bake|refine) (?:it|them)$/.test(pieces[i].trim())){
+      const prior=q.steps[i-1],recipe=SMELT_RECIPES[step.item];
+      return prior?.goal==='gather'&&recipe?.source===prior.resource&&
+        step.targetCount===prior.targetCount&&
+        Number.isInteger(step.targetCount)&&step.targetCount>=1&&step.targetCount<=16;
     }
     return modelGoalGrounded(normalized,pieces[i]);
    });

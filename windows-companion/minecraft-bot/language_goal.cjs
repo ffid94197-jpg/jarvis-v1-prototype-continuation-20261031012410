@@ -116,7 +116,14 @@ function directIntent(raw){
    return fail('Sequence must contain two to eight clear gameplay objectives');
   const steps=[];
   for(const part of parts){
-   const candidate=directIntent(part);
+   let candidate=directIntent(part);
+   // A single-item request like "craft a chest" uses the immediate
+   // craft_item primitive; inside a longer owner mission only promote
+   // validated known recipe goals to the durable stage controller.
+   if(candidate?.ok && candidate.command?.command==='craft_item' &&
+      Object.hasOwn(RECIPES,candidate.command.item))
+     candidate=canonicalIntent({command:'auto_goal',goal:'craft',
+       item:candidate.command.item,targetCount:candidate.command.count});
    if(!candidate?.ok || candidate.command?.command!=='auto_goal')
     return fail('Cannot safely build a long-horizon sequence from unsupported subgoals');
    const {command,durationSeconds,destinationSlot,...step}=candidate.command;

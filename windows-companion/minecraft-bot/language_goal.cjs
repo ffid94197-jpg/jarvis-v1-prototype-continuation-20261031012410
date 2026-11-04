@@ -117,7 +117,7 @@ function directIntent(raw){
  // three existing validated durable build_volume stages: floor, front
  // doorway walls, then roof. The world origin is owner-provided, never
  // invented by an LLM or an untrusted game sign.
- const room=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2}) by (\d{1,2}) ([a-z_ ]{2,35}) (?:roofed room|roofed shelter|shelter) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(s);
+ const room=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2}) by (\d{1,2}) ([a-z_ ]{2,35}?) (?:roofed room|roofed shelter|shelter) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(s);
  if(room){
   const item=itemName(room[4]);
   const steps=roofedRoomSteps({position:{

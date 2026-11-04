@@ -162,7 +162,7 @@ function directIntent(raw){
  }
  // A site-free dimensioned shelter is a native fixed-geometry objective,
  // not permission to invent coordinates or a new arbitrary material.
- const smallRoom=/^(?:build|construct|make)(?: me)? (?:a |the )?([34]) by ([34])(?: small| simple| basic)? (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?(?: in minecraft)?$/.exec(s);
+ const smallRoom=/^(?:build|construct|make)(?: me)? (?:a |the )?([34])\s*(?:by|x|×)\s*([34])(?: small| simple| basic)? (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?(?: in minecraft)?$/.exec(s);
  if(smallRoom)return canonicalIntent({command:'auto_goal',goal:'shelter',
    width:Number(smallRoom[1]),depth:Number(smallRoom[2])});
  const armorSteps=armorEquipSteps(s);

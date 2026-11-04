@@ -132,10 +132,12 @@ function directIntent(raw){
   return canonicalIntent({command:'auto_status'});
  // Standalone natural smelting uses the native recipe map; the owner
  // never needs to memorize a keyword or supply furnace block coordinates.
- const cook=new RegExp('^(?:smelt|refine|cook|bake)(?: me)? (?:('+COUNT_PATTERN+') )?(raw iron|iron ore|iron ingots?|raw gold|gold ore|gold ingots?|raw copper|copper ore|copper ingots?|ancient debris|netherite scraps?|sand|glass|cobblestone|stone|raw beef|beef|raw porkchop|porkchop|raw mutton|mutton|raw chicken|chicken|raw rabbit|rabbit|potatoes|potato|baked potatoes?)(?: (?:into|to make|for) ([a-z_ ]{2,35}))?(?: in minecraft)?$').exec(s);
+ const cookText=s.replace(/\s+in minecraft$/,'');
+ const cook=new RegExp('^(?:smelt|refine|cook|bake)(?: me)? (?:('+COUNT_PATTERN+') )?(raw iron|iron ore|iron ingots?|raw gold|gold ore|gold ingots?|raw copper|copper ore|copper ingots?|ancient debris|netherite scraps?|sand|glass|cobblestone|stone|raw beef|beef|raw porkchop|porkchop|raw mutton|mutton|raw chicken|chicken|raw rabbit|rabbit|potatoes|potato|baked potatoes?)(?: (?:into|to make|for) ([a-z_ ]{2,35}))?$').exec(cookText);
  if(cook){
   const phrase=cook[2].replace(/^raw /,'');
-  const normalized=phrase==='glass'?phrase:phrase.replace(/s$/,'');
+  const normalized=phrase==='glass'?phrase:
+    phrase==='potatoes'?'potato':phrase.replace(/s$/,'');
   const map={
    'iron ore':'iron_ingot','iron ingot':'iron_ingot','iron':'iron_ingot',
    'gold ore':'gold_ingot','gold ingot':'gold_ingot','gold':'gold_ingot',
@@ -146,7 +148,10 @@ function directIntent(raw){
    'chicken':'cooked_chicken','rabbit':'cooked_rabbit',
    'potato':'baked_potato','potatoe':'baked_potato','baked potato':'baked_potato'
   };
-  const output=map[normalized],named=cook[3]?.trim().replace(/s$/,'')||null;
+  const output=map[normalized];
+  const rawNamed=cook[3]?.trim()||null;
+  const named=rawNamed==='glass'?rawNamed:
+    rawNamed?.replace(/potatoes$/,'potato').replace(/s$/,'')||null;
   const validName=!named || named===output?.replace(/_/g,' ') ||
     named===output?.replace('cooked_','').replace(/_/g,' ');
   if(output&&Object.hasOwn(SMELT_RECIPES,output)&&validName)

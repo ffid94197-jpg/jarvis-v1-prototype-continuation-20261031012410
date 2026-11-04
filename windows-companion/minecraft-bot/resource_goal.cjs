@@ -4,9 +4,9 @@
  * The caller must execute and verify every proposed step in the real world.
  */
 const RESOURCES=new Set(['logs','planks','sticks','cobblestone','raw_iron',
-  'iron_ingot','diamond','obsidian','flint','netherrack']);
+  'iron_ingot','diamond','obsidian','flint','netherrack','coal']);
 const ALIASES=Object.freeze({
- wood:'logs',log:'logs',stones:'cobblestone',stone:'cobblestone',
+ wood:'logs',log:'logs',stones:'cobblestone',stone:'cobblestone',coal_ore:'coal',
  diamonds:'diamond',iron:'iron_ingot',iron_ingots:'iron_ingot',rawiron:'raw_iron',
  plank:'planks',stick:'sticks'
 });
@@ -18,7 +18,7 @@ function normalizeResource(name){
 }
 const COUNTS={logs:'logs',planks:'planks',sticks:'sticks',
   cobblestone:'cobblestone',raw_iron:'rawIron',iron_ingot:'ironIngot',
-  diamond:'diamonds',obsidian:'obsidian',flint:'flint',netherrack:'netherrack'};
+  diamond:'diamonds',obsidian:'obsidian',flint:'flint',netherrack:'netherrack',coal:'coal'};
 const required=(kind,why,extra={})=>({kind,why,...extra});
 function resourceCount(world,resource){
  const inv=world?.inventory||{};
@@ -78,6 +78,10 @@ function resourcePlan(world,failures={},progress={},delegate){
    }
    return mine('mine_iron','Mine naturally generated exposed iron', 'iron');
  }
+ case 'coal':
+   if(!(inv.woodenPickaxe||inv.stonePickaxe||inv.ironPickaxe||inv.diamondPickaxe))
+     return stage('tools')||required('blocked','Missing pickaxe after tool planning');
+   return mine('mine_coal','Mine naturally generated exposed coal ore','coal');
  case 'diamond':
    if(!inv.ironPickaxe&&!inv.diamondPickaxe)
      return stage('iron_age')||required('blocked','Iron pickaxe prerequisite unresolved');

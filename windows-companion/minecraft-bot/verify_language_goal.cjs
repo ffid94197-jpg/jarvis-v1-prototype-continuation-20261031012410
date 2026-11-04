@@ -18,6 +18,9 @@ ok(L.directIntent('gather coal').command.resource==='coal','natural coal request
 ok(L.directIntent('get me some logs').command.targetCount===1,'natural resource request defaults to one safe unit');
 ok(L.directIntent('make me a stone pickaxe').command.item==='stone_pickaxe','natural recipe request defaults to one item');
 ok(L.directIntent('craft an iron helmet').command.item==='iron_helmet','natural armor recipe request');
+ok(L.directIntent('build a wall').command.goal==='wall','natural simple wall request');
+ok(L.canonicalIntent({command:'auto_goal',goal:'wall',length:5,height:3}).ok,'bounded wall intent passes same command validator');
+ok(!L.canonicalIntent({command:'auto_goal',goal:'wall',length:9,height:3}).ok,'oversized wall intent rejected');
 ok(L.directIntent('make 2 chests').command.item==='chest','natural craft');
 ok(L.directIntent('Could you please make me 3 torches?').command.item==='torch','natural plural torch craft');
 ok(L.directIntent('do not gather wood').ok===false,'negation fail closed');

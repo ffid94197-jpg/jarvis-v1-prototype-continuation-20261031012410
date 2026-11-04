@@ -8,6 +8,7 @@ const {normalizeResource}=require('./resource_goal.cjs');
 const {RECIPES}=require('./general_goal.cjs');
 const {validStep}=require('./mission_sequence.cjs');
 const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName}=require('./general_play_intent.cjs');
+const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 const SIMPLE=new Set(['follow','come','stay','guard','status','inventory','observe','auto_status','auto_stop','auto_resume']);
 const FIXED=new Set(['survive','wood','tools','explore','follow','guard','stone_age','iron_age','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run']);
 const PARAMS={
@@ -28,7 +29,7 @@ const SYSTEM=[
  'Long-horizon auto_goal craft supports selected recipes; craft_item supports any item found in the live Minecraft registry when the server-confirmed inventory contains ingredients, with bounded count 1-16.',
  'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
  'One action is never a whole mission. An action STARTED or DISPATCHED is not success; JARVIS must observe state and replan before any further effect.',
- 'Other bounded native skills: inspect_villager {entityId}, trade_villager {entityId,tradeIndex,times}, transfer_container {position,item,count,operation}, enchant_item {position,item,choice}. The owner must explicitly request the exact target, offer, direction, item, and count. Only use freshly observed villagers/blocks; NEVER invent an ID or location, consume materials without owner approval, or claim success from a dispatch.',
+ 'Other bounded native skills: inspect_villager {entityId}, trade_villager {entityId,tradeIndex,times}, transfer_container {position,item,count,operation}, enchant_item {position,item,choice}, attack_hostile {entityId,maxSwings}. Attack only a freshly observed owner-named allowed hostile, never a player, villager, passive mob, boss or creeper. An attack input is not proof of damage or death. The owner must explicitly request the exact target, offer, direction, item, and count. Only use freshly observed villagers/blocks; NEVER invent an ID or location, consume materials without owner approval, or claim success from a dispatch.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
  'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
  'build_volume requires exactly position{x,y,z}, one supported survival block, width 1-5, depth 1-5, height 1-3 and shape floor, walls or solid, maximum 64 cells. The owner must explicitly request the block and actual 2D/3D dimensions and a real origin. Floors have height 1. Do not claim arbitrary houses/roofs supported.',
@@ -175,7 +176,8 @@ function contextualIntent(text,context){
  const villageDeal=/^(?:trade|buy|purchase) (?:offer|deal|trade|option) (?:number |#)?(\d{1,2})(?: (?:from|with) (?:the )?villager)?(?: (once|twice|three times|four times))?$/.exec(instruction);
  const storage=new RegExp('^(store|deposit|put|withdraw|take|retrieve) ('+COUNT_PATTERN+') ([a-z_ ]{2,56}) (?:in|into|from) (?:the |a |that )?(chest|barrel)$').exec(instruction);
  const enchanting=/^enchant (?:my |the |a |an )?([a-z_ ]{2,56}) (?:with |using )?(?:the )?(first|second|third) (?:choice|option)$/.exec(instruction);
- if(!request&&!villagerInspect&&!villageDeal&&!storage&&!enchanting)return null;
+ const fight=/^(?:attack|fight|defeat|kill|slay) (?:the |that |a |an )?(?:nearby )?([a-z_]+(?: [a-z_]+)?)(?: (?:up to )?(\d{1,2}) (?:hits|swings|times))?$/.exec(instruction);
+ if(!request&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight)return null;
  let scene;
  try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve nearby objects without a fresh game observation');}
  if(!scene||scene.joined!==true||scene.busy!==false||!Array.isArray(scene.nearbyBlocks))
@@ -198,6 +200,17 @@ function contextualIntent(text,context){
   return re?scene.nearbyBlocks.filter(b=>b&&typeof b.name==='string'&&re.test(b.name)&&
    ['x','y','z'].every(k=>Number.isInteger(b[k]))) :[];
  };
+ if(fight){
+  const mob=fight[1].replace(/ /g,'_');
+  if(!ALLOWED_HOSTILES.has(mob))return fail('Requested entity is not an approved hostile target');
+  const targets=Array.isArray(scene.threats)?scene.threats.filter(t=>
+    t?.name===mob&&Number.isInteger(t.id)&&Number.isFinite(t.distance)&&t.distance<=3.4):[];
+  if(targets.length!==1)return fail(targets.length?
+    'Several matching hostile entities are nearby; specify the target':
+    'Named hostile not safely reachable in latest observation');
+  return canonicalIntent({command:'attack_hostile',entityId:targets[0].id,
+    maxSwings:fight[2]?Number(fight[2]):4});
+ }
  if(storage||enchanting){
   const type=storage?storage[4]:'enchanting_table',matches=findTarget(type);
   if(matches.length!==1)return fail(matches.length?'Multiple matching workstations or containers; specify coordinates':

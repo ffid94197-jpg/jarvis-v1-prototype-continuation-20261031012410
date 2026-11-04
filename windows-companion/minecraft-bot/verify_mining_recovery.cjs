@@ -28,10 +28,22 @@ const caveFloor=world({
 });
 assert.deepEqual(findExposedOre(caveFloor,['deepslate_diamond_ore'])?.stance,
  {x:1,y:-53,z:0},'Cave floor ore safely accessed from adjacent elevated stance');
+const coalOre={name:'coal_ore',position:{x:0,y:64,z:0}};
+const coalBot={findBlocks:()=>[coalOre.position],blockAt:p=>{
+ const key=`${p.x},${p.y},${p.z}`;
+ if(key==='0,64,0')return coalOre;
+ if(key==='1,64,0'||key==='1,65,0')return {name:'air',boundingBox:'empty'};
+ return {name:'stone',boundingBox:'block'};
+}};
+assert.equal(findExposedOre(coalBot,['coal_ore'])?.block,coalOre,
+ 'Exposed coal ore can be selected with a safe stance');
+const coalHazard={...coalBot,blockAt:p=>p.x===2&&p.y===64?{name:'lava',boundingBox:'empty'}:coalBot.blockAt(p)};
+assert.equal(findExposedOre(coalHazard,['coal_ore']),null,
+ 'Coal ore beside a hazardous stance is not selected');
 const controller=createController({maxSeconds:43200});
 controller.start('netherite_dragon_run',21600);
 for(let j=0;j<6;j++)controller.record({kind:'survey_ore',ore:'diamond'},
  {ok:false,verified:false,detail:'No safe loaded corridor'});
 assert.equal(controller.status().status,'running','Recoverable survey failure must not end full mission');
 assert.equal(controller.status().failures.survey_ore,6);
-console.log('MINING_RECOVERY 7/7 PASS (offline candidate selection; no Minecraft server)');
+console.log('MINING_RECOVERY 9/9 PASS (offline candidate selection; no Minecraft server)');

@@ -75,7 +75,7 @@ function lateGamePlan(world,progress={}){
       return action('enter_overworld','Return from Nether to locate End portal');
     }
     if(dimension!=='overworld')return action('blocked','Unknown game dimension '+dimension);
-    if(!m.netherPortalBuilt && !world.netherPortalNearby){
+    if(!m.netherPortalBuilt && !m.netherPortalUsed && !world.netherPortalNearby){
       if(qty(i,'obsidian')<14)return action('mine_obsidian','Collect actual obsidian');
       if(!has(i,'flint_and_steel')){
         if(!has(i,'flint'))return action('collect_flint','Mine gravel for flint');
@@ -193,7 +193,7 @@ function lateGamePlan(world,progress={}){
   const missing=wantedNetherite.filter(n=>!has(i,n));
   if(missing.length){
     // Existing portal may be reconstructed from saved position after returning.
-    if(!m.netherPortalBuilt && !world.netherPortalNearby){
+    if(!m.netherPortalBuilt && !m.netherPortalUsed && !world.netherPortalNearby){
       if(qty(i,'obsidian')<14)return action('mine_obsidian','Mine fourteen actual obsidian blocks with diamond pickaxe');
       if(!has(i,'flint_and_steel')){
         if(!has(i,'flint'))return action('collect_flint','Mine gravel until real flint drops');

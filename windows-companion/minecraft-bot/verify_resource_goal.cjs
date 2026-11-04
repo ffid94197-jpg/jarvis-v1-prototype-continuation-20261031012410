@@ -16,6 +16,7 @@ const p=(resource,targetCount,world)=>decide('gather',world,{},{
 check(normalizeResource('diamonds')==='diamond','Common plural diamond goal normalized');
 check(normalizeResource('stone')==='cobblestone','Stone alias maps to real cobblestone receipts');
 check(normalizeResource('WOOD')==='logs','Wood alias maps to aggregated observed logs');
+check(normalizeResource('coal ore')==='coal','Coal ore wording maps to real coal inventory');
 check(normalizeResource('command_block')===null,'Unsupported admin blocks are rejected');
 check(RESOURCES.has('cobblestone')&&!RESOURCES.has('command_block'),
  'Only explicitly supported survival resources authorized');
@@ -29,6 +30,12 @@ check(p('cobblestone',32,w({woodenPickaxe:1,sticks:4})).kind==='mine_cobblestone
  'Actual wooden pickaxe permits natural stone mining');
 check(p('diamond',10,w({stonePickaxe:1,stoneSword:1})).kind==='collect_wood',
  'Diamond acquisition must first plan the complete Iron gear prerequisites');
+check(p('coal',3,w({woodenPickaxe:1})).kind==='mine_coal',
+ 'Coal gathering requires an actual pickaxe and a live coal-mining action');
+check(p('coal',3,w({woodenPickaxe:1,coal:3})).kind==='complete',
+ 'Coal quantity is read from observed survival inventory');
+check(p('coal',3,w()).kind==='collect_wood',
+ 'Coal mining plans the real pickaxe prerequisite before mining');
 check(p('diamond',10,w({ironPickaxe:1})).kind==='mine_diamond',
  'Iron pickaxe enables live exposed diamond ore acquisition');
 check(p('diamond',10,w({ironPickaxe:1,diamonds:10})).kind==='complete',

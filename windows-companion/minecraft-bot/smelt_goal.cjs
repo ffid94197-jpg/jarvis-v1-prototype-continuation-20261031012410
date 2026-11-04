@@ -61,10 +61,9 @@ function smeltPlan(world,progress,delegate){
   return action('craft_furnace','Craft survival furnace from actual cobblestone');
  }
  const enoughFuel=quantity(inv,'coal')>0||quantity(inv,'charcoal')>0||
+   quantity(inv,'blaze_rod')>0||
    Object.entries(inv.raw||{}).some(([name,count])=>name.endsWith('_planks')&&count>0);
  if(!enoughFuel){
-  if(inv.planks>0)return action('smelt_resource','Smelt with an observed wooden plank',
-   {input:recipe.input,output:spec.item});
   if(inv.logs>0)return action('craft_planks','Prepare physically owned wood as furnace fuel');
   return action('collect_wood','Collect bounded real wood for furnace fuel');
  }

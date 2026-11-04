@@ -251,11 +251,16 @@ function decide(goal, world, failures={}, progress={}) {
      goal==='dragon_then_netherite_run' || goal==='netherite_armor_run' || goal==='netherite_gear_run') {
     if(inv.stonePickaxe && (goal==='netherite_armor_run'||inv.stoneSword)) {
       if(goal==='stone_age')return {kind:'complete',why:'Stone pickaxe and stone sword verified in inventory'};
-      if(inv.ironPickaxe){
-        if(goal==='iron_age')return {kind:'complete',why:'Iron pickaxe verified in inventory'};
+      if(inv.ironPickaxe||inv.diamondPickaxe||(inv.raw?.netherite_pickaxe||0)>0){
+        if(goal==='iron_age')return {kind:'complete',why:'Iron-tier or better pickaxe verified in inventory'};
         const armorOnly=goal==='netherite_armor_run';
-        if(inv.diamondPickaxe && (armorOnly || inv.diamondSword) &&
-           inv.diamondHelmet && inv.diamondChestplate && inv.diamondLeggings && inv.diamondBoots)
+        const canReuseUpgrades=['netherite_armor_run','netherite_gear_run'].includes(goal);
+        const sufficient=name=>!!(inv.raw?.[name]>0) ||
+          (canReuseUpgrades && name.startsWith('diamond_') &&
+            (inv.raw?.[name.replace('diamond_','netherite_')]||0)>0);
+        if((sufficient('diamond_pickaxe')||sufficient('netherite_pickaxe')) &&
+           (armorOnly || sufficient('diamond_sword')) &&
+           ['diamond_helmet','diamond_chestplate','diamond_leggings','diamond_boots'].every(sufficient))
           return lateGamePlan(world,{...progress,goal});
         // Armor-only goals must not craft an unrelated diamond sword.
         const gear=[['diamond_pickaxe','diamondPickaxe',3],
@@ -263,7 +268,7 @@ function decide(goal, world, failures={}, progress={}) {
           ['diamond_chestplate','diamondChestplate',8],['diamond_leggings','diamondLeggings',7],
           ['diamond_helmet','diamondHelmet',5],['diamond_boots','diamondBoots',4]];
         for(const [name,key,cost] of gear){
-          if(inv[key])continue;
+          if(inv[key]||sufficient(name))continue;
           if((inv.diamonds||0)<cost)return failures.mine_diamond>=2?{kind:'survey_ore',ore:'diamond',index:number(progress.steps),why:'Explore new loaded terrain for diamond veins'}:{kind:'mine_diamond',why:'Find naturally generated diamond ore for '+name};
           if(!world.workbenchNearby)return inv.table?{kind:'place_table'}:{kind:'craft_table'};
           if((name==='diamond_pickaxe' && inv.sticks<2)||(name==='diamond_sword' && inv.sticks<1))

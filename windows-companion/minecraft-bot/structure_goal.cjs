@@ -31,6 +31,13 @@ function validWallSpec(s){
    (s.length===undefined||(Number.isInteger(s.length)&&s.length>=1&&s.length<=8))&&
    (s.height===undefined||(Number.isInteger(s.height)&&s.height>=1&&s.height<=4));
 }
+function validPlatformSpec(s){
+ return !!s&&typeof s==='object'&&!Array.isArray(s)&&s.goal==='platform'&&
+   Object.keys(s).every(k=>['goal','block','length','width'].includes(k))&&
+   (s.block===undefined||BLOCKS.has(s.block))&&
+   (s.length===undefined||(Number.isInteger(s.length)&&s.length>=1&&s.length<=8))&&
+   (s.width===undefined||(Number.isInteger(s.width)&&s.width>=1&&s.width<=8));
+}
 function buildPositions(spec){
  if(!validBuildSpec(spec))throw Error('Invalid bounded construction goal');
  const [dx,dz]=AXES[spec.axis];
@@ -80,4 +87,4 @@ function buildPlan(world,progress={},delegate){
  }
  return {kind:'complete',why:'All '+cells.length+' requested blocks observed in live Minecraft world'};
 }
-module.exports={BLOCKS,AXES,validBuildSpec,validWallSpec,buildPositions,observeBuild,buildPlan};
+module.exports={BLOCKS,AXES,validBuildSpec,validWallSpec,validPlatformSpec,buildPositions,observeBuild,buildPlan};

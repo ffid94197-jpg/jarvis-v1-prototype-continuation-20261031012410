@@ -709,6 +709,30 @@ async function autoExecute(plan,epoch){
           clear?'Original hostile moved beyond observed defensive range; death not claimed':
           'Defensive attacks bounded; hostile still present: '+String(result.detail||'unknown')};
     }
+    case 'recover_health':{
+      // Passive recovery has no movement, attack, mining or world edit.
+      // Remain in the current position only while the server still shows
+      // enough hunger and zero nearby enemies. A timer is NOT health proof.
+      if(epoch!==actionEpoch)throw Error('Owner cancelled recovery');
+      const start=digest(bot,leader),initial=bot.health;
+      if(!Number.isFinite(initial)||initial>=12||bot.food<18 ||
+         start.threats.some(t=>t.distance<=10))
+        return {ok:false,verified:false,detail:'No safe, hungry-enough physical health recovery state'};
+      for(let i=0;i<12;i++){
+        if(epoch!==actionEpoch)throw Error('Owner cancelled passive health recovery');
+        await pause(500);
+        if(epoch!==actionEpoch)throw Error('Owner cancelled passive health recovery');
+        const current=digest(bot,leader);
+        if(current.threats.some(t=>t.distance<=10)||bot.food<18)
+          return {ok:false,verified:false,detail:'Threat or hunger changed during health recovery'};
+        if(Number.isFinite(bot.health)&&bot.health>initial)
+          return {ok:true,verified:true,proof:'health_regenerated',
+            detail:'Server health rose '+initial+' -> '+bot.health+
+              ' without any artificial heal command'};
+      }
+      return {ok:false,verified:false,
+        detail:'No real health regeneration observed in bounded safe recovery window'};
+    }
     case 'eat':{
       const food=bot.inventory.items().find(i=>FOOD.test(i.name));if(!food)throw Error('No edible item');
       const old=bot.food;

@@ -14,6 +14,10 @@ const owner='build a 3 by 3 by 2 cobblestone roofed room at 1 64 2';
 const res=directIntent(owner);
 ok(res?.ok===true&&res.command.goal==='sequence',
  'one natural owner instruction becomes durable native sequence');
+const shelter=directIntent('build a 3 by 3 by 2 cobblestone roofed shelter at 1 64 2');
+ok(shelter?.ok&&shelter.command.goal==='sequence'&&
+ shelter.command.steps[1].shape==='entrance_walls',
+ 'roofed shelter words preserve intended material and physical entry');
 const steps=res.command.steps;
 ok(steps.length===3&&steps.map(s=>s.shape).join(',')===
  'floor,entrance_walls,roof',

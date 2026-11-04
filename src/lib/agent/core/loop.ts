@@ -476,7 +476,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
              receipt?.ok!==true || receipt?.detail?.botAcknowledged!==true ||
              receipt?.detail?.command!=="auto_goal")continue;
           const started=row.settledAt?.getTime()??row.admittedAt.getTime();
-          if(minecraftAiGate.restoreNativeMission(a.goal,started))break;
+          if(minecraftAiGate.restoreNativeMission(a.goal,started,a))break;
         }catch{/* Damaged receipt cannot restore native-goal authority. */}
       }
     }catch{

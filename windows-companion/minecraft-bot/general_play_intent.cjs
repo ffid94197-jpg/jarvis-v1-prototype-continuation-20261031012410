@@ -315,7 +315,7 @@ function modelGoalGrounded(q,ownerText,context=''){
   case 'shelter':{
    const sentence=s.replace(/^in minecraft[, :]+/,'').replace(/\s+in minecraft$/,'')
      .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'');
-   const sized=/^(?:build|construct|make)(?: me)? (?:a |the )?([34]) by ([34])(?: small| simple| basic)? (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?$/.exec(sentence);
+   const sized=/^(?:build|construct|make)(?: me)? (?:a |the )?([34])\s*(?:by|x|×)\s*([34])(?: small| simple| basic)? (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?$/.exec(sentence);
    if(sized)return q.width===Number(sized[1]) && q.depth===Number(sized[2]);
    if(q.width!==undefined||q.depth!==undefined)return false;
    return /^(?:build|construct|make)(?: me)? (?:a |the )?(?:small|simple|basic) (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?$/.test(sentence);

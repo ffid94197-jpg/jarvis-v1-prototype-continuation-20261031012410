@@ -147,6 +147,7 @@ function modelGoalGrounded(q,ownerText){
   case 'follow':return has(/\bfollow\b/);
   case 'guard':return has(/\b(?:guard|protect|defend)\b/);
   case 'gather':{
+   if(q.resource==='sand'&&/\bred sand\b/.test(s))return false;
    const aliases=q.resource==='logs'?/\b(?:wood|logs?|timber)\b/:
      q.resource==='iron_ingot'?/\biron ingots?\b/:
      q.resource==='raw_iron'?/\braw iron\b/:

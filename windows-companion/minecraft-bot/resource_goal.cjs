@@ -7,7 +7,7 @@ const RESOURCES=new Set(['logs','planks','sticks','cobblestone','raw_iron',
   'iron_ingot','diamond','obsidian','flint','netherrack']);
 const ALIASES=Object.freeze({
  wood:'logs',log:'logs',stones:'cobblestone',stone:'cobblestone',
- diamonds:'diamond',iron:'iron_ingot',rawiron:'raw_iron',
+ diamonds:'diamond',iron:'iron_ingot',iron_ingots:'iron_ingot',rawiron:'raw_iron',
  plank:'planks',stick:'sticks'
 });
 function normalizeResource(name){

@@ -48,7 +48,7 @@ function loadedTargets(bot,{includeGeneral=false}={}){
   const byPriority=[
     // Keep observed containers/doors visible to the same JARVIS planner.
     // Never infer a location or open a block from an unobserved name.
-    ...primary.filter(b=>INTERACTIVE.test(b.name)).slice(0,2),
+    ...primary.filter(b=>INTERACTIVE.test(b.name)).slice(0,3),
     ...primary.filter(b=>ORES.test(b.name)).slice(0,3),
     ...primary.filter(b=>MINABLE_STONE.has(b.name)).slice(0,2),
     ...primary.filter(b=>!INTERACTIVE.test(b.name)&&!ORES.test(b.name)&&!MINABLE_STONE.has(b.name))

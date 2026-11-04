@@ -184,6 +184,20 @@ function directIntent(raw){
   const steps=[];
   for(const part of parts){
    let candidate=directIntent(part);
+   if((!candidate||candidate.ok!==true) &&
+      /^(?:smelt|cook|bake|refine) (?:it|them)$/.test(part.trim()) &&
+      steps.length>0){
+     const prior=steps[steps.length-1];
+     // A pronoun only inherits the immediately previous explicit gather
+     // source and quantity. An unknown resource or an earlier ambiguous
+     // owner clause NEVER authorizes an inferred furnace recipe.
+     if(prior.goal==='gather'&&Number.isInteger(prior.targetCount)&&
+        prior.targetCount>=1&&prior.targetCount<=16){
+       const recipe=Object.entries(SMELT_RECIPES).find(([,v])=>v.source===prior.resource);
+       if(recipe)candidate=canonicalIntent({command:'auto_goal',goal:'smelt',
+         item:recipe[0],targetCount:prior.targetCount});
+     }
+   }
    // A single-item request like "craft a chest" uses the immediate
    // craft_item primitive; inside a longer owner mission only promote
    // validated known recipe goals to the durable stage controller.

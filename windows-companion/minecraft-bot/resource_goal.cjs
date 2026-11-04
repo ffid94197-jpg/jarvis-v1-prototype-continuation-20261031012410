@@ -43,7 +43,11 @@ function resourcePlan(world,failures={},progress={},delegate){
    'Server-backed '+resource+' quantity '+have+' >= '+count);
  const inv=world.inventory||{};
  const stage=goal=>{
+   if(typeof delegate!=='function')
+     return required('blocked','No authorized prerequisite planner supplied');
    const d=delegate(goal);
+   if(!d||typeof d.kind!=='string')
+     return required('blocked','Prerequisite planner returned no verifiable decision');
    return d.kind==='complete'?null:d;
  };
  const mine=(kind,why,ore)=>{

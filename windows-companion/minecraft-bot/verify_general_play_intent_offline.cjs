@@ -101,6 +101,11 @@ ok(!modelPrimitiveGrounded({command:'interact_entity',entityId:10},
 ok(modelPrimitiveGrounded({command:'interact_entity',entityId:11},
  'interact with the cow',namedScene),'language can select the observed named animal');
 
+const {validSequence}=require('./mission_sequence.cjs');
+ok(validSequence([{goal:'travel',destination:{x:1,y:64,z:2},arrivalRange:2}]),
+ 'Companion admits canonical travel stage');
+ok(!validSequence([{goal:'travel',destination:{x:1,y:64,z:2,admin:true},arrivalRange:2}]),
+ 'Companion rejects extra hidden nested coordinate fields');
 const env={JARVIS_MODEL_BACKEND:'ollama',JARVIS_OLLAMA_MODEL:'verified-local-model'};
 const respond=(payload)=>async()=>({ok:true,text:async()=>JSON.stringify({
  message:{content:JSON.stringify(payload)}

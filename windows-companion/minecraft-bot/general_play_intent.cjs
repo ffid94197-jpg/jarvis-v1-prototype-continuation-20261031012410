@@ -7,8 +7,8 @@
 const NUMBER_WORDS=Object.freeze({a:1,an:1,one:1,two:2,three:3,four:4,five:5,
  six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,
  fourteen:14,fifteen:15,sixteen:16});
-const COUNT='(?:\d{1,2}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)';
-const coord='(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})';
+const COUNT='(?:\\d{1,2}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)';
+const coord='(-?\\d{1,8})[\\s,]+(-?\\d{1,8})[\\s,]+(-?\\d{1,8})';
 const validItem=/^[a-z0-9_]{1,64}$/;
 function itemName(value){
  if(typeof value!=='string')return null;

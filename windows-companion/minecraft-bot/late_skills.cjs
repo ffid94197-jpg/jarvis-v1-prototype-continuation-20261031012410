@@ -224,7 +224,20 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const beforeArrows=count(bot,'arrow');
     await bot.equip(bow,'hand');
     check(epoch);
-    const aim=target.position.offset(0,Math.min(5,dist*dist/135),0);
+    // Dragon flight is dynamic; a stationary crosshair misses a moving
+    // target even when the arrow is physically consumed. Lead only with
+    // genuinely observed bounded entity velocity; no invented position,
+    // predicted hit receipt or extra Minecraft action authority.
+    const motion=target.velocity;
+    const validVelocity=motion &&
+      [motion.x,motion.y,motion.z].every(v=>Number.isFinite(v) && Math.abs(v)<=2);
+    const tickLead=target.name==='ender_dragon' && validVelocity?
+      Math.max(2,Math.min(14,dist/3)):0;
+    const axis=v=>Math.max(-9,Math.min(9,v*tickLead));
+    const dx=validVelocity?axis(motion.x):0,
+      dy=validVelocity?axis(motion.y):0,
+      dz=validVelocity?axis(motion.z):0;
+    const aim=target.position.offset(dx,Math.min(5,dist*dist/135)+dy,dz);
     await bot.lookAt(aim,true);
     bot.activateItem();
     try{await delay(1200);}finally{bot.deactivateItem();}
@@ -560,9 +573,19 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       // eyes into an already full frame (no hardcoded state bits).
       if(frame.getProperties?.().eye === true)continue;
       await move(frame.position,3,epoch,12000);
+      check(epoch);
+      const current=bot.blockAt(p);
+      if(!current||current.name!=='end_portal_frame')
+        return observed(false,'End portal frame changed or unloaded during approach');
+      if(current.getProperties?.().eye===true)continue;
+      if(!bot.entity?.position ||
+         bot.entity.position.distanceTo(current.position)>4.5)
+        return observed(false,'End frame is not within measured interaction range');
       const liveEye=item(bot,'ender_eye')||item(bot,'eye_of_ender');
-      if(!liveEye)break; // Don't use a stale item after it was consumed.
-      await bot.equip(liveEye,'hand');await bot.activateBlock(frame);
+      if(!liveEye)break; // Do not reuse a consumed Eye.
+      await bot.equip(liveEye,'hand');
+      check(epoch);
+      await bot.activateBlock(current);
       await delay(250);check(epoch);
       if(bot.blockAt(p)?.getProperties?.().eye===true)inserted++;
       if(lookup(bot,['end_portal'],30))return observed(true,'End portal blocks appeared after frame activation');

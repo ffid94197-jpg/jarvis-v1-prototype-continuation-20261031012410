@@ -190,7 +190,8 @@ export function mayStartNativeMinecraftGoal(
  const localField=(p:unknown):boolean=>{
   if(!p||typeof p!=='object'||Array.isArray(p))return false;
   const v=p as Record<string,unknown>;
-  if(!['x','y','z'].every(k=>amount(v[k],-30000000,30000000)))return false;
+  if(Object.keys(v).length!==3 ||
+     !['x','y','z'].every(k=>amount(v[k],-30000000,30000000)))return false;
   const origin=observed.position;
   return Math.hypot((v.x as number)-origin.x,(v.y as number)-origin.y,
     (v.z as number)-origin.z)<=11.5;
@@ -220,6 +221,7 @@ export function mayStartNativeMinecraftGoal(
    // destinationSlot for the existing equip goal validator.
    const candidate:Record<string,unknown>={command:'auto_goal',...step};
    if(step.goal==='equip'){
+    if(Object.keys(step).some(k=>!['goal','item','destination'].includes(k)))return false;
     candidate.destinationSlot=step.destination;delete candidate.destination;
    }
    return mayStartNativeMinecraftGoal(stages[index]+' in Minecraft',candidate,observed);
@@ -258,7 +260,8 @@ export function mayStartNativeMinecraftGoal(
   const d=args.destination;
   if(!d||typeof d!=='object'||Array.isArray(d))return false;
   const p=d as Record<string,unknown>;
-  if(!['x','y','z'].every(k=>amount(p[k],-30000000,30000000)))return false;
+  if(Object.keys(p).length!==3 ||
+     !['x','y','z'].every(k=>amount(p[k],-30000000,30000000)))return false;
   const xyz=/\b(?:to|at)\s*\(?\s*(-?\d+)\s*[, ]+\s*(-?\d+)\s*[, ]+\s*(-?\d+)\s*\)?/.exec(s);
   return !!xyz && Number(xyz[1])===p.x && Number(xyz[2])===p.y && Number(xyz[3])===p.z;
  }

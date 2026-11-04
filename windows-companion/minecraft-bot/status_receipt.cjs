@@ -7,6 +7,12 @@
 const MAX_BYTES=1800;
 const VICTORY=['dragonSeen','dragonKilled','exitPortalObserved','endReturned',
  'netheriteEquipped','travelArrivalVerified'];
+// Counts are not victory booleans. Under size pressure they must remain
+// in the compact receipt: JARVIS Core checks the smelting count against
+// the exact original owner request, and bow/bridge counts explain bounded
+// End attempt exhaustion without claiming hit or island arrival.
+const REQUIRED_COUNTERS=['smeltedOutput','dragonRangedShots',
+ 'dragonStanceTrips','endBridgeTiles'];
 const boundedString=(x,n)=>typeof x==='string'?x.slice(0,n):null;
 const boundedNum=x=>Number.isFinite(x)?x:null;
 function safeMilestones(input){
@@ -51,11 +57,19 @@ function compactAutonomyStatus(state){
  let json=JSON.stringify(receipt);
  if(json.length>MAX_BYTES){receipt.failures={};json=JSON.stringify(receipt);}
  if(json.length>MAX_BYTES){receipt.lastResult=null;receipt.why=null;json=JSON.stringify(receipt);}
- if(json.length>MAX_BYTES){receipt.milestones=safeMilestones(
-  Object.fromEntries(VICTORY.filter(k=>Object.hasOwn(receipt.milestones,k))
-   .map(k=>[k,receipt.milestones[k]])));json=JSON.stringify(receipt);}
+ if(json.length>MAX_BYTES){
+  const required=new Set([...VICTORY,...REQUIRED_COUNTERS]);
+  receipt.milestones=safeMilestones(
+   Object.fromEntries(Object.entries(receipt.milestones)
+    .filter(([key])=>required.has(key))));
+  json=JSON.stringify(receipt);
+ }
+ // Never discard the proof-critical counters to fit the wire. Optional
+ // UI fields may be omitted; if even the minimal attested receipt exceeds
+ // MAX_BYTES, fail closed rather than silently returning incomplete proof.
+ if(json.length>MAX_BYTES){receipt.lastDecision=null;json=JSON.stringify(receipt);}
  if(json.length>MAX_BYTES)
   throw Error('JARVIS Minecraft status exceeds safe transport limit');
  return json;
 }
-module.exports={compactAutonomyStatus,safeMilestones,MAX_BYTES};
+module.exports={compactAutonomyStatus,safeMilestones,MAX_BYTES,REQUIRED_COUNTERS};

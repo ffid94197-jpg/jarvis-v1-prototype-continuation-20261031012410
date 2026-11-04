@@ -18,7 +18,7 @@ export function minecraftMissionFromObjective(objective: string): MinecraftMissi
   if (!s || /\b(?:don't|do not|never|without defeating|without killing|not to)\b/.test(s)) return null;
   if (/^(?:how|why|what|when|where|who|explain|describe|tell me|show me|status|stop|cancel|pause)\b/.test(s))
     return null;
-  const scoped=/\b(?:minecraft|ender dragon|netherite|dragon)\b/.test(s);
+  const scoped=/\b(?:minecraft|ender dragon|netherite|jarvisbuddy)\b/.test(s);
   if(!scoped)return null;
   const active=/\b(?:play|join|survive|start|finish|complete|beat|defeat|kill|slay|win|get|obtain|equip|wear|craft|make)\b/.test(s);
   if(!active)return null;

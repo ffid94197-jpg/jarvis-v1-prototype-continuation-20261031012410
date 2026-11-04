@@ -22,6 +22,7 @@ function lateGamePlan(world,progress={}){
   const i=world.inventory||{},m=progress.milestones||{};
   const dimension=String(world.dimension||'minecraft:overworld').replace(/^minecraft:/,'');
   const dragonFirst=progress.goal==='dragon_then_netherite_run';
+  const dragonOnly=progress.goal==='dragon_run';
   const armorOnly=progress.goal==='netherite_armor_run';
   const equipmentOnly=progress.goal==='netherite_gear_run';
   const gearOnly=armorOnly||equipmentOnly;
@@ -52,7 +53,10 @@ function lateGamePlan(world,progress={}){
   // This separate user-authorized mission enforces a strict temporal order:
   // dragon death and the End exit portal FIRST, full worn Netherite LAST.
   // It never accepts entity disappearance or a planner receipt as proof.
-  if(dragonFirst && !dragonVictory){
+  // Dragon-only missions reuse the existing verified End route. They MUST
+  // NOT silently expand into 20 Ancient Debris, Bastion template and
+  // Netherite smithing. Composite missions retain their separate order.
+  if((dragonFirst||dragonOnly) && !dragonVictory){
     if(dimension==='the_end'){
       if(world.wornDiamond!==true && world.wornNetherite!==true)
         return action('equip_diamond','Equip and verify four diamond armor slots before the Dragon fight');
@@ -112,6 +116,14 @@ function lateGamePlan(world,progress={}){
     if(world.strongholdPortalFrameNearby || world.endPortalPresent)
       return action('activate_end_portal','Activate twelve observed stronghold portal frames');
     return action('track_stronghold','Locate a real stronghold using Eyes of Ender');
+  }
+  if(dragonOnly && dragonVictory){
+    // Keep only the *current mission's* witnessed death event and physical
+    // exit portal as victory proof. Netherite equipment was never requested.
+    if(dimension==='the_end' && world.dragonDeadObserved===true &&
+       world.exitPortalPresent===true)
+      return action('complete','Actual Ender Dragon death event and End exit portal independently observed');
+    return action('blocked','Dragon kill milestone exists but current live End death/exit observations are unavailable');
   }
   if(dragonFirst && dragonVictory && dimension==='the_end')
     return action('exit_end','Use the observed End exit portal to return to Overworld; dragon already verified');

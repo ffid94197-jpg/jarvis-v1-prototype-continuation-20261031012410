@@ -81,8 +81,9 @@ function canonicalIntent(raw){
  if(q.goal==='gather')q.resource=normalizeResource(q.resource);
  if(q.goal==='craft'&&q.targetCount===undefined)q.targetCount=1;
  if(q.goal==='travel'&&q.arrivalRange===undefined)q.arrivalRange=2;
- const long=['gather','sequence','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run'];
- q.durationSeconds=raw.durationSeconds===undefined?(long.includes(q.goal)?21600:300):raw.durationSeconds;
+ const long=['gather','sequence','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run','build_volume'];
+ q.durationSeconds=raw.durationSeconds===undefined?
+  (q.goal==='build_volume'?3600:(long.includes(q.goal)?21600:300)):raw.durationSeconds;
  const error=validateCommand(q);
  return error?fail(error):{ok:true,command:q};
 }

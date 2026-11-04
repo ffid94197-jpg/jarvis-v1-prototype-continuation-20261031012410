@@ -12,7 +12,7 @@ function armorEquipSteps(ownerText){
  const s=ownerText.toLowerCase().trim().replace(/^in minecraft[, :]+/,'')
    .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
    .replace(/\s+in minecraft$/,'').replace(/\s+/g,' ');
- const m=/^(?:equip|wear|put on)(?: me)? (?:a |the |my )?(?:full |complete )?(?:set of )?(leather|iron|gold|golden|diamond|netherite) (?:armor|armour)(?: set)?$/.exec(s);
+ const m=/^(?:equip|wear|put on)(?: me)? (?:a |the |my )?(?:full |complete )?(?:set of )?(leather|iron|gold|golden|diamond) (?:armor|armour)(?: set)?$/.exec(s);
  if(!m)return null;
  const tier=m[1]==='gold'?'golden':m[1];
  return [['helmet','head'],['chestplate','torso'],['leggings','legs'],['boots','feet']]
@@ -252,6 +252,13 @@ function modelGoalGrounded(q,ownerText){
   return count===null?qty===1:qty===count;
  };
  switch(q.goal){
+  case 'netherite_armor_run':case 'netherite_gear_run':{
+   const explicitlyNamed=/\bnetherite\s+(?:armor|armour)\b/.test(s);
+   const approved=/\b(?:get|obtain|make|craft|equip|wear|put on)\b/.test(s);
+   const wantsSword=/\bnetherite\s+sword\b/.test(s);
+   return explicitlyNamed && approved && !has(/\b(?:dragon|ender dragon)\b/) &&
+     (q.goal==='netherite_gear_run'?wantsSword:!wantsSword);
+  }
   case 'dragon_run':return !has(/\bnetherite\b/) &&
    has(/\b(?:defeat|beat|kill|slay|fight)\b/)&&has(/\bdragon\b/);
   case 'netherite_dragon_run':case 'dragon_then_netherite_run':{

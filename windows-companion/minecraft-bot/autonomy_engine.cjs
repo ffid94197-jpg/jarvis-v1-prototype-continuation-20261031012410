@@ -171,6 +171,9 @@ function decide(goal, world, failures={}, progress={}) {
     return {kind:'retreat',why:'Multiple threats or low health: regain safe distance'};
   if(closest?.distance<=6 && !ALLOWED_HOSTILES.has(closest.name))
     return {kind:'retreat',why:'Observed threat is not an authorized generic melee target'};
+  if(world.health<12 && closest?.distance<=12 &&
+     ['ender_dragon','wither','ghast','piglin_brute','blaze','hoglin'].includes(closest.name))
+    return {kind:'retreat',why:'Low health near major Nether/End hazard; keep physical separation'};
   // Low-health long-horizon survival MUST recover before taking an
   // optional Nether/Dragon fight. An already-sufficient food bar can
   // naturally regenerate health; require a server-observed health
@@ -182,8 +185,13 @@ function decide(goal, world, failures={}, progress={}) {
      !threats.some(t=>Number.isFinite(t?.distance)&&t.distance<=10)){
     if(world.hunger<18 && (inv.food||0)>0)
       return {kind:'eat',why:'Health low: eat observed food to enable natural recovery'};
-    if(world.hunger<18)
-      return {kind:'obtain_food',why:'Health low with insufficient hunger: obtain verified food before risky progression'};
+    if(world.hunger<18){
+      const where=String(world.dimension||'').replace(/^minecraft:/,'');
+      if(where==='the_end'||where==='the_nether')
+        return {kind:'blocked',why:'Health too low for safe combat to obtain food in '+where+
+          '; no verified edible inventory or safe gathering route exists'};
+      return {kind:'obtain_food',why:'Health low with insufficient hunger: obtain verified Overworld food before risky progression'};
+    }
     return {kind:'recover_health',why:'Health low: remain still only while safe and verify actual server regeneration'};
   }
   if(world.hunger<=12 && (inv.food||0)>0)return {kind:'eat',why:'Hunger low; edible inventory item detected'};

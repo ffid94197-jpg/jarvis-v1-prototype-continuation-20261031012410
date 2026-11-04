@@ -20,6 +20,9 @@ ok(L.directIntent('make me a stone pickaxe').command.item==='stone_pickaxe','nat
 ok(L.directIntent('craft an iron helmet').command.item==='iron_helmet','natural armor recipe request');
 ok(L.directIntent('build a wall').command.goal==='wall','natural simple wall request');
 ok(L.canonicalIntent({command:'auto_goal',goal:'wall',length:5,height:3}).ok,'bounded wall intent passes same command validator');
+ok(L.directIntent('build a platform').command.goal==='platform','natural platform request');
+ok(L.canonicalIntent({command:'auto_goal',goal:'platform',length:3,width:4}).ok,'bounded platform intent passes same command validator');
+ok(!L.canonicalIntent({command:'auto_goal',goal:'platform',length:9,width:4}).ok,'oversized platform intent rejected');
 ok(!L.canonicalIntent({command:'auto_goal',goal:'wall',length:9,height:3}).ok,'oversized wall intent rejected');
 ok(L.directIntent('make 2 chests').command.item==='chest','natural craft');
 ok(L.directIntent('Could you please make me 3 torches?').command.item==='torch','natural plural torch craft');

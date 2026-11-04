@@ -340,7 +340,7 @@ async function interpretOwnerInstruction(input,{env=process.env,context='',fetch
   if(Object.hasOwn(PRIMITIVE_FIELDS,proposed.command.command) &&
      !modelPrimitiveGrounded(proposed.command,text,context))
     return fail('Model proposed an unrelated or ungrounded Minecraft action; no effect taken');
-  if(proposed.command.command==='auto_goal' && !modelGoalGrounded(proposed.command,text))
+  if(proposed.command.command==='auto_goal' && !modelGoalGrounded(proposed.command,text,context))
     return fail('Model proposed an autonomous goal not authorized by the owner request');
   if(SIMPLE.has(proposed.command.command) && !modelSimpleGrounded(proposed.command.command,text))
     return fail('Model proposed a control action unrelated to the owner request');

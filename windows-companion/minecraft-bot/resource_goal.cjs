@@ -89,12 +89,14 @@ function resourcePlan(world,failures={},progress={},delegate){
    if((inv.logs||0)>0)return required('craft_planks','Prepare planks for sticks');
    return required('collect_wood','Obtain timber for sticks');
  case 'cobblestone':
-   if(!(inv.woodenPickaxe||inv.stonePickaxe||inv.ironPickaxe||inv.diamondPickaxe))
+   if(!(inv.woodenPickaxe||inv.stonePickaxe||inv.ironPickaxe||inv.diamondPickaxe||
+        (inv.raw?.netherite_pickaxe||0)>0))
      return stage('tools')||required('blocked','Missing pickaxe after tool planning');
    return required('mine_cobblestone','Mine accessible stone and prove inventory increment');
  case 'raw_iron':
  case 'iron_ingot':{
-   if(!inv.stonePickaxe&&!inv.ironPickaxe&&!inv.diamondPickaxe)
+   if(!inv.stonePickaxe&&!inv.ironPickaxe&&!inv.diamondPickaxe&&
+      !(inv.raw?.netherite_pickaxe>0))
      return stage('stone_age')||required('blocked','Stone pickaxe prerequisite unresolved');
    if(resource==='iron_ingot' && (inv.rawIron||0)>0){
      if(!world.furnaceNearby){
@@ -114,11 +116,11 @@ function resourcePlan(world,failures={},progress={},delegate){
    return mine('mine_iron','Mine naturally generated exposed iron', 'iron');
  }
  case 'diamond':
-   if(!inv.ironPickaxe&&!inv.diamondPickaxe)
-     return stage('iron_age')||required('blocked','Iron pickaxe prerequisite unresolved');
+   if(!inv.ironPickaxe&&!inv.diamondPickaxe&&!(inv.raw?.netherite_pickaxe>0))
+     return stage('iron_age')||required('blocked','Iron-grade pickaxe prerequisite unresolved');
    return mine('mine_diamond','Mine naturally generated exposed diamond','diamond');
  case 'obsidian':{
-   if(!inv.diamondPickaxe){
+   if(!inv.diamondPickaxe&&!(inv.raw?.netherite_pickaxe>0)){
      if(!inv.ironPickaxe)return stage('iron_age')||
        required('blocked','Iron pickaxe prerequisite unresolved');
      if((inv.diamonds||0)<3)return mine('mine_diamond',

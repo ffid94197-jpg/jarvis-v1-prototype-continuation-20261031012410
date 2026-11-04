@@ -252,6 +252,38 @@ no(mayStartNativeMinecraftGoal('In Minecraft, craft a chest',
  {command:'auto_goal',goal:'craft',item:'chest',targetCount:16},sameWorld),
  'Core cannot invent a quantity of sixteen for a single requested item');
 
+// Multi-step Core must preserve each stage and quantity; the companion will
+// separately validate validSequence before executing any stage.
+const sequenceOwner='In Minecraft gather four logs then craft a chest';
+const requiredStages=[
+ {goal:'gather',resource:'logs',targetCount:4},
+ {goal:'craft',item:'chest',targetCount:1}
+];
+const sequenceArgs=steps=>({command:'auto_goal',goal:'sequence',steps,durationSeconds:21600});
+ok(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs(requiredStages),sameWorld),
+ 'Core admits owner-requested bounded gather-then-craft sequence');
+no(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs([...requiredStages].reverse()),sameWorld),
+ 'Core cannot reorder the owner goal sequence');
+no(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs([
+ {...requiredStages[0],targetCount:40},requiredStages[1]]),sameWorld),
+ 'Core cannot inflate a sequence-stage inventory quantity');
+no(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs([
+ requiredStages[0],{goal:'craft',item:'torch',targetCount:1}]),sameWorld),
+ 'Core cannot replace the requested craft item in a sequence');
+no(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs([
+ requiredStages[0],{goal:'dragon_run'}]),sameWorld),
+ 'Core sequence rejects unsupported unrequested Dragon-stage injection');
+no(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs([
+ {...requiredStages[0],shell:'cmd'},requiredStages[1]]),sameWorld),
+ 'Core sequence rejects extra stage parameters');
+no(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs([requiredStages[0]]),sameWorld),
+ 'Core refuses a model that silently drops the second stage');
+no(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs(Array(9).fill(requiredStages[0])),sameWorld),
+ 'Core rejects overlong sequences');
+no(mayStartNativeMinecraftGoal('In Minecraft get Netherite after defeating the Dragon',
+ nativeGoal('netherite_dragon_run'),sameWorld),
+ 'Core refuses ambiguous after-clause rather than reversing mission order');
+
 const entry=(objective)=>{
  const gate=new MinecraftAiGate(objective);
  gate.record('minecraft_companion_command',{command:'observe'},{ok:true,detail:{

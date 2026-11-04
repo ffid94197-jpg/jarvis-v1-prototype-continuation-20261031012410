@@ -142,6 +142,12 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
 function decide(goal, world, failures={}, progress={}) {
   if(!GOALS.has(goal)) return {kind:'idle',why:'No autonomous goal'};
   if(!world?.joined)return {kind:'wait',why:'Bot not spawned'};
+  // The requested equipment may already be worn. Use direct live slot
+  // observation and avoid mining extra diamond tools or attacking anything.
+  if(goal==='netherite_armor_run'&&world.wornNetherite===true)
+    return {kind:'complete',why:'Four server-observed Netherite armor slots are worn'};
+  if(goal==='netherite_gear_run'&&world.wornNetherite===true&&world.heldNetheriteSword===true)
+    return {kind:'complete',why:'Server-observed Netherite armor and sword are currently equipped'};
   const inv=world.inventory||{}, threats=world.threats||[];
   const closest=threats[0];
   // Never ask the guarded melee executor to attack outside its 3.4-block
@@ -243,7 +249,7 @@ function decide(goal, world, failures={}, progress={}) {
   }
   if(goal==='stone_age' || goal==='iron_age' || goal==='dragon_run' || goal==='netherite_dragon_run' ||
      goal==='dragon_then_netherite_run' || goal==='netherite_armor_run' || goal==='netherite_gear_run') {
-    if(inv.stonePickaxe && inv.stoneSword) {
+    if(inv.stonePickaxe && (goal==='netherite_armor_run'||inv.stoneSword)) {
       if(goal==='stone_age')return {kind:'complete',why:'Stone pickaxe and stone sword verified in inventory'};
       if(inv.ironPickaxe){
         if(goal==='iron_age')return {kind:'complete',why:'Iron pickaxe verified in inventory'};

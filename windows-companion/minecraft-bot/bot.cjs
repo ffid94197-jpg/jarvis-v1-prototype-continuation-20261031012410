@@ -1752,13 +1752,33 @@ bot.on('spawn',()=>{
 });
 bot.on('kicked',reason=>{process.stderr.write('Bot kicked: '+String(reason).slice(0,150)+'\n');process.exitCode=1;});
 bot.on('error',err=>{process.stderr.write('Bot error: '+String(err.code||'unknown')+'\n');process.exitCode=1;});
+let intentionalProcessStop=false;
 bot.on('end',()=>{
   clearInterval(followTimer);
+  if(!intentionalProcessStop){
+    // A disconnected Minecraft Java session is not successful task
+    // settlement, even when the server closes an idle TCP connection
+    // cleanly. Only the explicit operator shutdown path may exit zero.
+    process.exitCode=1;
+  }
+  const mission=autopilot.status();
+  const lostActiveMission=mode==='auto'&&mission.status==='running';
   if(!spawned){
     process.stderr.write('Minecraft connection ended before spawn; no in-game action was verified\n');
     process.exitCode=1;
   }
+  if(lostActiveMission){
+    // A remote server/network disconnect is NOT an autonomous-gameplay
+    // victory, even when Mineflayer produces a normal 'end' event with no
+    // earlier 'error'. Preserve the sealed typed mission-intent lease but
+    // discard in-memory progress proofs. A new bot/owner session may resume
+    // only through existing Guardian-authorized auto_resume and fresh world
+    // evidence, not an automatic stale-action replay.
+    autopilot.stop('Minecraft connection ended before native mission settled; all effects unverified after disconnect');
+    process.exitCode=1;
+    process.stderr.write('JARVIS Minecraft session disconnected during active autonomous mission; saved intent requires owner-authorized reconciliation\n');
+  }
   halt();
   process.exit(process.exitCode||0);
 });
-process.on('SIGTERM',()=>{clearInterval(followTimer);if(mode==='auto')autopilot.stop('Operator stopped bot');missionCheckpoint.clear();halt();bot.quit('Operator stopped JARVIS friend');});
+process.on('SIGTERM',()=>{intentionalProcessStop=true;clearInterval(followTimer);if(mode==='auto')autopilot.stop('Operator stopped bot');missionCheckpoint.clear();halt();bot.quit('Operator stopped JARVIS friend');});

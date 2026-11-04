@@ -364,7 +364,7 @@ export class MinecraftAiGate {
     }
     if(['inspect_villager','trade_villager'].includes(command)){
       const id=args.entityId;
-      if(!Number.isInteger(id)||!this.observed.villagers?.some(v=>v.id===id&&v.distance<=4.3))
+      if(typeof id!=='number'||!Number.isInteger(id)||!this.observed.villagers?.some(v=>v.id===id&&v.distance<=4.3))
         return {ok:false,reason:'Only a freshly observed reachable villager ID can be used'};
       if(!/\bvillager\b/i.test(this.objective))
         return {ok:false,reason:'Owner never requested a villager interaction'};
@@ -375,8 +375,8 @@ export class MinecraftAiGate {
         return {ok:true,reason:'Show actual villager offers; no transaction authorized'};
       }
       if(Object.keys(args).some(k=>!['command','entityId','tradeIndex','times'].includes(k)) ||
-         !Number.isInteger(args.tradeIndex)||args.tradeIndex<0||args.tradeIndex>31 ||
-         !Number.isInteger(args.times)||args.times<1||args.times>4 ||
+         typeof args.tradeIndex!=='number'||!Number.isInteger(args.tradeIndex)||args.tradeIndex<0||args.tradeIndex>31 ||
+         typeof args.times!=='number'||!Number.isInteger(args.times)||args.times<1||args.times>4 ||
          !/\b(?:trade|buy|purchase|exchange)\b/i.test(this.objective))
         return {ok:false,reason:'Trade parameters or explicit owner approval missing'};
       const number=String(this.objective).toLowerCase().match(/\b(?:offer|deal|option|trade)\s*(?:number\s*|#)?(\d{1,2})\b/);
@@ -403,7 +403,7 @@ export class MinecraftAiGate {
       if(command==='transfer_container'){
         if(!['chest','trapped_chest','barrel'].includes(nearby.name)||
            Object.keys(args).some(k=>!['command','position','item','count','operation'].includes(k))||
-           !Number.isInteger(args.count)||args.count<1||args.count>64 ||
+           typeof args.count!=='number'||!Number.isInteger(args.count)||args.count<1||args.count>64 ||
            !['deposit','withdraw'].includes(String(args.operation)))
           return {ok:false,reason:'Invalid chest transfer contract'};
         const owner=this.objective.toLowerCase();

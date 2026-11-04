@@ -28,6 +28,8 @@ type NativeMissionReceipt = {
   status:string;
   since:number;
   milestones:Record<string,unknown>;
+  item?:string;
+  targetCount?:number;
 };
 
 const READ_ONLY = new Set(['observe','status','inventory','auto_status','inspect_block']);
@@ -519,6 +521,8 @@ export class MinecraftAiGate {
   private bootstrapJoinConsumed=false;
   private nativeGoalStarted:string|null=null;
   private nativeGoalStartedAt:number|null=null;
+  private nativeSmeltItem:string|null=null;
+  private nativeSmeltQuantity:number|null=null;
   private nativeStatus:NativeMissionReceipt|null=null;
   constructor(private readonly objective: string = '',
               private readonly allowBootstrapJoin=false) {}
@@ -765,6 +769,10 @@ export class MinecraftAiGate {
         detail?.botAcknowledged===true && detail?.command==='auto_goal';
       this.nativeGoalStarted=admitted&&typeof args.goal==='string'?args.goal:null;
       this.nativeGoalStartedAt=this.nativeGoalStarted?Date.now():null;
+      this.nativeSmeltItem=admitted&&args.goal==='smelt'&&
+        typeof args.item==='string'&&/^[a-z_]{2,64}$/.test(args.item)?args.item:null;
+      this.nativeSmeltQuantity=admitted&&args.goal==='smelt'&&
+        Number.isInteger(args.targetCount)?args.targetCount as number:null;
       this.nativeStatus=null;
     }
     if(args.command==='auto_status'){
@@ -786,7 +794,12 @@ export class MinecraftAiGate {
              !Array.isArray(parsed.milestones)){
             this.nativeStatus={goal:parsed.goal,status:parsed.status,
               since:parsed.since as number,
-              milestones:parsed.milestones as Record<string,unknown>};
+              milestones:parsed.milestones as Record<string,unknown>,
+              ...(typeof parsed.item==='string'&&/^[a-z_]{2,64}$/.test(parsed.item)?
+                 {item:parsed.item}:{}),
+              ...(Number.isInteger(parsed.targetCount)&&
+                 (parsed.targetCount as number)>=1&&(parsed.targetCount as number)<=64?
+                 {targetCount:parsed.targetCount as number}:{})};
           }
         }catch{/* A malformed or truncated status is never completion proof. */}
       }
@@ -816,6 +829,22 @@ export class MinecraftAiGate {
     const raw=o.inventory.raw||{};
     const logs=Object.entries(raw).filter(([name])=>/_log$/.test(name)).reduce((n,[,v])=>n+(Number.isFinite(v)?v:0),0);
     const pick=raw.wooden_pickaxe||o.inventory.woodenPickaxe||0;
+    if(this.nativeGoalStarted==='smelt'){
+      const receipt=this.nativeStatus,product=this.nativeSmeltItem,
+        quantity=this.nativeSmeltQuantity,started=this.nativeGoalStartedAt;
+      const current=product?Number(raw[product])||0:0;
+      if(!receipt||receipt.goal!=='smelt'||receipt.status!=='complete'||
+         o.nativeGoal!=='smelt'||started===null||
+         !Number.isSafeInteger(receipt.since)||
+         Math.abs(receipt.since-started)>60000 ||
+         receipt.item!==product || quantity===null ||
+         receipt.targetCount!==quantity)
+        return {verified:false,reason:'No current-task, matching native smelting COMPLETE receipt with original item and count'};
+      return current>=quantity?
+        {verified:true,reason:'Native smelting goal is COMPLETE and freshly observed physical inventory holds '+
+          current+' '+product+' (requested '+quantity+'); raw material and fuel were handled by native verified furnace steps'}:
+        {verified:false,reason:'Smelting receipt exists but fresh survival inventory is missing required output quantity'};
+    }
     const mission=minecraftMissionFromObjective(objective);
     if(mission&&mission!=='companion'){
       const receipt=this.nativeStatus,startedAt=this.nativeGoalStartedAt;

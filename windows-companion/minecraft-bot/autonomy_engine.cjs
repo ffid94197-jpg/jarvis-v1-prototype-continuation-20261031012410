@@ -611,7 +611,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       mine_obsidian:10,prepare_archery:10,
       obtain_food:10,enter_nether:8,enter_overworld:8,
       activate_end_portal:8,enter_end:8,exit_end:8,
-      destroy_end_crystal:12,fight_dragon:12,
+      destroy_end_crystal:12,fight_dragon:12,advance_dragon:8,
       collect_flint:10,mine_netherrack:10
     };
     if(Object.hasOwn(lateFailureBudgets,d.kind) &&
@@ -619,6 +619,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       d={kind:'blocked',why:'Real-game '+d.kind+' exhausted '+
         lateFailureBudgets[d.kind]+
         ' consecutive unverified attempts; preserve receipts and require new observed conditions'};
+    if(d.kind==='advance_dragon' &&
+       (state.milestones.dragonApproachTrips||0)>=24)
+      d={kind:'blocked',why:'Twenty-four proven safe Dragon approach regions failed to bring combat into range'};
     if(d.kind==='fight_dragon' &&
        (state.milestones.dragonAttackInputs||0)>=96)
       d={kind:'blocked',why:'Ninety-six observed Dragon attack attempts did not prove the real Dragon death'};
@@ -641,6 +644,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       (decision.kind!=='survey_resource' ||
         (Object.hasOwn(ORE_RESOURCE_RULES,decision.resource)&&
           outcome.proof==='safe_scout_move')) &&
+      (decision.kind!=='advance_dragon' ||
+        outcome.proof==='dragon_approach') &&
       (decision.kind!=='fight_bound_hostile' ||
         (outcome.proof==='bound_hostile_death' &&
           outcome.targetId===state.entityId && outcome.mob===state.mob)) &&
@@ -654,6 +659,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       state.failures[decision.kind]=0;
       state.successes++;
       // A verified receipt from the wrong action cannot grant a victory milestone.
+      if(decision.kind==='advance_dragon'&&outcome.proof==='dragon_approach')
+        state.milestones.dragonApproachTrips=Math.min(24,
+          (state.milestones.dragonApproachTrips||0)+1);
       if(decision.kind==='fight_bound_hostile'&&
          outcome.proof==='bound_hostile_death'&&
          outcome.targetId===state.entityId&&outcome.mob===state.mob){
@@ -737,7 +745,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       }}
     else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;
     state.lastResult={kind:decision.kind,verified:ok,detail:String(outcome?.detail||'unverified').slice(0,140)};
-    if(!ok && !['mine_iron','mine_diamond','mine_obsidian','mine_ancient_debris','hunt_blazes','hunt_endermen','track_stronghold','search_dragon','collect_flint','collect_gold','loot_bastion_template','prepare_archery','obtain_food','mine_netherrack','survey_ore','destroy_end_crystal','fight_dragon'].includes(decision.kind) && (state.failures[decision.kind]||0)>=3){
+    if(!ok && !['mine_iron','mine_diamond','mine_obsidian','mine_ancient_debris','hunt_blazes','hunt_endermen','track_stronghold','search_dragon','collect_flint','collect_gold','loot_bastion_template','prepare_archery','obtain_food','mine_netherrack','survey_ore','destroy_end_crystal','fight_dragon','advance_dragon'].includes(decision.kind) && (state.failures[decision.kind]||0)>=3){
       state.status='blocked';state.why='Repeated unverified or failing action: '+decision.kind;
     }
   }

@@ -7,7 +7,7 @@ const {validateCommand}=require('./friend_protocol.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
 const {RECIPES}=require('./general_goal.cjs');
 const {validStep}=require('./mission_sequence.cjs');
-const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded}=require('./general_play_intent.cjs');
+const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded,modelGoalGrounded}=require('./general_play_intent.cjs');
 const SIMPLE=new Set(['follow','come','stay','guard','status','inventory','observe','auto_status','auto_stop','auto_resume']);
 const FIXED=new Set(['survive','wood','tools','explore','follow','guard','stone_age','iron_age','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run']);
 const PARAMS={
@@ -177,6 +177,8 @@ async function interpretOwnerInstruction(input,{env=process.env,context='',fetch
   if(Object.hasOwn(PRIMITIVE_FIELDS,proposed.command.command) &&
      !modelPrimitiveGrounded(proposed.command,text,context))
     return fail('Model proposed an unrelated or ungrounded Minecraft action; no effect taken');
+  if(proposed.command.command==='auto_goal' && !modelGoalGrounded(proposed.command,text))
+    return fail('Model proposed an autonomous goal not authorized by the owner request');
   return proposed;
  }catch{return fail('JARVIS model did not return an authorized JSON goal; no action taken');}
 }

@@ -383,16 +383,43 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const existing=lookup(bot,['end_portal_frame'],30);
     if(existing)return observed(true,'Stronghold End portal frame actually observed nearby');
     if(session.bearing && session.eyesThrown%3!==0){
-      const p=bot.entity.position.clone();
-      const target=p.offset(session.bearing.x*22,0,session.bearing.z*22);
-      const arrived=await move(target,4,epoch,18000);
-      check(epoch);
-      const actual=bot.entity.position;
-      if(arrived!==true || !actual || actual.distanceTo(p)<4 ||
-         actual.distanceTo(target)>6)
-        return observed(false,'Eye-heading navigation did not yield physical displacement and target arrival');
-      session.eyesThrown++;
-      return observed(true,'Server-observed movement along thrown-eye bearing; stronghold still unverified');
+      const origin=bot.entity.position?.clone();
+      if(!origin)return observed(false,'No observed position for Eye-of-Ender heading');
+      // Previous implementation assumed the ground at an arbitrary 22-block
+      // same-Y destination existed and could be walked to. Hills, ravines,
+      // lava and unloaded chunks made the real End route frequently stall.
+      // Navigate only through live standable, loaded terrain, preserving
+      // the actual Eye heading as a preference rather than inventing a path.
+      const bearing=session.bearing;
+      const threats=Object.values(bot.entities||{}).filter(e=>e?.position &&
+        (ALLOWED_HOSTILES.has(e.name)||['creeper','wither'].includes(e.name)));
+      const options=surveyTargets(bot,origin,Vec3).map(p=>{
+        const dx=p.x-origin.x,dz=p.z-origin.z;
+        const along=dx*bearing.x+dz*bearing.z;
+        const sideways=Math.abs(dx*bearing.z-dz*bearing.x);
+        return {p,along,sideways};
+      }).filter(o=>o.along>=4 && o.sideways<=Math.max(5,o.along*0.8) &&
+        !threats.some(t=>o.p.distanceTo(t.position)<8))
+        .sort((a,b)=>b.along-a.along||a.sideways-b.sideways).slice(0,5);
+      if(!options.length)return observed(false,
+        'No loaded hazard-free terrain in measured Eye direction; refuse guessed route');
+      for(const {p} of options){
+        check(epoch);
+        try{
+          await move(p,2,epoch,18000);
+          check(epoch);
+          const actual=bot.entity?.position;
+          const forward=actual?
+            (actual.x-origin.x)*bearing.x+(actual.z-origin.z)*bearing.z:0;
+          if(actual&&forward>=3&&actual.distanceTo(p)<=4){
+            session.eyesThrown++;
+            return observed(true,'Physical player travel along observed Eye direction '+ 
+              Math.floor(actual.x)+','+Math.floor(actual.y)+','+
+              Math.floor(actual.z)+'; stronghold not yet claimed');
+          }
+        }catch(err){check(epoch);}
+      }
+      return observed(false,'No bounded Eye-bearing route physically reached');
     }
     const eye=item(bot,'ender_eye')||item(bot,'eye_of_ender');
     const origin=bot.entity.position.clone();

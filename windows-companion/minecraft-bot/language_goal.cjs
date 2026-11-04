@@ -4,7 +4,7 @@
 // src/utils/text.js at e1c1fc3ffa481506c2445fc639e16dba504b5920.
 // Original license retained in MINDCRAFT_LICENSE.txt.
 const {validateCommand}=require('./friend_protocol.cjs');
-const {normalizeResource}=require('./resource_goal.cjs');
+const {normalizeResource,RESOURCES}=require('./resource_goal.cjs');
 const {RECIPES}=require('./general_goal.cjs');
 const SIMPLE=new Set(['follow','come','stay','guard','status','inventory','observe','auto_status','auto_stop','auto_resume']);
 const FIXED=new Set(['survive','wood','tools','explore','follow','guard','stone_age','iron_age','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run']);
@@ -21,8 +21,11 @@ const SYSTEM=[
  'If the owner asks an informational question without an action request, negates a task, or gives an ambiguous/unsupported goal, output {"command":"unsupported"}.',
  'Allowed commands: follow, come, stay, guard, status, inventory, observe, auto_status, auto_stop, auto_resume (only for an explicit owner continuation of a saved mission).',
  'Allowed auto_goal values: survive, wood, tools, explore, follow, guard, stone_age, iron_age, companion, dragon_run, netherite_dragon_run, dragon_then_netherite_run, gather, craft, equip, travel, sequence, build, farm_wheat.',
- 'Gather requires resource (logs,planks,sticks,cobblestone,raw_iron,iron_ingot,diamond,obsidian,flint,netherrack) and targetCount 1-64.',
- 'Craft requires item (stick,crafting_table,chest,furnace,ladder,bread,shield,torch) and targetCount 1-16.',
+ 'Gather requires one registered survival resource and targetCount 1-64. Registered resources: '+Array.from(RESOURCES).join(', ')+'.',
+ 'Craft requires one registered vanilla recipe item and targetCount 1-16. Registered recipe items: '+Object.keys(RECIPES).join(', ')+'.',
+ 'For compound requests, use sequence with 1-8 validated typed stages. Each stage must be one supported gather, craft, equip, travel, build, farm_wheat, tools, stone_age or iron_age goal. Never invent coordinates, materials, recipes or stages.',
+ 'Use the supplied observed world context for current inventory, equipment, dimension, owner distance, health, hunger and workstations. Never assume an item is owned unless it appears in that observation.',
+ 'If the owner asks to build a complex house, bridge, redstone machine, locate/trade with a village, enchant, or do another unsupported action, output unsupported instead of pretending a straight-line build can do it.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
  'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
  'Example: {"command":"auto_goal","goal":"gather","resource":"diamond","targetCount":3}.',
@@ -85,14 +88,15 @@ function directIntent(raw){
   [/^(show|check|tell me) (your )?(status|progress)$/,{command:'auto_status'}]
  ];
  for(const [re,q] of rules)if(re.test(s))return canonicalIntent(q);
- const g=/^(mine|gather|collect|get|find|bring)( me)? (\d{1,2}) ([a-z_ ]{2,35})$/.exec(s);
+ const g=/^(mine|gather|collect|get|find|bring)(?: me)?(?: (\d{1,2}|some|a|an|one))? ([a-z_ ]{2,35})$/.exec(s);
  if(g){
-  const resource=normalizeResource(g[4].trim().replace(/ blocks?$/,''));
-  if(resource)return canonicalIntent({command:'auto_goal',goal:'gather',resource,targetCount:Number(g[3])});
+  const resource=normalizeResource(g[3].trim().replace(/ blocks?$/,''));
+  const targetCount=/^\d+$/.test(g[2]||'')?Number(g[2]):1;
+  if(resource)return canonicalIntent({command:'auto_goal',goal:'gather',resource,targetCount});
  }
- const c=/^(craft|make)( me)? (\d{1,2}) ([a-z_ ]{2,35})$/.exec(s);
+ const c=/^(craft|make)(?: me)?(?: (\d{1,2}|a|an|one))? ([a-z_ ]{2,35})$/.exec(s);
  if(c){
-  let item=c[4].trim().replace(/ /g,'_');
+  let item=c[3].trim().replace(/ /g,'_');
   if(!Object.hasOwn(RECIPES,item)){
    // Resolve ordinary English plurals against the actual recipe allowlist.
    // Try both -es and -s forms so 'torches' -> 'torch' and 'chests' -> 'chest'.
@@ -101,7 +105,7 @@ function directIntent(raw){
     item.endsWith('s')?item.slice(0,-1):null].filter(Boolean);
    item=singular.find(candidate=>Object.hasOwn(RECIPES,candidate))||item;
   }
-  if(Object.hasOwn(RECIPES,item))return canonicalIntent({command:'auto_goal',goal:'craft',item,targetCount:Number(c[3])});
+  if(Object.hasOwn(RECIPES,item))return canonicalIntent({command:'auto_goal',goal:'craft',item,targetCount:/^\d+$/.test(c[2]||'')?Number(c[2]):1});
  }
  return null; // More complex language requires a configured JARVIS-owned model.
 }
@@ -123,7 +127,7 @@ async function interpretOwnerInstruction(input,{env=process.env,context='',fetch
  const send=fetchImpl||globalThis.fetch;
  if(typeof send!=='function')return fail('Model transport unavailable');
  const messages=[{role:'system',content:SYSTEM},...strictFormat([{role:'user',content:JSON.stringify({
-  ownerInstruction:text,observedMinecraftStatus:String(context).slice(0,1500)})}])];
+  ownerInstruction:text,observedMinecraftStatus:String(context).slice(0,4000)})}])];
  try{
   const response=await send(config.url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json'},
    body:JSON.stringify({model:config.model,messages,stream:false,format:'json',options:{num_predict:650}}),

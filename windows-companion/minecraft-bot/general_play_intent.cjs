@@ -304,8 +304,11 @@ function modelGoalGrounded(q,ownerText){
     itemMention(q.block)&&has(/\b(?:wall|line|row)\b/);
   case 'farm_wheat':return has(/\b(?:farm|grow|plant|harvest)\b/)&&has(/\bwheat\b/);
   case 'sequence':{
-   if(!Array.isArray(q.steps)||!has(/\b(?:then|after that|next)\b/))return false;
-   const pieces=s.split(/\s+(?:and then|then|after that|next)\s+/);
+   if(!Array.isArray(q.steps)||!(
+   has(/\b(?:then|after that|next)\b/)||
+   has(/\band\s+(?:mine|craft|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b/)
+  ))return false;
+   const pieces=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
    if(pieces.length!==q.steps.length)return false;
    return q.steps.every((step,i)=>{
     const normalized={command:'auto_goal',...step};

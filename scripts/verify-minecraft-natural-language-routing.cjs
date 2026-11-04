@@ -262,6 +262,15 @@ const requiredStages=[
 const sequenceArgs=steps=>({command:'auto_goal',goal:'sequence',steps,durationSeconds:21600});
 ok(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs(requiredStages),sameWorld),
  'Core admits owner-requested bounded gather-then-craft sequence');
+for(const conjunction of ['and craft','and then craft','next craft','after that craft']){
+ const owner='In Minecraft gather four logs '+conjunction+' a chest';
+ ok(mayStartNativeMinecraftGoal(owner,sequenceArgs(requiredStages),sameWorld),
+  'Core preserves two authorized stages for '+conjunction);
+ no(mayStartNativeMinecraftGoal(owner,sequenceArgs(requiredStages.slice(0,1)),sameWorld),
+  'Core refuses silent second-stage omission for '+conjunction);
+ no(mayStartNativeMinecraftGoal(owner,sequenceArgs([...requiredStages].reverse()),sameWorld),
+  'Core refuses altered stage order for '+conjunction);
+}
 no(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs([...requiredStages].reverse()),sameWorld),
  'Core cannot reorder the owner goal sequence');
 no(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs([

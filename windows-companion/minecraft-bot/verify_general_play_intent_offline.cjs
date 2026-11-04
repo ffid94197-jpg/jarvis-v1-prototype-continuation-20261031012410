@@ -6,7 +6,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {directIntent,canonicalIntent,interpretOwnerInstruction}=require('./language_goal.cjs');
-const {modelPrimitiveGrounded}=require('./general_play_intent.cjs');
+const {modelPrimitiveGrounded,modelGoalGrounded}=require('./general_play_intent.cjs');
 const {validateCommand}=require('./friend_protocol.cjs');
 let count=0;
 function ok(value,label){assert.ok(value,label);count++;console.log('PASS',label);}
@@ -46,6 +46,27 @@ const seq=directIntent('gather four logs then craft one chest');
 ok(seq.ok&&seq.command.steps.length===2&&seq.command.durationSeconds===21600&&
  seq.command.steps[0].goal==='gather'&&seq.command.steps[1].goal==='craft',
  'verifiable bounded long-horizon sequence stages');
+for(const phrase of [
+ 'gather four logs and craft a chest',
+ 'gather four logs and then craft a chest',
+ 'gather four logs next craft a chest',
+ 'gather four logs after that craft a chest'
+]){
+ const parsed=directIntent(phrase);
+ ok(parsed?.ok&&parsed.command.goal==='sequence'&&
+   parsed.command.steps.length===2&&
+   parsed.command.steps[0].resource==='logs'&&
+   parsed.command.steps[1].item==='chest',
+   'equivalent natural-language conjunction preserves BOTH steps: '+phrase);
+ ok(modelGoalGrounded(parsed.command,phrase),
+   'model gate grounds full ordered conjunction without partial completion: '+phrase);
+}
+const swapped=directIntent('craft a chest and gather four logs');
+ok(swapped?.ok&&swapped.command.steps[0].goal==='craft'&&
+ swapped.command.steps[1].goal==='gather',
+ 'compound owner order is not silently reversed');
+ok(!directIntent('gather four logs and craft 99 chests')?.ok,
+ 'malformed second stage cannot be silently omitted');
 for(const text of [
  "don't mine block 1 64 1","craft 99 chests",
  'mine 65 diamonds','what is an iron sword?',

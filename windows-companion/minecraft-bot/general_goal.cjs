@@ -65,11 +65,17 @@ function generalPlan(world,progress={},delegate){
  const hasVersionedRecipe=catalog?.root===progress.item &&
    Array.isArray(catalog?.nodes?.[progress.item]) &&
    catalog.nodes[progress.item].length>0;
- if(hasVersionedRecipe || !Object.hasOwn(RECIPES,progress.item))
-  return planRecipeStep(catalog,inv.raw,progress.item,progress.targetCount,{
+ if(hasVersionedRecipe || !Object.hasOwn(RECIPES,progress.item)){
+  const versioned=planRecipeStep(catalog,inv.raw,progress.item,progress.targetCount,{
    workbenchNearby:world?.workbenchNearby===true,logs:inv.logs||0,planks:inv.planks||0,
    delegate
   });
+  // Only the original eight audited recipes may use this compatibility
+  // fallback. Never improvise ingredients for an arbitrary item if its
+  // actual versioned recipe graph contains no permitted acquisition path.
+  if(versioned.kind!=='blocked'||!Object.hasOwn(RECIPES,progress.item))
+   return versioned;
+ }
  const recipe=RECIPES[progress.item];
  for(const [ingredient,amount] of Object.entries(recipe)){
   if(ingredient==='oak_planks'){

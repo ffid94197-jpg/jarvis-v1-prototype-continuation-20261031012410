@@ -209,12 +209,14 @@ function contextualIntent(text,context){
    .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
    .replace(/\s+(?:please|for me)$/,'');
  const request=/^(?:open|close|activate|press|toggle|interact with|use) (?:the |a |an |that |this |my )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table)$/.exec(instruction);
+ const travel=/^(?:go|walk|move|navigate|travel|head)(?: over)? to (?:the |a |that |this )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table|enchanting table)$/.exec(instruction);
+ const inspect=/^(?:inspect|examine|look at|check) (?:the |a |that |this )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table|enchanting table)$/.exec(instruction);
  const villagerInspect=/^(?:show|list|inspect|view|check)(?: me)?(?: the)? (?:trades|offers) (?:for|from|of) (?:the |a |that )?villager$/.exec(instruction);
  const villageDeal=/^(?:trade|buy|purchase) (?:offer|deal|trade|option) (?:number |#)?(\d{1,2})(?: (?:from|with) (?:the )?villager)?(?: (once|twice|three times|four times))?$/.exec(instruction);
  const storage=new RegExp('^(store|deposit|put|withdraw|take|retrieve) ('+COUNT_PATTERN+') ([a-z_ ]{2,56}) (?:in|into|from) (?:the |a |that )?(chest|barrel)$').exec(instruction);
  const enchanting=/^enchant (?:my |the |a |an )?([a-z_ ]{2,56}) (?:with |using )?(?:the )?(first|second|third) (?:choice|option)$/.exec(instruction);
  const fight=/^(?:attack|fight|defeat|kill|slay) (?:the |that |a |an )?(?:nearby )?([a-z_]+(?: [a-z_]+)?)(?: (?:up to )?(\d{1,2}) (?:hits|swings|times))?$/.exec(instruction);
- if(!request&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight)return null;
+ if(!request&&!travel&&!inspect&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight)return null;
  let scene;
  try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve nearby objects without a fresh game observation');}
  if(!scene||scene.joined!==true||scene.busy!==false||!Array.isArray(scene.nearbyBlocks))
@@ -275,17 +277,23 @@ function contextualIntent(text,context){
   button:/^[a-z_]+_button$/,
   furnace:/^furnace$/,
   'crafting table':/^crafting_table$/,
-  'smithing table':/^smithing_table$/
+  'smithing table':/^smithing_table$/,
+  'enchanting table':/^enchanting_table$/
  };
+ const targetType=request?.[1]||travel?.[1]||inspect?.[1];
  const candidates=scene.nearbyBlocks.filter(b=>b && typeof b.name==='string' &&
-   types[request[1]].test(b.name) &&
-   ['x','y','z'].every(k=>Number.isInteger(b[k]) && Math.abs(b[k])<=30000000));
+   types[targetType]?.test(b.name) &&
+   ['x','y','z'].every(k=>Number.isInteger(b[k]) && Math.abs(b[k])<=30000000) &&
+   scene.position && ['x','y','z'].every(k=>Number.isFinite(scene.position[k])) &&
+   Math.hypot(b.x-scene.position.x,b.y-scene.position.y,b.z-scene.position.z)<=14);
  if(candidates.length!==1)
   return fail(candidates.length===0?
-    'No matching block present in the fresh nearby world observation':
-    'Multiple matching blocks are visible; specify the exact block or coordinates');
- const {x,y,z}=candidates[0];
- return canonicalIntent({command:'interact_block',position:{x,y,z}});
+    'No matching nearby block present in the fresh observed world':
+    'Multiple matching blocks are visible; specify its exact coordinates');
+ const {x,y,z}=candidates[0],position={x,y,z};
+ if(travel)return canonicalIntent({command:'navigate',position,range:2});
+ if(inspect)return canonicalIntent({command:'inspect_block',position});
+ return canonicalIntent({command:'interact_block',position});
 }
 function modelConfig(env){
  if(env?.JARVIS_MODEL_BACKEND!=='ollama'||!env.JARVIS_OLLAMA_MODEL)return null;

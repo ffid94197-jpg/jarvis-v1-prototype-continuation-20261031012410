@@ -14,6 +14,11 @@ function ok(value,label){assert.ok(value,label);count++;console.log('PASS',label
 const examples=[
  ['make three oak doors','craft_item','oak_door',3],
  ['please craft four glass','craft_item','glass',4],
+ ['craft four oak planks','craft_item','oak_planks',4],
+ ['craft five stone bricks','craft_item','stone_bricks',5],
+ ['craft two torches','craft_item','torch',2],
+ ['craft two iron pickaxes','craft_item','iron_pickaxe',2],
+ ['craft two diamond boots','craft_item','diamond_boots',2],
  ['craft two chests','craft','chest',2],
  ['craft one torch','craft','torch',1],
  ['wear a diamond helmet','equip_item','diamond_helmet'],
@@ -101,6 +106,22 @@ const respond=(payload)=>async()=>({ok:true,text:async()=>JSON.stringify({
   env,context:scene,fetchImpl:respond({command:'follow'})
  });
  ok(!falseFollow.ok,'model cannot turn resource request into follow effect');
+ const improper=await interpretOwnerInstruction('Defeat the Ender Dragon then get full Netherite armor',{
+  env,context:scene,fetchImpl:respond({command:'auto_goal',goal:'netherite_dragon_run'})
+ });
+ ok(!improper.ok,'model cannot reverse the explicitly requested Dragon/Netherite order');
+ const correct=await interpretOwnerInstruction('Defeat the Ender Dragon then get full Netherite armor',{
+  env,context:scene,fetchImpl:respond({command:'auto_goal',goal:'dragon_then_netherite_run'})
+ });
+ ok(correct.ok&&correct.command.goal==='dragon_then_netherite_run','explicitly ordered combined goal still works');
+ const truncated=await interpretOwnerInstruction('Please mine three diamonds then craft a chest',{
+  env,context:scene,fetchImpl:respond({command:'auto_goal',goal:'gather',resource:'diamond',targetCount:3})
+ });
+ ok(!truncated.ok,'model cannot silently omit the second stage of a composed request');
+ const unbounded=await interpretOwnerInstruction('Make a stack of torches for me',{
+  env,context:scene,fetchImpl:respond({command:'craft_item',item:'torch',count:1})
+ });
+ ok(!unbounded.ok,'model cannot turn one stack of torches into one torch');
  const realFollow=await interpretOwnerInstruction('Could you follow me around the cave',{
   env,context:scene,fetchImpl:respond({command:'follow'})
  });

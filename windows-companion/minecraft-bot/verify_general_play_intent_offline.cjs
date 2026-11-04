@@ -89,6 +89,22 @@ const respond=(payload)=>async()=>({ok:true,text:async()=>JSON.stringify({
   env,context:scene,fetchImpl:respond({command:'dig_block',position:{x:9,y:64,z:9}})
  });
  ok(!denied.ok,'model hallucinated coordinate rejected');
+ const swapped=await interpretOwnerInstruction('Please get me three diamonds without exploring far',{
+  env,context:scene,fetchImpl:respond({command:'auto_goal',goal:'dragon_run'})
+ });
+ ok(!swapped.ok,'model cannot substitute an unrelated Dragon goal');
+ const resource=await interpretOwnerInstruction('Please get me three diamonds without exploring far',{
+  env,context:scene,fetchImpl:respond({command:'auto_goal',goal:'gather',resource:'diamond',targetCount:3})
+ });
+ ok(resource.ok&&resource.command.goal==='gather','model goal matching requested resource and quantity admitted');
+ const falseFollow=await interpretOwnerInstruction('Please get me three diamonds without exploring far',{
+  env,context:scene,fetchImpl:respond({command:'follow'})
+ });
+ ok(!falseFollow.ok,'model cannot turn resource request into follow effect');
+ const realFollow=await interpretOwnerInstruction('Could you follow me around the cave',{
+  env,context:scene,fetchImpl:respond({command:'follow'})
+ });
+ ok(realFollow.ok&&realFollow.command.command==='follow','model owner-matched follow request admitted');
 
  // Execute the REAL craftNamed function from bot.cjs with Mineflayer-shaped
  // inventory/recipe stubs, without making any packets. This checks the

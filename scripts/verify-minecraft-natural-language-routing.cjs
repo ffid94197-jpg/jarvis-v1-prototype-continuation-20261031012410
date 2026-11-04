@@ -283,6 +283,25 @@ no(mayStartNativeMinecraftGoal(sequenceOwner,sequenceArgs(Array(9).fill(required
 no(mayStartNativeMinecraftGoal('In Minecraft get Netherite after defeating the Dragon',
  nativeGoal('netherite_dragon_run'),sameWorld),
  'Core refuses ambiguous after-clause rather than reversing mission order');
+const travelStages=[
+ {goal:'travel',destination:{x:1,y:64,z:2},arrivalRange:2},
+ {goal:'craft',item:'chest',targetCount:1}
+];
+ok(mayStartNativeMinecraftGoal('In Minecraft travel to 1 64 2 then craft a chest',
+ sequenceArgs(travelStages),sameWorld),
+ 'Core admits literal owner-specified travel stage before craft');
+no(mayStartNativeMinecraftGoal('In Minecraft travel to 1 64 2 then craft a chest',
+ sequenceArgs([{...travelStages[0],destination:{...travelStages[0].destination,admin:true}},
+  travelStages[1]]),sameWorld),
+ 'Core rejects injected nested position metadata');
+const equipStages=[{goal:'equip',item:'iron_helmet',destination:'head'},
+ {goal:'craft',item:'chest',targetCount:1}];
+ok(mayStartNativeMinecraftGoal('In Minecraft equip iron helmet then craft a chest',
+ sequenceArgs(equipStages),sameWorld),
+ 'Core admits owner-specified equipment then craft');
+no(mayStartNativeMinecraftGoal('In Minecraft equip iron helmet then craft a chest',
+ sequenceArgs([{...equipStages[0],destinationSlot:'head'},equipStages[1]]),sameWorld),
+ 'Core refuses extra equipment-stage parameters');
 
 const entry=(objective)=>{
  const gate=new MinecraftAiGate(objective);

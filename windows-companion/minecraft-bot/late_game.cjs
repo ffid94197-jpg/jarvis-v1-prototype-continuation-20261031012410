@@ -138,6 +138,14 @@ function lateGamePlan(world,progress={}){
     }
     return action('search_dragon','Scout End island for real dragon or exit portal');
   }
+  if(gearOnly && wantedNetherite.every(name=>has(i,name))){
+    // Equipment goals are not location-specific. Once the actual items
+    // exist, put them on wherever the player is safe rather than performing
+    // an unnecessary portal transition or mining another template.
+    return armorOnly?
+      action('equip_netherite_armor','Equip owned Netherite armor in physically observed slots'):
+      action('equip_netherite','Equip owned Netherite armor and sword in physical slots');
+  }
   if(dimension==='the_nether'){
     // Bring all five upgrade ingots' ingredients, template, pearls and rods
     // back home; Overworld is safer for crafting and smithing workstations.

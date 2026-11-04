@@ -43,6 +43,7 @@ function compactAutonomyStatus(state){
    .slice(0,15)),
   ...(state.sequenceIndex!==undefined?{sequenceIndex:boundedNum(state.sequenceIndex)}:{}),
   ...(state.resource!==undefined?{resource:boundedString(state.resource,64)}:{}),
+  ...(state.item!==undefined?{item:boundedString(state.item,64)}:{}),
   ...(state.targetCount!==undefined?{targetCount:boundedNum(state.targetCount)}:{})
  };
  let json=JSON.stringify(receipt);

@@ -27,7 +27,7 @@ function extractGoal(state){
  const spec={goal};
  if(goal==='gather'){
    spec.resource=state.resource;spec.targetCount=state.targetCount;
- }else if(goal==='craft'){
+ }else if(goal==='craft'||goal==='smelt'){
    spec.item=state.item;spec.targetCount=state.targetCount;
  }else if(goal==='equip'){
    spec.item=state.item;spec.destinationSlot=state.destination;

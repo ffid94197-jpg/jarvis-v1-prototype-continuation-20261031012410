@@ -5,6 +5,7 @@
  * bot.cjs checks actual world state. No arbitrary scripts or admin commands.
  */
 const {roofedRoomSteps}=require('./structure_goal.cjs');
+const {SMELT_RECIPES}=require('./smelt_goal.cjs');
 // A whole armor set is an owner-defined four-slot objective, not permission
 // to select arbitrary equipment or execute raw Minecraft actions.
 function armorEquipSteps(ownerText){
@@ -254,7 +255,7 @@ function modelGoalGrounded(q,ownerText,context=''){
  // into one model-selected subgoal. The typed sequence controller must
  // verify every constituent stage independently.
  const multiPart=has(/\b(?:then|after that|afterwards?|next)\b/)||
-   has(/\band(?:\s+then)?\s+(?:mine|craft|make|build|gather|collect|equip|wear|defeat|beat|fight|travel|go|place)\b/);
+   has(/\band(?:\s+then)?\s+(?:mine|craft|smelt|cook|bake|refine|make|build|gather|collect|equip|wear|defeat|beat|fight|travel|go|place)\b/);
  // A full Netherite armor AND sword request is one explicit loadout
  // outcome handled by the native smithing goal. It is not an unrelated
  // model-invented two-step sequence. All other conjunctions still require
@@ -339,6 +340,24 @@ function modelGoalGrounded(q,ownerText,context=''){
   }
   case 'craft':return has(/\b(?:craft|make)\b/)&&
     itemMention(q.item)&&quantityMatches(q.targetCount);
+  case 'smelt':{
+   const rule=SMELT_RECIPES[q.item];
+   if(!rule||!has(/\b(?:smelt|cook|refine|bake)\b/) ||
+      !quantityMatches(q.targetCount))return false;
+   const product=q.item.replace(/_/g,' ');
+   const origin=rule.input.replace(/_/g,' ');
+   const source=rule.input==='raw_iron'?/\b(?:raw iron|iron ore|iron ingot)\b/:
+      rule.input==='raw_gold'?/\b(?:raw gold|gold ore|gold ingot)\b/:
+      rule.input==='raw_copper'?/\b(?:raw copper|copper ore|copper ingot)\b/:
+      rule.input==='ancient_debris'?/\b(?:ancient debris|netherite scrap)\b/:
+      new RegExp('\\b'+origin.replace(/ /g,'\\s+')+'\\b');
+   if(!source.test(s)&&!s.includes(product))return false;
+   const named=/\b(?:into|to make|for)\s+([a-z ]{2,35})$/.exec(s.trim());
+   const label=named?.[1].trim();
+   const singular=label==='glass'?'glass':
+     label?.replace(/potatoes$/,'potato').replace(/s$/,'');
+   return !named || singular===product;
+  }
   case 'equip':return has(/\b(?:wear|equip|wield|hold|put on)\b/)&&itemMention(q.item);
   case 'travel':{
    if(!has(/\b(?:travel|walk|go|navigate|reach|head)\b/)||
@@ -410,14 +429,21 @@ function modelGoalGrounded(q,ownerText,context=''){
    }
    if(!Array.isArray(q.steps)||!(
    has(/\b(?:then|after that|next)\b/)||
-   has(/\band\s+(?:mine|craft|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b/)
+   has(/\band\s+(?:mine|craft|smelt|cook|bake|refine|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b/)
   ))return false;
-   const pieces=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
+   const pieces=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|smelt|cook|bake|refine|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
    if(pieces.length!==q.steps.length)return false;
    return q.steps.every((step,i)=>{
     const normalized={command:'auto_goal',...step};
     if(step.goal==='equip'&&step.destination!==undefined){
       normalized.destinationSlot=step.destination;delete normalized.destination;
+    }
+    if(i>0&&step.goal==='smelt'&&
+       /^(?:smelt|cook|bake|refine) (?:it|them)$/.test(pieces[i].trim())){
+      const prior=q.steps[i-1],recipe=SMELT_RECIPES[step.item];
+      return prior?.goal==='gather'&&recipe?.source===prior.resource&&
+        step.targetCount===prior.targetCount&&
+        Number.isInteger(step.targetCount)&&step.targetCount>=1&&step.targetCount<=16;
     }
     return modelGoalGrounded(normalized,pieces[i]);
    });

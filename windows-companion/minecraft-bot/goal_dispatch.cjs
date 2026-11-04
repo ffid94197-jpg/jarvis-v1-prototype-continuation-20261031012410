@@ -7,6 +7,7 @@ const GOAL_FIELDS=Object.freeze({
  gather:['resource','targetCount'],
  travel:['destination','arrivalRange'],
  craft:['item','targetCount'],
+ smelt:['item','targetCount'],
  equip:['item','destinationSlot'],
  defeat_hostile:['mob','entityId'],
  build:['position','block','axis','length'],

@@ -58,12 +58,17 @@ function loadedTargets(bot,{includeGeneral=false}={}){
   const extra=ranked.filter(b=>GENERAL.test(b.name)&&!keys.has(b.x+','+b.y+','+b.z)).slice(0,4);
   return [...core,...extra].slice(0,12);
 }
-function projectWorld(world,nearby=[],lastAction='',mode='stay',nativeGoal=null){
+function projectWorld(world,nearby=[],lastAction='',mode='stay',nativeGoal=null,nativeItem=null){
   if(!world || !world.position)throw Error('No observed Minecraft player position');
   const raw=world.inventory?.raw||{};
+  // Native owner-authorized item goals need a current physical inventory
+  // readback for the EXACT target even when carrying many unrelated items.
+  // Model-proposed item names never influence the read-only digest.
+  const target=typeof nativeItem==='string'&&/^[a-z_]{2,64}$/.test(nativeItem)?nativeItem:null;
+  const rank=name=>name===target?-1:(itemRank.get(name)??1000);
   const ordered=Object.entries(raw)
     .filter(([k,n])=>/^[a-z0-9_]{1,64}$/.test(k)&&Number.isFinite(n)&&n>0)
-    .sort(([a],[b])=>(itemRank.get(a)??1000)-(itemRank.get(b)??1000))
+    .sort(([a],[b])=>rank(a)-rank(b))
     .slice(0,32);
   const slim={
     joined:world.joined===true,position:world.position,dimension:world.dimension,

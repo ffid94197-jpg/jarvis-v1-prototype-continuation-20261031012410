@@ -6,6 +6,7 @@ const {validSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,validVolumeSpec}=require('./structure_goal.cjs');
 const {validFarmSpec}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
+const {validSmeltSpec}=require('./smelt_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop','auto_checkpoint','auto_resume']);
 function validateCommand(input) {
@@ -45,6 +46,7 @@ function validateCommand(input) {
       input.entityId>=0&&input.entityId<=200000;
     const validGoal=fixed.includes(input.goal)||validBoundHostile||validTravel||validBuild||validVolume||validFarm||
       (input.goal==='craft' && validCraftSpec({goal:'craft',item:input.item,targetCount:input.targetCount}))||
+      (input.goal==='smelt' && validSmeltSpec({goal:'smelt',item:input.item,targetCount:input.targetCount}))||
       (input.goal==='equip' && validEquipSpec({goal:'equip',item:input.item,destination:input.destinationSlot}))||
       (input.goal==='gather' && RESOURCES.has(input.resource) &&
         Number.isInteger(input.targetCount) &&
@@ -59,6 +61,12 @@ function validateCommand(input) {
         input.targetCount===undefined&&input.item===undefined&&input.position===undefined&&
         input.block===undefined&&input.width===undefined&&input.depth===undefined&&
         input.height===undefined&&input.shape===undefined&&input.destinationSlot===undefined) ||
+      (input.goal==='smelt' && input.steps===undefined&&input.destination===undefined&&
+        input.arrivalRange===undefined&&input.position===undefined&&input.resource===undefined&&
+        input.block===undefined&&input.axis===undefined&&input.length===undefined&&
+        input.width===undefined&&input.depth===undefined&&input.height===undefined&&
+        input.shape===undefined&&input.mob===undefined&&input.entityId===undefined&&
+        input.destinationSlot===undefined) ||
       (input.goal==='craft' && input.steps===undefined&&input.destination===undefined&&
         input.arrivalRange===undefined&&input.position===undefined&&input.resource===undefined&&
         input.block===undefined&&input.axis===undefined&&input.length===undefined&&
@@ -85,9 +93,9 @@ function validateCommand(input) {
         input.arrivalRange===undefined);
     return validGoal && noUnrelatedParameters &&
       (input.goal==='defeat_hostile'||(input.mob===undefined&&input.entityId===undefined)) &&
-      (['craft','equip'].includes(input.goal)||input.item===undefined) &&
+      (['craft','equip','smelt'].includes(input.goal)||input.item===undefined) &&
       (input.goal==='equip'||input.destinationSlot===undefined) &&
-      (['craft','gather','farm_wheat'].includes(input.goal)||input.targetCount===undefined) &&
+      (['craft','smelt','gather','farm_wheat'].includes(input.goal)||input.targetCount===undefined) &&
       (input.goal==='build_volume'||['height','shape'].every(k=>input[k]===undefined)) &&
       (['build','build_volume'].includes(input.goal)||['block','axis','length'].every(k=>input[k]===undefined)) &&
       (input.goal==='build_volume'||input.height===undefined&&input.shape===undefined) &&

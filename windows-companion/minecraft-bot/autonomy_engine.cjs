@@ -10,10 +10,11 @@ const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,buildPlan,validVolumeSpec,volumePlan}=require('./structure_goal.cjs');
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
+const {validSmeltSpec,smeltPlan}=require('./smelt_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip']);
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip','smelt']);
 // Perception must include EVERY already-authorized hostile; otherwise the
 // planner never sees cave spiders, slimes or phantoms that the native combat
 // controller can safely handle. Add explicitly disallowed hazards for
@@ -201,6 +202,8 @@ function decide(goal, world, failures={}, progress={}) {
     return {kind:'fight_bound_hostile',targetId:progress.entityId,mob:progress.mob,
       why:'Continue target-bound guarded melee only while same hostile is observed'};
   }
+  if(goal==='smelt')return smeltPlan(world,{...progress,goal},
+    (needed,extra)=>decide(needed,world,failures,{...progress,...extra,goal:needed}));
   if(goal==='craft'||goal==='equip')return generalPlan(world,{...progress,goal},
     (needed,extra)=>decide(needed,world,failures,{...progress,...extra}));
   if(goal==='gather')return resourcePlan(world,failures,progress,needed=>decide(needed,world,failures,progress));
@@ -445,6 +448,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       throw Error('Invalid bounded multi-layer construction goal');
     if(goal==='craft' && !validCraftSpec({goal,item:spec?.item,targetCount:spec?.targetCount}))
       throw Error('Unsupported general crafting recipe or target quantity');
+    if(goal==='smelt' && !validSmeltSpec({goal,item:spec?.item,targetCount:spec?.targetCount}))
+      throw Error('Unsupported furnace output or smelting quantity');
     if(goal==='equip' && !validEquipSpec({goal,item:spec?.item,destination:spec?.destination}))
       throw Error('Unsupported equipment item or slot');
     if(goal==='sequence' && !validSequence(spec?.steps))
@@ -460,7 +465,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null,
       ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{}),
       ...(goal==='defeat_hostile'?{mob:spec.mob,entityId:spec.entityId}:{}),
-      ...(goal==='craft'?{item:spec.item,targetCount:spec.targetCount}:{}),
+      ...(goal==='craft'||goal==='smelt'?{item:spec.item,targetCount:spec.targetCount}:{}),
       ...(goal==='equip'?{item:spec.item,destination:spec.destination}:{}),
       ...(goal==='build'?{position:{...spec.position},block:spec.block,axis:spec.axis,length:spec.length}:{}),
       ...(goal==='build_volume'?{position:{...spec.position},block:spec.block,

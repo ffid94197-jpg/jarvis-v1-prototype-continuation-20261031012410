@@ -465,6 +465,16 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       }
       if(!d)d={kind:'blocked',why:'No valid stage decision'};
     }else d=decide(state.goal,world,state.failures,state);
+    // Replan from a different *observed safe* travel waypoint after repeated
+    // pathfinder failure. Never change the owner's destination or silently
+    // declare arrival from a successful detour.
+    if(state.goal==='travel' && d.kind==='travel_target' &&
+       (state.failures.travel_target||0)>=2){
+      d=(state.milestones.travelRecoveryTrips||0)>=4
+       ?{kind:'blocked',why:'Four verified alternate travel approaches exhausted; destination not reached'}
+       :{kind:'scout_survival',reason:'travel_recovery',index:state.steps,
+         why:'Previous route failed; observe a new safe approach before retrying exact target'};
+    }
     // A repeated failure to collect real stone gets an alternate safe
     // observation site, never a fabricated inventory receipt.
     if(d.kind==='mine_cobblestone' && (state.failures.mine_cobblestone||0)>=2){
@@ -563,6 +573,11 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         if(decision.reason==='stone_recovery'){
           state.milestones.stoneSurveyTrips=Math.min(8,(state.milestones.stoneSurveyTrips||0)+1);
           state.failures.mine_cobblestone=0;
+        }
+        if(decision.reason==='travel_recovery'){
+          state.milestones.travelRecoveryTrips=Math.min(4,(state.milestones.travelRecoveryTrips||0)+1);
+          state.failures.travel_target=0;
+          state.milestones.travelArrivalVerified=false;
         }
       }}
     else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;

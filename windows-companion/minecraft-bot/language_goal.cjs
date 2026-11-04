@@ -216,7 +216,7 @@ function contextualIntent(text,context){
  const villageDeal=/^(?:trade|buy|purchase) (?:offer|deal|trade|option) (?:number |#)?(\d{1,2})(?: (?:from|with) (?:the )?villager)?(?: (once|twice|three times|four times))?$/.exec(instruction);
  const storage=new RegExp('^(store|deposit|put|withdraw|take|retrieve) ('+COUNT_PATTERN+') ([a-z_ ]{2,56}) (?:in|into|from) (?:the |a |that )?(chest|barrel)$').exec(instruction);
  const enchanting=/^enchant (?:my |the |a |an )?([a-z_ ]{2,56}) (?:with |using )?(?:the )?(first|second|third) (?:choice|option)$/.exec(instruction);
- const fight=/^(?:attack|fight|defeat|kill|slay) (?:the |that |a |an )?(?:nearby )?([a-z_]+(?: [a-z_]+)?)(?: (?:up to )?(\d{1,2}) (?:hits|swings|times))?$/.exec(instruction);
+ const fight=/^(?:attack|fight|defeat|kill|slay|eliminate|take out) (?:the |that |a |an )?(?:nearby )?([a-z_]+(?: [a-z_]+)?)(?: (?:up to )?(\d{1,2}) (?:hits|swings|times))?$/.exec(instruction);
  if(!request&&!travel&&!inspect&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight)return null;
  let scene;
  try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve nearby objects without a fresh game observation');}
@@ -243,7 +243,7 @@ function contextualIntent(text,context){
  if(fight){
   const mob=fight[1].replace(/ /g,'_');
   if(!ALLOWED_HOSTILES.has(mob))return fail('Requested entity is not an approved hostile target');
-  const durable=!fight[2]&&/^(?:defeat|kill|slay)\b/.test(instruction);
+  const durable=!fight[2]&&/^(?:defeat|kill|slay|eliminate|take out)\b/.test(instruction);
   const radius=durable?12:3.4;
   const targets=Array.isArray(scene.threats)?scene.threats.filter(t=>
     t?.name===mob&&Number.isInteger(t.id)&&Number.isFinite(t.distance)&&

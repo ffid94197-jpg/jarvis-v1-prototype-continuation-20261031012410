@@ -12,6 +12,7 @@ export type MinecraftAiObservation = {
   joined:boolean;
   busy:boolean;
   dimension?:string;
+  nativeGoal?:string|null;
   wornNetherite?:boolean;
   dragonDeadObserved?:boolean;
   exitPortalPresent?:boolean;
@@ -20,6 +21,13 @@ export type MinecraftAiObservation = {
   villagers?: Array<{id:number;name:string;distance:number}>;
   threats?: Array<{id:number;name:string;distance:number;position?:{x:number;y:number;z:number}}>;
   lastAction?:string;
+};
+
+type NativeMissionReceipt = {
+  goal:string;
+  status:string;
+  since:number;
+  milestones:Record<string,unknown>;
 };
 
 const READ_ONLY = new Set(['observe','status','inventory','auto_status','inspect_block']);
@@ -43,6 +51,9 @@ function observationFromResult(result:unknown): MinecraftAiObservation | null {
         !s.inventory || typeof s.inventory!=='object') return null;
     // Only finite integer coordinates and well-formed names from real Mineflayer
     // snapshot data may be supplied as actionable model grounding.
+    if(s.nativeGoal!==undefined && s.nativeGoal!==null &&
+       (typeof s.nativeGoal!=='string'||!/^[a-z_]{1,64}$/.test(s.nativeGoal)))
+      return null;
     s.nearbyBlocks=Array.isArray(s.nearbyBlocks)?s.nearbyBlocks.filter(b=>
       b && typeof b.name==='string' && /^[a-z_]{1,64}$/.test(b.name) &&
       point(b) && Number.isInteger(b.x) && Number.isInteger(b.y) && Number.isInteger(b.z)).slice(0,12):[];
@@ -466,6 +477,9 @@ export class MinecraftAiGate {
   private sameIdleObservations=0;
   private lastSceneSignature: string|null=null;
   private bootstrapJoinConsumed=false;
+  private nativeGoalStarted:string|null=null;
+  private nativeGoalStartedAt:number|null=null;
+  private nativeStatus:NativeMissionReceipt|null=null;
   constructor(private readonly objective: string = '',
               private readonly allowBootstrapJoin=false) {}
   get lastObservation(){return this.observed;}
@@ -686,6 +700,44 @@ export class MinecraftAiGate {
   }
   record(tool:string,args:Record<string,unknown>,result:unknown):void {
     if(tool!=='minecraft_companion_command')return;
+    // An external bot may have completed some entirely different mission
+    // before this owner task. Only a currently admitted native goal STARTED
+    // by this task can be associated with a later status receipt.
+    if(args.command==='auto_goal'){
+      const wrapper=result&&typeof result==='object'?
+        result as Record<string,unknown>:null;
+      const detail=wrapper?.detail&&typeof wrapper.detail==='object'?
+        wrapper.detail as Record<string,unknown>:null;
+      const admitted=wrapper?.ok===true &&
+        detail?.botAcknowledged===true && detail?.command==='auto_goal';
+      this.nativeGoalStarted=admitted&&typeof args.goal==='string'?args.goal:null;
+      this.nativeGoalStartedAt=this.nativeGoalStarted?Date.now():null;
+      this.nativeStatus=null;
+    }
+    if(args.command==='auto_status'){
+      this.nativeStatus=null;
+      const wrapper=result&&typeof result==='object'?
+        result as Record<string,unknown>:null;
+      const detail=wrapper?.detail&&typeof wrapper.detail==='object'?
+        wrapper.detail as Record<string,unknown>:null;
+      if(wrapper?.ok===true && detail?.botAcknowledged===true &&
+         detail.command==='auto_status' && typeof detail.status==='string' &&
+         detail.status.length<=1800){
+        try{
+          const parsed=JSON.parse(detail.status) as Record<string,unknown>;
+          if(parsed&&typeof parsed.goal==='string'&&
+             /^[a-z_]{1,64}$/.test(parsed.goal)&&
+             typeof parsed.status==='string'&&
+             Number.isSafeInteger(parsed.since)&&
+             parsed.milestones&&typeof parsed.milestones==='object'&&
+             !Array.isArray(parsed.milestones)){
+            this.nativeStatus={goal:parsed.goal,status:parsed.status,
+              since:parsed.since as number,
+              milestones:parsed.milestones as Record<string,unknown>};
+          }
+        }catch{/* A malformed or truncated status is never completion proof. */}
+      }
+    }
     if(args.command==='observe'){
       const latest=observationFromResult(result);
       if(latest){
@@ -699,6 +751,7 @@ export class MinecraftAiGate {
       this.observed=latest;
       this.fresh=latest!==null;
     }else if(CONTROLLED_EFFECTS.has(String(args.command))){
+      if(args.command!=='auto_goal')this.nativeStatus=null;
       this.fresh=false;
       this.sameIdleObservations=0;
       this.lastSceneSignature=null;
@@ -710,6 +763,43 @@ export class MinecraftAiGate {
     const raw=o.inventory.raw||{};
     const logs=Object.entries(raw).filter(([name])=>/_log$/.test(name)).reduce((n,[,v])=>n+(Number.isFinite(v)?v:0),0);
     const pick=raw.wooden_pickaxe||o.inventory.woodenPickaxe||0;
+    const mission=minecraftMissionFromObjective(objective);
+    if(mission&&mission!=='companion'){
+      const receipt=this.nativeStatus,startedAt=this.nativeGoalStartedAt;
+      if(!receipt||this.nativeGoalStarted!==mission||
+         receipt.goal!==mission||o.nativeGoal!==mission||
+         receipt.status!=='complete'||startedAt===null||
+         !Number.isSafeInteger(receipt.since)||
+         Math.abs(receipt.since-startedAt)>60000)
+        return {verified:false,reason:'No matching current-task native mission COMPLETE receipt cross-checked against current live goal and start time'};
+      const m=receipt.milestones,proved=(key:string)=>m[key]===true;
+      if(mission==='netherite_armor_run')
+        return o.wornNetherite===true?
+          {verified:true,reason:'Native mission completed; four Netherite armor slots are physically worn in the fresh game observation'}:
+          {verified:false,reason:'Native completion receipt lacks currently worn four-piece Netherite armor'};
+      if(mission==='netherite_gear_run')
+        return o.wornNetherite===true&&o.heldNetheriteSword===true?
+          {verified:true,reason:'Native goal completed; four Netherite armor slots and held sword are freshly observed'}:
+          {verified:false,reason:'Current real inventory does not show both Netherite armor and sword equipped'};
+      const died=proved('dragonSeen')&&proved('dragonKilled')&&
+        proved('exitPortalObserved')&&o.dragonDeadObserved===true;
+      if(!died)return {verified:false,reason:'No witnessed native Dragon death plus actual End exit portal milestone'};
+      if(mission==='dragon_run'){
+        const returned=proved('endReturned') &&
+          String(o.dimension||'').replace(/^minecraft:/,'')==='overworld';
+        return returned?
+          {verified:true,reason:'Current-task Dragon death, generated End exit portal and server dimension return independently witnessed'}:
+          {verified:false,reason:'Dragon victory lacks verified End-to-Overworld exit completion'};
+      }
+      const wore=o.wornNetherite===true&&o.heldNetheriteSword===true&&
+        proved('netheriteEquipped');
+      if(!wore)return {verified:false,reason:'Dragon victory lacks fresh Netherite armor-and-sword equipment proof'};
+      if(mission==='dragon_then_netherite_run' &&
+         (!proved('endReturned') ||
+           String(o.dimension||'').replace(/^minecraft:/,'')!=='overworld'))
+        return {verified:false,reason:'Dragon-first route has not proven End return before Netherite completion'};
+      return {verified:true,reason:'Current owner mission COMPLETE, witnessed Dragon death+End exit and current four Netherite armor slots and held sword verified'};
+    }
     if(/(?:ender dragon|netherite|beat minecraft|defeat minecraft)/.test(s)) {
       // A single observation is insufficient to establish witnessed dragon death
       // across all game versions. Full mission cannot pass this provisional gate.

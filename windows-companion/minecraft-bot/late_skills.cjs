@@ -628,6 +628,17 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
           return craft('arrow',epoch,'crafting_table');
         return hunt('skeleton','arrow',epoch);
       }
+      case 'collect_food':{
+        const inNether=String(bot.game?.dimension||'').includes('nether');
+        const targets=inNether?[['hoglin','porkchop']]:[
+          ['cow','beef'],['pig','porkchop'],['sheep','mutton'],['chicken','chicken'],['rabbit','rabbit']
+        ];
+        for(const [name,drop] of targets){
+          if(bot.nearestEntity(e=>e?.name===name&&e?.position))
+            return hunt(name,drop,epoch);
+        }
+        return walkScout(epoch,inNether?'safe hoglin food source':'passive livestock food source');
+      }
       case 'obtain_food':{
         const safeRaw=bot.inventory.items().find(i=>['beef','porkchop','mutton','rabbit'].includes(i.name));
         if(safeRaw){const before=bot.food;await bot.equip(safeRaw,'hand');await bot.consume();

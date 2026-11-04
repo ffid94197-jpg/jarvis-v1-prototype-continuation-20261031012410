@@ -1048,6 +1048,40 @@ async function action(q){
     }
     case 'auto_stop':resumeAfterSpawn=false;setMode('stay');return {ok:true,status:'Autonomous gameplay stopped; movement cancelled'};
     case 'auto_goal':{
+      // A natural-language platform is expanded into bounded, parallel
+      // ground-supported rows. No unsupported bridge or floating placement.
+      if(q.goal==='platform'){
+        const player=bot.entity?.position,yaw=bot.entity?.yaw;
+        if(!player||!Number.isFinite(yaw))return {ok:false,error:'Cannot ground a platform without live player position and facing'};
+        const fx=-Math.sin(yaw),fz=Math.cos(yaw);
+        const dx=Math.abs(fx)>Math.abs(fz)?Math.sign(fx):0;
+        const dz=dx===0?(Math.sign(fz)||1):0;
+        const sideX=-dz,sideZ=dx;
+        const sideAxis=sideX>0?'x+':sideX<0?'x-':sideZ>0?'z+':'z-';
+        const length=q.length||3,width=q.width||3;
+        const choices=q.block?[q.block]:['cobblestone','oak_planks','spruce_planks','birch_planks','stone_bricks','dirt','netherrack'];
+        const block=choices.find(name=>BLOCKS.has(name)&&rawCount(bot,name)>0);
+        if(!block)return {ok:false,error:'No supported building block is currently owned; gather a safe block material first'};
+        const origin={x:Math.floor(player.x)+dx*2-sideX*Math.floor((width-1)/2),
+          y:Math.floor(player.y),z:Math.floor(player.z)+dz*2-sideZ*Math.floor((width-1)/2)};
+        const steps=Array.from({length},(_,i)=>({goal:'build',
+          position:{x:origin.x+dx*i,y:origin.y,z:origin.z+dz*i},
+          block,axis:sideAxis,length:width,height:1}));
+        const unique=new Set();
+        for(const stage of steps)for(let i=0;i<width;i++)
+          unique.add([stage.position.x+sideX*i,stage.position.y,stage.position.z+sideZ*i].join(','));
+        const required=unique.size;
+        if(rawCount(bot,block)<required)
+          return {ok:false,error:'Platform needs '+required+' '+block+' blocks; only '+rawCount(bot,block)+' are owned'};
+        const tooFar=[...unique].some(key=>{
+          const [x,y,z]=key.split(',').map(Number);
+          return bot.entity.position.distanceTo(new Vec3(x+.5,y+.5,z+.5))>12;
+        });
+        if(tooFar)return {ok:false,error:'Platform exceeds the local 12-block build authority radius'};
+        q={command:'auto_goal',goal:'sequence',steps,durationSeconds:q.durationSeconds||1800};
+        const normalizedError=validateCommand(q);
+        if(normalizedError)return {ok:false,error:normalizedError};
+      }
       // A natural-language "build a wall" request is anchored to the live
       // player position and facing. The model never invents world coordinates.
       if(q.goal==='wall'){

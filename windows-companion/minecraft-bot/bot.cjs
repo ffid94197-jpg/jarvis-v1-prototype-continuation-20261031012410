@@ -1306,10 +1306,16 @@ bot.on('chat',(username,message)=>{
 });
 const reader=readline.createInterface({input:process.stdin,crlfDelay:Infinity});
 reader.on('line',line=>{
-  let q;try{q=JSON.parse(line);}catch{return;}
-  if(typeof q.id!=='string'||!/^[a-f0-9]{16}$/.test(q.id))return;
-  action(q).then(r=>ack(q.id,r.ok,r.status,r.error))
-    .catch(err=>ack(q.id,false,'',String(err.message||err).slice(0,120)));
+  let envelope;try{envelope=JSON.parse(line);}catch{return;}
+  if(!envelope || typeof envelope!=='object' || Array.isArray(envelope))return;
+  const {id,...command}=envelope;
+  if(typeof id!=='string'||!/^[a-f0-9]{16}$/.test(id))return;
+  // The transport correlation ID is NOT a Minecraft command argument.
+  // natural_goal rejects extra properties and auto_goal has a strict typed
+  // key allowlist. Passing the envelope as-is made BOTH commands unusable
+  // over stdin, despite being accepted by the owner-chat entrypoint.
+  action(command).then(r=>ack(id,r.ok,r.status,r.error))
+    .catch(err=>ack(id,false,'',String(err.message||err).slice(0,120)));
 });
 bot.on('entityDead',entity=>{
    // A death event is only admissible if the current mission observed a

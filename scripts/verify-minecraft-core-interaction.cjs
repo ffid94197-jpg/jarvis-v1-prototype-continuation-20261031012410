@@ -41,7 +41,7 @@ check(decide('Open the Minecraft chest',position,{shell:'cmd'}).ok===false,
  'unexpected action parameters are rejected');
 check(decide('Open the Minecraft chest',position,{}, {nearbyBlocks:[]}).ok===false,
  'stale or missing observed target is not admitted');
-check(decide('Open the Minecraft chest',{...position,meta:true}).ok===true===false,
+check(decide('Open the Minecraft chest',{...position,meta:true}).ok===false,
  'invalid metadata coordinate must be denied by companion exact-schema validator');
 // The isolated guard itself is not the full Core: the actual wire validator
 // rejects extra position keys at the Mineflayer boundary. This assertion

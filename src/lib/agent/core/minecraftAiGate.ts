@@ -537,6 +537,7 @@ export class MinecraftAiGate {
   private nativeSmeltItem:string|null=null;
   private nativeSmeltQuantity:number|null=null;
   private nativeStageCount:number|null=null;
+  private pendingNativeRestore:{goal:string;startedAt:number;args:Record<string,unknown>}|null=null;
   private nativeStatus:NativeMissionReceipt|null=null;
   constructor(private readonly objective: string = '',
               private readonly allowBootstrapJoin=false) {}
@@ -545,13 +546,27 @@ export class MinecraftAiGate {
    * budget pause. A replayed model summary, external status or different
    * owner's task cannot create this binding.
    */
-  restoreNativeMission(goal:string,startedAt:number):boolean {
-    const expected=minecraftMissionFromObjective(this.objective);
-    if(!expected || goal!==expected || this.nativeGoalStarted!==null ||
-       !Number.isSafeInteger(startedAt) || startedAt<0 ||
+  restoreNativeMission(goal:string,startedAt:number,savedArgs:Record<string,unknown>={}):boolean {
+    if(this.nativeGoalStarted!==null||this.pendingNativeRestore!==null ||
+       !Number.isSafeInteger(startedAt)||startedAt<0 ||
        startedAt>Date.now()+60000)return false;
-    this.nativeGoalStarted=goal;
-    this.nativeGoalStartedAt=startedAt;
+    const expected=minecraftMissionFromObjective(this.objective);
+    if(expected&&goal===expected){
+      this.nativeGoalStarted=goal;
+      this.nativeGoalStartedAt=startedAt;
+      return true;
+    }
+    // For typed staged/furnace missions, do not trust a historical goal
+    // string alone. Defer restoring its owner-task binding until the next
+    // fresh, idle Mineflayer scene can independently revalidate the EXACT
+    // saved tool arguments against current owner language.
+    const hint=goal==='smelt'?/\b(?:smelt|cook|bake|refine)\b/i:
+      goal==='sequence'?/\b(?:then|after that|next|and)\b/i:
+      goal==='shelter'?/\b(?:shelter|hut)\b/i:null;
+    if(!hint||!hint.test(this.objective)||
+       savedArgs.command!=='auto_goal'||savedArgs.goal!==goal)
+      return false;
+    this.pendingNativeRestore={goal,startedAt,args:{...savedArgs}};
     return true;
   }
 
@@ -836,6 +851,21 @@ export class MinecraftAiGate {
       }
       this.observed=latest;
       this.fresh=latest!==null;
+      if(latest && !latest.busy && this.pendingNativeRestore){
+        const pending=this.pendingNativeRestore;
+        this.pendingNativeRestore=null;
+        if(mayStartNativeMinecraftGoal(this.objective,pending.args,latest)){
+          this.nativeGoalStarted=pending.goal;
+          this.nativeGoalStartedAt=pending.startedAt;
+          this.nativeSmeltItem=pending.goal==='smelt'?
+            String(pending.args.item):null;
+          this.nativeSmeltQuantity=pending.goal==='smelt'?
+            Number(pending.args.targetCount):null;
+          this.nativeStageCount=pending.goal==='sequence' &&
+            Array.isArray(pending.args.steps)?pending.args.steps.length:
+            pending.goal==='shelter'?3:null;
+        }
+      }
     }else if(CONTROLLED_EFFECTS.has(String(args.command))){
       if(args.command!=='auto_goal')this.nativeStatus=null;
       this.fresh=false;

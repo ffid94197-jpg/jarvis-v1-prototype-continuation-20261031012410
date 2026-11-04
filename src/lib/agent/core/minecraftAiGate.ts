@@ -15,11 +15,12 @@ export type MinecraftAiObservation = {
   exitPortalPresent?:boolean;
   // Loaded server-observed positions only; the model may never invent mining targets.
   nearbyBlocks?: Array<{name:string;x:number;y:number;z:number}>;
+  villagers?: Array<{id:number;name:string;distance:number}>;
   lastAction?:string;
 };
 
 const READ_ONLY = new Set(['observe','status','inventory','auto_status','inspect_block']);
-const CONTROLLED_EFFECTS = new Set(['collect_wood','craft_item','equip_item','navigate','dig_block','place_block','interact_block','stay','follow','come','guard','auto_stop','auto_resume','auto_goal']);
+const CONTROLLED_EFFECTS = new Set(['collect_wood','craft_item','equip_item','navigate','dig_block','place_block','interact_block','inspect_villager','trade_villager','transfer_container','enchant_item','stay','follow','come','guard','auto_stop','auto_resume','auto_goal']);
 const MAX_TARGET_DISTANCE = 16;
 const point = (v:unknown):v is {x:number;y:number;z:number} => {
   if (!v || typeof v!=='object') return false;
@@ -42,6 +43,9 @@ function observationFromResult(result:unknown): MinecraftAiObservation | null {
     s.nearbyBlocks=Array.isArray(s.nearbyBlocks)?s.nearbyBlocks.filter(b=>
       b && typeof b.name==='string' && /^[a-z_]{1,64}$/.test(b.name) &&
       point(b) && Number.isInteger(b.x) && Number.isInteger(b.y) && Number.isInteger(b.z)).slice(0,12):[];
+    s.villagers=Array.isArray(s.villagers)?s.villagers.filter(v=>
+      v && v.name==='villager'&&Number.isInteger(v.id)&&
+      v.id>=0&&v.id<=200000&&Number.isFinite(v.distance)&&v.distance>=0&&v.distance<=10).slice(0,3):[];
     return s;
   }catch{return null;}
 }
@@ -323,7 +327,7 @@ export class MinecraftAiGate {
   }
   private sceneSignature(o:MinecraftAiObservation):string {
     return JSON.stringify({p:o.position,i:o.inventory,h:o.health,food:o.hunger,busy:o.busy,
-      blocks:o.nearbyBlocks??[],last:o.lastAction??''});
+      blocks:o.nearbyBlocks??[],villagers:o.villagers??[],last:o.lastAction??''});
   }
   check(tool:string,args:Record<string,unknown>):{ok:boolean;reason:string} {
     if(tool!=='minecraft_companion_command')return {ok:false,reason:'Minecraft AI tasks are limited to the managed companion; other tools and joining another bot are denied'};
@@ -357,6 +361,71 @@ export class MinecraftAiGate {
       return mayStartNativeMinecraftGoal(this.objective,args,this.observed)?
         {ok:true,reason:'Owner-matched existing JARVIS bounded mission, requires later status/evidence'}:
         {ok:false,reason:'Unmatched or unsafe proposed native Minecraft mission; use observed primitives instead'};
+    }
+    if(['inspect_villager','trade_villager'].includes(command)){
+      const id=args.entityId;
+      if(!Number.isInteger(id)||!this.observed.villagers?.some(v=>v.id===id&&v.distance<=4.3))
+        return {ok:false,reason:'Only a freshly observed reachable villager ID can be used'};
+      if(!/\bvillager\b/i.test(this.objective))
+        return {ok:false,reason:'Owner never requested a villager interaction'};
+      if(command==='inspect_villager'){
+        if(Object.keys(args).some(k=>!['command','entityId'].includes(k))||
+          !/\b(?:inspect|show|list|view|check)\b/i.test(this.objective))
+          return {ok:false,reason:'Villager trade inspection must be explicitly owner-requested'};
+        return {ok:true,reason:'Show actual villager offers; no transaction authorized'};
+      }
+      if(Object.keys(args).some(k=>!['command','entityId','tradeIndex','times'].includes(k)) ||
+         !Number.isInteger(args.tradeIndex)||args.tradeIndex<0||args.tradeIndex>31 ||
+         !Number.isInteger(args.times)||args.times<1||args.times>4 ||
+         !/\b(?:trade|buy|purchase|exchange)\b/i.test(this.objective))
+        return {ok:false,reason:'Trade parameters or explicit owner approval missing'};
+      const number=String(this.objective).toLowerCase().match(/\b(?:offer|deal|option|trade)\s*(?:number\s*|#)?(\d{1,2})\b/);
+      if(!number||Number(number[1])-1!==args.tradeIndex)
+        return {ok:false,reason:'Trade offer index must come from owner words'};
+      return {ok:true,reason:'Server trade inputs and output must still be verified'};
+    }
+    if(['transfer_container','enchant_item'].includes(command)){
+      const position=args.position;
+      if(!position||typeof position!=='object'||Array.isArray(position)||
+         Object.keys(position).length!==3||!point(position) ||
+         !['x','y','z'].every(k=>Number.isInteger(position[k])))
+        return {ok:false,reason:'Exact observed container/workstation coordinates required'};
+      const p=this.observed.position;
+      if(Math.max(Math.abs(position.x-p.x),Math.abs(position.y-p.y),Math.abs(position.z-p.z))>10)
+        return {ok:false,reason:'Container/workstation out of bounded current game scene'};
+      const nearby=(this.observed.nearbyBlocks||[]).find(b=>
+        b.x===position.x&&b.y===position.y&&b.z===position.z);
+      if(!nearby)return {ok:false,reason:'Requested interactive block not freshly observed'};
+      const item=args.item;
+      if(typeof item!=='string'||!/^[a-z][a-z0-9_]{0,63}$/.test(item)||
+         !this.objective.toLowerCase().includes(item.replace(/_/g,' ')))
+        return {ok:false,reason:'Owner did not specify the exact named item'};
+      if(command==='transfer_container'){
+        if(!['chest','trapped_chest','barrel'].includes(nearby.name)||
+           Object.keys(args).some(k=>!['command','position','item','count','operation'].includes(k))||
+           !Number.isInteger(args.count)||args.count<1||args.count>64 ||
+           !['deposit','withdraw'].includes(String(args.operation)))
+          return {ok:false,reason:'Invalid chest transfer contract'};
+        const owner=this.objective.toLowerCase();
+        const deposit=/\b(?:store|deposit|put)\b/.test(owner);
+        const withdraw=/\b(?:withdraw|take|retrieve)\b/.test(owner);
+        if(args.operation==='deposit'?!deposit:!withdraw)
+          return {ok:false,reason:'Container movement direction was not owner-specified'};
+        const count=owner.match(/\b(\d{1,2})\b/);
+        if(!count||Number(count[1])!==args.count)
+          return {ok:false,reason:'Container item quantity must match explicit owner instruction'};
+        if(/\bchest\b/.test(owner)&&nearby.name==='barrel' ||
+           /\bbarrel\b/.test(owner)&&nearby.name!=='barrel')
+          return {ok:false,reason:'Observed storage block differs from requested type'};
+        return {ok:true,reason:'Exact owner-authorized storage transfer; dual inventory proof required'};
+      }
+      const owner=this.objective.toLowerCase();
+      const option=/\bfirst\b/.test(owner)?0:/\bsecond\b/.test(owner)?1:/\bthird\b/.test(owner)?2:null;
+      if(nearby.name!=='enchanting_table' ||
+         Object.keys(args).some(k=>!['command','position','item','choice'].includes(k))||
+         !/\benchant\b/.test(owner)||option!==args.choice)
+        return {ok:false,reason:'Enchant option or observed table not authorized'};
+      return {ok:true,reason:'Enchantment materials and returned item state must be verified'};
     }
     // Never allow a model to aim an action far outside the most recent observed scene.
     const target=(command==='place_block'?args.reference:args.position);

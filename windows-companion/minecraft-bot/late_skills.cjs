@@ -4,7 +4,7 @@
  * No commands/creative mode/seed inspection/teleports. Failure is explicit.
  */
 const {NETHERITE}=require('./late_game.cjs');
-const {SAFE_GENERIC_RESOURCES,PICKAXE_GENERIC_RESOURCES}=require('./resource_goal.cjs');
+const {SAFE_GENERIC_RESOURCES,PICKAXE_GENERIC_RESOURCES,PICKAXES,ORE_RESOURCE_RULES}=require('./resource_goal.cjs');
 const {observeDragon,noteDragonAttack}=require('./dragon_engagement.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
@@ -45,7 +45,8 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     // buried in the loaded chunk cache. Surface obsidian, netherrack, gravel
     // and other terrain can legitimately be mined from above, so retain their
     // original reachability checks rather than requiring a horizontal cave.
-    const needsFace=names.every(n=>['iron_ore','deepslate_iron_ore','diamond_ore','deepslate_diamond_ore'].includes(n));
+    const needsFace=names.every(n=>/^(?:deepslate_)?(?:iron|diamond|coal|copper|gold|redstone|lapis|emerald)_ore$/.test(n) ||
+      n==='nether_quartz_ore');
     const exposed=needsFace?findExposedOre(bot,names,searchRadius):null;
     const block=needsFace?exposed?.block:bot.findBlock({matching:b=>b && names.includes(b.name) && (!visibleOnly ||
       [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].some(([x,y,z])=>
@@ -54,7 +55,8 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     // Bare-hand gathering is allowed only for an audited catalog of common,
     // harvestable surface blocks. Valuable ores still need a real pickaxe.
     const handSafe=toolNames.length===0 && names.length===1 && SAFE_GENERIC_RESOURCES.has(names[0]);
-    const pick=bot.inventory.items().find(i=>toolNames.includes(i.name));
+    const pick=bot.inventory.items().find(i=>toolNames.includes(i.name))||
+      (toolNames.includes(bot.heldItem?.name)?bot.heldItem:null);
     if(!pick&&!handSafe)return observed(false,'Missing appropriate tool for '+names[0]);
     const before=count(bot,drop), p=block.position.clone();
     await move(needsFace?exposed.stance:p,needsFace?1:3,epoch,19000);
@@ -669,6 +671,19 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
   async function run(plan,epoch){
     check(epoch);
     switch(plan.kind){
+      case 'mine_resource_ore':{
+        const rule=ORE_RESOURCE_RULES[plan.resource];
+        if(!rule)return observed(false,'Unsupported generic ore resource');
+        const dimension=String(bot.game?.dimension||'').replace(/^minecraft:/,'');
+        if(dimension!==rule.dimension)
+          return observed(false,'Wrong live dimension for '+plan.resource+' ore');
+        return mineKnown(rule.blocks,rule.drop,PICKAXES[rule.tier],epoch,26);
+      }
+      case 'survey_resource':{
+        if(!Object.hasOwn(ORE_RESOURCE_RULES,plan.resource))
+          return observed(false,'Unsupported generic ore survey target');
+        return walkScout(epoch,'resource '+plan.resource);
+      }
       case 'mine_obsidian':{
         const b=lookup(bot,['obsidian'],28);
         if(!b)return walkScout(epoch,'obsidian near surface lava/water');

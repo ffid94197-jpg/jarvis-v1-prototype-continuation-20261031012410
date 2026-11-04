@@ -144,6 +144,9 @@ function decide(goal, world, failures={}, progress={}) {
   if(!world?.joined)return {kind:'wait',why:'Bot not spawned'};
   // The requested equipment may already be worn. Use direct live slot
   // observation and avoid mining extra diamond tools or attacking anything.
+  if(goal==='defeat_hostile'&&progress.milestones?.defeatedId===progress.entityId &&
+     progress.milestones?.defeatedMob===progress.mob)
+    return {kind:'complete',why:'Authorized target-specific server death event observed'};
   if(goal==='netherite_armor_run'&&world.wornNetherite===true)
     return {kind:'complete',why:'Four server-observed Netherite armor slots are worn'};
   if(goal==='netherite_gear_run'&&world.wornNetherite===true&&world.heldNetheriteSword===true)
@@ -175,9 +178,6 @@ function decide(goal, world, failures={}, progress={}) {
   // mission remains alive until stopped; it chooses and verifies its own
   // survival, crafting and movement actions instead of requiring commands.
   if(goal==='defeat_hostile'){
-    if(progress.milestones?.defeatedId===progress.entityId &&
-       progress.milestones?.defeatedMob===progress.mob)
-      return {kind:'complete',why:'Bound hostile target server entityDead event independently observed'};
     const target=threats.find(t=>t?.id===progress.entityId&&t?.name===progress.mob);
     if(!target)return {kind:'blocked',
       why:'Previously selected hostile is no longer observed; death NOT independently proven'};

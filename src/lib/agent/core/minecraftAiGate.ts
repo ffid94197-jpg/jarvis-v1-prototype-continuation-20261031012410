@@ -55,6 +55,16 @@ function observationFromResult(result:unknown): MinecraftAiObservation | null {
   }catch{return null;}
 }
 
+/** Explicit readback questions are observations, never game-effect authority. */
+function minecraftReadbackQuestion(objective:string):boolean {
+ const s=objective.toLowerCase().trim()
+  .replace(/^jarvis(?:buddy)?[, :]+/,'')
+  .replace(/^please\s+/,'')
+  .replace(/^in minecraft[, :]+/,'')
+  .replace(/\s+in minecraft$/,'');
+ return /^(?:what(?:'s| is) in your inventory|what items (?:do you have|are you carrying)|which items (?:do you have|are you carrying)|how many [a-z0-9_ ]{2,50} (?:do you have|are you carrying)|what do you see|what(?:'s| is) around you|where are you|where are you standing|what(?:'s| is) your position|how much health do you have|how is your health|how is the mission going|how far along are you|what(?:'s| is) your mission status|what(?:'s| is) your progress)$/.test(s);
+}
+
 export function isMinecraftAiObjective(objective:string):boolean {
   const s=objective.trim().toLowerCase();
   if (!s || s.length>1000) return false;
@@ -65,6 +75,7 @@ export function isMinecraftAiObjective(objective:string):boolean {
   const minecraftScope=/\b(?:minecraft|minecraft_companion_command|jarvisbuddy|ender dragon|netherite)\b/.test(s);
   const resourceScope=/\b(?:cobblestone|cobbled deepslate|stone pickaxe|wooden pickaxe|iron pickaxe|diamond pickaxe|ender pearls?|blaze rods?|ancient debris|diamond ore|iron ore|gold ore|redstone ore|end portal|nether portal|stronghold)\b/.test(s);
   const actionGoal=/\b(?:play|gather|collect|craft|mine|dig|excavate|defeat|kill|attack|beat|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|enchant|explore|travel|find|place|equip|wear|wield|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(s);
+  if (minecraftScope && minecraftReadbackQuestion(objective)) return true;
   if (!(minecraftScope || resourceScope) || !actionGoal) return false;
   // Only reject a question/refusal when it is the request's intent. A valid
   // action goal often contains important restrictions such as "do not use
@@ -82,6 +93,7 @@ export function isMinecraftAiObjective(objective:string):boolean {
  * restrictions ('do not mine/craft'). This never authorizes game effects. */
 export function isMinecraftObservationOnlyObjective(objective:string):boolean {
   if (!isMinecraftAiObjective(objective)) return false;
+  if (minecraftReadbackQuestion(objective)) return true;
   const s=objective.toLowerCase();
   const primary=s.split(/\b(?:do not|don't|never|stop if|if blocked|if an action fails)\b/,1)[0];
   const observation=/\b(?:observe|inspect)\b/.test(primary) ||

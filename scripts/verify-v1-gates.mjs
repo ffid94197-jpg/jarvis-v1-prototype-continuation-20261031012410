@@ -56,6 +56,7 @@ const checks=[
  ['MINECRAFT-EXPANDED-MATERIALS',['windows-companion/minecraft-bot/verify_expanded_materials_offline.cjs']],
  ['MINECRAFT-GENERIC-SURVEY-RECOVERY',['windows-companion/minecraft-bot/verify_generic_survey_recovery_offline.cjs']],
  ['MINECRAFT-DURABLE-STRUCTURE',['windows-companion/minecraft-bot/verify_durable_structure_offline.cjs']],
+ ['MINECRAFT-EQUIP-CRAFT-COMPOSITION',['windows-companion/minecraft-bot/verify_equip_craft_composition_offline.cjs']],
  // One launcher authorization context must satisfy BOTH the startup preflight
  // and the runtime companion gate. Guards the observed defect where an
  // owner-authorized minecraft_companion_join was denied three times because the

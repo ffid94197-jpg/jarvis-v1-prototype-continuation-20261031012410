@@ -32,7 +32,8 @@ const examples=[
  ['defeat the ender dragon','dragon_run'],
  ['beat the ender dragon then get full netherite armor','dragon_then_netherite_run'],
  ['mine six diamonds then craft two chests','sequence'],
- ['gather four logs then craft one chest','sequence']
+ ['gather four logs then craft one chest','sequence'],
+ ['gather four logs then craft a chest','sequence']
 ];
 for(const [text,expected,item,quantity] of examples){
  const r=directIntent(text),q=r?.command;

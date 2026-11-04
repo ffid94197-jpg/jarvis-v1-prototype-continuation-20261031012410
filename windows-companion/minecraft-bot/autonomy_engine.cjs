@@ -580,6 +580,19 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
        :{kind:'scout_survival',reason:'travel_recovery',index:state.steps,
          why:'Previous route failed; observe a new safe approach before retrying exact target'};
     }
+    // A distant Dragon on the central island can be physically separated
+    // by a short void gap. After TWO failed safe-land advances, try ONE
+    // independently observed, non-creative block placement, never a
+    // fabricated walk into unloaded terrain. Finite eight-tile budget.
+    if(d.kind==='advance_dragon'&&
+       (state.failures.advance_dragon||0)>=2){
+      const placed=state.milestones.endBridgeTiles||0;
+      d=placed>=8?
+        {kind:'blocked',why:'Eight real End bridging tiles exhausted without confirmed island route'}:
+        (state.failures.bridge_end_gap||0)>=2?
+          {kind:'blocked',why:'Two failed safely observed End bridge placements; no route authorized'}:
+          {kind:'bridge_end_gap',why:'Bridge only a supported observed short End void gap using survival blocks'};
+    }
     // A repeated failure to collect real stone gets an alternate safe
     // observation site, never a fabricated inventory receipt.
     if(d.kind==='mine_cobblestone' && (state.failures.mine_cobblestone||0)>=2){
@@ -629,7 +642,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       mine_obsidian:10,prepare_archery:10,
       obtain_food:10,enter_nether:8,enter_overworld:8,
       activate_end_portal:8,enter_end:8,exit_end:8,
-      destroy_end_crystal:12,fight_dragon:12,advance_dragon:8,
+      destroy_end_crystal:12,fight_dragon:12,advance_dragon:8,bridge_end_gap:2,
       collect_flint:10,mine_netherrack:10
     };
     if(Object.hasOwn(lateFailureBudgets,d.kind) &&
@@ -664,6 +677,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           outcome.proof==='safe_scout_move')) &&
       (decision.kind!=='advance_dragon' ||
         outcome.proof==='dragon_approach') &&
+      (decision.kind!=='bridge_end_gap' ||
+        outcome.proof==='end_bridge_tile') &&
       (decision.kind!=='fight_bound_hostile' ||
         (outcome.proof==='bound_hostile_death' &&
           outcome.targetId===state.entityId && outcome.mob===state.mob)) &&
@@ -680,6 +695,11 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       if(decision.kind==='advance_dragon'&&outcome.proof==='dragon_approach')
         state.milestones.dragonApproachTrips=Math.min(24,
           (state.milestones.dragonApproachTrips||0)+1);
+      if(decision.kind==='bridge_end_gap'&&outcome.proof==='end_bridge_tile'){
+        state.milestones.endBridgeTiles=Math.min(8,
+          (state.milestones.endBridgeTiles||0)+1);
+        state.failures.advance_dragon=0;
+      }
       if(decision.kind==='fight_bound_hostile'&&
          outcome.proof==='bound_hostile_death'&&
          outcome.targetId===state.entityId&&outcome.mob===state.mob){

@@ -243,12 +243,15 @@ function contextualIntent(text,context){
  if(fight){
   const mob=fight[1].replace(/ /g,'_');
   if(!ALLOWED_HOSTILES.has(mob))return fail('Requested entity is not an approved hostile target');
+  const durable=!fight[2]&&/^(?:defeat|kill|slay)\b/.test(instruction);
+  const radius=durable?12:3.4;
   const targets=Array.isArray(scene.threats)?scene.threats.filter(t=>
-    t?.name===mob&&Number.isInteger(t.id)&&Number.isFinite(t.distance)&&t.distance<=3.4):[];
+    t?.name===mob&&Number.isInteger(t.id)&&Number.isFinite(t.distance)&&
+    t.distance<=radius):[];
   if(targets.length!==1)return fail(targets.length?
-    'Several matching hostile entities are nearby; specify the target':
-    'Named hostile not safely reachable in latest observation');
-  if(!fight[2]&&/^(?:defeat|kill|slay)\b/.test(instruction))
+    'Several matching hostiles are observed; specify the exact target':
+    'No single named hostile server-observed in authorized range');
+  if(durable)
    return canonicalIntent({command:'auto_goal',goal:'defeat_hostile',
      mob,entityId:targets[0].id});
   return canonicalIntent({command:'attack_hostile',entityId:targets[0].id,

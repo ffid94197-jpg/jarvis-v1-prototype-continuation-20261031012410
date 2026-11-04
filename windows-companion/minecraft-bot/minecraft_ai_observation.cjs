@@ -7,7 +7,7 @@ const INTERACTIVE=/^(?:chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_tra
 const INTERESTING=/^(?:[a-z_]+_log|stone|cobblestone|deepslate|cobbled_deepslate|(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore|crafting_table|furnace|smithing_table|enchanting_table|chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|nether_portal|end_portal_frame)$/;
 // Small, deliberately bounded sample of everyday loaded blocks for
 // general-purpose Minecraft tasks. Never mine blindly or infer world terrain.
-const GENERAL=/^(?:dirt|grass_block|sand|red_sand|gravel|clay|netherrack|mud|coarse_dirt|rooted_dirt|snow|snow_block|cobblestone|[a-z_]+_planks|[a-z_]+_wool|[a-z_]+_log)$/;
+const GENERAL=/^(?:dirt|grass_block|sand|red_sand|gravel|clay|netherrack|mud|soul_sand|soul_soil|moss_block|andesite|diorite|granite|tuff|calcite|cobbled_deepslate|blackstone|basalt|coarse_dirt|rooted_dirt|snow|snow_block|cobblestone|[a-z_]+_planks|[a-z_]+_wool|[a-z_]+_log)$/;
 const {diggableObserved,MINABLE_STONE,isExposed,stances}=require('./mining_navigation.cjs');
 const ORES=/^(?:(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore)$/;
 // Preserve completion-relevant items when the compact ACK must trim inventory.

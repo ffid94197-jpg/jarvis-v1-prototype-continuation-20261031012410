@@ -3,14 +3,20 @@
  * fabricated ore locations, or success from merely dispatching an action.
  * The caller must execute and verify every proposed step in the real world.
  */
-const SAFE_GENERIC_RESOURCES=new Set(['dirt','sand','red_sand','gravel','mud']);
+// Only terrain whose normal survival drops match the exact requested item.
+const HAND_GENERIC_RESOURCES=new Set(['dirt','sand','red_sand','gravel','mud',
+ 'soul_sand','soul_soil','moss_block']);
+const PICKAXE_GENERIC_RESOURCES=new Set(['andesite','diorite','granite',
+ 'tuff','calcite','cobbled_deepslate','blackstone','basalt']);
+const SAFE_GENERIC_RESOURCES=new Set([...HAND_GENERIC_RESOURCES,
+ ...PICKAXE_GENERIC_RESOURCES]);
 const RESOURCES=new Set(['logs','planks','sticks','cobblestone','raw_iron',
   'iron_ingot','diamond','obsidian','flint','netherrack',...SAFE_GENERIC_RESOURCES]);
 const ALIASES=Object.freeze({
  wood:'logs',log:'logs',stones:'cobblestone',stone:'cobblestone',
  diamonds:'diamond',iron:'iron_ingot',rawiron:'raw_iron',
  plank:'planks',stick:'sticks',soil:'dirt',sand_block:'sand',red_sand_block:'red_sand',
- gravel_block:'gravel',mud_block:'mud'
+ gravel_block:'gravel',mud_block:'mud',moss:'moss_block',moss_blocks:'moss_block'
 });
 function normalizeResource(name){
  if(typeof name!=='string')return null;
@@ -37,7 +43,11 @@ function resourcePlan(world,failures={},progress={},delegate){
    'Server-backed '+resource+' quantity '+have+' >= '+count);
  const inv=world.inventory||{};
  const stage=goal=>{
+   if(typeof delegate!=='function')
+     return required('blocked','No authorized prerequisite planner supplied');
    const d=delegate(goal);
+   if(!d||typeof d.kind!=='string')
+     return required('blocked','Prerequisite planner returned no verifiable decision');
    return d.kind==='complete'?null:d;
  };
  const mine=(kind,why,ore)=>{
@@ -47,6 +57,10 @@ function resourcePlan(world,failures={},progress={},delegate){
      :required(kind,why);
  };
  if(SAFE_GENERIC_RESOURCES.has(resource)){
+   if(PICKAXE_GENERIC_RESOURCES.has(resource)&&
+      !(inv.woodenPickaxe||inv.stonePickaxe||inv.ironPickaxe||inv.diamondPickaxe||
+        (inv.raw?.netherite_pickaxe||0)>0))
+     return stage('tools')||required('blocked','Missing real pickaxe to harvest '+resource);
    if((failures.mine_generic||0)>=3)
      return required('blocked','Three attempts to obtain safe '+resource+' did not yield a verified pickup');
    return required('mine_generic','Gather loaded, visibly accessible '+resource+' and verify inventory increase',{resource});
@@ -117,4 +131,5 @@ function resourcePlan(world,failures={},progress={},delegate){
  default:return required('blocked','Resource target not supported');
  }
 }
-module.exports={RESOURCES,SAFE_GENERIC_RESOURCES,normalizeResource,resourceCount,resourcePlan};
+module.exports={RESOURCES,SAFE_GENERIC_RESOURCES,HAND_GENERIC_RESOURCES,
+ PICKAXE_GENERIC_RESOURCES,normalizeResource,resourceCount,resourcePlan};

@@ -4,7 +4,7 @@
  * No commands/creative mode/seed inspection/teleports. Failure is explicit.
  */
 const {NETHERITE}=require('./late_game.cjs');
-const {SAFE_GENERIC_RESOURCES}=require('./resource_goal.cjs');
+const {SAFE_GENERIC_RESOURCES,PICKAXE_GENERIC_RESOURCES}=require('./resource_goal.cjs');
 const {observeDragon,noteDragonAttack}=require('./dragon_engagement.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
@@ -569,10 +569,15 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
         return mineKnown(['obsidian'],'obsidian',['diamond_pickaxe','netherite_pickaxe'],epoch);
       }
       case 'mine_netherrack':return mineKnown(['netherrack'],'netherrack',['wooden_pickaxe','stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'],epoch);
-      case 'mine_generic':
+      case 'mine_generic':{
         if(!SAFE_GENERIC_RESOURCES.has(plan.resource))
           return observed(false,'Unsupported general terrain gathering resource');
-        return mineKnown([plan.resource],plan.resource,[],epoch,20,true);
+        // Miner must hold a real pickaxe for minerals; a bare-hand dig can
+        // remove the block while dropping NO item. That is not a success.
+        const toolNames=PICKAXE_GENERIC_RESOURCES.has(plan.resource)?
+          ['wooden_pickaxe','stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe']:[];
+        return mineKnown([plan.resource],plan.resource,toolNames,epoch,20,true);
+      }
       case 'collect_flint':{
         const b=lookup(bot,['gravel'],28);
         if(!b)return walkScout(epoch,'gravel');

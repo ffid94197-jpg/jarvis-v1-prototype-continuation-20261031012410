@@ -213,7 +213,13 @@ export function mayStartNativeMinecraftGoal(
   diamond:/\bdiamonds?\b/,obsidian:/\bobsidian\b/,
   flint:/\bflint\b/,netherrack:/\bnetherrack\b/,
   dirt:/\bdirt\b/,sand:/\bsands?\b/,red_sand:/\bred sand\b/,
-  gravel:/\bgravel\b/,mud:/\bmud\b/
+  gravel:/\bgravel\b/,mud:/\bmud\b/,
+  soul_sand:/\bsoul sand\b/,soul_soil:/\bsoul soil\b/,
+  moss_block:/\bmoss block\b/,
+  andesite:/\bandesite\b/,diorite:/\bdiorite\b/,
+  granite:/\bgranite\b/,tuff:/\btuff\b/,
+  calcite:/\bcalcite\b/,cobbled_deepslate:/\bcobbled deepslate\b/,
+  blackstone:/\bblackstone\b/,basalt:/\bbasalt\b/
  };
  if(goal==='sequence'){
   // A model may propose a durable sequence ONLY when each requested stage

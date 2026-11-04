@@ -206,6 +206,7 @@ export function mayStartNativeMinecraftGoal(
  };
  if(goal==='gather'){
   const resource=args.resource;
+  if(resource==='sand' && /\bred sand\b/.test(s))return false;
   if(typeof resource!=='string'||!Object.hasOwn(resources,resource) ||
     !resources[resource].test(s) || !amount(args.targetCount,1,64) ||
     !/\b(?:collect|gather|mine|dig|obtain|find|get|bring|acquire)\b/.test(s))return false;

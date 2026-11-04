@@ -567,6 +567,14 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         :{kind:'scout_survival',reason:'stone_recovery',index:state.steps,
           why:'Stone mining stalled; move to genuinely new safe loaded terrain'};
     }
+    // Do not let a 3.6-second projectile flight destroy a 12-hour Dragon
+    // mission. If a crystal survives two verified arrow attempts, change
+    // the physical shooting angle using a finite safe waypoint search.
+    if(d.kind==='destroy_end_crystal' && (state.failures.destroy_end_crystal||0)>=2)
+      d=(state.milestones.crystalRecoveryTrips||0)>=6
+        ?{kind:'blocked',why:'Six verified alternate crystal shooting regions exhausted'}
+        :{kind:'scout_survival',reason:'crystal_recovery',index:state.steps,
+          why:'Crystal survived ranged shots; seek a different verified safe stance'};
     if(d.kind==='survey_ore' && (state.failures.survey_ore||0)>=12)
       d={kind:'blocked',why:'Twelve failed physically observed ore surveys; manual reconciliation required'};
     if(d.kind==='scout_survival' && state.goal==='explore' &&
@@ -692,10 +700,14 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         }
         if(decision.reason==='shelter_site')
           state.milestones.shelterSiteTrips=Math.min(6,(state.milestones.shelterSiteTrips||0)+1);
+        if(decision.reason==='crystal_recovery'){
+          state.milestones.crystalRecoveryTrips=Math.min(6,(state.milestones.crystalRecoveryTrips||0)+1);
+          state.failures.destroy_end_crystal=0;
+        }
       }}
     else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;
     state.lastResult={kind:decision.kind,verified:ok,detail:String(outcome?.detail||'unverified').slice(0,140)};
-    if(!ok && !['mine_iron','mine_diamond','mine_obsidian','mine_ancient_debris','hunt_blazes','hunt_endermen','track_stronghold','search_dragon','collect_flint','collect_gold','loot_bastion_template','prepare_archery','obtain_food','mine_netherrack','survey_ore'].includes(decision.kind) && (state.failures[decision.kind]||0)>=3){
+    if(!ok && !['mine_iron','mine_diamond','mine_obsidian','mine_ancient_debris','hunt_blazes','hunt_endermen','track_stronghold','search_dragon','collect_flint','collect_gold','loot_bastion_template','prepare_archery','obtain_food','mine_netherrack','survey_ore','destroy_end_crystal'].includes(decision.kind) && (state.failures[decision.kind]||0)>=3){
       state.status='blocked';state.why='Repeated unverified or failing action: '+decision.kind;
     }
   }

@@ -4,9 +4,9 @@
  * The caller must execute and verify every proposed step in the real world.
  */
 const RESOURCES=new Set(['logs','planks','sticks','cobblestone','raw_iron',
-  'iron_ingot','diamond','obsidian','flint','netherrack','coal']);
+  'iron_ingot','diamond','obsidian','flint','netherrack','coal','food']);
 const ALIASES=Object.freeze({
- wood:'logs',log:'logs',stones:'cobblestone',stone:'cobblestone',coal_ore:'coal',
+ wood:'logs',log:'logs',stones:'cobblestone',stone:'cobblestone',coal_ore:'coal',foods:'food',
  diamonds:'diamond',iron:'iron_ingot',iron_ingots:'iron_ingot',rawiron:'raw_iron',
  plank:'planks',stick:'sticks'
 });
@@ -18,7 +18,7 @@ function normalizeResource(name){
 }
 const COUNTS={logs:'logs',planks:'planks',sticks:'sticks',
   cobblestone:'cobblestone',raw_iron:'rawIron',iron_ingot:'ironIngot',
-  diamond:'diamonds',obsidian:'obsidian',flint:'flint',netherrack:'netherrack',coal:'coal'};
+  diamond:'diamonds',obsidian:'obsidian',flint:'flint',netherrack:'netherrack',coal:'coal',food:'food'};
 const required=(kind,why,extra={})=>({kind,why,...extra});
 function resourceCount(world,resource){
  const inv=world?.inventory||{};
@@ -107,6 +107,7 @@ function resourcePlan(world,failures={},progress={},delegate){
    return required('mine_obsidian','Search or mine real obsidian with a diamond pickaxe; only inventory delta counts');
  }
  case 'flint':return required('collect_flint','Mine loaded gravel until flint is received');
+ case 'food':return required('collect_food','Hunt safe naturally generated livestock and retain verified food drops');
  case 'netherrack':
    if(!String(world.dimension||'').includes('nether'))
      return required('blocked','Netherrack acquisition requires verified Nether dimension');

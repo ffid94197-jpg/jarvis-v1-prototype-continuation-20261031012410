@@ -59,7 +59,9 @@ function findTradeOffer(win,index,times,bot){
   if(!item)continue;
   if(!NAME.test(String(item.name))||!int(item.count,1,64))
    return {error:'Invalid input item in live villager offer'};
-  requirements.set(item.name,(requirements.get(item.name)||0)+item.count*times);
+  const realCost=item===input && int(offer.realPrice,1,64)?
+    offer.realPrice:item.count;
+  requirements.set(item.name,(requirements.get(item.name)||0)+realCost*times);
  }
  for(const [name,need] of requirements)if(ownCount(bot,name)<need)
   return {error:'Missing server-observed trade input '+name};
@@ -178,7 +180,9 @@ function createAdvancedActions({bot,Vec3,pause=ms=>new Promise(r=>setTimeout(r,m
    await win.putTargetItem(owned);
    await win.putLapis(lapis);
    requireCurrent(allowed);
-   const option=win.enchantments?.[choice];
+   const observedLevel=await confirmChange(()=>win.enchantments?.[choice]?.level,
+     v=>int(v,1,100),allowed,pause);
+   const option={level:observedLevel};
    const level=bot.experience?.level;
    if(!int(option?.level,1,100)||!int(level,0,300)||level<option.level)
     return itemProof(false,'Requested enchantment option or experience level unavailable');
@@ -188,7 +192,9 @@ function createAdvancedActions({bot,Vec3,pause=ms=>new Promise(r=>setTimeout(r,m
    requireCurrent(allowed);
    const candidate=returned||result;
    const after=JSON.stringify(candidate?.nbt??candidate?.components??null);
-   const valid= candidate?.name===item && after!=='null'&&after!==before;
+   const playerReadback=(bot.inventory?.items?.()||[]).some(i=>
+     i?.name===item && JSON.stringify(i.nbt??i.components??null)===after);
+   const valid=candidate?.name===item&&after!=='null'&&after!==before&&playerReadback;
    return itemProof(valid,valid?
     'Enchantment result item has new observed enchantment metadata':
     'Enchantment was attempted but changed item metadata was not verified');

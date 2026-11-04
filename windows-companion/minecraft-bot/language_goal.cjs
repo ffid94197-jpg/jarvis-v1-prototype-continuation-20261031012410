@@ -172,7 +172,7 @@ function directIntent(raw){
  // Compose small independent, verifiable subgoals using the existing
  // goal-controller sequence. Generic one-off primitives are NOT silently
  // promoted to an open-ended mission, and all stage parameters are validated.
- const parts=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
+ const parts=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|smelt|cook|refine|bake|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
  if(parts.length>1){
   if(parts.length>8||parts.some(p=>!p.trim()))
    return fail('Sequence must contain two to eight clear gameplay objectives');

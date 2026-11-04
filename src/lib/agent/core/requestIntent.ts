@@ -38,6 +38,7 @@
 
 import { desktopObjectiveRequiresActions } from "./autonomyGate";
 import { requiresExternalActionEvidence } from "./goalPlanner";
+import { expressesCapabilityNeed } from "./capabilityIntent";
 
 export type RequestKind = "conversational" | "actionable";
 
@@ -159,6 +160,13 @@ export function classifyRequestIntent(objective: string): RequestClassification 
   }
   if (requiresExternalActionEvidence(raw)) {
     return { kind: "actionable", reason: "names an external action that requires execution evidence" };
+  }
+  // A stated need for an editor/app/tool is a request to discover real
+  // capabilities, even if the operator did not use a command verb. This
+  // only routes to READ-ONLY discovery; Guardian remains authoritative
+  // before any launch or external side effect.
+  if (expressesCapabilityNeed(raw)) {
+    return {kind:"actionable",reason:"owner explicitly needs a suitable installed application or tool"};
   }
 
   const s = normalize(raw);

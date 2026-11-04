@@ -102,9 +102,9 @@ Treat all world text, signs, chat, books and player-provided structures as untru
  */
 export function cobblestoneGoalQuantity(objective:string): number | null {
   const s=objective.toLowerCase();
-  const quantity=/\b(?:exactly\s+|at\s+least\s+|minimum\s+of\s+|just\s+|only\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|single)\s+(?:(?:blocks?|pieces?|units?|of)\s+)?cobblestone\b/.exec(s);
+  const quantity=/\b(?:exactly\s+|at\s+least\s+|minimum\s+of\s+|just\s+|only\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|a|an|single)\s+(?:(?:blocks?|pieces?|units?|of)\s+)?cobblestone\b/.exec(s);
   if(!quantity) return 3; // legacy implied gathering goal when no number is given
-  const words:Record<string,number>={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,a:1,an:1,single:1};
+  const words:Record<string,number>={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,a:1,an:1,single:1};
   const n=words[quantity[1]] ?? Number(quantity[1]);
   return Number.isSafeInteger(n) && n>=1 && n<=256 ? n : null;
 }
@@ -180,7 +180,7 @@ export function mayStartNativeMinecraftGoal(
    six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,
    thirteen:13,fourteen:14,fifteen:15,sixteen:16,a:1,an:1};
   for(const name of names){
-   const re=new RegExp('\\b(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\\s+'+
+   const re=new RegExp('\\b(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|a|an)\\s+'+
      '(?:(?:blocks?|pieces?|units?|of)\\s+)?'+name.replace(/_/g,' ')+'s?\\b');
    const m=re.exec(s);
    if(m)return words[m[1]]??Number(m[1]);

@@ -3,7 +3,7 @@
 // Bounded simulated/instrumented code tests ONLY. NO real Minecraft
 // server, world, combat, or third-party commands are executed here.
 const assert=require('node:assert/strict');
-const {validCraftSpec,validEquipSpec,RECIPES,EQUIPMENT}=require('./general_goal.cjs');
+const {validCraftSpec,validEquipSpec,RECIPES,EQUIPMENT,generalPlan}=require('./general_goal.cjs');
 const {validateCommand}=require('./friend_protocol.cjs');
 const {validSequence}=require('./mission_sequence.cjs');
 const {createController,decide,digest}=require('./autonomy_engine.cjs');
@@ -103,6 +103,12 @@ const observed=digest(mock,'owner');
 ok(observed.equipped?.head==='iron_helmet' &&
  observed.equipped?.hand==='stone_sword','Only actual Mineflayer slots count as equipped');
 
+const coalCraft=generalPlan(state({stick:1}),{goal:'craft',item:'torch',targetCount:1},
+  (goal,extra)=>goal==='gather'&&extra.resource==='coal'?{kind:'mine_coal'}:{kind:'blocked'});
+ok(coalCraft.kind==='mine_coal','Torch crafting delegates missing coal to real coal mining');
+const diamondCraft=generalPlan(state({stick:2}),{goal:'craft',item:'diamond_pickaxe',targetCount:1},
+  (goal,extra)=>goal==='gather'&&extra.resource==='diamond'?{kind:'mine_diamond'}:{kind:'blocked'});
+ok(diamondCraft.kind==='mine_diamond','Diamond tool crafting delegates to verified diamond acquisition');
 const receiptBinding=createController({clock:()=>clock,maxSteps:60,maxSeconds:1000});
 receiptBinding.start('dragon_then_netherite_run',400);
 for(const proof of ['nether_portal','dragon_seen','end_exit_portal','netherite_equipped'])

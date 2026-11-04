@@ -13,7 +13,7 @@ const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip']);
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
@@ -427,7 +427,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   // windows. This is NOT a completion, and never resumes a blocked, cancelled,
   // or owner-paused task. The next decision is recomputed from live world state.
   function renewMission(seconds=21600){
-    if(state.status!=='expired' || !['netherite_dragon_run','dragon_then_netherite_run','dragon_run','netherite_armor_run','netherite_gear_run','companion'].includes(state.goal))return false;
+    if(state.status!=='expired' || !['netherite_dragon_run','dragon_then_netherite_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','companion'].includes(state.goal))return false;
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)return false;
     const t=clock();
     if(!Number.isSafeInteger(state.since)||t<state.since)return false;
@@ -445,7 +445,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     state.failures={};state.milestones={};state.steps=0;state.lastDecision=null;state.lastResult=null;
     // Death may have destroyed inventory. Recheck earlier stages from live
     // state instead of blindly resuming a stale sequence checkpoint.
-    if(state.goal==='sequence')state.sequenceIndex=0;
+    if(state.goal==='sequence'||state.goal==='shelter')state.sequenceIndex=0;
     return true;
   }
   function status(){return JSON.parse(JSON.stringify(state));}
@@ -453,7 +453,27 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(state.status!=='running')return {kind:'idle',why:'Automation not running'};
     if(clock()>=state.deadline||state.steps>=maxSteps){state.status='expired';state.why='Goal time/step budget exhausted';return {kind:'idle',why:state.why};}
     let d;
-    if(state.goal==='sequence'){
+    if(state.goal==='shelter' && !Array.isArray(state.sequence)){
+      // The shelter request chooses a fixed 3x3x2 cobblestone structure.
+      // Coordinates are derived only from fresh safe local world blocks,
+      // never supplied by an LLM or untrusted in-world chat.
+      const approved=world?.shelterSite?.steps;
+      if(Array.isArray(approved) && validSequence(approved) &&
+         approved.length===3 &&
+         approved[0]?.shape==='floor' &&
+         approved[1]?.shape==='entrance_walls' &&
+         approved[2]?.shape==='roof' &&
+         approved.every(s=>s.goal==='build_volume' && s.block==='cobblestone' &&
+           s.width===3&&s.depth===3)){
+        state.sequence=canonicalSequence(approved);
+        state.sequenceIndex=0;
+      }else if((state.milestones.shelterSiteTrips||0)>=6)
+        d={kind:'blocked',why:'Six verified alternative areas lacked a safe shelter footprint'};
+      else
+        d={kind:'scout_survival',reason:'shelter_site',index:state.steps,
+          why:'Locate real loaded, nonhazardous local ground for a 3x3 cobblestone shelter'};
+    }
+    if(!d && (state.goal==='sequence'||state.goal==='shelter')){
       // Do not mark a composed goal complete by merely issuing the steps.
       // Recompute every stage against the current server-backed world and
       // advance across at most eight already-proven stages in one tick.
@@ -592,6 +612,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           state.failures.travel_target=0;
           state.milestones.travelArrivalVerified=false;
         }
+        if(decision.reason==='shelter_site')
+          state.milestones.shelterSiteTrips=Math.min(6,(state.milestones.shelterSiteTrips||0)+1);
       }}
     else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;
     state.lastResult={kind:decision.kind,verified:ok,detail:String(outcome?.detail||'unverified').slice(0,140)};

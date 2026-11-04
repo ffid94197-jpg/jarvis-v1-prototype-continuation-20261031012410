@@ -128,5 +128,50 @@ const seq=directIntent('gather four logs then craft three oak doors');
 ok(seq?.ok===true&&seq.command.goal==='sequence'&&
  seq.command.steps[1].item==='oak_door',
  'Mindcraft-derived crafting works as native sequential owner subgoal');
+// Prefer actual server-version recipe alternatives over the old oak-only
+// hardcoded chest recipe. A chest may be made from available spruce planks.
+const multiRegistry={
+ items:{1:{id:1,name:'oak_planks'},2:{id:2,name:'spruce_planks'},
+        3:{id:3,name:'chest'}},
+ itemsByName:{oak_planks:{id:1},spruce_planks:{id:2},chest:{id:3}},
+ recipes:{3:[
+   {inShape:[[1,1,1],[1,null,1],[1,1,1]],result:{id:3,count:1}},
+   {inShape:[[2,2,2],[2,null,2],[2,2,2]],result:{id:3,count:1}}
+ ]}
+};
+const chestCatalog=compileRecipeCatalog({registry:multiRegistry},'chest');
+ok(chestCatalog?.nodes?.chest?.length===2,
+ 'server-version chest has two legal alternative wood recipes');
+const withSpruce=generalPlan({joined:true,
+ inventory:{raw:{spruce_planks:8},planks:8},workbenchNearby:true,
+ recipeCatalog:chestCatalog},{goal:'craft',item:'chest',targetCount:1});
+ok(withSpruce.kind==='craft_general'&&withSpruce.item==='chest',
+ 'existing spruce planks satisfy versioned chest alternative without oak');
+const withOak=generalPlan({joined:true,
+ inventory:{raw:{oak_planks:8},planks:8},workbenchNearby:true,
+ recipeCatalog:chestCatalog},{goal:'craft',item:'chest',targetCount:1});
+ok(withOak.kind==='craft_general'&&withOak.item==='chest',
+ 'existing oak recipe remains available in versioned catalog');
+const alreadyCrafted=generalPlan({joined:true,
+ inventory:{raw:{chest:2}},recipeCatalog:null},
+ {goal:'craft',item:'chest',targetCount:2});
+ok(alreadyCrafted.kind==='complete',
+ 'server-observed owned item proves success even without recipe metadata');
+const noRegistered=generalPlan({joined:true,
+ inventory:{raw:{oak_planks:8},planks:8},workbenchNearby:true,
+ recipeCatalog:null},{goal:'craft',item:'chest',targetCount:1});
+ok(noRegistered.kind==='craft_general',
+ 'known legacy chest recipe remains an exact audited fallback');
+const missingIngredients=generalPlan({joined:true,
+ inventory:{raw:{}},workbenchNearby:true,recipeCatalog:chestCatalog},
+ {goal:'craft',item:'chest',targetCount:1});
+ok(missingIngredients.kind==='collect_wood',
+ 'incomplete versioned graph falls back to verified wood acquisition');
+const unregisteredItem=generalPlan({joined:true,
+ inventory:{raw:{}},workbenchNearby:true,recipeCatalog:null},
+ {goal:'craft',item:'unlisted_mystery_item',targetCount:1});
+ok(unregisteredItem.kind==='blocked',
+ 'unknown recipe must never inherit a made-up legacy fallback');
+
 console.log('MINDCRAFT_NATIVE_RECIPE_GRAPH '+checks+'/'+checks+
  ' PASS (modeled version registry and production planner; NOT live Minecraft Java)');

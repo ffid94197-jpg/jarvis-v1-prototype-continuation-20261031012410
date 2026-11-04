@@ -9,7 +9,7 @@ const {validFarmSpec}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const SIMPLE_STEPS=new Set(['tools','stone_age','iron_age']);
 function validPosition(p){
- return !!p&&typeof p==='object'&&!Array.isArray(p)&&
+ return !!p&&typeof p==='object'&&!Array.isArray(p)&&Object.keys(p).length===3&&
    ['x','y','z'].every(k=>Number.isInteger(p[k])&&Math.abs(p[k])<=30000000);
 }
 function validStep(s){

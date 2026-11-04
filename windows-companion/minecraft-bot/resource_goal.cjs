@@ -10,13 +10,32 @@ const PICKAXE_GENERIC_RESOURCES=new Set(['andesite','diorite','granite',
  'tuff','calcite','cobbled_deepslate','blackstone','basalt']);
 const SAFE_GENERIC_RESOURCES=new Set([...HAND_GENERIC_RESOURCES,
  ...PICKAXE_GENERIC_RESOURCES]);
+// Native versioned game-ore acquisition; no arbitrary item drop assumptions.
+const PICKAXES=Object.freeze({
+ wood:['wooden_pickaxe','stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'],
+ stone:['stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'],
+ iron:['iron_pickaxe','diamond_pickaxe','netherite_pickaxe']
+});
+const ORE_RESOURCE_RULES=Object.freeze({
+ coal:{blocks:['coal_ore','deepslate_coal_ore'],drop:'coal',tier:'wood',dimension:'overworld'},
+ raw_copper:{blocks:['copper_ore','deepslate_copper_ore'],drop:'raw_copper',tier:'stone',dimension:'overworld'},
+ raw_gold:{blocks:['gold_ore','deepslate_gold_ore'],drop:'raw_gold',tier:'iron',dimension:'overworld'},
+ redstone:{blocks:['redstone_ore','deepslate_redstone_ore'],drop:'redstone',tier:'iron',dimension:'overworld'},
+ lapis_lazuli:{blocks:['lapis_ore','deepslate_lapis_ore'],drop:'lapis_lazuli',tier:'stone',dimension:'overworld'},
+ emerald:{blocks:['emerald_ore','deepslate_emerald_ore'],drop:'emerald',tier:'iron',dimension:'overworld'},
+ quartz:{blocks:['nether_quartz_ore'],drop:'quartz',tier:'wood',dimension:'the_nether'}
+});
 const RESOURCES=new Set(['logs','planks','sticks','cobblestone','raw_iron',
-  'iron_ingot','diamond','obsidian','flint','netherrack',...SAFE_GENERIC_RESOURCES]);
+  'iron_ingot','diamond','obsidian','flint','netherrack',...SAFE_GENERIC_RESOURCES,
+  ...Object.keys(ORE_RESOURCE_RULES)]);
 const ALIASES=Object.freeze({
  wood:'logs',log:'logs',stones:'cobblestone',stone:'cobblestone',
  diamonds:'diamond',iron:'iron_ingot',rawiron:'raw_iron',
  plank:'planks',stick:'sticks',soil:'dirt',sand_block:'sand',red_sand_block:'red_sand',
- gravel_block:'gravel',mud_block:'mud',moss:'moss_block',moss_blocks:'moss_block'
+ gravel_block:'gravel',mud_block:'mud',moss:'moss_block',moss_blocks:'moss_block',
+ copper:'raw_copper',gold:'raw_gold',lapis:'lapis_lazuli',
+ lapis_dust:'lapis_lazuli',redstone_dust:'redstone',nether_quartz:'quartz',
+ emeralds:'emerald',coal_ore:'coal'
 });
 function normalizeResource(name){
  if(typeof name!=='string')return null;
@@ -56,6 +75,29 @@ function resourcePlan(world,failures={},progress={},delegate){
      ?required('survey_ore','Seek safe newly observed '+ore+' terrain',{ore,index:progress.steps||0})
      :required(kind,why);
  };
+ if(Object.hasOwn(ORE_RESOURCE_RULES,resource)){
+   const rule=ORE_RESOURCE_RULES[resource];
+   const dimension=String(world.dimension||'').replace(/^minecraft:/,'');
+   if(dimension!==rule.dimension)
+     return required('blocked','Requested '+resource+' ore requires the observed '+rule.dimension+' dimension');
+   const tier=PICKAXES[rule.tier];
+   if(!tier?.some(name=>(inv.raw?.[name]||0)>0 ||
+      (name==='wooden_pickaxe'&&inv.woodenPickaxe>0) ||
+      (name==='stone_pickaxe'&&inv.stonePickaxe>0) ||
+      (name==='iron_pickaxe'&&inv.ironPickaxe>0) ||
+      (name==='diamond_pickaxe'&&inv.diamondPickaxe>0)))
+     return stage(rule.tier==='iron'?'iron_age':rule.tier==='stone'?'stone_age':'tools') ||
+       required('blocked','Missing real required tool for '+resource+' ore');
+   if((failures.mine_resource_ore||0)>=2){
+     const surveys=progress.milestones?.resourceOreTrips?.[resource]||0;
+     if(surveys>=8)return required('blocked','Eight verified alternate '+resource+
+       ' ore search regions exhausted');
+     return required('survey_resource','Scout new safe loaded terrain for '+resource,
+       {resource,index:progress.steps||0});
+   }
+   return required('mine_resource_ore','Mine exposed real '+resource+' ore with verified drop',
+     {resource});
+ }
  if(SAFE_GENERIC_RESOURCES.has(resource)){
    if(PICKAXE_GENERIC_RESOURCES.has(resource)&&
       !(inv.woodenPickaxe||inv.stonePickaxe||inv.ironPickaxe||inv.diamondPickaxe||
@@ -148,4 +190,4 @@ function resourcePlan(world,failures={},progress={},delegate){
  }
 }
 module.exports={RESOURCES,SAFE_GENERIC_RESOURCES,HAND_GENERIC_RESOURCES,
- PICKAXE_GENERIC_RESOURCES,normalizeResource,resourceCount,resourcePlan};
+ PICKAXE_GENERIC_RESOURCES,PICKAXES,ORE_RESOURCE_RULES,normalizeResource,resourceCount,resourcePlan};

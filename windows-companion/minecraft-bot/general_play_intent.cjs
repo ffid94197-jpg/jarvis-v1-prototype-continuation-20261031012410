@@ -246,7 +246,7 @@ function modelPrimitiveGrounded(command,ownerText,context){
  * This only authorizes a typed proposal to proceed to the existing validator
  * and runtime checks; it is not completion evidence or extra tool authority.
  */
-function modelGoalGrounded(q,ownerText){
+function modelGoalGrounded(q,ownerText,context=''){
  if(!q||q.command!=='auto_goal'||typeof q.goal!=='string')return false;
  const s=String(ownerText||'').toLowerCase().replace(/_/g,' ');
  const has=expression=>expression.test(s);
@@ -255,7 +255,12 @@ function modelGoalGrounded(q,ownerText){
  // verify every constituent stage independently.
  const multiPart=has(/\b(?:then|after that|afterwards?|next)\b/)||
    has(/\band(?:\s+then)?\s+(?:mine|craft|make|build|gather|collect|equip|wear|defeat|beat|fight|travel|go|place)\b/);
- if(multiPart&&!['sequence','netherite_dragon_run','dragon_then_netherite_run'].includes(q.goal))return false;
+ // A full Netherite armor AND sword request is one explicit loadout
+ // outcome handled by the native smithing goal. It is not an unrelated
+ // model-invented two-step sequence. All other conjunctions still require
+ // a fully validated owner-matched sequence or approved Dragon order.
+ if(multiPart&&!['sequence','netherite_dragon_run','dragon_then_netherite_run',
+   'netherite_gear_run'].includes(q.goal))return false;
  if(has(/\b(?:stack|stacks|several|lots|all)\b/) && ['gather','craft'].includes(q.goal))return false;
  const itemMention=name=>typeof name==='string'&&
    (s.includes(name.replace(/_/g,' '))||s.includes(name.replace(/_/g,' ')+'s'));
@@ -288,6 +293,23 @@ function modelGoalGrounded(q,ownerText){
      return q.goal===(dragonFirst?'dragon_then_netherite_run':'netherite_dragon_run');
    }
    return true;
+  }
+  case 'defeat_hostile':{
+   const mob=q.mob,entityId=q.entityId;
+   if(!ALLOWED_HOSTILES.has(mob)||!Number.isInteger(entityId)||entityId<0||entityId>200000)
+     return false;
+   if(!/\b(?:defeat|kill|slay|eliminate|take out)\b/.test(s) ||
+      !s.includes(String(mob).replace(/_/g,' '))||
+      /\b(?:player|villager|creeper|dragon|wither)\b/.test(s))return false;
+   // A model cannot choose a target ID not present in the current managed
+   // observation, or select arbitrarily among multiple same-name threats.
+   // The live executor still rechecks identity/range immediately before any
+   // movement or attack; this is grounding, not permission.
+   let scene;try{scene=JSON.parse(String(context||''));}catch{return false;}
+   const matches=Array.isArray(scene?.threats)?scene.threats.filter(t=>
+     t?.name===mob&&Number.isInteger(t.id)&&Number.isFinite(t.distance)&&
+     t.distance>=0&&t.distance<=12):[];
+   return matches.length===1&&matches[0].id===entityId;
   }
   case 'shelter':{
    const sentence=s.replace(/^in minecraft[, :]+/,'').replace(/\s+in minecraft$/,'');

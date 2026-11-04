@@ -216,7 +216,7 @@ function contextualIntent(text,context){
  const villageDeal=/^(?:trade|buy|purchase) (?:offer|deal|trade|option) (?:number |#)?(\d{1,2})(?: (?:from|with) (?:the )?villager)?(?: (once|twice|three times|four times))?$/.exec(instruction);
  const storage=new RegExp('^(store|deposit|put|withdraw|take|retrieve) ('+COUNT_PATTERN+') ([a-z_ ]{2,56}) (?:in|into|from) (?:the |a |that )?(chest|barrel)$').exec(instruction);
  const enchanting=/^enchant (?:my |the |a |an )?([a-z_ ]{2,56}) (?:with |using )?(?:the )?(first|second|third) (?:choice|option)$/.exec(instruction);
- const fight=/^(?:attack|fight|defeat|kill|slay) (?:the |that |a |an )?(?:nearby )?([a-z_]+(?: [a-z_]+)?)(?: (?:up to )?(\d{1,2}) (?:hits|swings|times))?$/.exec(instruction);
+ const fight=/^(?:attack|fight|defeat|kill|slay|eliminate|take out) (?:the |that |a |an )?(?:nearby )?([a-z_]+(?: [a-z_]+)?)(?: (?:up to )?(\d{1,2}) (?:hits|swings|times))?$/.exec(instruction);
  if(!request&&!travel&&!inspect&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight)return null;
  let scene;
  try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve nearby objects without a fresh game observation');}
@@ -243,12 +243,15 @@ function contextualIntent(text,context){
  if(fight){
   const mob=fight[1].replace(/ /g,'_');
   if(!ALLOWED_HOSTILES.has(mob))return fail('Requested entity is not an approved hostile target');
+  const durable=!fight[2]&&/^(?:defeat|kill|slay|eliminate|take out)\b/.test(instruction);
+  const radius=durable?12:3.4;
   const targets=Array.isArray(scene.threats)?scene.threats.filter(t=>
-    t?.name===mob&&Number.isInteger(t.id)&&Number.isFinite(t.distance)&&t.distance<=3.4):[];
+    t?.name===mob&&Number.isInteger(t.id)&&Number.isFinite(t.distance)&&
+    t.distance<=radius):[];
   if(targets.length!==1)return fail(targets.length?
-    'Several matching hostile entities are nearby; specify the target':
-    'Named hostile not safely reachable in latest observation');
-  if(!fight[2]&&/^(?:defeat|kill|slay)\b/.test(instruction))
+    'Several matching hostiles are observed; specify the exact target':
+    'No single named hostile server-observed in authorized range');
+  if(durable)
    return canonicalIntent({command:'auto_goal',goal:'defeat_hostile',
      mob,entityId:targets[0].id});
   return canonicalIntent({command:'attack_hostile',entityId:targets[0].id,
@@ -337,7 +340,7 @@ async function interpretOwnerInstruction(input,{env=process.env,context='',fetch
   if(Object.hasOwn(PRIMITIVE_FIELDS,proposed.command.command) &&
      !modelPrimitiveGrounded(proposed.command,text,context))
     return fail('Model proposed an unrelated or ungrounded Minecraft action; no effect taken');
-  if(proposed.command.command==='auto_goal' && !modelGoalGrounded(proposed.command,text))
+  if(proposed.command.command==='auto_goal' && !modelGoalGrounded(proposed.command,text,context))
     return fail('Model proposed an autonomous goal not authorized by the owner request');
   if(SIMPLE.has(proposed.command.command) && !modelSimpleGrounded(proposed.command.command,text))
     return fail('Model proposed a control action unrelated to the owner request');

@@ -20,7 +20,7 @@ const {itemName:normalizeCraftItemName}=require('./general_play_intent.cjs');
 const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
 const {createAdvancedActions}=require('./advanced_survival_actions.cjs');
-const {validHostileTarget,fightObserved,equipObservedMelee}=require('./native_combat.cjs');
+const {validHostileTarget,validPursuitTarget,fightObserved,equipObservedMelee}=require('./native_combat.cjs');
 const {compileRecipeCatalog}=require('./mindcraft_recipe_graph.cjs');
 const {chooseNativeShelterSite}=require('./native_shelter.cjs');
 const {planSurveyStep}=require('./terrain_survey.cjs');
@@ -567,6 +567,29 @@ async function autoExecute(plan,epoch){
         }
       }
       return {ok:false,verified:false,detail:'Retreat not verified: '+reason};
+    }
+    case 'approach_bound_hostile':{
+      const live=validPursuitTarget(bot,plan.targetId,12);
+      if(!live||live.name!==plan.mob||bot.health<12)
+        return {ok:false,verified:false,detail:'Bound target absent, changed or player health unsafe'};
+      const observed=digest(bot,leader);
+      // Never chase through another hostile's occupied danger corridor or
+      // route through an active creeper blast zone.
+      if(observed.threats.some(t=>t.id!==plan.targetId&&t.distance<=8))
+        return {ok:false,verified:false,detail:'Other hostiles nearby; bounded pursuit refused'};
+      if(epoch!==actionEpoch)throw Error('Owner cancelled hostile approach');
+      const from=bot.entity.position.clone();
+      const arrived=await navigate(live.position,2,epoch,14000);
+      if(epoch!==actionEpoch)throw Error('Owner cancelled hostile approach');
+      const current=validPursuitTarget(bot,plan.targetId,3.4);
+      const moved=bot.entity.position.distanceTo(from)>0.8;
+      const ok=arrived&&!!current&&current.name===plan.mob&&
+        bot.health>=9&&(moved||from.distanceTo(current.position)<=3.4);
+      return {ok,verified:ok,
+        ...(ok?{proof:'bound_hostile_approach',targetId:plan.targetId,mob:plan.mob}:{}),
+        detail:ok?'Server-observed safe approach to bound hostile '+plan.mob+
+          '; no damage or death claimed':
+          'Pursuit route failed or target changed before reaching confirmed melee range'};
     }
     case 'fight_bound_hostile':{
       const live=validHostileTarget(bot,plan.targetId);
@@ -1193,9 +1216,9 @@ async function action(q){
     case 'auto_stop':resumeAfterSpawn=false;setMode('stay');return {ok:true,status:'Autonomous gameplay stopped; movement cancelled'};
     case 'auto_goal':{
       if(q.goal==='defeat_hostile'){
-        const bound=validHostileTarget(bot,q.entityId);
+        const bound=validPursuitTarget(bot,q.entityId,12);
         if(!bound||bound.name!==q.mob)
-          return {ok:false,error:'Target hostile identity and melee range must be freshly server-observed before starting'};
+          return {ok:false,error:'Hostile target ID/name and 12-block pursuit radius must be freshly server-observed'};
       }
       if(q.goal==='farm_wheat' && bot.entity.position.distanceTo(
         new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>12)

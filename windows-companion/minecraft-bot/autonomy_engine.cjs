@@ -14,7 +14,12 @@ const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
 const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip']);
-const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
+// Perception must include EVERY already-authorized hostile; otherwise the
+// planner never sees cave spiders, slimes or phantoms that the native combat
+// controller can safely handle. Add explicitly disallowed hazards for
+// avoidance/retreat only, not combat permission.
+const HOSTILES = new Set([...ALLOWED_HOSTILES,
+  'creeper','ghast','piglin_brute','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
 function itemsFrom(bot) {
@@ -183,8 +188,12 @@ function decide(goal, world, failures={}, progress={}) {
       why:'Previously selected hostile is no longer observed; death NOT independently proven'};
     if(!ALLOWED_HOSTILES.has(target.name))
       return {kind:'blocked',why:'Selected entity no longer an authorized hostile'};
-    if(target.distance>3.4)return {kind:'blocked',
-      why:'Selected hostile moved outside observed safe melee range; no blind pursuit'};
+    if(target.distance>12)return {kind:'blocked',
+      why:'Selected hostile moved beyond its authorized twelve-block pursuit envelope'};
+    if(world.health<12)return {kind:'retreat',why:'Insufficient health for target-bound pursuit'};
+    if(target.distance>3.4)return {kind:'approach_bound_hostile',targetId:progress.entityId,
+      mob:progress.mob,why:'Move within bounded observed reach of the original allowed hostile'};
+
     if(world.health<12)return {kind:'retreat',why:'Insufficient health for bounded target-specific combat'};
     return {kind:'fight_bound_hostile',targetId:progress.entityId,mob:progress.mob,
       why:'Continue target-bound guarded melee only while same hostile is observed'};
@@ -514,6 +523,17 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           break;
         }
         const stage=state.sequence[state.sequenceIndex];
+        // autoTick compiles the LIVE Minecraft recipe catalog only for the
+        // previously active craft/equip stage. When a stage has just been
+        // proven and the sequence index advances during this same tick, the
+        // next item may have a completely different versioned recipe.
+        // Yield one observation tick rather than using stale recipe evidence
+        // to falsely block a valid multi-stage owner instruction.
+        if(n>0 && ['craft','equip'].includes(stage.goal) &&
+           world.recipeCatalog?.root!==stage.item){
+          d={kind:'wait',why:'Refresh live recipe catalog for next authorized sequence item'};
+          break;
+        }
         const stageWorld=stage.goal==='build'?
           {...world,buildCells:world.buildCellsByStage?.[state.sequenceIndex]}:
           stage.goal==='build_volume'?
@@ -589,6 +609,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           outcome.proof==='safe_scout_move')) &&
       (decision.kind!=='fight_bound_hostile' ||
         (outcome.proof==='bound_hostile_death' &&
+          outcome.targetId===state.entityId && outcome.mob===state.mob)) &&
+      (decision.kind!=='approach_bound_hostile' ||
+        (outcome.proof==='bound_hostile_approach' &&
           outcome.targetId===state.entityId && outcome.mob===state.mob));
     if(ok){
       // Only CONSECUTIVE unresolved attempts should exhaust an action's
@@ -605,6 +628,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       }
       if(decision.kind==='build_nether_portal' && outcome.proof==='nether_portal')
         state.milestones.netherPortalBuilt=true;
+      if((decision.kind==='enter_nether'&&outcome.proof==='nether_entered') ||
+         (decision.kind==='enter_overworld'&&outcome.proof==='overworld_return'))
+        state.milestones.netherPortalUsed=true;
       if(['observe_dragon','search_dragon','fight_dragon'].includes(decision.kind) &&
          outcome.proof==='dragon_seen')
         state.milestones.dragonSeen=true;

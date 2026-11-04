@@ -74,7 +74,7 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay'){
     wornNetherite:world.wornNetherite===true,heldNetheriteSword:world.heldNetheriteSword===true,
     dragonDeadObserved:world.dragonDeadObserved===true,
     exitPortalPresent:world.exitPortalPresent===true,dragonPresent:world.dragonPresent===true,
-    threats:Array.isArray(world.threats)?world.threats.slice(0,2):[],
+    threats:Array.isArray(world.threats)?world.threats.slice(0,6):[],
     villagers:Array.isArray(world.villagers)?world.villagers.slice(0,2):[],
     nearbyBlocks:Array.isArray(nearby)?nearby.slice(0,12):[],lastAction:String(lastAction).slice(0,100)
   };

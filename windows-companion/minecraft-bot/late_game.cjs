@@ -22,6 +22,7 @@ function lateGamePlan(world,progress={}){
   const i=world.inventory||{},m=progress.milestones||{};
   const dimension=String(world.dimension||'minecraft:overworld').replace(/^minecraft:/,'');
   const dragonFirst=progress.goal==='dragon_then_netherite_run';
+  const dragonOnly=progress.goal==='dragon_run';
   const armorOnly=progress.goal==='netherite_armor_run';
   const equipmentOnly=progress.goal==='netherite_gear_run';
   const gearOnly=armorOnly||equipmentOnly;
@@ -52,7 +53,10 @@ function lateGamePlan(world,progress={}){
   // This separate user-authorized mission enforces a strict temporal order:
   // dragon death and the End exit portal FIRST, full worn Netherite LAST.
   // It never accepts entity disappearance or a planner receipt as proof.
-  if(dragonFirst && !dragonVictory){
+  // Dragon-only missions reuse the existing verified End route. They MUST
+  // NOT silently expand into 20 Ancient Debris, Bastion template and
+  // Netherite smithing. Composite missions retain their separate order.
+  if((dragonFirst||dragonOnly) && !dragonVictory){
     if(dimension==='the_end'){
       if(world.wornDiamond!==true && world.wornNetherite!==true)
         return action('equip_diamond','Equip and verify four diamond armor slots before the Dragon fight');
@@ -71,7 +75,7 @@ function lateGamePlan(world,progress={}){
       return action('enter_overworld','Return from Nether to locate End portal');
     }
     if(dimension!=='overworld')return action('blocked','Unknown game dimension '+dimension);
-    if(!m.netherPortalBuilt && !world.netherPortalNearby){
+    if(!m.netherPortalBuilt && !m.netherPortalUsed && !world.netherPortalNearby){
       if(qty(i,'obsidian')<14)return action('mine_obsidian','Collect actual obsidian');
       if(!has(i,'flint_and_steel')){
         if(!has(i,'flint'))return action('collect_flint','Mine gravel for flint');
@@ -112,6 +116,18 @@ function lateGamePlan(world,progress={}){
     if(world.strongholdPortalFrameNearby || world.endPortalPresent)
       return action('activate_end_portal','Activate twelve observed stronghold portal frames');
     return action('track_stronghold','Locate a real stronghold using Eyes of Ender');
+  }
+  if(dragonOnly && dragonVictory){
+    // Killing the dragon and observing the exit portal is not the full game
+    // completion handoff. The independent End-to-Overworld dimension change
+    // is an existing server-backed receipt; require it before settlement.
+    // Netherite equipment is NEVER an implicit prerequisite here.
+    if(dimension==='the_end' && world.dragonDeadObserved===true &&
+       world.exitPortalPresent===true)
+      return action('exit_end','Leave the End via observed victory portal; verify the actual Overworld return');
+    if(dimension==='overworld'&&m.endReturned===true)
+      return action('complete','Dragon death and End exit portal witnessed, then server-confirmed Overworld return');
+    return action('blocked','Dragon victory proof missing the verified End-to-Overworld transition');
   }
   if(dragonFirst && dragonVictory && dimension==='the_end')
     return action('exit_end','Use the observed End exit portal to return to Overworld; dragon already verified');
@@ -177,7 +193,7 @@ function lateGamePlan(world,progress={}){
   const missing=wantedNetherite.filter(n=>!has(i,n));
   if(missing.length){
     // Existing portal may be reconstructed from saved position after returning.
-    if(!m.netherPortalBuilt && !world.netherPortalNearby){
+    if(!m.netherPortalBuilt && !m.netherPortalUsed && !world.netherPortalNearby){
       if(qty(i,'obsidian')<14)return action('mine_obsidian','Mine fourteen actual obsidian blocks with diamond pickaxe');
       if(!has(i,'flint_and_steel')){
         if(!has(i,'flint'))return action('collect_flint','Mine gravel until real flint drops');

@@ -61,9 +61,23 @@ function resourcePlan(world,failures={},progress={},delegate){
       !(inv.woodenPickaxe||inv.stonePickaxe||inv.ironPickaxe||inv.diamondPickaxe||
         (inv.raw?.netherite_pickaxe||0)>0))
      return stage('tools')||required('blocked','Missing real pickaxe to harvest '+resource);
-   if((failures.mine_generic||0)>=3)
-     return required('blocked','Three attempts to obtain safe '+resource+' did not yield a verified pickup');
-   return required('mine_generic','Gather loaded, visibly accessible '+resource+' and verify inventory increase',{resource});
+   // A missed block in the current loaded chunk is not proof the whole
+   // survival biome lacks the material. After two failed real acquisitions
+   // scout a different, server-confirmed standable region before retrying.
+   // Every scout requires physical displacement, never invented inventory.
+   if((failures.mine_generic||0)>=2){
+     const attempts=progress.milestones?.genericSurveyTrips?.[resource];
+     const completed=Number.isInteger(attempts)&&attempts>=0?attempts:0;
+     if(completed>=8)
+       return required('blocked','Eight verified alternate '+resource+
+         ' survey regions exhausted; no resource claimed');
+     return required('survey_generic',
+       'Find a different safe loaded area for observed '+resource,{
+         resource,index:progress.steps||0
+       });
+   }
+   return required('mine_generic','Gather loaded, visibly accessible '+resource+
+     ' and verify inventory increase',{resource});
  }
  switch(resource){
  case 'logs':return required('collect_wood','Gather '+(count-have)+' more physical logs');

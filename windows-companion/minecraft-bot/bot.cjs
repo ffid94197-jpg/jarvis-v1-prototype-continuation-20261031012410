@@ -16,6 +16,7 @@ const {validateCommand, inventorySummary} = require('./friend_protocol.cjs');
 const {goalSpecFromCommand}=require('./goal_dispatch.cjs');
 const {compactAutonomyStatus}=require('./status_receipt.cjs');
 const {interpretOwnerInstruction} = require('./language_goal.cjs');
+const {buildLanguageContext}=require('./language_context.cjs');
 const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
 const {planSurveyStep}=require('./terrain_survey.cjs');
@@ -1001,7 +1002,10 @@ async function action(q){
       languageBusy=true;
       const before=actionEpoch;
       try{
-        const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:conciseStatus()});
+        const observed=digest(bot,leader,{dragonDead:lateSkills.session.dragonDied});
+        const context=buildLanguageContext(observed,{gameMode:bot.game?.gameMode||'unknown',
+          mission:autopilot.status(),lastAction});
+        const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context});
         if(before!==actionEpoch)return {ok:false,error:'Superseded owner command cancelled stale language result'};
         if(!parsed.ok)return {ok:false,error:parsed.error};
         const result=await action(parsed.command);

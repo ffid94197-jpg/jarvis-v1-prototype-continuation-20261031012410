@@ -438,10 +438,15 @@ async function autoExecute(plan,epoch){
       const beforeCount=rawCount(bot,plan.block);
       // Navigation is allowed only to observed safe adjacent foot locations.
       if(bot.entity.position.distanceTo(target.offset(.5,.5,.5))>4.2){
-        const feet=[[p.x+1,p.z],[p.x-1,p.z],[p.x,p.z+1],[p.x,p.z-1]]
-          .map(([x,z])=>safeSurveyFeet(bot,x,z,p.y,Vec3)).filter(Boolean);
+        // A roof cell may be reachable from the real floor below, not
+        // from an imaginary standable platform at rooftop elevation.
+        // Search a few nearby *observed* safe foot levels, never teleport.
+        const around=[[p.x+1,p.z],[p.x-1,p.z],[p.x,p.z+1],[p.x,p.z-1]];
+        const feet=[p.y,p.y-1,p.y-2,p.y-3,p.y-4]
+          .flatMap(y=>around.map(([x,z])=>safeSurveyFeet(bot,x,z,y,Vec3)))
+          .filter(Boolean);
         let reached=false;
-        for(const foot of feet.slice(0,4)){
+        for(const foot of feet.slice(0,8)){
           if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
           try{
             if(await navigate(foot.offset(.5,0,.5),0,epoch,stanceNavTimeoutMs()) &&

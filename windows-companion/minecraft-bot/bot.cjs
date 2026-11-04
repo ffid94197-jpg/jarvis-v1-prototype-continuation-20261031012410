@@ -28,7 +28,7 @@ const {confirmedMove}=require('./movement_proof.cjs');
 const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_navigation.cjs');
 const {collectObservedDrop,pickupFeet}=require('./drop_pickup.cjs');
 const {retreatStances}=require('./retreat_access.cjs');
-const {normalizeResource}=require('./resource_goal.cjs');
+const {normalizeResource,SAFE_GENERIC_RESOURCES}=require('./resource_goal.cjs');
 const {validBuildSpec,observeBuild,validVolumeSpec,observeVolume}=require('./structure_goal.cjs');
 const {validFarmSpec,observeWheat}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
@@ -600,6 +600,42 @@ async function autoExecute(plan,epoch){
         }
       }
       return {ok:false,verified:false,detail:'Safe independent exploration blocked: '+last};
+    }
+    case 'survey_generic':{
+      const resource=plan.resource;
+      if(!SAFE_GENERIC_RESOURCES.has(resource))
+        return {ok:false,verified:false,detail:'Generic survey material is not owner-authorized'};
+      if(epoch!==actionEpoch)throw Error('Material survey cancelled');
+      const start=bot.entity.position.clone();
+      const catalog=bot.jarvisGenericSurveyVisited instanceof Map?
+        bot.jarvisGenericSurveyVisited:new Map();
+      bot.jarvisGenericSurveyVisited=catalog;
+      const used=catalog.get(resource)||new Set();
+      catalog.set(resource,used);
+      const sites=surveyTargets(bot,start,Vec3).filter(p=>
+        !used.has([p.x,p.y,p.z].join(',')) && p.distanceTo(start)>5);
+      if(!sites.length)
+        return {ok:false,verified:false,detail:'No new safe loaded survey waypoints for '+resource};
+      const offset=(Number.isInteger(plan.index)?Math.abs(plan.index):0)%sites.length;
+      let last='No reachable alternate '+resource+' search region';
+      for(let i=0;i<Math.min(4,sites.length);i++){
+        if(epoch!==actionEpoch)throw Error('Material survey cancelled');
+        const p=sites[(offset+i)%sites.length],key=[p.x,p.y,p.z].join(',');
+        used.add(key);
+        try{
+          const reached=await navigate(p,2,epoch,14000);
+          const now=bot.entity.position;
+          if(reached&&now.distanceTo(start)>4&&now.distanceTo(p)<=4){
+            return {ok:true,verified:true,proof:'generic_survey_move',
+              detail:'Server-confirmed movement to a new safe '+resource+' search region; no resource acquired or claimed'};
+          }
+          last='No server-confirmed displacement to a fresh '+resource+' search region';
+        }catch(err){
+          if(epoch!==actionEpoch)throw Error('Material survey cancelled');
+          last=String(err?.message||err).slice(0,105);
+        }
+      }
+      return {ok:false,verified:false,detail:'Material survey blocked: '+last};
     }
     case 'survey_wood':{
       if(epoch!==actionEpoch)throw Error('Wood survey cancelled');

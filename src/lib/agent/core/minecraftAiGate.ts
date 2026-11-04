@@ -126,15 +126,21 @@ export function singleInventoryResourceGoal(objective:string):
   {name:'iron_ingot',pattern:/\biron[ _]ingots?\b/,defaultCount:1},
   {name:'obsidian',pattern:/\bobsidian\b/,defaultCount:1},
   {name:'flint',pattern:/\bflint\b/,defaultCount:1},
-  {name:'netherrack',pattern:/\bnetherrack\b/,defaultCount:1}
+  {name:'netherrack',pattern:/\bnetherrack\b/,defaultCount:1},
+  {name:'dirt',pattern:/\bdirt\b/,defaultCount:1},
+  {name:'sand',pattern:/\bsands?\b/,defaultCount:1},
+  {name:'red_sand',pattern:/\bred sand\b/,defaultCount:1},
+  {name:'gravel',pattern:/\bgravel\b/,defaultCount:1},
+  {name:'mud',pattern:/\bmud\b/,defaultCount:1}
  ];
- const matches=supported.map(x=>({goal:x,match:x.pattern.exec(s)})).filter(x=>x.match!==null);
+ const matches=supported.map(x=>({goal:x,match:x.pattern.exec(s)}))
+  .filter(x=>x.match!==null && !(x.goal.name==='sand' && /\bred sand\b/.test(s)));
  if(matches.length!==1)return null;
  const {goal,match}=matches[0];
  const before=s.slice(Math.max(0,match!.index-42),match!.index);
- const specified=/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|single)\s+(?:(?:blocks?|pieces?|units?|of)\s+)?$/.exec(before);
+ const specified=/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|a|an|single)\s+(?:(?:blocks?|pieces?|units?|of)\s+)?$/.exec(before);
  const words:Record<string,number>={one:1,two:2,three:3,four:4,five:5,six:6,
-  seven:7,eight:8,nine:9,ten:10,a:1,an:1,single:1};
+  seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,a:1,an:1,single:1};
  const quantity=specified ? (words[specified[1]]??Number(specified[1])):goal.defaultCount;
  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>64)return null;
  return {resource:goal.name,quantity};
@@ -171,7 +177,8 @@ export function mayStartNativeMinecraftGoal(
   /^[a-z_]{2,64}$/.test(x) && s.includes(x.replace(/_/g,' '));
  const explicitQuantity=(names:string[]):number|null=>{
   const words:Record<string,number>={one:1,two:2,three:3,four:4,five:5,
-   six:6,seven:7,eight:8,nine:9,ten:10,a:1,an:1};
+   six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,
+   thirteen:13,fourteen:14,fifteen:15,sixteen:16,a:1,an:1};
   for(const name of names){
    const re=new RegExp('\\b(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\\s+'+
      '(?:(?:blocks?|pieces?|units?|of)\\s+)?'+name.replace(/_/g,' ')+'s?\\b');
@@ -193,7 +200,9 @@ export function mayStartNativeMinecraftGoal(
   sticks:/\bsticks?\b/,cobblestone:/\bcobblestone\b/,
   raw_iron:/\braw iron\b/,iron_ingot:/\biron ingots?\b/,
   diamond:/\bdiamonds?\b/,obsidian:/\bobsidian\b/,
-  flint:/\bflint\b/,netherrack:/\bnetherrack\b/
+  flint:/\bflint\b/,netherrack:/\bnetherrack\b/,
+  dirt:/\bdirt\b/,sand:/\bsands?\b/,red_sand:/\bred sand\b/,
+  gravel:/\bgravel\b/,mud:/\bmud\b/
  };
  if(goal==='gather'){
   const resource=args.resource;

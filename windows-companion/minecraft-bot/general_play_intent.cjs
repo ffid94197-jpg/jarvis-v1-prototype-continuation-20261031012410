@@ -271,6 +271,24 @@ function modelGoalGrounded(q,ownerText){
     return xyz?.length===3&&xyz[0]===p.x&&xyz[1]===p.y&&xyz[2]===p.z;
    });
   }
+  case 'build_volume':{
+   if(!has(/\b(?:build|construct|make)\b/))return false;
+   if(!s.includes(String(q.block||'').replace(/_/g,' ')))return false;
+   const shapeWord=q.shape==='walls'?'walls?':String(q.shape||'');
+   if(!new RegExp('\\b'+shapeWord+'\\b').test(s))return false;
+   const dimensions=s.match(/\b(\d{1,2}) by (\d{1,2})(?: by (\d{1,2}))?\b/);
+   if(!dimensions||Number(dimensions[1])!==q.width||
+      Number(dimensions[2])!==q.depth||
+      (dimensions[3]?Number(dimensions[3]):1)!==q.height)return false;
+   const point=q.position;
+   if(!point||!Number.isInteger(point.x)||!Number.isInteger(point.y)||
+      !Number.isInteger(point.z))return false;
+   const triplet=s.match(/-?\d{1,8}[\s,]+-?\d{1,8}[\s,]+-?\d{1,8}/g)||[];
+   return triplet.some(t=>{
+    const v=t.match(/-?\d+/g)?.map(Number);
+    return v?.length===3&&v[0]===point.x&&v[1]===point.y&&v[2]===point.z;
+   });
+  }
   case 'build':return has(/\b(?:build|construct|place)\b/)&&
     itemMention(q.block)&&has(/\b(?:wall|line|row)\b/);
   case 'farm_wheat':return has(/\b(?:farm|grow|plant|harvest)\b/)&&has(/\bwheat\b/);

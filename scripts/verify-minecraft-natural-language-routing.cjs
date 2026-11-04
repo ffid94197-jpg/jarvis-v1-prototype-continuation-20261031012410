@@ -321,6 +321,14 @@ ok(roomParsed?.ok&&roomParsed.command.goal==='sequence'&&roomParsed.command.step
 const roomSteps=roomParsed.command.steps;
 ok(mayStartNativeMinecraftGoal(roomObjective,sequenceArgs(roomSteps),sameWorld),
  'Core admits exactly owner-specified local roofed-room geometry');
+ok(mayStartNativeMinecraftGoal(
+ 'In Minecraft, build a 3 by 3 by 2 cobblestone roofed shelter at 1 64 2',
+ sequenceArgs(roomSteps),sameWorld),
+ 'Core recognizes roofed shelter phrase as matching same exact room sequence');
+ok(mayStartNativeMinecraftGoal(
+ 'In Minecraft, please build a 3 by 3 by 2 cobblestone roofed room at 1 64 2',
+ sequenceArgs(roomSteps),sameWorld),
+ 'Core accepts polite owner syntax without changing any room parameters');
 no(mayStartNativeMinecraftGoal(roomObjective,sequenceArgs(roomSteps.slice(0,2)),sameWorld),
  'Core refuses silently omitting roof from requested room');
 no(mayStartNativeMinecraftGoal(roomObjective,sequenceArgs([...roomSteps].reverse()),sameWorld),

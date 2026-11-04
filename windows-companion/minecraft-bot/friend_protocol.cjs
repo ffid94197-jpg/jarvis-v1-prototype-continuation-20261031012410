@@ -80,7 +80,7 @@ function validateCommand(input) {
       (input.goal==='build_volume'||['height','shape'].every(k=>input[k]===undefined)) &&
       (['build','build_volume'].includes(input.goal)||['block','axis','length'].every(k=>input[k]===undefined)) &&
       (input.goal==='build_volume'||input.height===undefined&&input.shape===undefined) &&
-      (input.goal==='farm_wheat'||['width','depth'].every(k=>input[k]===undefined)) &&
+      (['farm_wheat','build_volume'].includes(input.goal)||['width','depth'].every(k=>input[k]===undefined)) &&
       (['build','build_volume','farm_wheat'].includes(input.goal)||input.position===undefined) &&
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&

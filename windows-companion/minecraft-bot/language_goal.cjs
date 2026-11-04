@@ -92,6 +92,21 @@ function directIntent(raw){
  const s=t.toLowerCase().replace(/\s+/g,' ').replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'');
  if(/\b(?:don't|do not|never|must not|not to|without)\b/.test(s))
   return fail('Negative instruction needs clarification; no action taken');
+ const rules=[
+  [/^(stop|pause|halt|cancel)( now| everything| that| the mission)?$/,{command:'auto_stop'}],
+  [/^(?:continue|resume|keep going|carry on)(?:\s+(?:where we left(?: off)?|from (?:the )?(?:last|latest) checkpoint|(?:with\s+)?(?:(?:the|my|current|previous|last|saved)\s+)*(?:mission|goal|task|campaign|run|(?:netherite|dragon|minecraft)\s+(?:mission|goal|task|campaign|run))))?$/,{command:'auto_resume'}],
+  [/^(follow me|follow along|stay with me)$/,{command:'follow'}],
+  [/^(come here|come to me|come over)$/,{command:'come'}],
+  [/^(stay here|stay put|wait here)$/,{command:'stay'}],
+  [/^(?:beat|defeat|kill) (?:the )?(?:ender )?dragon(?: in minecraft)?$/,{command:'auto_goal',goal:'dragon_run'}],
+  [/^(?:get|obtain|make|craft)(?: me)? (?:a )?(?:full |complete )?(?:set of )?netherite (?:gear|equipment|armor) (?:and|then) (?:beat|defeat|kill) (?:the )?(?:ender )?dragon$/,{command:'auto_goal',goal:'netherite_dragon_run'}],
+  [/^(?:beat|defeat|kill) (?:the )?(?:ender )?dragon (?:and|then) (?:get|obtain|make|craft)(?: me)? (?:a )?(?:full |complete )?(?:set of )?netherite (?:gear|equipment|armor)$/,{command:'auto_goal',goal:'dragon_then_netherite_run'}],
+  [/^(?:explore|scout)(?: the| this)? (?:cave|area|world|terrain)(?: in minecraft)?$/,{command:'auto_goal',goal:'explore'}],
+  [/^(protect me|guard me|defend me|keep me safe)$/,{command:'auto_goal',goal:'guard'}],
+  [/^(show|check|tell me) (your )?inventory$/,{command:'inventory'}],
+  [/^(show|check|tell me) (your )?(status|progress)$/,{command:'auto_status'}]
+ ];
+ for(const [re,q] of rules)if(re.test(s))return canonicalIntent(q);
  // Compose small independent, verifiable subgoals using the existing
  // goal-controller sequence. Generic one-off primitives are NOT silently
  // promoted to an open-ended mission, and all stage parameters are validated.
@@ -112,21 +127,6 @@ function directIntent(raw){
   }
   return canonicalIntent({command:'auto_goal',goal:'sequence',steps});
  }
- const rules=[
-  [/^(stop|pause|halt|cancel)( now| everything| that| the mission)?$/,{command:'auto_stop'}],
-  [/^(?:continue|resume|keep going|carry on)(?:\s+(?:where we left(?: off)?|from (?:the )?(?:last|latest) checkpoint|(?:with\s+)?(?:(?:the|my|current|previous|last|saved)\s+)*(?:mission|goal|task|campaign|run|(?:netherite|dragon|minecraft)\s+(?:mission|goal|task|campaign|run))))?$/,{command:'auto_resume'}],
-  [/^(follow me|follow along|stay with me)$/,{command:'follow'}],
-  [/^(come here|come to me|come over)$/,{command:'come'}],
-  [/^(stay here|stay put|wait here)$/,{command:'stay'}],
-  [/^(?:beat|defeat|kill) (?:the )?(?:ender )?dragon(?: in minecraft)?$/,{command:'auto_goal',goal:'dragon_run'}],
-  [/^(?:get|obtain|make|craft)(?: me)? (?:a )?(?:full |complete )?(?:set of )?netherite (?:gear|equipment|armor) (?:and|then) (?:beat|defeat|kill) (?:the )?(?:ender )?dragon$/,{command:'auto_goal',goal:'netherite_dragon_run'}],
-  [/^(?:beat|defeat|kill) (?:the )?(?:ender )?dragon (?:and|then) (?:get|obtain|make|craft)(?: me)? (?:a )?(?:full |complete )?(?:set of )?netherite (?:gear|equipment|armor)$/,{command:'auto_goal',goal:'dragon_then_netherite_run'}],
-  [/^(?:explore|scout)(?: the| this)? (?:cave|area|world|terrain)(?: in minecraft)?$/,{command:'auto_goal',goal:'explore'}],
-  [/^(protect me|guard me|defend me|keep me safe)$/,{command:'auto_goal',goal:'guard'}],
-  [/^(show|check|tell me) (your )?inventory$/,{command:'inventory'}],
-  [/^(show|check|tell me) (your )?(status|progress)$/,{command:'auto_status'}]
- ];
- for(const [re,q] of rules)if(re.test(s))return canonicalIntent(q);
  const g=new RegExp('^(?:mine|gather|collect|get|find|bring)(?: me)? ('+COUNT_PATTERN+') ([a-z_ ]{2,35})$').exec(s);
  if(g){
   const resource=normalizeResource(g[2].trim().replace(/ blocks?$/,''));

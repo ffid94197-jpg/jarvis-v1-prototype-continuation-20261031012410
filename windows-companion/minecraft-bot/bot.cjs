@@ -20,7 +20,7 @@ const {itemName:normalizeCraftItemName}=require('./general_play_intent.cjs');
 const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
 const {createAdvancedActions}=require('./advanced_survival_actions.cjs');
-const {validHostileTarget,fightObserved}=require('./native_combat.cjs');
+const {validHostileTarget,fightObserved,equipObservedMelee}=require('./native_combat.cjs');
 const {compileRecipeCatalog}=require('./mindcraft_recipe_graph.cjs');
 const {planSurveyStep}=require('./terrain_survey.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
@@ -546,7 +546,15 @@ async function autoExecute(plan,epoch){
         return {ok:true,verified:true,detail:'Observed hostile no longer visible; local danger cleared'};
       if(!validHostileTarget(bot,plan.targetId))
         return {ok:false,verified:false,detail:'Unsafe or out-of-range hostile; no blind attack'};
-      bot.attack(hostile);await pause(300);
+      const equipped=await equipObservedMelee(bot,()=>epoch===actionEpoch&&spawned);
+      if(!equipped.ok)return {ok:false,verified:false,detail:'Defensive weapon not verified: '+equipped.detail};
+      // Equipment changes take time: recheck the observed target AND health
+      // before dispatching even a single attack.
+      const live=validHostileTarget(bot,plan.targetId);
+      if(epoch!==actionEpoch)throw Error('Owner cancelled defensive action');
+      if(!live||bot.health<9)
+        return {ok:false,verified:false,detail:'Defensive target moved or health fell while equipping'};
+      bot.attack(live);await pause(300);
       if(epoch!==actionEpoch)throw Error('Owner cancelled defensive action');
       const remaining=bot.entities?.[plan.targetId];
       const safe=!remaining?.position||

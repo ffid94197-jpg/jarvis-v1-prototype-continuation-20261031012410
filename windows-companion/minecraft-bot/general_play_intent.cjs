@@ -138,7 +138,8 @@ function modelGoalGrounded(q,ownerText){
  // Do not reduce "mine then craft" or a different compound owner request
  // into one model-selected subgoal. The typed sequence controller must
  // verify every constituent stage independently.
- const multiPart=has(/\b(?:then|after that|next)\b/);
+ const multiPart=has(/\b(?:then|after that|afterwards?|next)\b/)||
+   has(/\band(?:\s+then)?\s+(?:mine|craft|make|build|gather|collect|equip|wear|defeat|beat|fight|travel|go|place)\b/);
  if(multiPart&&!['sequence','netherite_dragon_run','dragon_then_netherite_run'].includes(q.goal))return false;
  if(has(/\b(?:stack|stacks|several|lots|all)\b/) && ['gather','craft'].includes(q.goal))return false;
  const itemMention=name=>typeof name==='string'&&

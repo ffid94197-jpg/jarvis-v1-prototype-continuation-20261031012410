@@ -65,10 +65,10 @@ const snapshot=()=>{
 };
 const controller=createController({clock:()=>1000,maxSeconds:21600,maxSteps:100});
 controller.start('sequence',21600,{steps});
-let count=0;
-while(count<33){
+let count=0,done=null;
+while(count<34){
  const decision=controller.next(snapshot());
- if(decision.kind==='complete')break;
+ if(decision.kind==='complete'){done=decision;break;}
  assert.equal(decision.kind,'place_build_block');
  assert.equal(decision.block,'cobblestone');
  assert.ok(!occupied.has(key(decision.position)));
@@ -77,8 +77,7 @@ while(count<33){
   detail:'Simulated cell now physically present'});
  count++;
 }
-const done=controller.next(snapshot());
-ok(count===32&&done.kind==='complete'&&controller.status().status==='complete',
+ok(count===32&&done?.kind==='complete'&&controller.status().status==='complete',
  'all three structure stages advance only from observed world block state');
 occupied.delete(key({x:2,y:67,z:3}));
 const restarted=createController({clock:()=>1000,maxSeconds:21600,maxSteps:100});

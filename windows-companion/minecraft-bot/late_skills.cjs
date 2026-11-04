@@ -12,7 +12,7 @@ const {collectObservedDrop}=require('./drop_pickup.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
 const {findPortalLayout,pos:portalCell}=require('./portal_layout.cjs');
 const {surveyTargets}=require('./wood_navigation.cjs');
-const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
+const {ALLOWED_HOSTILES,equipObservedMelee}=require('./native_combat.cjs');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const solid=b=>b && b.boundingBox!=='empty' && !['air','cave_air','void_air','lava','water','fire','nether_portal'].includes(b.name);
 const count=(bot,name)=>(bot.inventory?.items?.()||[]).reduce((n,i)=>n+(i.name===name?i.count:0),0);
@@ -352,8 +352,8 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const live=bot.entities?.[e.id];
     if(!live?.position||live.name!==name||bot.entity.position.distanceTo(live.position)>4)
       return observed(false,'Target identity or physical melee range changed during approach');
-    const sword=bot.inventory.items().find(i=>/_sword$/.test(i.name));
-    if(sword)await bot.equip(sword,'hand');
+    const gear=await equipObservedMelee(bot,()=>getEpoch()===epoch);
+    if(!gear.ok)return observed(false,'Hunt weapon could not be server-verified: '+gear.detail);
     check(epoch);
     for(let j=0;j<12;j++){
       check(epoch);

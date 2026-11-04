@@ -50,6 +50,7 @@ const checks=[
  ['MINECRAFT-CORE-INTERACTION',['scripts/verify-minecraft-core-interaction.cjs']],
  ['MINECRAFT-GENERAL-GATHER',['windows-companion/minecraft-bot/verify_general_gather_offline.cjs']],
  ['MINECRAFT-MINDCRAFT-RECIPE-GRAPH',['windows-companion/minecraft-bot/verify_mindcraft_recipe_graph_offline.cjs']],
+ ['MINECRAFT-ADVANCED-SURVIVAL',['windows-companion/minecraft-bot/verify_advanced_survival_offline.cjs']],
  // One launcher authorization context must satisfy BOTH the startup preflight
  // and the runtime companion gate. Guards the observed defect where an
  // owner-authorized minecraft_companion_join was denied three times because the

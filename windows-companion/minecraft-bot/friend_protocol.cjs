@@ -84,7 +84,10 @@ function validateCommand(input) {
     interact_block:['position'],equip_item:['item','destination'],
     craft_item:['item','count'],place_block:['item','reference','face'],
     use_item:['hand'],interact_entity:['entityId'],
-    move:['directionInput','durationMs'],say:['text']
+    move:['directionInput','durationMs'],say:['text'],
+    inspect_villager:['entityId'],trade_villager:['entityId','tradeIndex','times'],
+    transfer_container:['position','item','count','operation'],
+    enchant_item:['position','item','choice']
   };
   if(Object.hasOwn(primitiveFields,input.command)&&!exactFields(primitiveFields[input.command]))
     return 'Unexpected parameter on game primitive';
@@ -116,6 +119,23 @@ function validateCommand(input) {
     return ['forward','back','left','right'].includes(input.directionInput) &&
       Number.isInteger(input.durationMs) && input.durationMs >= 100 && input.durationMs <= 3000
       ? null : 'Movement must specify direction and 100–3000ms';
+  if(input.command==='inspect_villager')
+    return Number.isInteger(input.entityId)&&input.entityId>=0&&input.entityId<=200000?
+      null:'Villager inspect needs one observed entity ID';
+  if(input.command==='trade_villager')
+    return Number.isInteger(input.entityId)&&input.entityId>=0&&input.entityId<=200000 &&
+      Number.isInteger(input.tradeIndex)&&input.tradeIndex>=0&&input.tradeIndex<=31 &&
+      Number.isInteger(input.times)&&input.times>=1&&input.times<=4?
+      null:'Trade needs observed villager ID, offer index 0-31 and repetitions 1-4';
+  if(input.command==='transfer_container')
+    return pos(input.position)&&itemName(input.item)&&
+      Number.isInteger(input.count)&&input.count>=1&&input.count<=64 &&
+      ['deposit','withdraw'].includes(input.operation)?
+      null:'Container transfer needs exact coordinates, item, count 1-64 and direction';
+  if(input.command==='enchant_item')
+    return pos(input.position)&&itemName(input.item)&&
+      Number.isInteger(input.choice)&&input.choice>=0&&input.choice<=2?
+      null:'Enchant requires loaded table coordinates, item and option 0-2';
   if (input.command === 'say')
     return typeof input.text === 'string' && input.text.trim().length >= 1 &&
       input.text.length <= 120 && !/[\x00-\x1f\x7f]/.test(input.text)

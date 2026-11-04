@@ -7,7 +7,7 @@ const {validateCommand}=require('./friend_protocol.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
 const {RECIPES}=require('./general_goal.cjs');
 const {validStep}=require('./mission_sequence.cjs');
-const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded}=require('./general_play_intent.cjs');
+const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName}=require('./general_play_intent.cjs');
 const SIMPLE=new Set(['follow','come','stay','guard','status','inventory','observe','auto_status','auto_stop','auto_resume']);
 const FIXED=new Set(['survive','wood','tools','explore','follow','guard','stone_age','iron_age','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run']);
 const PARAMS={
@@ -27,6 +27,7 @@ const SYSTEM=[
  'Long-horizon auto_goal craft supports selected recipes; craft_item supports any item found in the live Minecraft registry when the server-confirmed inventory contains ingredients, with bounded count 1-16.',
  'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
  'One action is never a whole mission. An action STARTED or DISPATCHED is not success; JARVIS must observe state and replan before any further effect.',
+ 'Other bounded native skills: inspect_villager {entityId}, trade_villager {entityId,tradeIndex,times}, transfer_container {position,item,count,operation}, enchant_item {position,item,choice}. The owner must explicitly request the exact target, offer, direction, item, and count. Only use freshly observed villagers/blocks; NEVER invent an ID or location, consume materials without owner approval, or claim success from a dispatch.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
  'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
  'Example: {"command":"auto_goal","goal":"gather","resource":"diamond","targetCount":3}.',
@@ -157,11 +158,51 @@ function contextualIntent(text,context){
    .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
    .replace(/\s+(?:please|for me)$/,'');
  const request=/^(?:open|close|activate|press|toggle|interact with|use) (?:the |a |an |that |this |my )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table)$/.exec(instruction);
- if(!request)return null;
+ const villagerInspect=/^(?:show|list|inspect|view|check)(?: me)?(?: the)? (?:trades|offers) (?:for|from|of) (?:the |a |that )?villager$/.exec(instruction);
+ const villageDeal=/^(?:trade|buy|purchase) (?:offer|deal|trade|option) (?:number |#)?(\d{1,2})(?: (?:from|with) (?:the )?villager)?(?: (once|twice|three times|four times))?$/.exec(instruction);
+ const storage=new RegExp('^(store|deposit|put|withdraw|take|retrieve) ('+COUNT_PATTERN+') ([a-z_ ]{2,56}) (?:in|into|from) (?:the |a |that )?(chest|barrel)$').exec(instruction);
+ const enchanting=/^enchant (?:my |the |a |an )?([a-z_ ]{2,56}) (?:with |using )?(?:the )?(first|second|third) (?:choice|option)$/.exec(instruction);
+ if(!request&&!villagerInspect&&!villageDeal&&!storage&&!enchanting)return null;
  let scene;
- try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve a nearby object without a fresh game observation');}
+ try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve nearby objects without a fresh game observation');}
  if(!scene||scene.joined!==true||scene.busy!==false||!Array.isArray(scene.nearbyBlocks))
-   return fail('A fresh idle joined-game observation is required to act on a named object');
+   return fail('A fresh idle joined-game observation is required for object actions');
+ if(villagerInspect||villageDeal){
+  const villagers=(Array.isArray(scene.villagers)?scene.villagers:[]).filter(v=>
+   v?.name==='villager' && Number.isInteger(v.id) &&
+   Number.isFinite(v.distance)&&v.distance<=4.3);
+  if(villagers.length!==1)
+   return fail(villagers.length?'Multiple villagers visible; specify which one':'No reachable villager in latest observation');
+  const entityId=villagers[0].id;
+  if(villagerInspect)return canonicalIntent({command:'inspect_villager',entityId});
+  const times=({once:1,twice:2,'three times':3,'four times':4})[villageDeal[2]]||1;
+  return canonicalIntent({command:'trade_villager',entityId,
+   tradeIndex:Number(villageDeal[1])-1,times});
+ }
+ const findTarget=type=>{
+  const re=type==='chest'?/^(?:chest|trapped_chest)$/:type==='barrel'?/^barrel$/:
+   type==='enchanting_table'?/^enchanting_table$/:null;
+  return re?scene.nearbyBlocks.filter(b=>b&&typeof b.name==='string'&&re.test(b.name)&&
+   ['x','y','z'].every(k=>Number.isInteger(b[k]))) :[];
+ };
+ if(storage||enchanting){
+  const type=storage?storage[4]:'enchanting_table',matches=findTarget(type);
+  if(matches.length!==1)return fail(matches.length?'Multiple matching workstations or containers; specify coordinates':
+    'Requested workstation or container not observed');
+  const {x,y,z}=matches[0],position={x,y,z};
+  if(storage){
+   const item=itemName(storage[3]),count=asCount(storage[2]);
+   const verb=storage[1],operation=/^(?:store|deposit|put)$/.test(verb)?'deposit':'withdraw';
+   // "put from" or "take into" is contradictory and not authorized.
+   if((operation==='deposit'&&/\bfrom\b/.test(instruction))||
+      (operation==='withdraw'&&/\b(?:in|into)\b/.test(instruction)))
+    return fail('Contradictory container transfer direction');
+   return canonicalIntent({command:'transfer_container',position,item,count,operation});
+  }
+  const item=itemName(enchanting[1]),choice={first:0,second:1,third:2}[enchanting[2]];
+  return canonicalIntent({command:'enchant_item',position,item,choice});
+ }
+
  const types={
   chest:/^(?:chest|trapped_chest)$/,
   barrel:/^barrel$/,

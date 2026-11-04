@@ -294,6 +294,17 @@ function modelGoalGrounded(q,ownerText){
    }
    return true;
   }
+  case 'defeat_hostile':{
+   const mob=q.mob,entityId=q.entityId;
+   if(!ALLOWED_HOSTILES.has(mob)||!Number.isInteger(entityId)||entityId<0||entityId>200000)
+     return false;
+   if(!/\b(?:defeat|kill|slay|eliminate|take out)\b/.test(s) ||
+      !s.includes(String(mob).replace(/_/g,' '))||
+      /\b(?:player|villager|creeper|dragon|wither)\b/.test(s))return false;
+   // A model cannot choose a new entity ID from free text. Live runtime and
+   // the independently gated Core recheck the ID against an observation.
+   return true;
+  }
   case 'shelter':{
    const sentence=s.replace(/^in minecraft[, :]+/,'').replace(/\s+in minecraft$/,'');
    return /^(?:build|construct|make)(?: me)? (?:a |the )?(?:small|simple|basic) (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?$/.test(sentence);

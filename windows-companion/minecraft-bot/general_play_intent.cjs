@@ -13,8 +13,15 @@ const validItem=/^[a-z0-9_]{1,64}$/;
 function itemName(value){
  if(typeof value!=='string')return null;
  let s=value.toLowerCase().trim().replace(/[\s-]+/g,'_');
- if(s.endsWith('s')&&!/(?:glass|grass|stairs|compass|cactus|chorus|blaze_powder)$/.test(s))
-   s=s.slice(0,-1);
+ // Many vanilla IDs are intentionally plural; a blind trailing-'s'
+ // removal changes oak_planks to the nonexistent oak_plank.
+ const canonicalPlural=/(?:^|_)(?:planks|stairs|leaves|bricks|bars|seeds|berries|boots|leggings|shears)$/;
+ if(!canonicalPlural.test(s)&&s.endsWith('s')){
+   if(/torches$/.test(s))s=s.replace(/torches$/,'torch');
+   else if(/pickaxes$/.test(s))s=s.replace(/pickaxes$/,'pickaxe');
+   else if(/potatoes$/.test(s))s=s.replace(/potatoes$/,'potato');
+   else if(!/(?:glass|grass|compass|cactus|chorus)$/.test(s))s=s.slice(0,-1);
+ }
  return validItem.test(s)?s:null;
 }
 const amount=v=>/^\d+$/.test(v)?Number(v):NUMBER_WORDS[v];
@@ -86,8 +93,15 @@ function modelPrimitiveGrounded(command,ownerText,context){
   if(!label||!s.includes(label))return false;
  }
  if(command.command==='craft_item'){
-  const countText=String(s).match(/\b(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)\b/);
-  if(countText && amount(countText[0])!==command.count)return false;
+  // A model may not choose an arbitrary quantity for "make a sword", or
+  // silently turn "a stack" into one item. Multi-action instructions need
+  // a verified sequence, not partial completion of the first clause.
+  if(/\b(?:stack|stacks|some|many|several|lots|all|enough)\b/.test(s)||
+     /\b(?:then|after that|and then)\b/.test(s))return false;
+  const counts=s.match(/\b(?:\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)\b/g)||[];
+  if(counts.length>1)return false;
+  if(counts.length===1 && amount(counts[0])!==command.count)return false;
+  if(counts.length===0 && command.count!==1)return false;
  }
  if(command.command==='say' && !s.includes(String(command.text||'').toLowerCase()))return false;
  let scene;
@@ -121,6 +135,12 @@ function modelGoalGrounded(q,ownerText){
  if(!q||q.command!=='auto_goal'||typeof q.goal!=='string')return false;
  const s=String(ownerText||'').toLowerCase().replace(/_/g,' ');
  const has=expression=>expression.test(s);
+ // Do not reduce "mine then craft" or a different compound owner request
+ // into one model-selected subgoal. The typed sequence controller must
+ // verify every constituent stage independently.
+ const multiPart=has(/\b(?:then|after that|next)\b/);
+ if(multiPart&&!['sequence','netherite_dragon_run','dragon_then_netherite_run'].includes(q.goal))return false;
+ if(has(/\b(?:stack|stacks|several|lots|all)\b/) && ['gather','craft'].includes(q.goal))return false;
  const itemMention=name=>typeof name==='string'&&
    (s.includes(name.replace(/_/g,' '))||s.includes(name.replace(/_/g,' ')+'s'));
  const explicitQuantity=()=>{
@@ -133,10 +153,19 @@ function modelGoalGrounded(q,ownerText){
   return count===null?qty===1:qty===count;
  };
  switch(q.goal){
-  case 'dragon_run':return has(/\b(?:defeat|beat|kill|slay|fight)\b/)&&has(/\bdragon\b/);
-  case 'netherite_dragon_run':case 'dragon_then_netherite_run':
-   return has(/\bdragon\b/)&&has(/\bnetherite\b/)&&
-     has(/\b(?:defeat|beat|kill|slay|fight)\b/);
+  case 'dragon_run':return !has(/\bnetherite\b/) &&
+   has(/\b(?:defeat|beat|kill|slay|fight)\b/)&&has(/\bdragon\b/);
+  case 'netherite_dragon_run':case 'dragon_then_netherite_run':{
+   if(!has(/\bdragon\b/)||!has(/\bnetherite\b/)||
+      !has(/\b(?:defeat|beat|kill|slay|fight)\b/))return false;
+   // Explicit ordering is part of the owner instruction. Never satisfy
+   // "beat Dragon THEN get Netherite" with the reverse mission.
+   if(multiPart){
+     const dragonFirst=s.indexOf('dragon')<s.indexOf('netherite');
+     return q.goal===(dragonFirst?'dragon_then_netherite_run':'netherite_dragon_run');
+   }
+   return true;
+  }
   case 'survive':return has(/\b(?:survive|survival|stay alive)\b/);
   case 'wood':return has(/\b(?:collect|gather|get|mine|find)\b/)&&has(/\b(?:wood|logs?)\b/);
   case 'tools':return has(/\b(?:tools?|pickaxes?)\b/)&&has(/\b(?:craft|make|get|obtain|upgrade)\b/);

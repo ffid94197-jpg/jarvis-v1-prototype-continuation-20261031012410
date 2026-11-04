@@ -74,10 +74,7 @@ function validEquipSpec(s){
 }
 const act=(kind,why,params={})=>({kind,why,...params});
 const count=(inv,name)=>Number.isFinite(inv?.raw?.[name])?Math.max(0,inv.raw[name]):0;
-const normalizeRecipeResource=name=>{
- const {normalizeResource}=require('./resource_goal.cjs');
- return normalizeResource(name);
-};
+const {normalizeResource}=require('./resource_goal.cjs');
 function generalPlan(world,progress={},delegate){
  const inv=world?.inventory||{};
  if(progress.goal==='equip'){
@@ -108,7 +105,7 @@ function generalPlan(world,progress={},delegate){
    return act('collect_wood','Gather stick material');
   }
   if(count(inv,ingredient)>=amount)continue;
-  const resource=normalizeRecipeResource(ingredient);
+  const resource=normalizeResource(ingredient);
   if(resource){
    if(typeof delegate!=='function')return act('blocked','Missing verified ingredient '+ingredient);
    const plan=delegate('gather',{resource,targetCount:amount});

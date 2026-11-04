@@ -449,6 +449,74 @@ async function autoExecute(plan,epoch){
       }
       return {ok:false,verified:false,detail:'New wheat crop plus seed consumption not both verified'};
     }
+    case 'bridge_end_gap':{
+      // An End spawn platform may be isolated from the central island by
+      // a short VOID gap. Only place a bounded survival cobblestone bridge
+      // tile toward ACTUAL loaded End-stone terrain. Never step into void,
+      // synthesize a destination, invent a block, or treat a tile as victory.
+      if(String(bot.game?.dimension||'').replace(/^minecraft:/,'')!=='the_end' ||
+         bot.health<12 || !bot.entity?.position ||
+         rawCount(bot,'cobblestone')<1)
+        return {ok:false,verified:false,detail:'Bridge requires live End dimension, healthy player and real cobblestone'};
+      const here=bot.entity.position.clone(),footY=Math.floor(here.y)-1;
+      const beneath=bot.blockAt(new Vec3(Math.floor(here.x),footY,Math.floor(here.z)));
+      if(!beneath||beneath.boundingBox!=='block'||
+         /lava|water|fire|magma/.test(beneath.name))
+        return {ok:false,verified:false,detail:'Player lacks safe observed platform footing'};
+      const island=typeof bot.findBlocks==='function'?
+        bot.findBlocks({matching:v=>v?.name==='end_stone',
+          maxDistance:18,count:96})||[]:[];
+      const candidates=island.map(v=>({
+         pos:v,dx:v.x-here.x,dz:v.z-here.z,
+         horizontal:Math.hypot(v.x-here.x,v.z-here.z)
+        })).filter(v=>v.horizontal>=3&&v.horizontal<=14&&
+          Math.abs(v.pos.y-footY)<=2)
+          .sort((a,b)=>a.horizontal-b.horizontal);
+      if(!candidates.length)
+        return {ok:false,verified:false,detail:'No actual island End-stone within 14 horizontal blocks; bridge refused'};
+      const direction=candidates[0];
+      const sx=Math.abs(direction.dx)>=Math.abs(direction.dz)?
+        Math.sign(direction.dx):0;
+      const sz=sx===0?Math.sign(direction.dz):0;
+      if(sx===0&&sz===0)
+        return {ok:false,verified:false,detail:'No measured bridge direction'};
+      // Find one target on the same foot level with an ACTUAL contiguous
+      // support face. Deliberately limit to a few tiles from the standing
+      // position; otherwise navigation could lead over an unbuilt chasm.
+      const x=Math.floor(here.x),z=Math.floor(here.z);
+      let chosen=null;
+      for(let distance=1;distance<=3;distance++){
+        const p=new Vec3(x+sx*distance,footY,z+sz*distance);
+        const live=bot.blockAt(p),body=bot.blockAt(p.offset(0,1,0)),
+          head=bot.blockAt(p.offset(0,2,0)),
+          below=bot.blockAt(p.offset(0,-1,0));
+        if(!live||!body||!head||!below)return {ok:false,verified:false,
+          detail:'End bridge would extend into unloaded world; refused'};
+        // Never overwrite existing solid island/platform tiles or build
+        // above observed lava. A gap is air over observed void/air.
+        if(live.boundingBox==='block')continue;
+        if(live.boundingBox!=='empty'||body.boundingBox!=='empty'||
+           head.boundingBox!=='empty' ||
+           !['air','cave_air','void_air'].includes(below.name))
+          return {ok:false,verified:false,detail:'End gap has unsafe or blocked destination'};
+        const rear=bot.blockAt(p.offset(-sx,0,-sz));
+        if(rear?.boundingBox!=='block')continue;
+        const actualTarget={x:p.x,y:p.y,z:p.z};
+        if(bot.entity.position.distanceTo(p.offset(.5,.5,.5))>4.2)break;
+        chosen=actualTarget;break;
+      }
+      if(!chosen)return {ok:false,verified:false,
+        detail:'No safe directly supported gap tile within physical placement range'};
+      // The shared structure executor independently checks support,
+      // live occupancy, cancellation, real held item, block placement and
+      // cobblestone inventory consumption. Do not duplicate a weaker path.
+      const placed=await autoExecute({kind:'place_build_block',
+        position:chosen,block:'cobblestone'},epoch);
+      if(placed?.ok!==true||placed?.verified!==true)return {ok:false,verified:false,
+        detail:'End bridge placement not physically verified: '+String(placed?.detail||'unknown')};
+      return {ok:true,verified:true,proof:'end_bridge_tile',
+        detail:'One real cobblestone bridge tile verified with source block and survival inventory consumption; no island arrival claimed'};
+    }
     case 'place_build_block':{
       const p=plan.position;
       if(!validBuildSpec({goal:'build',position:p,block:plan.block,axis:'x+',length:1}))

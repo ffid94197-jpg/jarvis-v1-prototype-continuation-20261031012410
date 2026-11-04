@@ -629,11 +629,26 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       return observed(false,'Crystal still too close to safely attack');
     const shot=await shootVisibleEntity(current,epoch);
     if(!shot.ok)return shot;
-    await delay(250);check(epoch);
-    const destroyed=!bot.entities?.[c.id];
-    return observed(destroyed,destroyed?
-      'Server no longer reports the selected crystal after a verified ranged shot':
-      'Verified survival arrow consumed, but crystal destruction still unproven');
+    // A shot can require several server ticks and an actual arrow flight
+    // before the End crystal emits its removal event. Reporting failure
+    // after only 250ms consumes the finite failure budget before impact.
+    for(let attempt=0;attempt<18;attempt++){
+      check(epoch);
+      const live=bot.entities?.[c.id];
+      if(!live?.position){
+        const here=bot.entity?.position;
+        const inLoadedRange=here && here.distanceTo(current.position)<=54;
+        return observed(!!inLoadedRange,inLoadedRange?
+          'Crystal disappeared from server entity view within loaded bow range after physically verified shot; hit attribution not assumed':
+          'Crystal out of observed range; removal cannot be inferred',
+          inLoadedRange?'end_crystal_removed':undefined);
+      }
+      if(live.name!=='end_crystal')
+        return observed(false,'Crystal entity ID was recycled; destruction cannot be inferred');
+      await delay(200);
+    }
+    return observed(false,
+      'Arrow consumed but crystal still visible after bounded projectile-flight observation');
   }
   async function smithGear(plan,epoch){
     if(!NETHERITE.includes(plan.item) || plan.base!==plan.item.replace('netherite_','diamond_'))

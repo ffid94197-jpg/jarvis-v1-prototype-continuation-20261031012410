@@ -155,7 +155,7 @@ function decide(goal, world, failures={}, progress={}) {
     depth:progress.depth,targetCount:progress.targetCount});
   if(goal==='build'){
     const spec={goal:'build',position:progress.position,block:progress.block,
-      axis:progress.axis,length:progress.length};
+      axis:progress.axis,length:progress.length,height:progress.height};
     return buildPlan(world,spec,(needed,extra)=>decide(needed,world,failures,{...progress,...extra}));
   }
   if(goal==='travel'){
@@ -347,7 +347,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       width:spec?.width,depth:spec?.depth,targetCount:spec?.targetCount}))
       throw Error('Invalid bounded wheat farming goal');
     if(goal==='build' && !validBuildSpec({goal,position:spec?.position,block:spec?.block,
-      axis:spec?.axis,length:spec?.length}))throw Error('Invalid bounded construction goal');
+      axis:spec?.axis,length:spec?.length,height:spec?.height}))throw Error('Invalid bounded construction goal');
     if(goal==='craft' && !validCraftSpec({goal,item:spec?.item,targetCount:spec?.targetCount}))
       throw Error('Unsupported general crafting recipe or target quantity');
     if(goal==='equip' && !validEquipSpec({goal,item:spec?.item,destination:spec?.destination}))
@@ -366,7 +366,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{}),
       ...(goal==='craft'?{item:spec.item,targetCount:spec.targetCount}:{}),
       ...(goal==='equip'?{item:spec.item,destination:spec.destination}:{}),
-      ...(goal==='build'?{position:{...spec.position},block:spec.block,axis:spec.axis,length:spec.length}:{}),
+      ...(goal==='build'?{position:{...spec.position},block:spec.block,axis:spec.axis,length:spec.length,
+        height:spec.height===undefined?1:spec.height}:{}),
       ...(goal==='farm_wheat'?{position:{...spec.position},width:spec.width,
         depth:spec.depth,targetCount:spec.targetCount}:{}),
       ...(goal==='travel'?{destination:{...spec.destination},

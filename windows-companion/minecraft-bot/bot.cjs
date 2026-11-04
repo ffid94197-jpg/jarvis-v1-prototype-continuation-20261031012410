@@ -1215,14 +1215,23 @@ bot.on('chat',(username,message)=>{
     return;
   }
   const cmd=match[1].toLowerCase();
-  if(!CHAT_KEYWORDS.has(cmd)){naturalChat((match[1]+' '+(match[2]||'')).trim());return;}
+  const freeForm=()=>naturalChat((cmd+' '+(match[2]||'')).trim());
+  if(!CHAT_KEYWORDS.has(cmd)){freeForm();return;}
+  // Legacy one-word commands cannot consume arbitrary owner modifiers:
+  // "follow the dragon" must not silently become "follow the owner".
+  if(match[2] && ['follow','come','stay','guard','jump','look','status','inventory',
+                   'observe','auto_status','auto_resume','collect_wood'].includes(cmd)){
+    freeForm();return;
+  }
   const normalized=cmd==='gather'?'collect_wood':cmd==='wait'?'stay':cmd;
   if(cmd==='help'){say('Ask Jarvis in your own words, or use: follow, guard, gather [count resource], auto, pause, craft, equip, build, status');return;}
   if(cmd==='auto'||cmd==='goal') {const goal=(match[2]||'survive').trim().toLowerCase();
-    action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_then_netherite_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
+    const q={command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_then_netherite_run'||goal==='dragon_run'?21600:300};
+    if(validateCommand(q)){naturalChat((match[2]||cmd).trim());return;}
+    action(q).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
   if(cmd==='craft' && match[2]){
     const m=/^(\d{1,2})\s+([a-z_]{1,64})$/i.exec(match[2].trim());
-    if(!m){say('Use: jarvis craft 2 chest');return;}
+    if(!m){freeForm();return;}
     action({command:'auto_goal',goal:'craft',item:m[2].toLowerCase(),
       targetCount:Number(m[1]),durationSeconds:3600})
       .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start crafting goal'));
@@ -1230,7 +1239,7 @@ bot.on('chat',(username,message)=>{
   }
   if(cmd==='equip' && match[2]){
     const m=/^([a-z_]{1,64})\s+(hand|head|torso|legs|feet|off-hand)$/i.exec(match[2].trim());
-    if(!m){say('Use: jarvis equip iron_helmet head');return;}
+    if(!m){freeForm();return;}
     action({command:'auto_goal',goal:'equip',item:m[1].toLowerCase(),
       destinationSlot:m[2].toLowerCase(),durationSeconds:3600})
       .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start equip goal'));
@@ -1240,7 +1249,7 @@ bot.on('chat',(username,message)=>{
   if(cmd==='resume') {action({command:'auto_resume'}).then(r=>say(r.status||r.error));return;}
   if(cmd==='travel' && match[2]){
     const parts=/^(-?\d+)\s+(-?\d+)\s+(-?\d+)$/.exec(match[2].trim());
-    if(!parts){say('Use: jarvis travel 100 64 -50');return;}
+    if(!parts){freeForm();return;}
     action({command:'auto_goal',goal:'travel',
       destination:{x:Number(parts[1]),y:Number(parts[2]),z:Number(parts[3])},
       arrivalRange:2,durationSeconds:1800})
@@ -1251,7 +1260,7 @@ bot.on('chat',(username,message)=>{
 
   if(cmd==='farm' && match[2]){
     const a=/^(\d{1,2})\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d)\s+(\d)$/.exec(match[2].trim());
-    if(!a){say('Use: jarvis farm 2 10 65 10 2 2');return;}
+    if(!a){freeForm();return;}
     action({command:'auto_goal',goal:'farm_wheat',targetCount:Number(a[1]),
       position:{x:Number(a[2]),y:Number(a[3]),z:Number(a[4])},
       width:Number(a[5]),depth:Number(a[6]),durationSeconds:3600})
@@ -1260,7 +1269,7 @@ bot.on('chat',(username,message)=>{
   }
   if(cmd==='build' && match[2]){
     const args=/^(\d)\s+([a-z_]+)\s+(x\+|x-|z\+|z-)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)$/i.exec(match[2].trim());
-    if(!args){say('Use: jarvis build 4 cobblestone x+ 10 65 10');return;}
+    if(!args){freeForm();return;}
     action({command:'auto_goal',goal:'build',length:Number(args[1]),block:args[2].toLowerCase(),
       axis:args[3].toLowerCase(),position:{x:Number(args[4]),y:Number(args[5]),z:Number(args[6])},
       durationSeconds:3600}).then(r=>say(r.ok?r.status:r.error))
@@ -1271,7 +1280,7 @@ bot.on('chat',(username,message)=>{
     // Plain owner-chat entrypoint for finite dynamic goals. The validator
     // still checks resource names and count before changing game state.
     const spec=/^(\d{1,2})\s+([a-z_]+)$/i.exec(match[2].trim());
-    if(!spec){say('Use: jarvis gather 16 cobblestone');return;}
+    if(!spec){freeForm();return;}
     action({command:'auto_goal',goal:'gather',
       resource:normalizeResource(spec[2].toLowerCase()),
       targetCount:Number(spec[1]),durationSeconds:21600})
@@ -1280,6 +1289,11 @@ bot.on('chat',(username,message)=>{
     return;
   }
 
+  // A missing argument is not an unsupported executable command.
+  // Let native owner-language parsing or the configured local model handle it.
+  if(['craft','equip','travel','farm','build','gather'].includes(cmd) && !match[2]){
+    freeForm();return;
+  }
   const q={command:normalized};
   if(normalized==='say')q.text=match[2]||'';
   action(q).then(r=>say(r.ok?(r.status||'OK'):(r.error||'Unavailable'))).catch(()=>say('Action failed'));

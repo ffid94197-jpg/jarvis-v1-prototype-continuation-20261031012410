@@ -44,7 +44,7 @@ ok(!normalizeResource('lava')&&!normalizeResource('command_block'),
  'hazardous and privileged names never become generic resource goals');
 for(const phrase of [
  ['gather three granite','granite',3],
- ['mine two moss blocks',null,null],
+ ['mine two moss blocks','moss_block',2],
  ['collect four soul sand','soul_sand',4],
  ['gather five cobbled deepslate','cobbled_deepslate',5]
 ]){

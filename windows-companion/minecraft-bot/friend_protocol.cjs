@@ -25,7 +25,7 @@ function validateCommand(input) {
     const fixed=['survive','wood','tools','explore','follow','guard','stone_age','iron_age',
       'dragon_run','netherite_dragon_run','dragon_then_netherite_run','companion'];
     const position=target=>target && typeof target==='object' &&
-      !Array.isArray(target) &&
+      !Array.isArray(target) && Object.keys(target).length===3 &&
       ['x','y','z'].every(k=>Number.isInteger(target[k]) &&
         Math.abs(target[k])<=30000000);
     const validTravel=input.goal==='travel' && position(input.destination) &&
@@ -90,6 +90,7 @@ function validateCommand(input) {
     return 'Unexpected parameter on game primitive';
   const itemName = v => typeof v === 'string' && /^[a-z0-9_]{1,64}$/.test(v);
   const pos = v => v && typeof v === 'object' && !Array.isArray(v) &&
+    Object.keys(v).length===3 &&
     ['x','y','z'].every(k=>Number.isInteger(v[k]) && Math.abs(v[k])<=30000000);
   if (input.command === 'navigate')
     return pos(input.position) && (input.range===undefined || (Number.isInteger(input.range) && input.range>=1 && input.range<=8))

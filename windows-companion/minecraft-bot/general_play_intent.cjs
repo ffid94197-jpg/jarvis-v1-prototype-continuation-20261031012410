@@ -141,6 +141,23 @@ function modelPrimitiveGrounded(command,ownerText,context){
   b&&b.x===p?.x&&b.y===p?.y&&b.z===p?.z);
  const target=command.command==='place_block'?command.reference:command.position;
  if(target!==undefined && !(exactOwnerTriplet(target)||sceneBlock(target)))return false;
+ // A model may choose an observed nearby object only when its actual type
+ // appears in the owner's request. "Go somewhere" or "mine something" is
+ // not permission to select a random live coordinate.
+ if(['navigate','dig_block','inspect_block'].includes(command.command) &&
+    !exactOwnerTriplet(target)){
+   const observed=Array.isArray(scene?.nearbyBlocks)?scene.nearbyBlocks.find(b=>
+     b?.x===target?.x&&b?.y===target?.y&&b?.z===target?.z):null;
+   if(!observed?.name)return false;
+   const noun=String(observed.name).replace(/_/g,' ');
+   const aliases=String(observed.name)==='trapped_chest'?['chest']:
+     /_door$/.test(observed.name)?['door']:
+     /_trapdoor$/.test(observed.name)?['trapdoor']:
+     /_button$/.test(observed.name)?['button']:
+     /^(?:deepslate_)?(?:iron|diamond)_ore$/.test(observed.name)?
+       [String(observed.name).includes('diamond')?'diamond':'iron','ore']:[];
+   if(![noun,...aliases].some(label=>s.includes(label)))return false;
+ }
  if(command.command==='attack_hostile'){
   const threat=Number.isInteger(command.entityId)&&Array.isArray(scene?.threats)?
     scene.threats.find(t=>t.id===command.entityId):null;

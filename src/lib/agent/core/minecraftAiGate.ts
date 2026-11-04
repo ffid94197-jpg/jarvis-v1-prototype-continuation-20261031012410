@@ -187,7 +187,7 @@ export function mayStartNativeMinecraftGoal(
  };
  const fixed=new Set(['survive','wood','tools','explore','follow','guard',
   'stone_age','iron_age','dragon_run','netherite_dragon_run',
-  'dragon_then_netherite_run','companion']);
+  'dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','companion']);
  if(!fixed.has(goal)&&!Object.hasOwn(fields,goal))return false;
  const allowed=['command','goal','durationSeconds',...(Object.hasOwn(fields,goal)?fields[goal]:[])];
  if(Object.keys(args).some(k=>!allowed.includes(k)))return false;
@@ -379,6 +379,13 @@ export function mayStartNativeMinecraftGoal(
     (p.z as number)-base.z)<=4.5;
  }
  if(goal==='farm_wheat')return /\b(?:farm|grow|plant|harvest)\b/.test(s)&&/\bwheat\b/.test(s)&&localField(args.position);
+ if(goal==='netherite_armor_run'||goal==='netherite_gear_run'){
+  const armor=/\bnetherite\s+(?:armor|armour)\b/.test(s);
+  const sword=/\bnetherite\s+sword\b/.test(s);
+  return armor && /\b(?:get|obtain|make|craft|equip|wear|put on)\b/.test(s) &&
+   !/\bdragon\b/.test(s) &&
+   (goal==='netherite_gear_run'?sword:!sword);
+ }
  if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run'].includes(goal)){
   const dragon=/\b(?:ender dragon|dragon)\b/.test(s) &&
    /\b(?:defeat|kill|beat|slay|fight)\b/.test(s);

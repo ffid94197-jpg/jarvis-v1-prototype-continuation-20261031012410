@@ -9,6 +9,7 @@ const vm=require('node:vm');
 const {directIntent}=require('./language_goal.cjs');
 const {validateCommand}=require('./friend_protocol.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
+const {itemName:normalizeCraftItemName}=require('./general_play_intent.cjs');
 let checks=0;
 function check(ok,label){assert.ok(ok,label);checks++;console.log('PASS',label);}
 
@@ -50,7 +51,7 @@ vm.runInNewContext(snippet,{
  bot,leader:'Owner',spawned:true,
  say:message=>responses.push(message),
  action:payload=>{calls.push(payload);return Promise.resolve({ok:true,status:'STARTED; not verified'});},
- normalizeResource,validateCommand,Promise
+ normalizeResource,normalizeCraftItemName,validateCommand,Promise
 },{timeout:1000});
 check(typeof chatHandler==='function','native owner chat handler registered');
 const chats=[
@@ -58,7 +59,7 @@ const chats=[
  ['jarvis gather six diamonds','natural_goal','gather six diamonds'],
  ['jarvis goal defeat the ender dragon','natural_goal','defeat the ender dragon'],
  ['jarvis auto beat the ender dragon','natural_goal','beat the ender dragon'],
- ['jarvis craft 2 chests','natural_goal','craft 2 chests'],
+ ['jarvis craft 2 chests','auto_goal'],
  ['jarvis craft 2 chest','auto_goal'],
  ['jarvis gather 6 diamonds','auto_goal'],
  ['jarvis follow the dragon','natural_goal','follow the dragon'],
@@ -74,7 +75,8 @@ for(const [message,command,text] of chats){
  chatHandler('Owner',message);
  const action=calls[prior];
  check(calls.length===prior+1 && action.command===command &&
-  (text===undefined||action.text===text),
+  (text===undefined||action.text===text) &&
+  (message==='jarvis craft 2 chests'?action.item==='chest'&&action.targetCount===2:true),
   'chat dispatched the right typed or natural instruction: '+message);
 }
 let prior=calls.length;

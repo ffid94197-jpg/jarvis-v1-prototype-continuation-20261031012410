@@ -59,7 +59,12 @@ for(const q of [
  {command:'craft_item',item:'oak_door',count:3,script:'bad'},
  {command:'craft_item',item:'oak_door',count:100},
  {command:'place_block',item:'stone',reference:{x:1,y:64,z:1},face:{x:0,y:0,z:0}},
- {command:'dig_block',position:{x:1,y:64,z:1},shell:'not allowed'}
+ {command:'dig_block',position:{x:1,y:64,z:1},shell:'not allowed'},
+ {command:'dig_block',position:{x:1,y:64,z:1,admin:true}},
+ {command:'place_block',item:'stone',reference:{x:1,y:64,z:1,hidden:'bad'},
+  face:{x:0,y:1,z:0}},
+ {command:'auto_goal',goal:'travel',destination:{x:1,y:64,z:1,script:'bad'},
+  arrivalRange:2,durationSeconds:300}
 ])ok(!canonicalIntent(q).ok,'general model parameters retain strict validation');
 
 const scene=JSON.stringify({joined:true,busy:false,position:{x:0,y:64,z:0},

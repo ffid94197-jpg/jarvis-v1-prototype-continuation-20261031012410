@@ -607,7 +607,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const good=pieces.every(([name,slot])=>bot.inventory.slots?.[bot.getEquipmentDestSlot(slot)]?.name===name);
     return observed(good,good?'Four diamond armor slots verified by server':'Diamond equipment verification incomplete');
   }
-  async function equipNetherite(epoch){
+  async function equipNetherite(epoch,armorOnly=false){
     const pieces=[['netherite_helmet','head'],['netherite_chestplate','torso'],['netherite_leggings','legs'],['netherite_boots','feet']];
     for(const [name,slot] of pieces){
       check(epoch);
@@ -618,9 +618,18 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       await bot.equip(piece,slot);
       if(bot.inventory.slots?.[idx]?.name!==name)return observed(false,'Server did not equip '+name);
     }
-    const sword=item(bot,'netherite_sword');if(!sword)return observed(false,'Netherite sword missing');
-    await bot.equip(sword,'hand');check(epoch);
-    const good=pieces.every(([name,slot])=>bot.inventory.slots?.[bot.getEquipmentDestSlot(slot)]?.name===name) && bot.heldItem?.name==='netherite_sword';
+    const armorGood=pieces.every(([name,slot])=>
+      bot.inventory.slots?.[bot.getEquipmentDestSlot(slot)]?.name===name);
+    if(!armorGood)return observed(false,'Netherite armor slots not fully confirmed');
+    if(armorOnly)return observed(true,
+      'All four Netherite armor slots physically observed; no sword/Dragon implied',
+      'netherite_armor_equipped');
+    const sword=item(bot,'netherite_sword');
+    if(!sword && bot.heldItem?.name!=='netherite_sword')
+      return observed(false,'Netherite sword missing');
+    if(bot.heldItem?.name!=='netherite_sword')await bot.equip(sword,'hand');
+    check(epoch);
+    const good=armorGood&&bot.heldItem?.name==='netherite_sword';
     return observed(good,good?'Netherite armor worn and sword held, verified via server inventory':'Netherite equipment not fully verified',good?'netherite_equipped':undefined);
   }
   async function run(plan,epoch){
@@ -689,6 +698,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       case 'smith_netherite':return smithGear(plan,epoch);
       case 'equip_diamond':return equipDiamond(epoch);
       case 'equip_netherite':return equipNetherite(epoch);
+      case 'equip_netherite_armor':return equipNetherite(epoch,true);
       case 'hunt_blazes':return hunt('blaze','blaze_rod',epoch);
       case 'hunt_endermen':return hunt('enderman','ender_pearl',epoch);
       case 'craft_blaze_powder':return craft('blaze_powder',epoch);

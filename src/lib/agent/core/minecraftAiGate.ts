@@ -152,7 +152,14 @@ export function singleInventoryResourceGoal(objective:string):
   {name:'sand',pattern:/\bsands?\b/,defaultCount:1},
   {name:'red_sand',pattern:/\bred sand\b/,defaultCount:1},
   {name:'gravel',pattern:/\bgravel\b/,defaultCount:1},
-  {name:'mud',pattern:/\bmud\b/,defaultCount:1}
+  {name:'mud',pattern:/\bmud\b/,defaultCount:1},
+  {name:'coal',pattern:/\bcoal\b/,defaultCount:1},
+  {name:'raw_copper',pattern:/\b(?:raw )?copper\b/,defaultCount:1},
+  {name:'raw_gold',pattern:/\b(?:raw )?gold\b/,defaultCount:1},
+  {name:'redstone',pattern:/\bredstone\b/,defaultCount:1},
+  {name:'lapis_lazuli',pattern:/\b(?:lapis lazuli|lapis)\b/,defaultCount:1},
+  {name:'emerald',pattern:/\bemeralds?\b/,defaultCount:1},
+  {name:'quartz',pattern:/\b(?:nether )?quartz\b/,defaultCount:1}
  ];
  const matches=supported.map(x=>({goal:x,match:x.pattern.exec(s)}))
   .filter(x=>x.match!==null && !(x.goal.name==='sand' && /\bred sand\b/.test(s)));
@@ -231,7 +238,11 @@ export function mayStartNativeMinecraftGoal(
   andesite:/\bandesite\b/,diorite:/\bdiorite\b/,
   granite:/\bgranite\b/,tuff:/\btuff\b/,
   calcite:/\bcalcite\b/,cobbled_deepslate:/\bcobbled deepslate\b/,
-  blackstone:/\bblackstone\b/,basalt:/\bbasalt\b/
+  blackstone:/\bblackstone\b/,basalt:/\bbasalt\b/,
+  coal:/\bcoal\b/,raw_copper:/\b(?:raw )?copper\b/,
+  raw_gold:/\b(?:raw )?gold\b/,redstone:/\bredstone\b/,
+  lapis_lazuli:/\b(?:lapis lazuli|lapis)\b/,emerald:/\bemeralds?\b/,
+  quartz:/\b(?:nether )?quartz\b/
  };
  if(goal==='sequence'){
   // A model may propose a durable sequence ONLY when each requested stage
@@ -246,7 +257,7 @@ export function mayStartNativeMinecraftGoal(
     .replace(/^in minecraft[, :]*/,'')
     .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
     .replace(/\s+in minecraft$/,'').trim();
-  const armor=/^(?:equip|wear|put on)(?: me)? (?:a |the |my )?(?:full |complete )?(?:set of )?(leather|iron|gold|golden|diamond|netherite) (?:armor|armour)(?: set)?$/.exec(roomPhrase);
+  const armor=/^(?:equip|wear|put on)(?: me)? (?:a |the |my )?(?:full |complete )?(?:set of )?(leather|iron|gold|golden|diamond) (?:armor|armour)(?: set)?$/.exec(roomPhrase);
   if(armor){
    if(args.steps.length!==4)return false;
    const tier=armor[1]==='gold'?'golden':armor[1];

@@ -119,8 +119,37 @@ function modelPrimitiveGrounded(command,ownerText,context){
  const target=command.command==='place_block'?command.reference:command.position;
  if(target!==undefined && !(exactOwnerTriplet(target)||sceneBlock(target)))return false;
  if(command.command==='interact_entity'){
-  if(!Number.isInteger(command.entityId)||
-    !Array.isArray(scene?.threats)||!scene.threats.some(t=>t.id===command.entityId))return false;
+  const entity=Number.isInteger(command.entityId) && Array.isArray(scene?.threats)?
+    scene.threats.find(t=>t.id===command.entityId):null;
+  if(!entity||typeof entity.name!=='string'||
+     !s.includes(entity.name.replace(/_/g,' ').toLowerCase()))return false;
+ }
+ if(command.command==='interact_block'){
+  const observed=Array.isArray(scene?.nearbyBlocks)?
+    scene.nearbyBlocks.find(b=>b.x===target?.x&&b.y===target?.y&&b.z===target?.z):null;
+  if(!observed||typeof observed.name!=='string')return false;
+  // A model cannot treat a neighboring door as the requested chest. Require
+  // the current source observation plus an exact owner-mentioned block type.
+  const categories=[
+    [/\bchests?\b/,/^(?:chest|trapped_chest)$/],
+    [/\bbarrels?\b/,/^barrel$/],
+    [/\btrapdoors?\b/,/^[a-z_]+_trapdoor$/],
+    [/\bdoors?\b/,/^[a-z_]+_door$/],
+    [/\blevers?\b/,/^lever$/],
+    [/\bbuttons?\b/,/^[a-z_]+_button$/],
+    [/\bfurnaces?\b/,/^furnace$/],
+    [/\bcrafting tables?\b/,/^crafting_table$/],
+    [/\bsmithing tables?\b/,/^smithing_table$/]
+  ];
+  if(categories.some(([noun,type])=>noun.test(s)&&!type.test(observed.name)))return false;
+ }
+ if(command.command==='dig_block'){
+  const observed=Array.isArray(scene?.nearbyBlocks)?
+    scene.nearbyBlocks.find(b=>b.x===target?.x&&b.y===target?.y&&b.z===target?.z):null;
+  if(!observed || typeof observed.name!=='string')return false;
+  const named=scene.nearbyBlocks.filter(b=>b&&typeof b.name==='string'&&
+    s.includes(b.name.replace(/_/g,' ').toLowerCase()));
+  if(named.length && !named.some(b=>b.x===target.x&&b.y===target.y&&b.z===target.z))return false;
  }
  if(command.command==='place_block' && !sceneBlock(target) && !exactOwnerTriplet(target))return false;
  if(command.command==='use_item' && !scene?.joined)return false;

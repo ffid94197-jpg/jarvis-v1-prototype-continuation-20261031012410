@@ -623,6 +623,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       }
       if(decision.kind==='build_nether_portal' && outcome.proof==='nether_portal')
         state.milestones.netherPortalBuilt=true;
+      if((decision.kind==='enter_nether'&&outcome.proof==='nether_entered') ||
+         (decision.kind==='enter_overworld'&&outcome.proof==='overworld_return'))
+        state.milestones.netherPortalUsed=true;
       if(['observe_dragon','search_dragon','fight_dragon'].includes(decision.kind) &&
          outcome.proof==='dragon_seen')
         state.milestones.dragonSeen=true;

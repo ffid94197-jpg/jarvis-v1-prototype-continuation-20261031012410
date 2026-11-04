@@ -106,15 +106,15 @@ const respond=(payload)=>async()=>({ok:true,text:async()=>JSON.stringify({
   env,context:scene,fetchImpl:respond({command:'follow'})
  });
  ok(!falseFollow.ok,'model cannot turn resource request into follow effect');
- const improper=await interpretOwnerInstruction('Defeat the Ender Dragon then get full Netherite armor',{
+ const improper=await interpretOwnerInstruction('Could you defeat the Ender Dragon and then obtain complete Netherite armor',{
   env,context:scene,fetchImpl:respond({command:'auto_goal',goal:'netherite_dragon_run'})
  });
  ok(!improper.ok,'model cannot reverse the explicitly requested Dragon/Netherite order');
- const correct=await interpretOwnerInstruction('Defeat the Ender Dragon then get full Netherite armor',{
+ const correct=await interpretOwnerInstruction('Could you defeat the Ender Dragon and then obtain complete Netherite armor',{
   env,context:scene,fetchImpl:respond({command:'auto_goal',goal:'dragon_then_netherite_run'})
  });
  ok(correct.ok&&correct.command.goal==='dragon_then_netherite_run','explicitly ordered combined goal still works');
- const truncated=await interpretOwnerInstruction('Please mine three diamonds then craft a chest',{
+ const truncated=await interpretOwnerInstruction('Could you mine three diamonds, and make a chest',{
   env,context:scene,fetchImpl:respond({command:'auto_goal',goal:'gather',resource:'diamond',targetCount:3})
  });
  ok(!truncated.ok,'model cannot silently omit the second stage of a composed request');

@@ -16,6 +16,7 @@ const {validateCommand, inventorySummary} = require('./friend_protocol.cjs');
 const {goalSpecFromCommand}=require('./goal_dispatch.cjs');
 const {compactAutonomyStatus}=require('./status_receipt.cjs');
 const {interpretOwnerInstruction} = require('./language_goal.cjs');
+const {itemName:normalizeCraftItemName}=require('./general_play_intent.cjs');
 const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
 const {compileRecipeCatalog}=require('./mindcraft_recipe_graph.cjs');
@@ -1322,7 +1323,8 @@ bot.on('chat',(username,message)=>{
   if(cmd==='craft' && match[2]){
     const m=/^(\d{1,2})\s+([a-z_]{1,64})$/i.exec(match[2].trim());
     if(!m){freeForm();return;}
-    const q={command:'auto_goal',goal:'craft',item:m[2].toLowerCase(),
+    const q={command:'auto_goal',goal:'craft',
+      item:normalizeCraftItemName(m[2])||m[2].toLowerCase(),
       targetCount:Number(m[1]),durationSeconds:3600};
     if(validateCommand(q)){freeForm();return;}
     action(q).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start crafting goal'));

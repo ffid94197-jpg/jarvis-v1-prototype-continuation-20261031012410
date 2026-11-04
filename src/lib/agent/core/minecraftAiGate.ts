@@ -893,9 +893,11 @@ export class MinecraftAiGate {
          receipt.item!==product || quantity===null ||
          receipt.targetCount!==quantity)
         return {verified:false,reason:'No current-task, matching native smelting COMPLETE receipt with original item and count'};
-      return current>=quantity?
-        {verified:true,reason:'Native smelting goal is COMPLETE and freshly observed physical inventory holds '+
-          current+' '+product+' (requested '+quantity+'); raw material and fuel were handled by native verified furnace steps'}:
+      return current>=quantity&&
+        Number(receipt.milestones.smeltedOutput)>=quantity?
+        {verified:true,reason:'Native smelting goal is COMPLETE and current mission physically smelted '+
+          receipt.milestones.smeltedOutput+' '+product+'; observed inventory holds '+current+
+          ' (requested '+quantity+')'}:
         {verified:false,reason:'Smelting receipt exists but fresh survival inventory is missing required output quantity'};
     }
     if(this.nativeGoalStarted==='sequence'||this.nativeGoalStarted==='shelter'){

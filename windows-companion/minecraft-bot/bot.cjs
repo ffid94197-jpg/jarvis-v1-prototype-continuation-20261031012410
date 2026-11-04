@@ -1752,8 +1752,15 @@ bot.on('spawn',()=>{
 });
 bot.on('kicked',reason=>{process.stderr.write('Bot kicked: '+String(reason).slice(0,150)+'\n');process.exitCode=1;});
 bot.on('error',err=>{process.stderr.write('Bot error: '+String(err.code||'unknown')+'\n');process.exitCode=1;});
+let intentionalProcessStop=false;
 bot.on('end',()=>{
   clearInterval(followTimer);
+  if(!intentionalProcessStop){
+    // A disconnected Minecraft Java session is not successful task
+    // settlement, even when the server closes an idle TCP connection
+    // cleanly. Only the explicit operator shutdown path may exit zero.
+    process.exitCode=1;
+  }
   const mission=autopilot.status();
   const lostActiveMission=mode==='auto'&&mission.status==='running';
   if(!spawned){
@@ -1774,4 +1781,4 @@ bot.on('end',()=>{
   halt();
   process.exit(process.exitCode||0);
 });
-process.on('SIGTERM',()=>{clearInterval(followTimer);if(mode==='auto')autopilot.stop('Operator stopped bot');missionCheckpoint.clear();halt();bot.quit('Operator stopped JARVIS friend');});
+process.on('SIGTERM',()=>{intentionalProcessStop=true;clearInterval(followTimer);if(mode==='auto')autopilot.stop('Operator stopped bot');missionCheckpoint.clear();halt();bot.quit('Operator stopped JARVIS friend');});

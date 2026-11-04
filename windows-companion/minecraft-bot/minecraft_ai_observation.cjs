@@ -28,7 +28,7 @@ function loadedTargets(bot,{includeGeneral=false}={}){
   for(const x of [...coords,...general]){
     if(!x || ![x.x,x.y,x.z].every(Number.isFinite))continue;
     if(p && Math.max(Math.abs(x.x-p.x),Math.abs(x.y-p.y),Math.abs(x.z-p.z))>14)continue;
-    try{const b=bot.blockAt(x);if(!b?.name||!INTERESTING.test(b.name))continue;
+    try{const b=bot.blockAt(x);if(!b?.name||!(INTERESTING.test(b.name)||(includeGeneral&&GENERAL.test(b.name))))continue;
       const target={x:Math.floor(x.x),y:Math.floor(x.y),z:Math.floor(x.z)};
       const key=`${target.x},${target.y},${target.z}`;
       if(seen.has(key))continue;seen.add(key);

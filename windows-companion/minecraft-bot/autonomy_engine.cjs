@@ -5,7 +5,7 @@
  * run shell commands, trust other players' chat, or claim task completion.
  */
 const {lateGamePlan} = require('./late_game.cjs');
-const {RESOURCES,SAFE_GENERIC_RESOURCES,resourcePlan}=require('./resource_goal.cjs');
+const {RESOURCES,SAFE_GENERIC_RESOURCES,ORE_RESOURCE_RULES,resourcePlan}=require('./resource_goal.cjs');
 const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,buildPlan,validVolumeSpec,volumePlan}=require('./structure_goal.cjs');
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
@@ -563,7 +563,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       (decision.kind!=='survey_workstation' ||
         outcome.proof==='workstation_scout_move') &&
       (decision.kind!=='scout_survival' ||
-        outcome.proof==='safe_scout_move');
+        outcome.proof==='safe_scout_move') &&
+      (decision.kind!=='survey_resource' ||
+        (Object.hasOwn(ORE_RESOURCE_RULES,decision.resource)&&
+          outcome.proof==='safe_scout_move'));
     if(ok){
       // Only CONSECUTIVE unresolved attempts should exhaust an action's
       // bounded retry budget. Previously verified success left old failures
@@ -593,6 +596,15 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':'mine_diamond']=0;}
       if(decision.kind==='travel_target' && outcome.proof==='travel_arrival')
         state.milestones.travelArrivalVerified=true;
+      if(decision.kind==='survey_resource'){
+        const trips=state.milestones.resourceOreTrips&&
+          typeof state.milestones.resourceOreTrips==='object'?
+          state.milestones.resourceOreTrips:{};
+        const target=decision.resource;
+        trips[target]=Math.min(8,(trips[target]||0)+1);
+        state.milestones.resourceOreTrips=trips;
+        state.failures.mine_resource_ore=0;
+      }
       if(decision.kind==='survey_generic'){
         const trips=state.milestones.genericSurveyTrips &&
           typeof state.milestones.genericSurveyTrips==='object'?

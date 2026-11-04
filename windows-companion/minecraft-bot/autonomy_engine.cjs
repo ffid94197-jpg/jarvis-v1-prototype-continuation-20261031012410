@@ -7,12 +7,12 @@
 const {lateGamePlan} = require('./late_game.cjs');
 const {RESOURCES,resourcePlan}=require('./resource_goal.cjs');
 const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
-const {validBuildSpec,buildPlan}=require('./structure_goal.cjs');
+const {validBuildSpec,buildPlan,validVolumeSpec,volumePlan}=require('./structure_goal.cjs');
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','farm_wheat','sequence','craft','equip']);
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
@@ -167,6 +167,10 @@ function decide(goal, world, failures={}, progress={}) {
       axis:progress.axis,length:progress.length};
     return buildPlan(world,spec,(needed,extra)=>decide(needed,world,failures,{...progress,...extra}));
   }
+  if(goal==='build_volume')
+    return volumePlan(world,{goal,position:progress.position,block:progress.block,
+      width:progress.width,depth:progress.depth,height:progress.height,shape:progress.shape},
+      (needed,extra)=>decide(needed,world,failures,{...progress,...extra}));
   if(goal==='travel'){
     const t=progress.destination,p=world.position;
     if(!t || !['x','y','z'].every(k=>Number.isInteger(t[k])) ||
@@ -357,6 +361,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       throw Error('Invalid bounded wheat farming goal');
     if(goal==='build' && !validBuildSpec({goal,position:spec?.position,block:spec?.block,
       axis:spec?.axis,length:spec?.length}))throw Error('Invalid bounded construction goal');
+    if(goal==='build_volume'&&!validVolumeSpec({goal,position:spec?.position,
+      block:spec?.block,width:spec?.width,depth:spec?.depth,
+      height:spec?.height,shape:spec?.shape}))
+      throw Error('Invalid bounded multi-layer construction goal');
     if(goal==='craft' && !validCraftSpec({goal,item:spec?.item,targetCount:spec?.targetCount}))
       throw Error('Unsupported general crafting recipe or target quantity');
     if(goal==='equip' && !validEquipSpec({goal,item:spec?.item,destination:spec?.destination}))
@@ -376,6 +384,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       ...(goal==='craft'?{item:spec.item,targetCount:spec.targetCount}:{}),
       ...(goal==='equip'?{item:spec.item,destination:spec.destination}:{}),
       ...(goal==='build'?{position:{...spec.position},block:spec.block,axis:spec.axis,length:spec.length}:{}),
+      ...(goal==='build_volume'?{position:{...spec.position},block:spec.block,
+        width:spec.width,depth:spec.depth,height:spec.height,shape:spec.shape}:{}),
       ...(goal==='farm_wheat'?{position:{...spec.position},width:spec.width,
         depth:spec.depth,targetCount:spec.targetCount}:{}),
       ...(goal==='travel'?{destination:{...spec.destination},
@@ -425,6 +435,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         const stage=state.sequence[state.sequenceIndex];
         const stageWorld=stage.goal==='build'?
           {...world,buildCells:world.buildCellsByStage?.[state.sequenceIndex]}:
+          stage.goal==='build_volume'?
+          {...world,buildVolumeCells:world.buildVolumeCellsByStage?.[state.sequenceIndex]}:
           stage.goal==='farm_wheat'?
           {...world,wheatCells:world.wheatCellsByStage?.[state.sequenceIndex]}:world;
         d=decide(stage.goal,stageWorld,state.failures,{...state,...stage});

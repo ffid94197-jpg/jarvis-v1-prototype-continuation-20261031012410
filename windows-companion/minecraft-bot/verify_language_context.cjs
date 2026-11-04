@@ -30,4 +30,4 @@ const huge={...world,inventory:{raw:Object.fromEntries(Array.from({length:500},(
 const bounded=buildLanguageContext(huge,{gameMode:'survival',mission,lastAction:'x'.repeat(5000)});
 assert.ok(bounded.length<=4000,'large inventory and status cannot overflow model context');
 assert.doesNotThrow(()=>JSON.parse(bounded),'bounded fallback must remain valid JSON');
-console.log('MINECRAFT_LANGUAGE_CONTEXT 13/13 PASS (bounded observed context; no live LLM/game)');
+console.log('MINECRAFT_LANGUAGE_CONTEXT 14/14 PASS (bounded observed context; no live LLM/game)');

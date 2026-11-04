@@ -89,15 +89,15 @@ const respond=(payload)=>async()=>({ok:true,text:async()=>JSON.stringify({
   env,context:scene,fetchImpl:respond({command:'dig_block',position:{x:9,y:64,z:9}})
  });
  ok(!denied.ok,'model hallucinated coordinate rejected');
- const swapped=await interpretOwnerInstruction('Please get me three diamonds without exploring far',{
+ const swapped=await interpretOwnerInstruction('Could you please obtain three diamonds as safely as possible',{
   env,context:scene,fetchImpl:respond({command:'auto_goal',goal:'dragon_run'})
  });
  ok(!swapped.ok,'model cannot substitute an unrelated Dragon goal');
- const resource=await interpretOwnerInstruction('Please get me three diamonds without exploring far',{
+ const resource=await interpretOwnerInstruction('Could you please obtain three diamonds as safely as possible',{
   env,context:scene,fetchImpl:respond({command:'auto_goal',goal:'gather',resource:'diamond',targetCount:3})
  });
  ok(resource.ok&&resource.command.goal==='gather','model goal matching requested resource and quantity admitted');
- const falseFollow=await interpretOwnerInstruction('Please get me three diamonds without exploring far',{
+ const falseFollow=await interpretOwnerInstruction('Could you please obtain three diamonds as safely as possible',{
   env,context:scene,fetchImpl:respond({command:'follow'})
  });
  ok(!falseFollow.ok,'model cannot turn resource request into follow effect');

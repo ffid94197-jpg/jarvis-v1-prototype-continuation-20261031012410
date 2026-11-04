@@ -187,7 +187,8 @@ export function mayStartNativeMinecraftGoal(
  const goal=args.goal,s=objective.toLowerCase();
  const fields:Record<string,string[]>={
   gather:['resource','targetCount'],craft:['item','targetCount'],
-  equip:['item','destinationSlot'],travel:['destination','arrivalRange'],
+  equip:['item','destinationSlot'],defeat_hostile:['mob','entityId'],
+  travel:['destination','arrivalRange'],
   build:['position','block','axis','length'],
   build_volume:['position','block','width','depth','height','shape'],
   farm_wheat:['position','width','depth','targetCount'],sequence:['steps']
@@ -390,6 +391,20 @@ export function mayStartNativeMinecraftGoal(
     (p.z as number)-base.z)<=4.5;
  }
  if(goal==='farm_wheat')return /\b(?:farm|grow|plant|harvest)\b/.test(s)&&/\bwheat\b/.test(s)&&localField(args.position);
+ if(goal==='defeat_hostile'){
+  const allowed=new Set(['zombie','husk','drowned','skeleton','stray','spider',
+   'cave_spider','witch','pillager','blaze','endermite','silverfish',
+   'slime','magma_cube','zoglin','hoglin','phantom','wither_skeleton']);
+  const mob=args.mob,entityId=args.entityId;
+  if(typeof mob!=='string'||!allowed.has(mob)||
+     !Number.isInteger(entityId))return false;
+  const target=observed.threats?.find(t=>t?.id===entityId&&t.name===mob&&
+    Number.isFinite(t.distance)&&t.distance<=3.4);
+  if(!target)return false;
+  return /\b(?:defeat|kill|slay)\b/.test(s) &&
+    new RegExp('\\b'+mob.replace(/_/g,' ')+'\\b').test(s) &&
+    !/\b(?:player|villager|creeper|dragon|wither)\b/.test(s);
+ }
  if(goal==='shelter'){
   const sentence=s.replace(/^jarvis(?:buddy)?[, :]+/,'')
    .replace(/^in minecraft[, :]+/,'')

@@ -255,7 +255,12 @@ function modelGoalGrounded(q,ownerText){
  // verify every constituent stage independently.
  const multiPart=has(/\b(?:then|after that|afterwards?|next)\b/)||
    has(/\band(?:\s+then)?\s+(?:mine|craft|make|build|gather|collect|equip|wear|defeat|beat|fight|travel|go|place)\b/);
- if(multiPart&&!['sequence','netherite_dragon_run','dragon_then_netherite_run'].includes(q.goal))return false;
+ // A full Netherite armor AND sword request is one explicit loadout
+ // outcome handled by the native smithing goal. It is not an unrelated
+ // model-invented two-step sequence. All other conjunctions still require
+ // a fully validated owner-matched sequence or approved Dragon order.
+ if(multiPart&&!['sequence','netherite_dragon_run','dragon_then_netherite_run',
+   'netherite_gear_run'].includes(q.goal))return false;
  if(has(/\b(?:stack|stacks|several|lots|all)\b/) && ['gather','craft'].includes(q.goal))return false;
  const itemMention=name=>typeof name==='string'&&
    (s.includes(name.replace(/_/g,' '))||s.includes(name.replace(/_/g,' ')+'s'));

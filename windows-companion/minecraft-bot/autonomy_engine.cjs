@@ -470,7 +470,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         state.milestones.endReturned=true;
       if(decision.kind==='equip_netherite' && outcome.proof==='netherite_equipped')
         state.milestones.netheriteEquipped=true;
-      if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':'mine_diamond']=0;}
+      if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':decision.ore==='coal'?'mine_coal':'mine_diamond']=0;}
       if(decision.kind==='travel_target' && outcome.proof==='travel_arrival')
         state.milestones.travelArrivalVerified=true;
       if(decision.kind==='survey_wood'){

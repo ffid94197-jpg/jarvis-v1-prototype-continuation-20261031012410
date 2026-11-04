@@ -56,7 +56,8 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535 ||
   process.stderr.write('Configure a valid Minecraft Java LAN port and YOUR owner username (different from JarvisBuddy).\n');
   process.exit(2);
 }
-const bot = mineflayer.createBot({host,port,username:BOT_USERNAME,auth:'offline',hideErrors:true});
+// Keep protocol diagnostics visible during real vanilla server tests.
+const bot = mineflayer.createBot({host,port,username:BOT_USERNAME,auth:'offline',hideErrors:false});
 bot.loadPlugin(pathfinder);
 let spawned=false, mode='follow', actionEpoch=0, followTimer, moveTimer, lastAction='not started', guardUntil=0;
 // Failed digging coordinates are quarantined until a meaningful position change.
@@ -71,7 +72,13 @@ function ack(id,ok,status,error){
 }
 function stopInput(){
   if(moveTimer){clearTimeout(moveTimer);moveTimer=undefined;}
-  for(const key of ['forward','back','left','right','jump'])bot.setControlState(key,false);
+  // The control-state plugin may not exist if connection setup fails before
+  // spawn. Cleanup must not mask the original protocol/authentication error.
+  if(typeof bot.setControlState==='function'){
+    for(const key of ['forward','back','left','right','jump']){
+      try{bot.setControlState(key,false);}catch{}
+    }
+  }
 }
 // A stance leg must outlive pathfinder's own A* think budget plus walking time.
 function stanceNavTimeoutMs(){

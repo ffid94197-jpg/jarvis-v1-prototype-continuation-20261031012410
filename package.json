@@ -56,6 +56,7 @@
     "test:minecraft-general-gather": "node windows-companion/minecraft-bot/verify_general_gather_offline.cjs",
     "test:minecraft-mindcraft-recipe-graph": "node windows-companion/minecraft-bot/verify_mindcraft_recipe_graph_offline.cjs",
     "test:minecraft-advanced-survival": "node windows-companion/minecraft-bot/verify_advanced_survival_offline.cjs",
+    "test:minecraft-structure-volume": "node windows-companion/minecraft-bot/verify_structure_volume_offline.cjs",
     "test:minecraft-pathfinder-lifecycle": "node windows-companion/minecraft-bot/verify_pathfinder_lifecycle_offline.cjs && node windows-companion/minecraft-bot/verify_pathfinder_regression_offline.cjs",
     "test:minecraft-bridge-e2e": "node windows-companion/minecraft-bot/verify_mine_ai_mcp_live_bridge.cjs",
     "verify:v1-release": "node scripts/verify-v1-gates.mjs",

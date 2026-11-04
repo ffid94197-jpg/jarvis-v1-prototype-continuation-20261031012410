@@ -4,7 +4,7 @@
  * chat-supplied function, tool name, shell command or arbitrary Minecraft ID.
  */
 const {RESOURCES}=require('./resource_goal.cjs');
-const {validBuildSpec}=require('./structure_goal.cjs');
+const {validBuildSpec,validVolumeSpec}=require('./structure_goal.cjs');
 const {validFarmSpec}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const SIMPLE_STEPS=new Set(['tools','stone_age','iron_age']);
@@ -20,6 +20,7 @@ function validStep(s){
  if(s.goal==='craft')return validCraftSpec(s);
  if(s.goal==='equip')return validEquipSpec(s);
  if(s.goal==='build')return validBuildSpec(s);
+ if(s.goal==='build_volume')return validVolumeSpec(s);
  if(s.goal==='farm_wheat')return validFarmSpec(s);
  if(s.goal==='gather')
    return Object.keys(s).every(k=>['goal','resource','targetCount'].includes(k)) &&

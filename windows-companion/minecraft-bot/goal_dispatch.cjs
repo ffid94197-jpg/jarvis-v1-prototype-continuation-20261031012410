@@ -9,6 +9,7 @@ const GOAL_FIELDS=Object.freeze({
  craft:['item','targetCount'],
  equip:['item','destinationSlot'],
  build:['position','block','axis','length'],
+ build_volume:['position','block','width','depth','height','shape'],
  farm_wheat:['position','width','depth','targetCount'],
  sequence:['steps']
 });

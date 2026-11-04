@@ -68,4 +68,81 @@ function buildPlan(world,progress={},delegate){
  }
  return {kind:'complete',why:'All '+cells.length+' requested blocks observed in live Minecraft world'};
 }
-module.exports={BLOCKS,AXES,validBuildSpec,buildPositions,observeBuild,buildPlan};
+/**
+ * Geometry-only finite build. Uses the exact same owner-owned survival
+ * material policy, loaded-cell observations and block-placement receipts
+ * as existing line builds. Floors, open walls and solids are not "houses":
+ * roofs, doors and decorations require separately authorized goals.
+ */
+const VOLUME_SHAPES=new Set(['floor','walls','solid']);
+function validVolumeSpec(spec){
+ if(!spec||typeof spec!=='object'||Array.isArray(spec)||
+    Object.keys(spec).some(k=>!['goal','position','block','width','depth','height','shape'].includes(k))||
+    spec.goal!=='build_volume'||!BLOCKS.has(spec.block)||!VOLUME_SHAPES.has(spec.shape)||
+    !Number.isInteger(spec.width)||spec.width<1||spec.width>5||
+    !Number.isInteger(spec.depth)||spec.depth<1||spec.depth>5||
+    !Number.isInteger(spec.height)||spec.height<1||spec.height>3||
+    spec.width*spec.depth*spec.height>64||
+    (spec.shape==='floor'&&spec.height!==1))return false;
+ const p=spec.position;
+ if(!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).length!==3||
+    !['x','y','z'].every(k=>Number.isInteger(p[k])))return false;
+ return p.y>=-62 && p.y+spec.height<=319 &&
+   [p.x,p.x+spec.width,p.z,p.z+spec.depth].every(n=>Math.abs(n)<=29999984);
+}
+function volumePositions(spec){
+ if(!validVolumeSpec(spec))throw Error('Invalid owner-authorized bounded structure');
+ const arr=[],p=spec.position;
+ // Bottom-up ensures upper wall blocks have real verified support.
+ for(let dy=0;dy<spec.height;dy++)
+  for(let dz=0;dz<spec.depth;dz++)
+   for(let dx=0;dx<spec.width;dx++){
+    if(spec.shape==='walls' && dx!==0&&dz!==0&&
+       dx!==spec.width-1&&dz!==spec.depth-1)continue;
+    arr.push({x:p.x+dx,y:p.y+dy,z:p.z+dz});
+   }
+ return arr;
+}
+function observeVolume(bot,spec,Vec3){
+ if(!validVolumeSpec(spec)||!bot?.entity?.position||!bot.blockAt||!Vec3)return null;
+ return volumePositions(spec).map(position=>{
+  const point=new Vec3(position.x,position.y,position.z);
+  const block=bot.blockAt(point),floor=bot.blockAt(point.offset(0,-1,0));
+  let state='unloaded';
+  if(block&&floor){
+   if(block.name===spec.block)state='matched';
+   else if(block.boundingBox!=='empty'||DANGER.test(block.name))state='blocked';
+   else if(floor.boundingBox!=='block'||DANGER.test(floor.name))state='unsupported';
+   else state='ready';
+  }
+  return {position,state};
+ });
+}
+function volumePlan(world,progress={},delegate){
+ if(!validVolumeSpec(progress))
+  return {kind:'blocked',why:'Invalid owner-authorized structure spec'};
+ const positions=volumePositions(progress),observed=world?.buildVolumeCells;
+ if(!Array.isArray(observed)||observed.length!==positions.length)
+  return {kind:'blocked',why:'Structure cell state is not currently server-observed'};
+ for(let i=0;i<positions.length;i++){
+  const cell=observed[i],target=positions[i];
+  if(!cell?.position||
+     !['x','y','z'].every(k=>cell.position[k]===target[k])||
+     !['matched','ready','blocked','unsupported','unloaded'].includes(cell.state))
+   return {kind:'blocked',why:'Invalid or mismatched structure observation'};
+  if(cell.state==='matched')continue;
+  if(cell.state!=='ready')
+   return {kind:'blocked',why:'Structure cell '+i+' is '+cell.state+'; do not overwrite or float blocks'};
+  if((world.inventory?.raw?.[progress.block]||0)>0)
+   return {kind:'place_build_block',block:progress.block,position:target,
+    why:'Place one owner-approved structure cell; verify world and inventory'};
+  if(progress.block==='cobblestone'&&typeof delegate==='function'){
+   const plan=delegate('gather',{resource:'cobblestone',targetCount:1});
+   if(plan?.kind&&plan.kind!=='complete')return plan;
+  }
+  return {kind:'blocked',why:'No real survival inventory of requested '+progress.block};
+ }
+ return {kind:'complete',why:'Every structure cell matches the intended block in the loaded server world'};
+}
+module.exports={BLOCKS,AXES,validBuildSpec,buildPositions,observeBuild,buildPlan,
+ VOLUME_SHAPES,validVolumeSpec,volumePositions,observeVolume,volumePlan};

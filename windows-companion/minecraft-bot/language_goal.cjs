@@ -6,6 +6,8 @@
 const {validateCommand}=require('./friend_protocol.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
 const {RECIPES}=require('./general_goal.cjs');
+const {validStep}=require('./mission_sequence.cjs');
+const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded}=require('./general_play_intent.cjs');
 const SIMPLE=new Set(['follow','come','stay','guard','status','inventory','observe','auto_status','auto_stop','auto_resume']);
 const FIXED=new Set(['survive','wood','tools','explore','follow','guard','stone_age','iron_age','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run']);
 const PARAMS={
@@ -21,8 +23,10 @@ const SYSTEM=[
  'If the owner asks an informational question without an action request, negates a task, or gives an ambiguous/unsupported goal, output {"command":"unsupported"}.',
  'Allowed commands: follow, come, stay, guard, status, inventory, observe, auto_status, auto_stop, auto_resume (only for an explicit owner continuation of a saved mission).',
  'Allowed auto_goal values: survive, wood, tools, explore, follow, guard, stone_age, iron_age, companion, dragon_run, netherite_dragon_run, dragon_then_netherite_run, gather, craft, equip, travel, sequence, build, farm_wheat.',
- 'Gather requires resource (logs,planks,sticks,cobblestone,raw_iron,iron_ingot,diamond,obsidian,flint,netherrack) and targetCount 1-64.',
- 'Craft requires item (stick,crafting_table,chest,furnace,ladder,bread,shield,torch) and targetCount 1-16.',
+ 'Gather requires resource (logs,planks,sticks,cobblestone,raw_iron,iron_ingot,diamond,obsidian,flint,netherrack,dirt,sand,red_sand,gravel,mud) and targetCount 1-64. A generic gather must verify actual inventory pickup and cannot use cheats or arbitrary blocks.',
+ 'Long-horizon auto_goal craft supports selected recipes; craft_item supports any item found in the live Minecraft registry when the server-confirmed inventory contains ingredients, with bounded count 1-16.',
+ 'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
+ 'One action is never a whole mission. An action STARTED or DISPATCHED is not success; JARVIS must observe state and replan before any further effect.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
  'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
  'Example: {"command":"auto_goal","goal":"gather","resource":"diamond","targetCount":3}.',
@@ -56,7 +60,15 @@ function canonicalIntent(raw){
   return fail('Request unsupported; no Minecraft action taken');
  if(SIMPLE.has(raw.command))
   return Object.keys(raw).length===1?{ok:true,command:{command:raw.command}}:fail('Unexpected model parameter');
- if(raw.command!=='auto_goal'||typeof raw.goal!=='string')return fail('Unregistered model action rejected');
+ if(Object.hasOwn(PRIMITIVE_FIELDS,raw.command)){
+   const allowed=['command',...PRIMITIVE_FIELDS[raw.command]];
+   if(Object.keys(raw).some(k=>!allowed.includes(k)))return fail('Unexpected primitive parameter');
+   const command={command:raw.command};
+   for(const key of PRIMITIVE_FIELDS[raw.command])if(raw[key]!==undefined)command[key]=raw[key];
+   const error=validateCommand(command);
+   return error?fail(error):{ok:true,command};
+  }
+  if(raw.command!=='auto_goal'||typeof raw.goal!=='string')return fail('Unregistered model action rejected');
  const keys=Object.hasOwn(PARAMS,raw.goal)?PARAMS[raw.goal]:(FIXED.has(raw.goal)?[]:null);
  if(!keys)return fail('Unsupported Minecraft goal');
  if(Object.keys(raw).some(k=>!['command','goal','durationSeconds',...keys].includes(k)))
@@ -95,6 +107,33 @@ function directIntent(raw){
   [/^(show|check|tell me) (your )?(status|progress)$/,{command:'auto_status'}]
  ];
  for(const [re,q] of rules)if(re.test(s))return canonicalIntent(q);
+ // Compose small independent, verifiable subgoals using the existing
+ // goal-controller sequence. Generic one-off primitives are NOT silently
+ // promoted to an open-ended mission, and all stage parameters are validated.
+ const parts=s.split(/\s+(?:and then|then|after that)\s+/);
+ if(parts.length>1){
+  if(parts.length>8||parts.some(p=>!p.trim()))
+   return fail('Sequence must contain two to eight clear gameplay objectives');
+  const steps=[];
+  for(const part of parts){
+   let candidate=directIntent(part);
+   // A single-item request like "craft a chest" uses the immediate
+   // craft_item primitive; inside a longer owner mission only promote
+   // validated known recipe goals to the durable stage controller.
+   if(candidate?.ok && candidate.command?.command==='craft_item' &&
+      Object.hasOwn(RECIPES,candidate.command.item))
+     candidate=canonicalIntent({command:'auto_goal',goal:'craft',
+       item:candidate.command.item,targetCount:candidate.command.count});
+   if(!candidate?.ok || candidate.command?.command!=='auto_goal')
+    return null; // Give a configured JARVIS model a chance; its proposal is still owner-grounded and strictly validated.
+   const {command,durationSeconds,destinationSlot,...step}=candidate.command;
+   if(destinationSlot!==undefined)step.destination=destinationSlot;
+   if(!validStep(step))
+    return null; // Unsupported deterministic stage is never dispatched; model must prove an authorized whole goal.
+   steps.push(step);
+  }
+  return canonicalIntent({command:'auto_goal',goal:'sequence',steps});
+ }
  const g=new RegExp('^(?:mine|gather|collect|get|find|bring)(?: me)? ('+COUNT_PATTERN+') ([a-z_ ]{2,35})$').exec(s);
  if(g){
   const resource=normalizeResource(g[2].trim().replace(/ blocks?$/,''));
@@ -106,7 +145,8 @@ function directIntent(raw){
   if(!Object.hasOwn(RECIPES,item)&&item.endsWith('s'))item=item.slice(0,-1);
   if(Object.hasOwn(RECIPES,item))return canonicalIntent({command:'auto_goal',goal:'craft',item,targetCount:asCount(c[1])});
  }
- return null; // More complex language requires a configured JARVIS-owned model.
+ const primitive=parseOwnerPrimitive(s);
+  return primitive?canonicalIntent(primitive):null; // Otherwise use configured owner model.
 }
 function modelConfig(env){
  if(env?.JARVIS_MODEL_BACKEND!=='ollama'||!env.JARVIS_OLLAMA_MODEL)return null;
@@ -120,13 +160,16 @@ function modelConfig(env){
 async function interpretOwnerInstruction(input,{env=process.env,context='',fetchImpl}={}){
  const text=clean(input);if(!text)return fail('Owner text must be 1-600 printable characters');
  const direct=directIntent(text);if(direct)return direct;
+ // An information question cannot become a game effect through model JSON.
+ if(/^(?:how(?: do| can| to)|what|why|when|where|which|explain|tell me about)\b/i.test(text))
+  return fail('Information request is not a gameplay instruction; no action taken');
  let config;
  try{config=modelConfig(env);}catch(e){return fail(String(e.message||e));}
  if(!config)return fail('Natural goal requires a configured JARVIS-owned Ollama model or a supported typed instruction');
  const send=fetchImpl||globalThis.fetch;
  if(typeof send!=='function')return fail('Model transport unavailable');
  const messages=[{role:'system',content:SYSTEM},...strictFormat([{role:'user',content:JSON.stringify({
-  ownerInstruction:text,observedMinecraftStatus:String(context).slice(0,1500)})}])];
+  ownerInstruction:text,observedMinecraftStatus:String(context).slice(0,1750)})}])];
  try{
   const response=await send(config.url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json'},
    body:JSON.stringify({model:config.model,messages,stream:false,format:'json',options:{num_predict:650}}),
@@ -136,7 +179,16 @@ async function interpretOwnerInstruction(input,{env=process.env,context='',fetch
   if(raw.length>32768)return fail('Oversized model response denied');
   const result=JSON.parse(raw),content=result?.message?.content;
   if(typeof content!=='string'||content.length>8192)return fail('Malformed model content');
-  return canonicalIntent(JSON.parse(content));
+  const proposed=canonicalIntent(JSON.parse(content));
+  if(!proposed.ok)return proposed;
+  if(Object.hasOwn(PRIMITIVE_FIELDS,proposed.command.command) &&
+     !modelPrimitiveGrounded(proposed.command,text,context))
+    return fail('Model proposed an unrelated or ungrounded Minecraft action; no effect taken');
+  if(proposed.command.command==='auto_goal' && !modelGoalGrounded(proposed.command,text))
+    return fail('Model proposed an autonomous goal not authorized by the owner request');
+  if(SIMPLE.has(proposed.command.command) && !modelSimpleGrounded(proposed.command.command,text))
+    return fail('Model proposed a control action unrelated to the owner request');
+  return proposed;
  }catch{return fail('JARVIS model did not return an authorized JSON goal; no action taken');}
 }
 module.exports={strictFormat,canonicalIntent,directIntent,modelConfig,interpretOwnerInstruction};

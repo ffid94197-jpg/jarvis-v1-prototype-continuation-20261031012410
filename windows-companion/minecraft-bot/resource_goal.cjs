@@ -3,12 +3,14 @@
  * fabricated ore locations, or success from merely dispatching an action.
  * The caller must execute and verify every proposed step in the real world.
  */
+const SAFE_GENERIC_RESOURCES=new Set(['dirt','sand','red_sand','gravel','mud']);
 const RESOURCES=new Set(['logs','planks','sticks','cobblestone','raw_iron',
-  'iron_ingot','diamond','obsidian','flint','netherrack']);
+  'iron_ingot','diamond','obsidian','flint','netherrack',...SAFE_GENERIC_RESOURCES]);
 const ALIASES=Object.freeze({
  wood:'logs',log:'logs',stones:'cobblestone',stone:'cobblestone',
  diamonds:'diamond',iron:'iron_ingot',rawiron:'raw_iron',
- plank:'planks',stick:'sticks'
+ plank:'planks',stick:'sticks',soil:'dirt',sand_block:'sand',red_sand_block:'red_sand',
+ gravel_block:'gravel',mud_block:'mud'
 });
 function normalizeResource(name){
  if(typeof name!=='string')return null;
@@ -23,7 +25,7 @@ const required=(kind,why,extra={})=>({kind,why,...extra});
 function resourceCount(world,resource){
  const inv=world?.inventory||{};
  if(!RESOURCES.has(resource))return 0;
- const n=inv[COUNTS[resource]];
+ const n=inv[COUNTS[resource]]??inv.raw?.[resource];
  return Number.isFinite(n) && n>0?Math.floor(n):0;
 }
 function resourcePlan(world,failures={},progress={},delegate){
@@ -44,6 +46,11 @@ function resourcePlan(world,failures={},progress={},delegate){
      ?required('survey_ore','Seek safe newly observed '+ore+' terrain',{ore,index:progress.steps||0})
      :required(kind,why);
  };
+ if(SAFE_GENERIC_RESOURCES.has(resource)){
+   if((failures.mine_generic||0)>=3)
+     return required('blocked','Three attempts to obtain safe '+resource+' did not yield a verified pickup');
+   return required('mine_generic','Gather loaded, visibly accessible '+resource+' and verify inventory increase',{resource});
+ }
  switch(resource){
  case 'logs':return required('collect_wood','Gather '+(count-have)+' more physical logs');
  case 'planks':
@@ -110,4 +117,4 @@ function resourcePlan(world,failures={},progress={},delegate){
  default:return required('blocked','Resource target not supported');
  }
 }
-module.exports={RESOURCES,normalizeResource,resourceCount,resourcePlan};
+module.exports={RESOURCES,SAFE_GENERIC_RESOURCES,normalizeResource,resourceCount,resourcePlan};

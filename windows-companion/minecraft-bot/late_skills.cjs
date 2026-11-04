@@ -4,6 +4,7 @@
  * No commands/creative mode/seed inspection/teleports. Failure is explicit.
  */
 const {NETHERITE}=require('./late_game.cjs');
+const {SAFE_GENERIC_RESOURCES}=require('./resource_goal.cjs');
 const {observeDragon,noteDragonAttack}=require('./dragon_engagement.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
 const {confirmedMove}=require('./movement_proof.cjs');
@@ -48,13 +49,17 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].some(([x,y,z])=>
         ['air','cave_air','void_air'].includes(bot.blockAt(b.position.offset(x,y,z))?.name))),maxDistance:searchRadius});
     if(!block)return observed(false,'No accessible '+names.join('/')+' observed in loaded chunks');
+    // Bare-hand gathering is allowed only for an audited catalog of common,
+    // harvestable surface blocks. Valuable ores still need a real pickaxe.
+    const handSafe=toolNames.length===0 && names.length===1 && SAFE_GENERIC_RESOURCES.has(names[0]);
     const pick=bot.inventory.items().find(i=>toolNames.includes(i.name));
-    if(!pick)return observed(false,'Missing appropriate tool for '+names[0]);
+    if(!pick&&!handSafe)return observed(false,'Missing appropriate tool for '+names[0]);
     const before=count(bot,drop), p=block.position.clone();
     await move(needsFace?exposed.stance:p,needsFace?1:3,epoch,19000);
     const live=bot.blockAt(p);
     if(!live||!names.includes(live.name)||bot.entity.position.distanceTo(p)>5)throw Error('Ore absent or out of reach');
-    await bot.equip(pick,'hand');await bot.dig(live);check(epoch);
+    if(pick)await bot.equip(pick,'hand');
+    check(epoch);await bot.dig(live);check(epoch);
     return collectDrop(drop,before,p,epoch);
   }
   async function walkScout(epoch,kind){
@@ -564,6 +569,10 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
         return mineKnown(['obsidian'],'obsidian',['diamond_pickaxe','netherite_pickaxe'],epoch);
       }
       case 'mine_netherrack':return mineKnown(['netherrack'],'netherrack',['wooden_pickaxe','stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'],epoch);
+      case 'mine_generic':
+        if(!SAFE_GENERIC_RESOURCES.has(plan.resource))
+          return observed(false,'Unsupported general terrain gathering resource');
+        return mineKnown([plan.resource],plan.resource,[],epoch,20,true);
       case 'collect_flint':{
         const b=lookup(bot,['gravel'],28);
         if(!b)return walkScout(epoch,'gravel');

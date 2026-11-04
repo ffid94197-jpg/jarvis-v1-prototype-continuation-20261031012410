@@ -261,21 +261,35 @@ async function craftNamed(name,count,epoch,table=null){
   const item=bot.registry?.itemsByName?.[name];
   if(!item)throw Error('Item not available for this Minecraft version');
   const before=(digest(bot,leader).inventory.raw[name]||0);
-  const recipes=bot.recipesFor(item.id,null,1,table);
+  if(!Number.isInteger(count)||count<1||count>16)
+    throw Error('Craft quantity must be between 1 and 16 items');
+  // Mineflayer count means RECIPE OPERATIONS, not produced items. A log-to-
+  // planks recipe yields four items per operation; blindly crafting count
+  // times silently spends 4x the material. Query for the requested minimum
+  // output, then dispatch only the necessary number of operations.
+  const recipes=bot.recipesFor(item.id,null,count,table);
   if(!recipes?.length)throw Error('Required crafting ingredients or workstation unavailable');
-  await bot.craft(recipes[0],count,table);
+  const perCraft=recipes[0]?.result?.count;
+  if(!Number.isInteger(perCraft)||perCraft<1||perCraft>64)
+    throw Error('Invalid Minecraft recipe output count');
+  const operations=Math.ceil(count/perCraft);
+  if(epoch!==actionEpoch)throw Error('Craft cancelled by owner');
+  await bot.craft(recipes[0],operations,table);
   // The server can acknowledge a crafting operation before the inventory
   // packet settles. Readback immediately after craft() incorrectly rejected
   // real planks/sticks, then retried a spent log and deadlocked the mission.
   if(epoch!==actionEpoch)throw Error('Craft cancelled by owner');
   const result=await waitForInventoryIncrease({
-    before,read:()=>digest(bot,leader).inventory.raw[name]||0,
+    // Don't settle on the FIRST one-item increment when the owner requested
+    // several. Wait until the actual inventory reaches the full target.
+    before:before+count-1,read:()=>digest(bot,leader).inventory.raw[name]||0,
     check:()=>{if(epoch!==actionEpoch)throw Error('Craft cancelled by owner')},
     wait:pause,deadline:Date.now()+3500,
   });
-  return {ok:result.ok,verified:result.ok,
-    detail:`${name}: inventory ${before} -> ${result.after}`+
-      (result.ok?' (server receipt)':' (recipe dispatched, result unverified)')};
+  const verified=result.ok===true && result.after>=before+count;
+  return {ok:verified,verified,
+    detail:`${name}: inventory ${before} -> ${result.after}; requested at least ${count}`+
+      (verified?' (server receipt)':' (result unverified or incomplete)')};
 }
 const lateSkills=createLateSkills({bot,navigate,craftNamed,getEpoch:()=>actionEpoch,getOwner:()=>leader,digest,Vec3});
 async function collectVerifiedDrop(blockPosition,beforeCount,readCount,epoch,label){
@@ -960,9 +974,19 @@ async function action(q){
       languageBusy=true;
       const before=actionEpoch;
       try{
-        const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:conciseStatus()});
+        // Send a valid, compact fresh world observation, not truncated JSON or
+        // the older status blob without grounded block coordinates.
+        const observation=projectWorld(
+          digest(bot,leader,{dragonDead:lateSkills.session.dragonDied}),
+          loadedTargets(bot,{includeGeneral:true}),lastAction,mode);
+        const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:observation});
         if(before!==actionEpoch)return {ok:false,error:'Superseded owner command cancelled stale language result'};
         if(!parsed.ok)return {ok:false,error:parsed.error};
+        // A language-model suggestion may not silently interrupt a running
+        // long mission. A separate explicit owner stop is required.
+        const safeWhileBusy=new Set(['auto_stop','stay','status','inventory','observe','auto_status']);
+        if((mode==='auto'||autoBusy) && !safeWhileBusy.has(parsed.command.command))
+          return {ok:false,error:'Autonomous mission still active; stop it explicitly before another effect'};
         return await action(parsed.command);
       }finally{languageBusy=false;}
     }
@@ -972,7 +996,7 @@ async function action(q){
       const snapshot=digest(bot,leader,{dragonDead:lateSkills.session.dragonDied});
       // Compact, valid JSON (<1900 chars) so the managed companion cannot
       // silently truncate a late-game observation and mislead the planner.
-      return {ok:true,status:projectWorld(snapshot,loadedTargets(bot),lastAction,mode)};
+      return {ok:true,status:projectWorld(snapshot,loadedTargets(bot,{includeGeneral:true}),lastAction,mode)};
     }
     case 'auto_status':return {ok:true,status:compactAutonomyStatus(autopilot.status())};
     case 'auto_checkpoint':{
@@ -1058,7 +1082,16 @@ async function action(q){
       }
       startAction('dig_block',async alive=>{
         const jobEpoch=actionEpoch;
-        const dropMap={stone:'cobblestone',cobblestone:'cobblestone',deepslate:'cobbled_deepslate',cobbled_deepslate:'cobbled_deepslate',iron_ore:'raw_iron',deepslate_iron_ore:'raw_iron',diamond_ore:'diamond',deepslate_diamond_ore:'diamond',gold_ore:'raw_gold',deepslate_gold_ore:'raw_gold'};
+        const dropMap={stone:'cobblestone',cobblestone:'cobblestone',deepslate:'cobbled_deepslate',cobbled_deepslate:'cobbled_deepslate',
+          grass_block:'dirt',iron_ore:'raw_iron',deepslate_iron_ore:'raw_iron',
+          copper_ore:'raw_copper',deepslate_copper_ore:'raw_copper',
+          diamond_ore:'diamond',deepslate_diamond_ore:'diamond',
+          gold_ore:'raw_gold',deepslate_gold_ore:'raw_gold',
+          coal_ore:'coal',deepslate_coal_ore:'coal',
+          redstone_ore:'redstone',deepslate_redstone_ore:'redstone',
+          lapis_ore:'lapis_lazuli',deepslate_lapis_ore:'lapis_lazuli',
+          emerald_ore:'emerald',deepslate_emerald_ore:'emerald',
+          nether_gold_ore:'gold_nugget',nether_quartz_ore:'quartz'};
         const dropName=dropMap[block.name]||block.name;
         const before=rawCount(bot,dropName);
         let lastFailure='no reachable standable approach';
@@ -1095,9 +1128,30 @@ async function action(q){
           if(!arrived)throw Error('No reachable mining stance; '+lastFailure);
           const live=bot.blockAt(target);
           if(!live || live.name!==block.name)throw Error('Stone changed before digging; fresh observation required');
-          const pick=bot.inventory.items().find(i=>/^(?:wooden|stone|iron|golden|diamond|netherite)_pickaxe$/.test(i.name));
-          if(!pick)throw Error('No pickaxe in inventory');
-          await bot.equip(pick,'hand');
+          // General gameplay must not demand a pickaxe for dirt, sand, logs,
+          // planks, or wool. Ores still require the correct tier; otherwise
+          // a seemingly successful dig can destroy a valuable block without
+          // dropping an item. Never claim a harvest from dispatch alone.
+          const inventoryItems=bot.inventory.items();
+          const byNames=names=>inventoryItems.find(i=>names.includes(i.name));
+          const name=live.name;
+          const picks=['netherite_pickaxe','diamond_pickaxe','iron_pickaxe','stone_pickaxe','wooden_pickaxe','golden_pickaxe'];
+          const toughest=/^(?:ancient_debris|obsidian)$/;
+          const valuable=/^(?:deepslate_)?(?:diamond|redstone|emerald|gold)_ore$/;
+          const ironOre=/^(?:deepslate_)?(?:iron|copper|lapis)_ore$/;
+          const hardStone=/^(?:stone|cobblestone|cobbled_deepslate|deepslate|stone_bricks|(?:deepslate_)?[a-z_]+_ore|ancient_debris|obsidian)$/;
+          let tool=null;
+          if(toughest.test(name))tool=byNames(['netherite_pickaxe','diamond_pickaxe']);
+          else if(valuable.test(name))tool=byNames(['netherite_pickaxe','diamond_pickaxe','iron_pickaxe']);
+          else if(ironOre.test(name))tool=byNames(['netherite_pickaxe','diamond_pickaxe','iron_pickaxe','stone_pickaxe']);
+          else if(hardStone.test(name))tool=byNames(picks);
+          else if(/(?:_log|_wood|_planks)$/.test(name))
+            tool=inventoryItems.find(i=>/_axe$/.test(i.name))||null;
+          else if(/^(?:dirt|grass_block|coarse_dirt|rooted_dirt|gravel|sand|red_sand|mud|clay|snow_block)$/.test(name))
+            tool=inventoryItems.find(i=>/_shovel$/.test(i.name))||null;
+          if((toughest.test(name)||valuable.test(name)||ironOre.test(name)||hardStone.test(name))&&!tool)
+            throw Error('Appropriate mining tool tier unavailable; no block broken');
+          if(tool)await bot.equip(tool,'hand');
           if(!alive())throw Error('Dig cancelled');
           await bot.dig(live);
           if(!alive())throw Error('Dig cancelled');
@@ -1120,14 +1174,24 @@ async function action(q){
       return {ok:true,status:'Dig STARTED toward safe loaded mining stance; result pending; use observe.lastAction and inventory delta'};
     }
     case 'equip_item':{
+      if(mode==='auto'||autoBusy)return {ok:false,error:'Autonomous mission is active; stop it before changing equipment'};
       const item=bot.inventory.items().find(i=>i.name===q.item);
       if(!item)return {ok:false,error:'Item not in inventory'};
-      await bot.equip(item,q.destination||'hand');
-      return {ok:true,status:'Equip request completed for '+q.item};
+      setMode('stay');const epoch=actionEpoch;
+      const destination=q.destination||'hand';
+      await bot.equip(item,destination);
+      if(epoch!==actionEpoch)return {ok:false,error:'Equipment change cancelled'};
+      const slot=destination==='hand'?bot.heldItem:
+        bot.inventory?.slots?.[bot.getEquipmentDestSlot(destination)];
+      const verified=slot?.name===q.item;
+      return {ok:verified,status:'Equip '+q.item+
+        (verified?' verified in '+destination:' dispatched but equipment slot unverified')};
     }
     case 'craft_item':{
+      if(mode==='auto'||autoBusy)return {ok:false,error:'Autonomous mission is active; stop it before manual crafting'};
+      setMode('stay');const epoch=actionEpoch;
       const station=bot.findBlock({matching:b=>b?.name==='crafting_table',maxDistance:4});
-      const result=await craftNamed(q.item,q.count,actionEpoch,station||null);
+      const result=await craftNamed(q.item,q.count,epoch,station||null);
       return {ok:result.ok===true,status:result.detail||'Craft attempted'};
     }
     case 'place_block':{

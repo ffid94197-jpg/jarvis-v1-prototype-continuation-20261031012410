@@ -15,12 +15,17 @@ function validateCommand(input) {
       input.text.trim().length>0 && input.text.length<=600 &&
       !/[\x00-\x1f\x7f]/.test(input.text)
       ?null:'Natural owner instruction must be 1-600 printable characters with no extra fields';
-  if (SIMPLE.has(input.command)) return null;
+  // Every entrypoint (stdin, owner chat, Core tool) must reject unexpected
+  // fields. The correlation ID belongs to the transport envelope, never to
+  // the typed game command (bot.cjs already strips it before validation).
+  const exactFields=fields=>Object.keys(input).every(k=>k==='command'||fields.includes(k));
+  if (SIMPLE.has(input.command))
+    return exactFields([])?null:'Unexpected parameter on simple game command';
   if (input.command === 'auto_goal') {
     const fixed=['survive','wood','tools','explore','follow','guard','stone_age','iron_age',
       'dragon_run','netherite_dragon_run','dragon_then_netherite_run','companion'];
     const position=target=>target && typeof target==='object' &&
-      !Array.isArray(target) &&
+      !Array.isArray(target) && Object.keys(target).length===3 &&
       ['x','y','z'].every(k=>Number.isInteger(target[k]) &&
         Math.abs(target[k])<=30000000);
     const validTravel=input.goal==='travel' && position(input.destination) &&
@@ -74,8 +79,18 @@ function validateCommand(input) {
       'Autonomous goal invalid. Gather needs quantity 1-64; travel needs coordinates/radius 1-8; sequence allows 1-8 validated steps; duration 10-43200';
   }
   // Bounded general-purpose player primitives. All IDs/names are validated before I/O.
+  const primitiveFields={
+    navigate:['position','range'],dig_block:['position'],inspect_block:['position'],
+    interact_block:['position'],equip_item:['item','destination'],
+    craft_item:['item','count'],place_block:['item','reference','face'],
+    use_item:['hand'],interact_entity:['entityId'],
+    move:['directionInput','durationMs'],say:['text']
+  };
+  if(Object.hasOwn(primitiveFields,input.command)&&!exactFields(primitiveFields[input.command]))
+    return 'Unexpected parameter on game primitive';
   const itemName = v => typeof v === 'string' && /^[a-z0-9_]{1,64}$/.test(v);
   const pos = v => v && typeof v === 'object' && !Array.isArray(v) &&
+    Object.keys(v).length===3 &&
     ['x','y','z'].every(k=>Number.isInteger(v[k]) && Math.abs(v[k])<=30000000);
   if (input.command === 'navigate')
     return pos(input.position) && (input.range===undefined || (Number.isInteger(input.range) && input.range>=1 && input.range<=8))

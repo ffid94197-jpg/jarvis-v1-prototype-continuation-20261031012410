@@ -5,10 +5,10 @@
 // Original license retained in MINDCRAFT_LICENSE.txt.
 const {validateCommand}=require('./friend_protocol.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
-const {RECIPES}=require('./general_goal.cjs');
+const {RECIPES,EQUIPMENT}=require('./general_goal.cjs');
 const {validStep}=require('./mission_sequence.cjs');
 const {roofedRoomSteps}=require('./structure_goal.cjs');
-const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName}=require('./general_play_intent.cjs');
+const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName,armorEquipSteps}=require('./general_play_intent.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 const SIMPLE=new Set(['follow','come','stay','guard','status','inventory','observe','auto_status','auto_stop','auto_resume']);
 const FIXED=new Set(['survive','wood','tools','explore','follow','guard','stone_age','iron_age','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run']);
@@ -85,7 +85,8 @@ function canonicalIntent(raw){
  if(q.goal==='travel'&&q.arrivalRange===undefined)q.arrivalRange=2;
  const long=['gather','sequence','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run','build_volume'];
  q.durationSeconds=raw.durationSeconds===undefined?
-  (q.goal==='build_volume'?3600:(long.includes(q.goal)?21600:300)):raw.durationSeconds;
+  (['build_volume','craft','equip'].includes(q.goal)?3600:
+   (long.includes(q.goal)?21600:300)):raw.durationSeconds;
  const error=validateCommand(q);
  return error?fail(error):{ok:true,command:q};
 }
@@ -113,6 +114,8 @@ function directIntent(raw){
   [/^(show|check|tell me) (your )?(status|progress)$/,{command:'auto_status'}]
  ];
  for(const [re,q] of rules)if(re.test(s))return canonicalIntent(q);
+ const armorSteps=armorEquipSteps(s);
+ if(armorSteps)return canonicalIntent({command:'auto_goal',goal:'sequence',steps:armorSteps});
  // A single explicitly dimensioned roofed-room request expands ONLY into
  // three existing validated durable build_volume stages: floor, front
  // doorway walls, then roof. The world origin is owner-provided, never
@@ -172,6 +175,14 @@ function directIntent(raw){
  if(primitive?.command==='craft_item')
   return canonicalIntent({command:'auto_goal',goal:'craft',item:primitive.item,
     targetCount:primitive.count}); // Durable resource planning, not immediate failure.
+ // Authorized vanilla equipment goals should use the existing survival
+ // recipe/resource planner when the named item is not yet owned. Generic
+ // handheld items retain the bounded immediate equip action.
+ if(primitive?.command==='equip_item' &&
+    Object.hasOwn(EQUIPMENT,primitive.destination) &&
+    EQUIPMENT[primitive.destination].has(primitive.item))
+  return canonicalIntent({command:'auto_goal',goal:'equip',
+    item:primitive.item,destinationSlot:primitive.destination});
  return primitive?canonicalIntent(primitive):null; // Otherwise use configured owner model.
 }
 /**

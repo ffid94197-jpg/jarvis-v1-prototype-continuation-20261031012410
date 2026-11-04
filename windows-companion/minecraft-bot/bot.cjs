@@ -967,7 +967,7 @@ async function autoTick(){
   // Only the active, owner-authorized craft target is indexed. No broad
   // repository searches, no third-party bot, no AI code execution.
   const stage=active.goal==='sequence'?active.sequence?.[active.sequenceIndex]:active;
-  if(stage?.goal==='craft'&&typeof stage.item==='string')
+  if(['craft','equip'].includes(stage?.goal)&&typeof stage.item==='string')
     gameWorld.recipeCatalog=compileRecipeCatalog(bot,stage.item);
   const plan=autopilot.next(gameWorld);
   // Expiring a safety window must not silently claim mission completion or

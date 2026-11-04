@@ -307,6 +307,10 @@ function modelGoalGrounded(q,ownerText){
    const aliases=q.resource==='logs'?/\b(?:wood|logs?|timber)\b/:
      q.resource==='iron_ingot'?/\biron ingots?\b/:
      q.resource==='raw_iron'?/\braw iron\b/:
+     q.resource==='raw_copper'?/\b(?:raw )?copper\b/:
+     q.resource==='raw_gold'?/\b(?:raw )?gold\b/:
+     q.resource==='lapis_lazuli'?/\b(?:lapis lazuli|lapis)\b/:
+     q.resource==='quartz'?/\b(?:nether )?quartz\b/:
      new RegExp('\\b'+String(q.resource||'').replace(/_/g,' ')+'s?\\b');
    return has(/\b(?:gather|mine|collect|obtain|find|get|bring|dig)\b/)&&
      aliases.test(s)&&quantityMatches(q.targetCount);

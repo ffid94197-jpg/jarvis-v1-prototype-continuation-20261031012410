@@ -10,6 +10,7 @@ const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,buildPlan,validVolumeSpec,volumePlan}=require('./structure_goal.cjs');
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
+const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
 const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip']);
@@ -143,15 +144,26 @@ function decide(goal, world, failures={}, progress={}) {
   if(!world?.joined)return {kind:'wait',why:'Bot not spawned'};
   const inv=world.inventory||{}, threats=world.threats||[];
   const closest=threats[0];
+  // Never ask the guarded melee executor to attack outside its 3.4-block
+  // admission range. Unsafe or multiple threats require distance, not an
+  // endless sequence of rejected attack attempts.
   if(world.health<=8 && closest?.distance<=10)return {kind:'retreat',why:'Critical health near hostile entity'};
+  const crowded=threats.filter(t=>t?.distance<=8).length>=2;
+  if(closest?.distance<=7 && (crowded || (world.health<12 && closest.distance<=6)))
+    return {kind:'retreat',why:'Multiple threats or low health: regain safe distance'};
+  if(closest?.distance<=6 && !ALLOWED_HOSTILES.has(closest.name))
+    return {kind:'retreat',why:'Observed threat is not an authorized generic melee target'};
   if(world.hunger<=12 && (inv.food||0)>0)return {kind:'eat',why:'Hunger low; edible inventory item detected'};
   if(['dragon_run','netherite_dragon_run','dragon_then_netherite_run'].includes(goal) && world.hunger<=9 && (inv.food||0)===0)return {kind:'obtain_food',why:'Obtain safe food before autonomous survival progression'};
   if(closest?.name==='creeper' && closest.distance<=7)return {kind:'retreat',why:'Avoid nearby creeper explosion'};
   if(goal==='survive' && world.hunger<=9 && (inv.food||0)===0)
     return {kind:'obtain_food',why:'Seek actual safe food or livestock; verify inventory pickup before consumption'};
-  if(closest?.distance<=6 && world.health>=12 && ['guard','survive'].includes(goal)) {
-    if(closest.name==='creeper')return {kind:'retreat',why:'Creeper explosion risk'};
-    return {kind:'defend',why:'Hostile within defensive range',targetId:closest.id};
+  if(closest?.distance<=6 && ['guard','survive'].includes(goal)) {
+    if(closest.distance>3.4)return {kind:'retreat',
+      why:'Hostile is outside verified melee reach; avoid failed blind attacks'};
+    if(world.health>=12)return {kind:'defend',
+      why:'Authorized hostile is within confirmed melee range',targetId:closest.id};
+    return {kind:'retreat',why:'Health insufficient for melee defense'};
   }
   // An owner can give ONE high-level instruction to play together. This
   // mission remains alive until stopped; it chooses and verifies its own
@@ -185,8 +197,11 @@ function decide(goal, world, failures={}, progress={}) {
       why:'Navigate to saved destination and verify actual position'};
   }
   if(goal==='companion') {
-    if(closest?.distance<=6 && world.health>=12 && closest.name!=='creeper')
-      return {kind:'defend',why:'Defend against observed hostile',targetId:closest.id};
+    if(closest?.distance<=6 && closest.distance>3.4)
+      return {kind:'retreat',why:'Position outside allowed melee range; create safe separation'};
+    if(closest?.distance<=3.4 && world.health>=12 &&
+       ALLOWED_HOSTILES.has(closest.name))
+      return {kind:'defend',why:'Defend against reachable authorized hostile',targetId:closest.id};
     if(!world.ownerVisible)return {kind:'wait',why:'Owner not tracked in loaded chunks; do not wander blindly'};
     if(world.ownerDistance>15)return {kind:'follow',range:4,why:'Keep up with teammate'};
     if(world.hunger<=13 && !(inv.food>0))return {kind:'obtain_food',why:'Find actual food for continued survival'};
@@ -345,9 +360,11 @@ function decide(goal, world, failures={}, progress={}) {
     return {kind:'explore',why:'Scout near owner after obtaining basic supplies'};
   }
   if(goal==='explore') {
-    if(!world.ownerVisible)return {kind:'wait',why:'Owner not visible; exploration stays nearby'};
-    if(world.ownerDistance>20)return {kind:'follow',range:5,why:'Stay within 20 blocks of owner'};
-    return {kind:'explore',why:'Survey a safe waypoint near owner',index:number(progress.steps)};
+    // The explicitly authorized explore goal is independent survival
+    // scouting, unlike companion/follow/guard which remain owner-bounded.
+    // Reuse the already observed, non-digging survival waypoint executor.
+    return {kind:'scout_survival',reason:'explore',index:number(progress.steps),
+      why:'Scout a new safe server-loaded region without requiring the owner in view'};
   }
   return {kind:'idle',why:'No plan'};
 }
@@ -448,6 +465,21 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       }
       if(!d)d={kind:'blocked',why:'No valid stage decision'};
     }else d=decide(state.goal,world,state.failures,state);
+    // A repeated failure to collect real stone gets an alternate safe
+    // observation site, never a fabricated inventory receipt.
+    if(d.kind==='mine_cobblestone' && (state.failures.mine_cobblestone||0)>=2){
+      d=(state.milestones.stoneSurveyTrips||0)>=8
+        ?{kind:'blocked',why:'Eight verified alternate stone regions exhausted'}
+        :{kind:'scout_survival',reason:'stone_recovery',index:state.steps,
+          why:'Stone mining stalled; move to genuinely new safe loaded terrain'};
+    }
+    if(d.kind==='survey_ore' && (state.failures.survey_ore||0)>=12)
+      d={kind:'blocked',why:'Twelve failed physically observed ore surveys; manual reconciliation required'};
+    if(d.kind==='scout_survival' && state.goal==='explore' &&
+       (state.milestones.scoutTrips||0)>=24){
+      state.status='expired';state.why='Bounded 24-site exploration session completed; no resources or structures claimed';
+      return {kind:'idle',why:state.why};
+    }
     // Autonomous wood recovery remains bounded. A successful scout must
     // observe real movement; it does not fake resource acquisition.
     if(d.kind==='collect_wood' && (state.failures.collect_wood||0)>=2){
@@ -475,7 +507,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         SAFE_GENERIC_RESOURCES.has(decision.resource)&&
         outcome.proof==='generic_survey_move')) &&
       (decision.kind!=='survey_workstation' ||
-        outcome.proof==='workstation_scout_move');
+        outcome.proof==='workstation_scout_move') &&
+      (decision.kind!=='scout_survival' ||
+        outcome.proof==='safe_scout_move');
     if(ok){
       // Only CONSECUTIVE unresolved attempts should exhaust an action's
       // bounded retry budget. Previously verified success left old failures
@@ -523,6 +557,13 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       if(decision.kind==='survey_wood'){
         state.milestones.woodSurveyTrips=(state.milestones.woodSurveyTrips||0)+1;
         state.failures.collect_wood=0;
+      }
+      if(decision.kind==='scout_survival'){
+        state.milestones.scoutTrips=Math.min(24,(state.milestones.scoutTrips||0)+1);
+        if(decision.reason==='stone_recovery'){
+          state.milestones.stoneSurveyTrips=Math.min(8,(state.milestones.stoneSurveyTrips||0)+1);
+          state.failures.mine_cobblestone=0;
+        }
       }}
     else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;
     state.lastResult={kind:decision.kind,verified:ok,detail:String(outcome?.detail||'unverified').slice(0,140)};

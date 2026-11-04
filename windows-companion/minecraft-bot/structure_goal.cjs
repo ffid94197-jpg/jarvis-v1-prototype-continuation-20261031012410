@@ -59,9 +59,9 @@ function observeBuild(bot,spec,Vec3){
 function buildPlan(world,progress={},delegate){
  if(!validBuildSpec(progress))return {kind:'blocked',why:'Invalid owner-authorized construction goal'};
  const cells=world?.buildCells;
- if(!Array.isArray(cells)||cells.length!==progress.length)
-   return {kind:'blocked',why:'Missing server-observed construction cell states'};
  const targets=buildPositions(progress);
+ if(!Array.isArray(cells)||cells.length!==targets.length)
+   return {kind:'blocked',why:'Missing server-observed construction cell states'};
  for(let i=0;i<cells.length;i++){
    const c=cells[i],p=targets[i];
    if(!c||!c.position||!['x','y','z'].every(k=>c.position[k]===p[k]) ||

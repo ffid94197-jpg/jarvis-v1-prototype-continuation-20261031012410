@@ -44,7 +44,9 @@ function compactAutonomyStatus(state){
   ...(state.sequenceIndex!==undefined?{sequenceIndex:boundedNum(state.sequenceIndex)}:{}),
   ...(state.resource!==undefined?{resource:boundedString(state.resource,64)}:{}),
   ...(state.item!==undefined?{item:boundedString(state.item,64)}:{}),
-  ...(state.targetCount!==undefined?{targetCount:boundedNum(state.targetCount)}:{})
+  ...(state.targetCount!==undefined?{targetCount:boundedNum(state.targetCount)}:{}),
+  ...(state.goal==='shelter'&&state.width!==undefined&&state.depth!==undefined?
+    {width:boundedNum(state.width),depth:boundedNum(state.depth)}:{})
  };
  let json=JSON.stringify(receipt);
  if(json.length>MAX_BYTES){receipt.failures={};json=JSON.stringify(receipt);}

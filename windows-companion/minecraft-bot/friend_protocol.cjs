@@ -44,7 +44,12 @@ function validateCommand(input) {
     const validBoundHostile=input.goal==='defeat_hostile' &&
       ALLOWED_HOSTILES.has(input.mob)&&Number.isInteger(input.entityId)&&
       input.entityId>=0&&input.entityId<=200000;
-    const validGoal=fixed.includes(input.goal)||validBoundHostile||validTravel||validBuild||validVolume||validFarm||
+    const validShelter=input.goal==='shelter' &&
+      ((input.width===undefined&&input.depth===undefined)||
+       (Number.isInteger(input.width)&&input.width>=3&&input.width<=4&&
+        Number.isInteger(input.depth)&&input.depth>=3&&input.depth<=4));
+    const validGoal=(fixed.includes(input.goal) &&
+      (input.goal!=='shelter'||validShelter))||validBoundHostile||validTravel||validBuild||validVolume||validFarm||
       (input.goal==='craft' && validCraftSpec({goal:'craft',item:input.item,targetCount:input.targetCount}))||
       (input.goal==='smelt' && validSmeltSpec({goal:'smelt',item:input.item,targetCount:input.targetCount}))||
       (input.goal==='equip' && validEquipSpec({goal:'equip',item:input.item,destination:input.destinationSlot}))||
@@ -99,7 +104,7 @@ function validateCommand(input) {
       (input.goal==='build_volume'||['height','shape'].every(k=>input[k]===undefined)) &&
       (['build','build_volume'].includes(input.goal)||['block','axis','length'].every(k=>input[k]===undefined)) &&
       (input.goal==='build_volume'||input.height===undefined&&input.shape===undefined) &&
-      (['farm_wheat','build_volume'].includes(input.goal)||['width','depth'].every(k=>input[k]===undefined)) &&
+      (['farm_wheat','build_volume','shelter'].includes(input.goal)||['width','depth'].every(k=>input[k]===undefined)) &&
       (['build','build_volume','farm_wheat'].includes(input.goal)||input.position===undefined) &&
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&

@@ -42,6 +42,8 @@ function extractGoal(state){
  }else if(goal==='farm_wheat'){
    spec.position=state.position;spec.width=state.width;spec.depth=state.depth;
    spec.targetCount=state.targetCount;
+ }else if(goal==='shelter'){
+   spec.width=state.width;spec.depth=state.depth;
  }else if(goal==='sequence')spec.steps=state.sequence;
  if(validateCommand({command:'auto_goal',...spec})!==null)return null;
  return JSON.parse(JSON.stringify(spec));

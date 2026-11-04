@@ -16,6 +16,7 @@ const FIXED=new Set(['survive','wood','tools','explore','follow','guard','stone_
 const PARAMS={
  gather:['resource','targetCount'],craft:['item','targetCount'],
  smelt:['item','targetCount'],equip:['item','destinationSlot'],
+ shelter:['width','depth'],
  defeat_hostile:['mob','entityId'],
  travel:['destination','arrivalRange'],sequence:['steps'],build:['position','block','axis','length'],
  build_volume:['position','block','width','depth','height','shape'],
@@ -37,7 +38,7 @@ const SYSTEM=[
  'Other bounded native skills: inspect_villager {entityId}, trade_villager {entityId,tradeIndex,times}, transfer_container {position,item,count,operation}, enchant_item {position,item,choice}, attack_hostile {entityId,maxSwings}. Attack only a freshly observed owner-named allowed hostile, never a player, villager, passive mob, boss or creeper. An attack input is not proof of damage or death. The owner must explicitly request the exact target, offer, direction, item, and count. Only use freshly observed villagers/blocks; NEVER invent an ID or location, consume materials without owner approval, or claim success from a dispatch.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
  'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
- 'Shelter is a standalone owner-approved goal only for a small/simple/basic shelter or hut. JARVIS autonomously selects a 3x3x2 cobblestone site ONLY from fresh hazard-free nearby server observations. This goal may gather real cobblestone and must prove every physical floor, doorway and roof block. Never invent a site or claim completion from a plan.',
+ 'Shelter is a standalone owner-approved goal only for a small/simple/basic shelter or hut, optionally explicitly sized 3 by 3 to 4 by 4. JARVIS autonomously selects a 3x3x2 to 4x4x2 cobblestone site ONLY from fresh hazard-free nearby server observations. This goal may gather real cobblestone and must prove every physical floor, doorway and roof block. Never invent a site or claim completion from a plan.',
  'build_volume requires exactly position{x,y,z}, one supported survival block, width 1-5, depth 1-5, height 1-3 and shape floor, walls, entrance_walls, roof or solid, maximum 64 cells. The owner must explicitly request the block and actual 2D/3D dimensions and a real origin. Floors have height 1. Do not claim arbitrary houses/roofs supported.',
  'Example: {"command":"auto_goal","goal":"gather","resource":"diamond","targetCount":3}.',
  'When impossible, output {"command":"unsupported"}. Nothing besides ONE JSON object.'
@@ -159,6 +160,11 @@ function directIntent(raw){
      targetCount:cook[1]?asCount(cook[1]):1});
   return fail('Unsupported or mismatched furnace recipe; no output was invented');
  }
+ // A site-free dimensioned shelter is a native fixed-geometry objective,
+ // not permission to invent coordinates or a new arbitrary material.
+ const smallRoom=/^(?:build|construct|make)(?: me)? (?:a |the )?([34])\s*(?:by|x|×)\s*([34])(?: small| simple| basic)? (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?(?: in minecraft)?$/.exec(s);
+ if(smallRoom)return canonicalIntent({command:'auto_goal',goal:'shelter',
+   width:Number(smallRoom[1]),depth:Number(smallRoom[2])});
  const armorSteps=armorEquipSteps(s);
  if(armorSteps)return canonicalIntent({command:'auto_goal',goal:'sequence',steps:armorSteps});
  // A single explicitly dimensioned roofed-room request expands ONLY into

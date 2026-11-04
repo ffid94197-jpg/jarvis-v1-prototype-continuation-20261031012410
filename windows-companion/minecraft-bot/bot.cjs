@@ -454,6 +454,15 @@ async function autoExecute(plan,epoch){
       if(!validBuildSpec({goal:'build',position:p,block:plan.block,axis:'x+',length:1}))
         return {ok:false,verified:false,detail:'Invalid bounded construction cell'};
       const target=new Vec3(p.x,p.y,p.z);
+      const occupied=()=>[bot.entity,...Object.values(bot.entities||{})].some(e=>{
+        if(!e?.position || e.name==='item' || e.name==='experience_orb')return false;
+        const q=e.position;
+        return [q.x,q.y,q.z].every(Number.isFinite) &&
+          Math.abs(q.x-(p.x+.5))<.85 && Math.abs(q.z-(p.z+.5))<.85 &&
+          q.y>=p.y-.6 && q.y<=p.y+1.5;
+      });
+      if(occupied())return {ok:false,verified:false,
+        detail:'Construction target occupied by a physically observed entity'};
       if(bot.entity.position.distanceTo(target.offset(.5,.5,.5))>12)
         return {ok:false,verified:false,detail:'Construction cell outside 12-block local authority radius'};
       const beforeBlock=bot.blockAt(target),initial=placementReference(bot,target,Vec3);
@@ -489,6 +498,8 @@ async function autoExecute(plan,epoch){
       const currentTarget=bot.blockAt(target),support=placementReference(bot,target,Vec3);
       const liveReference=support?.block?.position?
         bot.blockAt(support.block.position):null;
+      if(occupied())return {ok:false,verified:false,
+        detail:'Entity entered structure cell during approach; placement refused'};
       if(!currentTarget||currentTarget.boundingBox!=='empty'||
          /lava|water|fire|magma|cactus|powder_snow|campfire/.test(currentTarget.name)||
          !liveReference||liveReference.name!==support.block.name||
@@ -1077,7 +1088,7 @@ async function autoTick(){
       width:active.width,depth:active.depth,height:active.height,shape:active.shape
     },Vec3);
   if(active.goal==='shelter' && !active.sequence)
-    gameWorld.shelterSite=chooseNativeShelterSite(bot,Vec3);
+    gameWorld.shelterSite=chooseNativeShelterSite(bot,Vec3,{width:active.width,depth:active.depth});
   if(active.goal==='sequence'||active.goal==='shelter'){
     const stages=active.sequence||gameWorld.shelterSite?.steps||[];
     gameWorld.buildCellsByStage=stages.map(s=>

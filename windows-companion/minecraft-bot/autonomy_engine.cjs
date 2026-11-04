@@ -434,6 +434,11 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   function start(goal,seconds=300,spec={}){
     if(!GOALS.has(goal))throw Error('Unsupported autonomous gameplay goal');
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)throw Error('Duration out of bounds');
+    if(goal==='shelter' &&
+       !((spec?.width===undefined&&spec?.depth===undefined)||
+         (Number.isInteger(spec?.width)&&spec.width>=3&&spec.width<=4&&
+          Number.isInteger(spec?.depth)&&spec.depth>=3&&spec.depth<=4)))
+      throw Error('Shelter width and depth must both be 3-4, or both omitted for default');
     if(goal==='defeat_hostile' && (!ALLOWED_HOSTILES.has(spec?.mob) ||
        !Number.isInteger(spec?.entityId)||spec.entityId<0||spec.entityId>200000))
       throw Error('Combat mission requires specific approved observed hostile ID');
@@ -465,6 +470,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null,
       ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{}),
       ...(goal==='defeat_hostile'?{mob:spec.mob,entityId:spec.entityId}:{}),
+      ...(goal==='shelter'?{width:spec.width??3,depth:spec.depth??3}:{}),
       ...(goal==='craft'||goal==='smelt'?{item:spec.item,targetCount:spec.targetCount}:{}),
       ...(goal==='equip'?{item:spec.item,destination:spec.destination}:{}),
       ...(goal==='build'?{position:{...spec.position},block:spec.block,axis:spec.axis,length:spec.length}:{}),
@@ -519,7 +525,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
          approved[1]?.shape==='entrance_walls' &&
          approved[2]?.shape==='roof' &&
          approved.every(s=>s.goal==='build_volume' && s.block==='cobblestone' &&
-           s.width===3&&s.depth===3)){
+           s.width===state.width&&s.depth===state.depth)){
         state.sequence=canonicalSequence(approved);
         state.sequenceIndex=0;
       }else if((state.milestones.shelterSiteTrips||0)>=6)

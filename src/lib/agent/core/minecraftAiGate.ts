@@ -30,6 +30,7 @@ type NativeMissionReceipt = {
   milestones:Record<string,unknown>;
   item?:string;
   targetCount?:number;
+  sequenceIndex?:number;
 };
 
 const READ_ONLY = new Set(['observe','status','inventory','auto_status','inspect_block']);
@@ -535,6 +536,7 @@ export class MinecraftAiGate {
   private nativeGoalStartedAt:number|null=null;
   private nativeSmeltItem:string|null=null;
   private nativeSmeltQuantity:number|null=null;
+  private nativeStageCount:number|null=null;
   private nativeStatus:NativeMissionReceipt|null=null;
   constructor(private readonly objective: string = '',
               private readonly allowBootstrapJoin=false) {}
@@ -785,6 +787,9 @@ export class MinecraftAiGate {
         typeof args.item==='string'&&/^[a-z_]{2,64}$/.test(args.item)?args.item:null;
       this.nativeSmeltQuantity=admitted&&args.goal==='smelt'&&
         Number.isInteger(args.targetCount)?args.targetCount as number:null;
+      this.nativeStageCount=admitted&&args.goal==='sequence'&&
+        Array.isArray(args.steps)&&args.steps.length>=1&&args.steps.length<=8?
+          args.steps.length:admitted&&args.goal==='shelter'?3:null;
       this.nativeStatus=null;
     }
     if(args.command==='auto_status'){
@@ -811,7 +816,10 @@ export class MinecraftAiGate {
                  {item:parsed.item}:{}),
               ...(Number.isInteger(parsed.targetCount)&&
                  (parsed.targetCount as number)>=1&&(parsed.targetCount as number)<=64?
-                 {targetCount:parsed.targetCount as number}:{})};
+                 {targetCount:parsed.targetCount as number}:{}),
+              ...(Number.isInteger(parsed.sequenceIndex)&&
+                 (parsed.sequenceIndex as number)>=0&&(parsed.sequenceIndex as number)<=8?
+                 {sequenceIndex:parsed.sequenceIndex as number}:{})};
           }
         }catch{/* A malformed or truncated status is never completion proof. */}
       }
@@ -856,6 +864,20 @@ export class MinecraftAiGate {
         {verified:true,reason:'Native smelting goal is COMPLETE and freshly observed physical inventory holds '+
           current+' '+product+' (requested '+quantity+'); raw material and fuel were handled by native verified furnace steps'}:
         {verified:false,reason:'Smelting receipt exists but fresh survival inventory is missing required output quantity'};
+    }
+    if(this.nativeGoalStarted==='sequence'||this.nativeGoalStarted==='shelter'){
+      const native=this.nativeStatus,target=this.nativeGoalStarted;
+      const expected=this.nativeStageCount,started=this.nativeGoalStartedAt;
+      if(!native||native.goal!==target||o.nativeGoal!==target||
+         native.status!=='complete'||started===null||expected===null||
+         native.sequenceIndex!==expected ||
+         Math.abs(native.since-started)>60000)
+        return {verified:false,reason:'Native staged goal has no current-task COMPLETE receipt with all owner-approved stages proven'};
+      // The native controller is the subsystem that checks each actual
+      // build/recipe/equipment cell. This is a verified controller outcome,
+      // not proof from dispatch or from the model's prose.
+      return {verified:true,reason:'Same-task native '+target+
+        ' goal completed '+expected+' independently verified physical stages and a fresh joined world observation'};
     }
     const mission=minecraftMissionFromObjective(objective);
     if(mission&&mission!=='companion'){

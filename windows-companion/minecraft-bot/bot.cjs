@@ -28,7 +28,7 @@ const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_na
 const {collectObservedDrop,pickupFeet}=require('./drop_pickup.cjs');
 const {retreatStances}=require('./retreat_access.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
-const {validBuildSpec,observeBuild}=require('./structure_goal.cjs');
+const {validBuildSpec,observeBuild,validVolumeSpec,observeVolume}=require('./structure_goal.cjs');
 const {validFarmSpec,observeWheat}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {safeSurveyFeet}=require('./wood_navigation.cjs');
@@ -906,9 +906,16 @@ async function autoTick(){
       targetCount:active.targetCount},Vec3);
   if(active.goal==='build')gameWorld.buildCells=observeBuild(bot,
     {goal:'build',position:active.position,block:active.block,axis:active.axis,length:active.length},Vec3);
+  if(active.goal==='build_volume')
+    gameWorld.buildVolumeCells=observeVolume(bot,{
+      goal:'build_volume',position:active.position,block:active.block,
+      width:active.width,depth:active.depth,height:active.height,shape:active.shape
+    },Vec3);
   if(active.goal==='sequence'){
     gameWorld.buildCellsByStage=(active.sequence||[]).map(s=>
       s.goal==='build'?observeBuild(bot,s,Vec3):null);
+    gameWorld.buildVolumeCellsByStage=(active.sequence||[]).map(s=>
+      s.goal==='build_volume'?observeVolume(bot,s,Vec3):null);
     gameWorld.wheatCellsByStage=(active.sequence||[]).map(s=>
       s.goal==='farm_wheat'?observeWheat(bot,s,Vec3):null);
   }
@@ -1045,9 +1052,12 @@ async function action(q){
       if(q.goal==='build' && bot.entity.position.distanceTo(
         new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>12)
         return {ok:false,error:'Build origin must be within 12 blocks of the actual player'};
+      if(q.goal==='build_volume' && bot.entity.position.distanceTo(
+        new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>4.5)
+        return {ok:false,error:'Multi-layer build origin must begin within 4.5 blocks of the player'};
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
-      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','build','farm_wheat','sequence','craft','equip'].includes(q.goal) &&
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip'].includes(q.goal) &&
          bot.game?.gameMode!=='survival')
         return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an

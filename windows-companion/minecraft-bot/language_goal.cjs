@@ -114,6 +114,14 @@ function directIntent(raw){
   [/^(show|check|tell me) (your )?(status|progress)$/,{command:'auto_status'}]
  ];
  for(const [re,q] of rules)if(re.test(s))return canonicalIntent(q);
+ // Conversational, read-only owner questions never authorize effects.
+ const question=s.replace(/\s+in minecraft$/,'').replace(/^in minecraft[, :]+/,'');
+ if(/^(?:what(?:'s| is) in your inventory|what items (?:do you have|are you carrying)|which items (?:do you have|are you carrying)|how many [a-z0-9_ ]{2,50} (?:do you have|are you carrying))$/.test(question))
+  return canonicalIntent({command:'inventory'});
+ if(/^(?:what do you see|what(?:'s| is) around you|where are you|where are you standing|what(?:'s| is) your position|how much health do you have|how is your health)$/.test(question))
+  return canonicalIntent({command:'observe'});
+ if(/^(?:how is the mission going|how far along are you|what(?:'s| is) your mission status|what(?:'s| is) your progress)$/.test(question))
+  return canonicalIntent({command:'auto_status'});
  const armorSteps=armorEquipSteps(s);
  if(armorSteps)return canonicalIntent({command:'auto_goal',goal:'sequence',steps:armorSteps});
  // A single explicitly dimensioned roofed-room request expands ONLY into

@@ -67,8 +67,12 @@ const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-
 let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const MOB_NAMES=new Set(['zombie','skeleton','spider','husk','drowned']);
-function ack(id,ok,status,error){
-  process.stdout.write('BOT_ACK '+JSON.stringify({id,ok,status:String(status||'').slice(0,1900),error})+'\n');
+function ack(id,ok,status,error,interpretedIntent){
+  const receipt={id,ok,status:String(status||'').slice(0,1900),error};
+  // Expose only the validated intent summary to the owner-side test/client;
+  // never expose raw model output or let it alter authorization.
+  if(interpretedIntent)receipt.interpretedIntent=interpretedIntent;
+  process.stdout.write('BOT_ACK '+JSON.stringify(receipt)+'\n');
 }
 function stopInput(){
   if(moveTimer){clearTimeout(moveTimer);moveTimer=undefined;}
@@ -963,7 +967,11 @@ async function action(q){
         const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:conciseStatus()});
         if(before!==actionEpoch)return {ok:false,error:'Superseded owner command cancelled stale language result'};
         if(!parsed.ok)return {ok:false,error:parsed.error};
-        return await action(parsed.command);
+        const result=await action(parsed.command);
+        return {...result,interpretedIntent:{
+          command:parsed.command.command,
+          ...(typeof parsed.command.goal==='string'?{goal:parsed.command.goal}:{})
+        }};
       }finally{languageBusy=false;}
     }
     case 'status':return {ok:true,status:conciseStatus()};
@@ -1222,74 +1230,101 @@ bot.on('chat',(username,message)=>{
     return;
   }
   const cmd=match[1].toLowerCase();
-  if(!CHAT_KEYWORDS.has(cmd)){naturalChat((match[1]+' '+(match[2]||'')).trim());return;}
-  const normalized=cmd==='gather'?'collect_wood':cmd==='wait'?'stay':cmd;
-  if(cmd==='help'){say('Ask Jarvis in your own words, or use: follow, guard, gather [count resource], auto, pause, craft, equip, build, status');return;}
-  if(cmd==='auto'||cmd==='goal') {const goal=(match[2]||'survive').trim().toLowerCase();
-    action({command:'auto_goal',goal,durationSeconds:goal==='companion'||goal==='netherite_dragon_run'||goal==='dragon_then_netherite_run'||goal==='dragon_run'?21600:300}).then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));return;}
-  if(cmd==='craft' && match[2]){
-    const m=/^(\d{1,2})\s+([a-z_]{1,64})$/i.exec(match[2].trim());
-    if(!m){say('Use: jarvis craft 2 chest');return;}
+  const naturalText=(match[1]+' '+(match[2]||'')).trim();
+
+  // Help is conversational: owners do not need to learn a command grammar.
+  if(cmd==='help' && !match[2]){
+    say('Just tell me what you want in ordinary language after saying Jarvis. I will plan supported actions, verify results, and ask when details are missing.');
+    return;
+  }
+  if(!CHAT_KEYWORDS.has(cmd)){naturalChat(naturalText);return;}
+
+  if(cmd==='auto'||cmd==='goal'){
+    const goal=(match[2]||'').trim().toLowerCase();
+    const allowed=new Set(['survive','wood','tools','explore','follow','guard','stone_age',
+      'iron_age','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run']);
+    if(!allowed.has(goal)){naturalChat(naturalText);return;}
+    action({command:'auto_goal',goal,durationSeconds:
+      ['companion','netherite_dragon_run','dragon_then_netherite_run','dragon_run'].includes(goal)?21600:300})
+      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start autonomous goal'));
+    return;
+  }
+  if(cmd==='craft'){
+    const m=/^(\d{1,2})\s+([a-z_]{1,64})$/i.exec((match[2]||'').trim());
+    if(!m){naturalChat(naturalText);return;}
     action({command:'auto_goal',goal:'craft',item:m[2].toLowerCase(),
       targetCount:Number(m[1]),durationSeconds:3600})
       .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start crafting goal'));
     return;
   }
-  if(cmd==='equip' && match[2]){
-    const m=/^([a-z_]{1,64})\s+(hand|head|torso|legs|feet|off-hand)$/i.exec(match[2].trim());
-    if(!m){say('Use: jarvis equip iron_helmet head');return;}
+  if(cmd==='equip'){
+    const m=/^([a-z_]{1,64})\s+(hand|head|torso|legs|feet|off-hand)$/i.exec((match[2]||'').trim());
+    if(!m){naturalChat(naturalText);return;}
     action({command:'auto_goal',goal:'equip',item:m[1].toLowerCase(),
       destinationSlot:m[2].toLowerCase(),durationSeconds:3600})
       .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start equip goal'));
     return;
   }
-  if(cmd==='pause') {action({command:'auto_stop'}).then(r=>say(r.status||r.error));return;}
-  if(cmd==='resume') {action({command:'auto_resume'}).then(r=>say(r.status||r.error));return;}
-  if(cmd==='travel' && match[2]){
-    const parts=/^(-?\d+)\s+(-?\d+)\s+(-?\d+)$/.exec(match[2].trim());
-    if(!parts){say('Use: jarvis travel 100 64 -50');return;}
+  if(cmd==='travel'){
+    const parts=/^(-?\d+)\s+(-?\d+)\s+(-?\d+)$/.exec((match[2]||'').trim());
+    if(!parts){naturalChat(naturalText);return;}
     action({command:'auto_goal',goal:'travel',
       destination:{x:Number(parts[1]),y:Number(parts[2]),z:Number(parts[3])},
       arrivalRange:2,durationSeconds:1800})
-      .then(r=>say(r.ok?r.status:r.error))
-      .catch(()=>say('Could not start travel goal'));
+      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start travel goal'));
     return;
   }
-
-  if(cmd==='farm' && match[2]){
-    const a=/^(\d{1,2})\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d)\s+(\d)$/.exec(match[2].trim());
-    if(!a){say('Use: jarvis farm 2 10 65 10 2 2');return;}
+  if(cmd==='farm'){
+    const a=/^(\d{1,2})\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d)\s+(\d)$/.exec((match[2]||'').trim());
+    if(!a){naturalChat(naturalText);return;}
     action({command:'auto_goal',goal:'farm_wheat',targetCount:Number(a[1]),
       position:{x:Number(a[2]),y:Number(a[3]),z:Number(a[4])},
       width:Number(a[5]),depth:Number(a[6]),durationSeconds:3600})
       .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start wheat farming'));
     return;
   }
-  if(cmd==='build' && match[2]){
-    const args=/^(\d)\s+([a-z_]+)\s+(x\+|x-|z\+|z-)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)$/i.exec(match[2].trim());
-    if(!args){say('Use: jarvis build 4 cobblestone x+ 10 65 10');return;}
+  if(cmd==='build'){
+    const args=/^(\d)\s+([a-z_]+)\s+(x\+|x-|z\+|z-)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)$/i.exec((match[2]||'').trim());
+    if(!args){naturalChat(naturalText);return;}
     action({command:'auto_goal',goal:'build',length:Number(args[1]),block:args[2].toLowerCase(),
       axis:args[3].toLowerCase(),position:{x:Number(args[4]),y:Number(args[5]),z:Number(args[6])},
       durationSeconds:3600}).then(r=>say(r.ok?r.status:r.error))
       .catch(()=>say('Could not start construction goal'));
     return;
   }
-  if(cmd==='gather' && match[2]){
-    // Plain owner-chat entrypoint for finite dynamic goals. The validator
-    // still checks resource names and count before changing game state.
-    const spec=/^(\d{1,2})\s+([a-z_]+)$/i.exec(match[2].trim());
-    if(!spec){say('Use: jarvis gather 16 cobblestone');return;}
-    action({command:'auto_goal',goal:'gather',
-      resource:normalizeResource(spec[2].toLowerCase()),
+  if(cmd==='gather'){
+    const spec=/^(\d{1,2})\s+([a-z_]+)$/i.exec((match[2]||'').trim());
+    if(!spec){naturalChat(naturalText);return;}
+    action({command:'auto_goal',goal:'gather',resource:normalizeResource(spec[2].toLowerCase()),
       targetCount:Number(spec[1]),durationSeconds:21600})
-      .then(r=>say(r.ok?r.status:r.error))
-      .catch(()=>say('Could not start resource goal'));
+      .then(r=>say(r.ok?r.status:r.error)).catch(()=>say('Could not start resource goal'));
     return;
   }
-
-  const q={command:normalized};
-  if(normalized==='say')q.text=match[2]||'';
-  action(q).then(r=>say(r.ok?(r.status||'OK'):(r.error||'Unavailable'))).catch(()=>say('Action failed'));
+  if(cmd==='pause'||cmd==='stop'){
+    action({command:'auto_stop'}).then(r=>say(r.status||r.error));return;
+  }
+  if(cmd==='resume'){
+    action({command:'auto_resume'}).then(r=>say(r.status||r.error));return;
+  }
+  if(cmd==='wait'||cmd==='stay'){
+    action({command:'stay'}).then(r=>say(r.status||r.error));return;
+  }
+  if(['follow','come','guard','jump','look','status','inventory','observe','auto_status','collect_wood'].includes(cmd)){
+    const normalized=cmd;
+    action({command:normalized}).then(r=>say(r.ok?(r.status||'OK'):(r.error||'Unavailable')))
+      .catch(()=>say('Action failed'));
+    return;
+  }
+  if(cmd==='say'){
+    const text=match[2]||'';
+    if(!text.trim()){naturalChat(naturalText);return;}
+    action({command:'say',text}).then(r=>say(r.ok?(r.status||'OK'):(r.error||'Unavailable')))
+      .catch(()=>say('Action failed'));
+    return;
+  }
+  // A familiar verb is not a rigid command. If its legacy numeric syntax was
+  // not supplied, send the whole sentence through the natural-language model.
+  naturalChat(naturalText);
 });
 const reader=readline.createInterface({input:process.stdin,crlfDelay:Infinity});
 reader.on('line',line=>{
@@ -1299,7 +1334,7 @@ reader.on('line',line=>{
   // particular, strict auto_goal validation rejects unknown keys, so passing
   // q with id made every valid authenticated auto_goal fail before execution.
   const {id,...command}=q;
-  action(command).then(r=>ack(id,r.ok,r.status,r.error))
+  action(command).then(r=>ack(id,r.ok,r.status,r.error,r.interpretedIntent))
     .catch(err=>ack(id,false,'',String(err.message||err).slice(0,120)));
 });
 bot.on('entityDead',entity=>{

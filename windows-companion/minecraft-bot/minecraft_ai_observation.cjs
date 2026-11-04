@@ -58,7 +58,7 @@ function loadedTargets(bot,{includeGeneral=false}={}){
   const extra=ranked.filter(b=>GENERAL.test(b.name)&&!keys.has(b.x+','+b.y+','+b.z)).slice(0,4);
   return [...core,...extra].slice(0,12);
 }
-function projectWorld(world,nearby=[],lastAction='',mode='stay'){
+function projectWorld(world,nearby=[],lastAction='',mode='stay',nativeGoal=null){
   if(!world || !world.position)throw Error('No observed Minecraft player position');
   const raw=world.inventory?.raw||{};
   const ordered=Object.entries(raw)
@@ -67,6 +67,7 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay'){
     .slice(0,32);
   const slim={
     joined:world.joined===true,position:world.position,dimension:world.dimension,
+    nativeGoal:typeof nativeGoal==='string'&&nativeGoal.length<=64?nativeGoal:null,
     busy:['collect_wood','navigate','dig_block','come','auto'].includes(mode),
     health:world.health,hunger:world.hunger,
     ownerVisible:world.ownerVisible===true,ownerDistance:world.ownerDistance,

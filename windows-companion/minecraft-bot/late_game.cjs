@@ -118,12 +118,16 @@ function lateGamePlan(world,progress={}){
     return action('track_stronghold','Locate a real stronghold using Eyes of Ender');
   }
   if(dragonOnly && dragonVictory){
-    // Keep only the *current mission's* witnessed death event and physical
-    // exit portal as victory proof. Netherite equipment was never requested.
+    // Killing the dragon and observing the exit portal is not the full game
+    // completion handoff. The independent End-to-Overworld dimension change
+    // is an existing server-backed receipt; require it before settlement.
+    // Netherite equipment is NEVER an implicit prerequisite here.
     if(dimension==='the_end' && world.dragonDeadObserved===true &&
        world.exitPortalPresent===true)
-      return action('complete','Actual Ender Dragon death event and End exit portal independently observed');
-    return action('blocked','Dragon kill milestone exists but current live End death/exit observations are unavailable');
+      return action('exit_end','Leave the End via observed victory portal; verify the actual Overworld return');
+    if(dimension==='overworld'&&m.endReturned===true)
+      return action('complete','Dragon death and End exit portal witnessed, then server-confirmed Overworld return');
+    return action('blocked','Dragon victory proof missing the verified End-to-Overworld transition');
   }
   if(dragonFirst && dragonVictory && dimension==='the_end')
     return action('exit_end','Use the observed End exit portal to return to Overworld; dragon already verified');

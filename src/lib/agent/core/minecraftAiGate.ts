@@ -483,6 +483,19 @@ export class MinecraftAiGate {
   constructor(private readonly objective: string = '',
               private readonly allowBootstrapJoin=false) {}
   get lastObservation(){return this.observed;}
+  /** Rehydrate ONLY a real current-task effect receipt after a durable
+   * budget pause. A replayed model summary, external status or different
+   * owner's task cannot create this binding.
+   */
+  restoreNativeMission(goal:string,startedAt:number):boolean {
+    const expected=minecraftMissionFromObjective(this.objective);
+    if(!expected || goal!==expected || this.nativeGoalStarted!==null ||
+       !Number.isSafeInteger(startedAt) || startedAt<0 ||
+       startedAt>Date.now()+60000)return false;
+    this.nativeGoalStarted=goal;
+    this.nativeGoalStartedAt=startedAt;
+    return true;
+  }
 
   /** Advice only. No actions and no bypass of the validator or Guardian. */
   nextActionEvidence():string {

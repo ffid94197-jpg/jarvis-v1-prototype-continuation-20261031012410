@@ -16,7 +16,7 @@ const ALIASES=Object.freeze({
  wood:'logs',log:'logs',stones:'cobblestone',stone:'cobblestone',
  diamonds:'diamond',iron:'iron_ingot',rawiron:'raw_iron',
  plank:'planks',stick:'sticks',soil:'dirt',sand_block:'sand',red_sand_block:'red_sand',
- gravel_block:'gravel',mud_block:'mud'
+ gravel_block:'gravel',mud_block:'mud',moss:'moss_block',moss_blocks:'moss_block'
 });
 function normalizeResource(name){
  if(typeof name!=='string')return null;

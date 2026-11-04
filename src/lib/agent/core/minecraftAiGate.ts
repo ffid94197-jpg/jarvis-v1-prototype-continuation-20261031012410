@@ -2,6 +2,8 @@
  * Model output is untrusted; this module has NO direct game/tool authority.
  * Only a genuine companion observation can unlock a bounded action.
  */
+import {minecraftMissionFromObjective} from "./minecraftIntent";
+
 export type MinecraftAiObservation = {
   position: {x:number;y:number;z:number};
   inventory: {logs?:number;woodenPickaxe?:number;raw?:Record<string,number>};
@@ -74,7 +76,7 @@ export function isMinecraftAiObjective(objective:string):boolean {
   // "wood" requests, and never enable the game route without an action intent.
   const minecraftScope=/\b(?:minecraft|minecraft_companion_command|jarvisbuddy|ender dragon|netherite)\b/.test(s);
   const resourceScope=/\b(?:cobblestone|cobbled deepslate|stone pickaxe|wooden pickaxe|iron pickaxe|diamond pickaxe|ender pearls?|blaze rods?|ancient debris|diamond ore|iron ore|gold ore|redstone ore|end portal|nether portal|stronghold)\b/.test(s);
-  const actionGoal=/\b(?:play|gather|collect|craft|mine|dig|excavate|defeat|kill|attack|beat|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|enchant|explore|travel|find|place|equip|wear|wield|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(s);
+  const actionGoal=/\b(?:play|gather|collect|craft|mine|dig|excavate|defeat|kill|attack|beat|slay|finish|complete|win|start|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|enchant|explore|travel|find|place|equip|wear|wield|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(s);
   if (minecraftScope && minecraftReadbackQuestion(objective)) return true;
   if (!(minecraftScope || resourceScope) || !actionGoal) return false;
   // Only reject a question/refusal when it is the request's intent. A valid
@@ -414,6 +416,16 @@ export function mayStartNativeMinecraftGoal(
   // companion owns selecting a safe loaded nearby 3x3x2 structure origin.
   return /^(?:build|construct|make)(?: me)? (?:a |the )?(?:small|simple|basic) (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?$/.test(sentence);
  }
+ // Both the deterministic join/start route and the model-directed Core
+ // must preserve the same owner-requested high-level campaign. A single
+ // typed Dragon-only request never escalates to unrelated Netherite grinding,
+ // and an "after Dragon" request cannot silently reverse the order.
+ const nativeMission=minecraftMissionFromObjective(objective);
+ if(nativeMission && [
+   'companion','dragon_run','netherite_dragon_run',
+   'dragon_then_netherite_run','netherite_armor_run','netherite_gear_run'
+ ].includes(goal))
+   return nativeMission===goal;
  if(goal==='netherite_armor_run'||goal==='netherite_gear_run'){
   const armor=/\bnetherite\s+(?:armor|armour)\b/.test(s);
   const sword=/\bnetherite\s+sword\b/.test(s);

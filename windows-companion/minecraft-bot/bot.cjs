@@ -29,7 +29,8 @@ const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_na
 const {collectObservedDrop,pickupFeet}=require('./drop_pickup.cjs');
 const {retreatStances}=require('./retreat_access.cjs');
 const {normalizeResource,SAFE_GENERIC_RESOURCES}=require('./resource_goal.cjs');
-const {validBuildSpec,observeBuild,validVolumeSpec,observeVolume}=require('./structure_goal.cjs');
+const {validBuildSpec,observeBuild,validVolumeSpec,observeVolume,
+  placementReference}=require('./structure_goal.cjs');
 const {validFarmSpec,observeWheat}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {safeSurveyFeet}=require('./wood_navigation.cjs');
@@ -427,19 +428,25 @@ async function autoExecute(plan,epoch){
       const target=new Vec3(p.x,p.y,p.z);
       if(bot.entity.position.distanceTo(target.offset(.5,.5,.5))>12)
         return {ok:false,verified:false,detail:'Construction cell outside 12-block local authority radius'};
-      const beforeBlock=bot.blockAt(target),ground=bot.blockAt(target.offset(0,-1,0));
-      if(!beforeBlock||beforeBlock.boundingBox!=='empty'||!ground||
-        ground.boundingBox!=='block'||/lava|water|fire|magma|cactus/.test(ground.name))
-        return {ok:false,verified:false,detail:'Construction target obstructed, unloaded or lacks safe support'};
+      const beforeBlock=bot.blockAt(target),initial=placementReference(bot,target,Vec3);
+      if(!beforeBlock||beforeBlock.boundingBox!=='empty'||
+        /lava|water|fire|magma|cactus|powder_snow|campfire/.test(beforeBlock.name)||
+        !initial)
+        return {ok:false,verified:false,detail:'Construction target obstructed, unloaded or lacks safe supporting face'};
       const stack=bot.inventory.items().find(i=>i.name===plan.block&&i.count>0);
       if(!stack)return {ok:false,verified:false,detail:'Actual building block missing from survival inventory'};
       const beforeCount=rawCount(bot,plan.block);
       // Navigation is allowed only to observed safe adjacent foot locations.
       if(bot.entity.position.distanceTo(target.offset(.5,.5,.5))>4.2){
-        const feet=[[p.x+1,p.z],[p.x-1,p.z],[p.x,p.z+1],[p.x,p.z-1]]
-          .map(([x,z])=>safeSurveyFeet(bot,x,z,p.y,Vec3)).filter(Boolean);
+        // A roof cell may be reachable from the real floor below, not
+        // from an imaginary standable platform at rooftop elevation.
+        // Search a few nearby *observed* safe foot levels, never teleport.
+        const around=[[p.x+1,p.z],[p.x-1,p.z],[p.x,p.z+1],[p.x,p.z-1]];
+        const feet=[p.y,p.y-1,p.y-2,p.y-3,p.y-4]
+          .flatMap(y=>around.map(([x,z])=>safeSurveyFeet(bot,x,z,y,Vec3)))
+          .filter(Boolean);
         let reached=false;
-        for(const foot of feet.slice(0,4)){
+        for(const foot of feet.slice(0,8)){
           if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
           try{
             if(await navigate(foot.offset(.5,0,.5),0,epoch,stanceNavTimeoutMs()) &&
@@ -449,11 +456,19 @@ async function autoExecute(plan,epoch){
         if(!reached)return {ok:false,verified:false,detail:'No safe reachable placement stance'};
       }
       if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
-      if(bot.blockAt(target)?.boundingBox!=='empty'||bot.blockAt(ground.position)?.name!==ground.name)
-        return {ok:false,verified:false,detail:'Target or floor changed before placement'};
+      // Re-evaluate support AFTER navigation: another game action might
+      // remove a support block or replace the target during the walk.
+      const currentTarget=bot.blockAt(target),support=placementReference(bot,target,Vec3);
+      const liveReference=support?.block?.position?
+        bot.blockAt(support.block.position):null;
+      if(!currentTarget||currentTarget.boundingBox!=='empty'||
+         /lava|water|fire|magma|cactus|powder_snow|campfire/.test(currentTarget.name)||
+         !liveReference||liveReference.name!==support.block.name||
+         liveReference.boundingBox!=='block')
+        return {ok:false,verified:false,detail:'Target or safe reference face changed before placement'};
       await bot.equip(stack,'hand');
       if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
-      await bot.placeBlock(ground,new Vec3(0,1,0));
+      await bot.placeBlock(liveReference,support.face);
       for(let attempt=0;attempt<8;attempt++){
         if(epoch!==actionEpoch)throw Error('Owner cancelled construction');
         const placed=bot.blockAt(target)?.name===plan.block;

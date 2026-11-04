@@ -8,6 +8,20 @@ const BLOCKS=new Set(['cobblestone','dirt','oak_planks','spruce_planks',
 const AXES=Object.freeze({'x+':[1,0],'x-':[-1,0],
  'z+':[0,1],'z-':[0,-1]});
 const DANGER=/lava|water|fire|magma|cactus|powder_snow|campfire/;
+const PLACEMENT_FACES=Object.freeze([
+ [[0,-1,0],[0,1,0]], // supporting block below target
+ [[-1,0,0],[1,0,0]],[[1,0,0],[-1,0,0]],
+ [[0,0,-1],[0,0,1]],[[0,0,1],[0,0,-1]]
+]);
+function placementReference(bot,point,Vec3){
+ if(!bot?.blockAt||!point?.offset||typeof Vec3!=='function')return null;
+ for(const [offset,face] of PLACEMENT_FACES){
+  const ref=bot.blockAt(point.offset(...offset));
+  if(ref?.boundingBox==='block'&&!DANGER.test(String(ref.name||'')))
+   return {block:ref,face:new Vec3(...face)};
+ }
+ return null;
+}
 function validBuildSpec(s){
  if(!s||typeof s!=='object'||Array.isArray(s)||
     Object.keys(s).some(k=>!['goal','position','length','axis','block'].includes(k))||
@@ -33,13 +47,12 @@ function observeBuild(bot,spec,Vec3){
  if(!validBuildSpec(spec)||!bot?.entity?.position||!bot.blockAt||!Vec3)return null;
  return buildPositions(spec).map(position=>{
    const p=new Vec3(position.x,position.y,position.z);
-   const block=bot.blockAt(p),below=bot.blockAt(p.offset(0,-1,0));
+   const block=bot.blockAt(p);
    let state='unloaded';
-   if(block&&below){
+   if(block){
      if(block.name===spec.block)state='matched';
      else if(block.boundingBox!=='empty'||DANGER.test(block.name))state='blocked';
-     else if(below.boundingBox!=='block'||DANGER.test(below.name))state='unsupported';
-     else state='ready';
+     else state=placementReference(bot,p,Vec3)?'ready':'unsupported';
    }
    return {position,state};
  });
@@ -74,7 +87,7 @@ function buildPlan(world,progress={},delegate){
  * as existing line builds. Floors, open walls and solids are not "houses":
  * roofs, doors and decorations require separately authorized goals.
  */
-const VOLUME_SHAPES=new Set(['floor','walls','solid']);
+const VOLUME_SHAPES=new Set(['floor','walls','solid','roof']);
 function validVolumeSpec(spec){
  if(!spec||typeof spec!=='object'||Array.isArray(spec)||
     Object.keys(spec).some(k=>!['goal','position','block','width','depth','height','shape'].includes(k))||
@@ -83,7 +96,7 @@ function validVolumeSpec(spec){
     !Number.isInteger(spec.depth)||spec.depth<1||spec.depth>5||
     !Number.isInteger(spec.height)||spec.height<1||spec.height>3||
     spec.width*spec.depth*spec.height>64||
-    (spec.shape==='floor'&&spec.height!==1))return false;
+    (['floor','roof'].includes(spec.shape)&&spec.height!==1))return false;
  const p=spec.position;
  if(!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).length!==3||
     !['x','y','z'].every(k=>Number.isInteger(p[k])))return false;
@@ -107,13 +120,12 @@ function observeVolume(bot,spec,Vec3){
  if(!validVolumeSpec(spec)||!bot?.entity?.position||!bot.blockAt||!Vec3)return null;
  return volumePositions(spec).map(position=>{
   const point=new Vec3(position.x,position.y,position.z);
-  const block=bot.blockAt(point),floor=bot.blockAt(point.offset(0,-1,0));
+  const block=bot.blockAt(point);
   let state='unloaded';
-  if(block&&floor){
+  if(block){
    if(block.name===spec.block)state='matched';
    else if(block.boundingBox!=='empty'||DANGER.test(block.name))state='blocked';
-   else if(floor.boundingBox!=='block'||DANGER.test(floor.name))state='unsupported';
-   else state='ready';
+   else state=placementReference(bot,point,Vec3)?'ready':'unsupported';
   }
   return {position,state};
  });
@@ -145,4 +157,5 @@ function volumePlan(world,progress={},delegate){
  return {kind:'complete',why:'Every structure cell matches the intended block in the loaded server world'};
 }
 module.exports={BLOCKS,AXES,validBuildSpec,buildPositions,observeBuild,buildPlan,
- VOLUME_SHAPES,validVolumeSpec,volumePositions,observeVolume,volumePlan};
+ VOLUME_SHAPES,validVolumeSpec,volumePositions,observeVolume,volumePlan,
+ placementReference};

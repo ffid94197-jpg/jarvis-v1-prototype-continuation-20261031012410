@@ -32,7 +32,7 @@ const SYSTEM=[
  'Other bounded native skills: inspect_villager {entityId}, trade_villager {entityId,tradeIndex,times}, transfer_container {position,item,count,operation}, enchant_item {position,item,choice}, attack_hostile {entityId,maxSwings}. Attack only a freshly observed owner-named allowed hostile, never a player, villager, passive mob, boss or creeper. An attack input is not proof of damage or death. The owner must explicitly request the exact target, offer, direction, item, and count. Only use freshly observed villagers/blocks; NEVER invent an ID or location, consume materials without owner approval, or claim success from a dispatch.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
  'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
- 'build_volume requires exactly position{x,y,z}, one supported survival block, width 1-5, depth 1-5, height 1-3 and shape floor, walls or solid, maximum 64 cells. The owner must explicitly request the block and actual 2D/3D dimensions and a real origin. Floors have height 1. Do not claim arbitrary houses/roofs supported.',
+ 'build_volume requires exactly position{x,y,z}, one supported survival block, width 1-5, depth 1-5, height 1-3 and shape floor, walls, roof or solid, maximum 64 cells. The owner must explicitly request the block and actual 2D/3D dimensions and a real origin. Floors have height 1. Do not claim arbitrary houses/roofs supported.',
  'Example: {"command":"auto_goal","goal":"gather","resource":"diamond","targetCount":3}.',
  'When impossible, output {"command":"unsupported"}. Nothing besides ONE JSON object.'
 ].join('\n');
@@ -144,7 +144,7 @@ function directIntent(raw){
   const resource=normalizeResource(g[2].trim().replace(/ blocks?$/,''));
   if(resource)return canonicalIntent({command:'auto_goal',goal:'gather',resource,targetCount:asCount(g[1])});
  }
- const structure=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2})(?: by (\d{1,2}))? ([a-z_ ]{2,35}) (floor|wall|walls|solid) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(s);
+ const structure=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2})(?: by (\d{1,2}))? ([a-z_ ]{2,35}) (floor|wall|walls|solid|roof) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(s);
  if(structure){
   const block=itemName(structure[4]);
   const shape=structure[5]==='wall'?'walls':structure[5];

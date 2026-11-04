@@ -71,7 +71,10 @@ const PRIMITIVE_FIELDS=Object.freeze({
  inspect_block:['position'],dig_block:['position'],
  navigate:['position','range'],interact_block:['position'],
  interact_entity:['entityId'],place_block:['item','reference','face'],
- move:['directionInput','durationMs'],use_item:['hand'],say:['text']
+ move:['directionInput','durationMs'],use_item:['hand'],say:['text'],
+ inspect_villager:['entityId'],trade_villager:['entityId','tradeIndex','times'],
+ transfer_container:['position','item','count','operation'],
+ enchant_item:['position','item','choice']
 });
 const GENERAL_ACTIONS=Object.freeze(Object.keys(PRIMITIVE_FIELDS));
 function modelPrimitiveGrounded(command,ownerText,context){
@@ -85,7 +88,11 @@ function modelPrimitiveGrounded(command,ownerText,context){
   interact_block:/\b(?:interact|activate|open|use)\b/,
   interact_entity:/\b(?:interact|trade|mount|use)\b/,
   place_block:/\b(?:place|put|build)\b/,move:/\b(?:move|walk|step)\b/,
-  use_item:/\b(?:use|eat|consume|shoot)\b/,say:/\b(?:say|tell|message)\b/
+  use_item:/\b(?:use|eat|consume|shoot)\b/,say:/\b(?:say|tell|message)\b/,
+  inspect_villager:/\b(?:inspect|show|view|check|list)\b/,
+  trade_villager:/\b(?:trade|buy|purchase|exchange)\b/,
+  transfer_container:/\b(?:store|deposit|put|take|withdraw|retrieve)\b/,
+  enchant_item:/\b(?:enchant|enchantment)\b/
  };
  if(!verbs[command.command]?.test(s))return false;
  if(['craft_item','equip_item','place_block'].includes(command.command)){
@@ -118,6 +125,43 @@ function modelPrimitiveGrounded(command,ownerText,context){
   b&&b.x===p?.x&&b.y===p?.y&&b.z===p?.z);
  const target=command.command==='place_block'?command.reference:command.position;
  if(target!==undefined && !(exactOwnerTriplet(target)||sceneBlock(target)))return false;
+ if(['inspect_villager','trade_villager'].includes(command.command)){
+  if(!Number.isInteger(command.entityId)||
+     !Array.isArray(scene?.villagers)||
+     !scene.villagers.some(v=>v.id===command.entityId&&v.name==='villager'))
+    return false;
+  if(!/\bvillager\b/.test(s))return false;
+  if(command.command==='trade_villager'){
+   const index=command.tradeIndex+1;
+   if(!new RegExp('\\b(?:offer|trade|option|deal)\\s*(?:number|#)?\\s*'+index+'\\b').test(s))
+    return false;
+   const reps=s.match(/\b(?:once|twice|three times|four times)\b/);
+   const expected=reps?({once:1,twice:2,'three times':3,'four times':4})[reps[0]]:1;
+   if(command.times!==expected)return false;
+  }
+ }
+ if(command.command==='transfer_container'){
+  if(!['deposit','withdraw'].includes(command.operation))return false;
+  const label=String(command.item||'').replace(/_/g,' ');
+  if(!label||!s.includes(label))return false;
+  const deposits=/\b(?:store|deposit|put)\b/.test(s);
+  const withdraws=/\b(?:withdraw|take|retrieve|get)\b/.test(s);
+  if(command.operation==='deposit'?!deposits:!withdraws)return false;
+  const count=s.match(/\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)\b/);
+  if(count?amount(count[0])!==command.count:command.count!==1)return false;
+  if(!Array.isArray(scene?.nearbyBlocks)||!scene.nearbyBlocks.some(b=>
+    ['chest','trapped_chest','barrel'].includes(b.name)&&
+    b.x===command.position?.x&&b.y===command.position?.y&&b.z===command.position?.z))
+    return false;
+ }
+ if(command.command==='enchant_item'){
+  if(!/\benchant\b/.test(s)||!s.includes(String(command.item||'').replace(/_/g,' ')))return false;
+  const expected=/\bfirst\b/.test(s)?0:/\bsecond\b/.test(s)?1:/\bthird\b/.test(s)?2:null;
+  if(expected===null||expected!==command.choice)return false;
+  if(!Array.isArray(scene?.nearbyBlocks)||!scene.nearbyBlocks.some(b=>
+    b.name==='enchanting_table'&&b.x===command.position?.x&&
+    b.y===command.position?.y&&b.z===command.position?.z))return false;
+ }
  if(command.command==='interact_entity'){
   const entity=Number.isInteger(command.entityId) && Array.isArray(scene?.threats)?
     scene.threats.find(t=>t.id===command.entityId):null;

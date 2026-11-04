@@ -59,7 +59,7 @@ export function isMinecraftAiObjective(objective:string):boolean {
   // "wood" requests, and never enable the game route without an action intent.
   const minecraftScope=/\b(?:minecraft|minecraft_companion_command|jarvisbuddy|ender dragon|netherite)\b/.test(s);
   const resourceScope=/\b(?:cobblestone|cobbled deepslate|stone pickaxe|wooden pickaxe|iron pickaxe|diamond pickaxe|ender pearls?|blaze rods?|ancient debris|diamond ore|iron ore|gold ore|redstone ore|end portal|nether portal|stronghold)\b/.test(s);
-  const actionGoal=/\b(?:play|gather|collect|craft|mine|dig|excavate|defeat|kill|beat|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|smelt|enchant|explore|travel|find|place|equip|wear|wield|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(s);
+  const actionGoal=/\b(?:play|gather|collect|craft|mine|dig|excavate|defeat|kill|beat|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|enchant|explore|travel|find|place|equip|wear|wield|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(s);
   if (!(minecraftScope || resourceScope) || !actionGoal) return false;
   // Only reject a question/refusal when it is the request's intent. A valid
   // action goal often contains important restrictions such as "do not use
@@ -81,7 +81,7 @@ export function isMinecraftObservationOnlyObjective(objective:string):boolean {
   const primary=s.split(/\b(?:do not|don't|never|stop if|if blocked|if an action fails)\b/,1)[0];
   const observation=/\b(?:observe|inspect)\b/.test(primary) ||
     /\b(?:minecraft_companion_command)\b/.test(primary) && /\bobserve\b/.test(primary);
-  const effects=/\b(?:craft|mine|gather|collect|dig|place|navigate|build|defeat|kill|equip|wear|wield|play|survive|progress|follow|come|protect|guard|defend|farm|trade|smelt|enchant|explore|travel|find|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(primary);
+  const effects=/\b(?:craft|mine|gather|collect|dig|place|navigate|build|defeat|kill|equip|wear|wield|play|survive|progress|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|enchant|explore|travel|find|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(primary);
   return observation && !effects;
 }
 

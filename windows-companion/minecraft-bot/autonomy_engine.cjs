@@ -171,6 +171,21 @@ function decide(goal, world, failures={}, progress={}) {
     return {kind:'retreat',why:'Multiple threats or low health: regain safe distance'};
   if(closest?.distance<=6 && !ALLOWED_HOSTILES.has(closest.name))
     return {kind:'retreat',why:'Observed threat is not an authorized generic melee target'};
+  // Low-health long-horizon survival MUST recover before taking an
+  // optional Nether/Dragon fight. An already-sufficient food bar can
+  // naturally regenerate health; require a server-observed health
+  // increase rather than treating elapsed time as a success.
+  const longSurvival=['survive','companion','stone_age','iron_age',
+    'dragon_run','netherite_dragon_run','dragon_then_netherite_run',
+    'netherite_armor_run','netherite_gear_run'].includes(goal);
+  if(longSurvival && Number.isFinite(world.health) && world.health<12 &&
+     !threats.some(t=>Number.isFinite(t?.distance)&&t.distance<=10)){
+    if(world.hunger<18 && (inv.food||0)>0)
+      return {kind:'eat',why:'Health low: eat observed food to enable natural recovery'};
+    if(world.hunger<18)
+      return {kind:'obtain_food',why:'Health low with insufficient hunger: obtain verified food before risky progression'};
+    return {kind:'recover_health',why:'Health low: remain still only while safe and verify actual server regeneration'};
+  }
   if(world.hunger<=12 && (inv.food||0)>0)return {kind:'eat',why:'Hunger low; edible inventory item detected'};
   if(['dragon_run','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run'].includes(goal) && world.hunger<=9 && (inv.food||0)===0)return {kind:'obtain_food',why:'Obtain safe food before autonomous survival progression'};
   if(closest?.name==='creeper' && closest.distance<=7)return {kind:'retreat',why:'Avoid nearby creeper explosion'};
@@ -686,6 +701,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         outcome.proof==='workstation_scout_move') &&
       (decision.kind!=='scout_survival' ||
         outcome.proof==='safe_scout_move') &&
+      (decision.kind!=='recover_health' ||
+        outcome.proof==='health_regenerated') &&
       (decision.kind!=='survey_resource' ||
         (Object.hasOwn(ORE_RESOURCE_RULES,decision.resource)&&
           outcome.proof==='safe_scout_move')) &&

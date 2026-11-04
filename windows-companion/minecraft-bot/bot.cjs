@@ -755,7 +755,8 @@ async function autoExecute(plan,epoch){
     }
     case 'mine_cobblestone':{
       if(!(before.inventory.woodenPickaxe||before.inventory.stonePickaxe||
-         before.inventory.ironPickaxe||before.inventory.diamondPickaxe))
+         before.inventory.ironPickaxe||before.inventory.diamondPickaxe||
+         (before.inventory.raw?.netherite_pickaxe||0)>0))
         throw Error('Stone mining requires a real pickaxe');
       const pick=bot.inventory.items().find(i=>
         ['stone_pickaxe','wooden_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'].includes(i.name));
@@ -806,7 +807,9 @@ async function autoExecute(plan,epoch){
       return picked;
     }
     case 'mine_iron':{
-      if(!before.inventory.stonePickaxe && !before.inventory.ironPickaxe)throw Error('Iron ore needs stone or better pickaxe');
+      if(!before.inventory.stonePickaxe && !before.inventory.ironPickaxe &&
+         !before.inventory.diamondPickaxe && !(before.inventory.raw?.netherite_pickaxe>0))
+        throw Error('Iron ore needs stone or better pickaxe');
       const exposed=findExposedOre(bot,['iron_ore','deepslate_iron_ore'],24);
       const target=exposed?.block;
       if(!target)throw Error('No safely exposed iron ore in loaded chunks; request cave survey');
@@ -818,7 +821,8 @@ async function autoExecute(plan,epoch){
       if(!live || !['iron_ore','deepslate_iron_ore'].includes(live.name) ||
         !bot.canDigBlock?.(live) || bot.entity.position.distanceTo(p)>5)
         return {ok:false,verified:false,detail:'Iron ore no longer server-observed within real dig range'};
-      const pick=bot.inventory.items().find(i=>['stone_pickaxe','iron_pickaxe'].includes(i.name));
+      const pick=bot.inventory.items().find(i=>
+        ['stone_pickaxe','iron_pickaxe','diamond_pickaxe','netherite_pickaxe'].includes(i.name));
       if(!pick)throw Error('Missing valid iron mining pickaxe');
       await bot.equip(pick,'hand');await bot.dig(live);
        return collectVerifiedDrop(p,before.inventory.rawIron,
@@ -882,7 +886,9 @@ async function autoExecute(plan,epoch){
       }finally{ui.close();}
     }
     case 'mine_diamond':{
-      if(!before.inventory.ironPickaxe && !before.inventory.diamondPickaxe)throw Error('Diamond mining requires iron or diamond pickaxe');
+      if(!before.inventory.ironPickaxe && !before.inventory.diamondPickaxe &&
+         !(before.inventory.raw?.netherite_pickaxe>0))
+        throw Error('Diamond mining requires iron-grade or better pickaxe');
       const exposed=findExposedOre(bot,['diamond_ore','deepslate_diamond_ore'],24);
       const target=exposed?.block;
       if(!target)throw Error('No safely exposed diamond ore in loaded chunks; request cave survey');
@@ -894,8 +900,9 @@ async function autoExecute(plan,epoch){
       if(!live || !['diamond_ore','deepslate_diamond_ore'].includes(live.name) ||
         !bot.canDigBlock?.(live) || bot.entity.position.distanceTo(p)>5)
         return {ok:false,verified:false,detail:'Diamond ore no longer within dig range or safe after route'};
-      const pick=bot.inventory.items().find(i=>['diamond_pickaxe','iron_pickaxe'].includes(i.name));
-      if(!pick)throw Error('Missing pickaxe');
+      const pick=bot.inventory.items().find(i=>
+        ['netherite_pickaxe','diamond_pickaxe','iron_pickaxe'].includes(i.name));
+      if(!pick)throw Error('Missing real diamond-grade mining pickaxe');
       await bot.equip(pick,'hand');await bot.dig(live);
        return collectVerifiedDrop(p,before.inventory.diamonds,
          ()=>digest(bot,leader).inventory.diamonds,epoch,'Diamonds');

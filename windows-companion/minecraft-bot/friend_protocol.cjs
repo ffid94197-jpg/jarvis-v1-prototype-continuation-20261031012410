@@ -3,7 +3,7 @@
 /** Pure command validation; identical contract for stdin and in-game chat. */
 const {RESOURCES}=require('./resource_goal.cjs');
 const {validSequence}=require('./mission_sequence.cjs');
-const {validBuildSpec,validWallSpec}=require('./structure_goal.cjs');
+const {validBuildSpec,validWallSpec,validPlatformSpec}=require('./structure_goal.cjs');
 const {validFarmSpec}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop','auto_checkpoint','auto_resume']);
@@ -30,9 +30,11 @@ function validateCommand(input) {
       length:input.length,height:input.height,axis:input.axis,block:input.block});
     const validWall=input.goal==='wall'&&validWallSpec({goal:'wall',block:input.block,
       length:input.length,height:input.height});
+    const validPlatform=input.goal==='platform'&&validPlatformSpec({goal:'platform',block:input.block,
+      length:input.length,width:input.width});
     const validFarm=input.goal==='farm_wheat'&&validFarmSpec({goal:'farm_wheat',
       position:input.position,width:input.width,depth:input.depth,targetCount:input.targetCount});
-    const validGoal=fixed.includes(input.goal)||validTravel||validBuild||validWall||validFarm||
+    const validGoal=fixed.includes(input.goal)||validTravel||validBuild||validWall||validPlatform||validFarm||
       (input.goal==='craft' && validCraftSpec({goal:'craft',item:input.item,targetCount:input.targetCount}))||
       (input.goal==='equip' && validEquipSpec({goal:'equip',item:input.item,destination:input.destinationSlot}))||
       (input.goal==='gather' && RESOURCES.has(input.resource) &&
@@ -64,6 +66,10 @@ function validateCommand(input) {
         input.targetCount===undefined&&input.destination===undefined&&input.arrivalRange===undefined&&
         input.position===undefined&&input.axis===undefined&&input.width===undefined&&
         input.depth===undefined&&input.item===undefined&&input.destinationSlot===undefined) ||
+      (input.goal==='platform' && input.steps===undefined&&input.resource===undefined &&
+        input.targetCount===undefined&&input.destination===undefined&&input.arrivalRange===undefined&&
+        input.position===undefined&&input.axis===undefined&&input.height===undefined&&
+        input.depth===undefined&&input.item===undefined&&input.destinationSlot===undefined) ||
       (fixed.includes(input.goal) && input.steps===undefined&&input.resource===undefined &&
         input.targetCount===undefined&&input.destination===undefined &&
         input.arrivalRange===undefined);
@@ -71,8 +77,8 @@ function validateCommand(input) {
       (['craft','equip'].includes(input.goal)||input.item===undefined) &&
       (input.goal==='equip'||input.destinationSlot===undefined) &&
       (['craft','gather','farm_wheat'].includes(input.goal)||input.targetCount===undefined) &&
-      (input.goal==='build'||input.goal==='wall'||['block','axis','length','height'].every(k=>input[k]===undefined)) &&
-      (input.goal==='farm_wheat'||['width','depth'].every(k=>input[k]===undefined)) &&
+      (input.goal==='build'||input.goal==='wall'||input.goal==='platform'||['block','axis','length','height'].every(k=>input[k]===undefined)) &&
+      (input.goal==='farm_wheat'||input.goal==='platform'||['width','depth'].every(k=>input[k]===undefined)) &&
       (['build','farm_wheat'].includes(input.goal)||input.position===undefined) &&
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&

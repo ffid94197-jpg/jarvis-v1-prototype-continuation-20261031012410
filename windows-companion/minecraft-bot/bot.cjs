@@ -1170,7 +1170,7 @@ async function action(q){
         // the older status blob without grounded block coordinates.
         const observation=projectWorld(
           digest(bot,leader,{dragonDead:lateSkills.session.dragonDied}),
-          loadedTargets(bot,{includeGeneral:true}),lastAction,mode);
+          loadedTargets(bot,{includeGeneral:true}),lastAction,mode,autopilot.status().goal);
         const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:observation});
         if(before!==actionEpoch)return {ok:false,error:'Superseded owner command cancelled stale language result'};
         if(!parsed.ok)return {ok:false,error:parsed.error};
@@ -1188,7 +1188,7 @@ async function action(q){
       const snapshot=digest(bot,leader,{dragonDead:lateSkills.session.dragonDied});
       // Compact, valid JSON (<1900 chars) so the managed companion cannot
       // silently truncate a late-game observation and mislead the planner.
-      return {ok:true,status:projectWorld(snapshot,loadedTargets(bot,{includeGeneral:true}),lastAction,mode)};
+      return {ok:true,status:projectWorld(snapshot,loadedTargets(bot,{includeGeneral:true}),lastAction,mode,autopilot.status().goal)};
     }
     case 'auto_status':return {ok:true,status:compactAutonomyStatus(autopilot.status())};
     case 'auto_checkpoint':{

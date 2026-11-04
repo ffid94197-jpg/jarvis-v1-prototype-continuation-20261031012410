@@ -125,11 +125,11 @@ function directIntent(raw){
      candidate=canonicalIntent({command:'auto_goal',goal:'craft',
        item:candidate.command.item,targetCount:candidate.command.count});
    if(!candidate?.ok || candidate.command?.command!=='auto_goal')
-    return fail('Cannot safely build a long-horizon sequence from unsupported subgoals');
+    return null; // Give a configured JARVIS model a chance; its proposal is still owner-grounded and strictly validated.
    const {command,durationSeconds,destinationSlot,...step}=candidate.command;
    if(destinationSlot!==undefined)step.destination=destinationSlot;
    if(!validStep(step))
-    return fail('Unverified or unsupported composed gameplay stage');
+    return null; // Unsupported deterministic stage is never dispatched; model must prove an authorized whole goal.
    steps.push(step);
   }
   return canonicalIntent({command:'auto_goal',goal:'sequence',steps});

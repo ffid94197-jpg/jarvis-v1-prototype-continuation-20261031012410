@@ -271,7 +271,14 @@ function decide(goal, world, failures={}, progress={}) {
   }
   if(goal==='dragon_run' || goal==='netherite_dragon_run' || goal==='dragon_then_netherite_run' ||
      goal==='netherite_armor_run' || goal==='netherite_gear_run'){
-    if((world.dimension && !String(world.dimension).includes('overworld')) || progress.milestones?.netherPortalBuilt)
+    // A verified trip through an existing portal is just as valid as
+    // building a new portal. Do not replay the early wooden/diamond setup
+    // when the native mission is already in Nether/End progression, or when
+    // a Dragon death was witnessed and the bot returned to the Overworld.
+    if((world.dimension && !String(world.dimension).includes('overworld')) ||
+       progress.milestones?.netherPortalBuilt ||
+       progress.milestones?.netherPortalUsed ||
+       progress.milestones?.dragonKilled)
       return lateGamePlan(world,{...progress,goal});
   }
   if(goal==='stone_age' || goal==='iron_age' || goal==='dragon_run' || goal==='netherite_dragon_run' ||

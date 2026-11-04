@@ -543,26 +543,28 @@ async function autoExecute(plan,epoch){
     }
     case 'defend':{
       const hostile=bot.entities?.[plan.targetId];
-      if(!hostile || !hostile.position)
-        return {ok:true,verified:true,detail:'Observed hostile no longer visible; local danger cleared'};
+      if(!hostile?.position)
+        return {ok:true,verified:true,
+          detail:'Target no longer in loaded danger range; no kill attributed'};
       if(!validHostileTarget(bot,plan.targetId))
-        return {ok:false,verified:false,detail:'Unsafe or out-of-range hostile; no blind attack'};
-      const equipped=await equipObservedMelee(bot,()=>epoch===actionEpoch&&spawned);
-      if(!equipped.ok)return {ok:false,verified:false,detail:'Defensive weapon not verified: '+equipped.detail};
-      // Equipment changes take time: recheck the observed target AND health
-      // before dispatching even a single attack.
-      const live=validHostileTarget(bot,plan.targetId);
-      if(epoch!==actionEpoch)throw Error('Owner cancelled defensive action');
-      if(!live||bot.health<9)
-        return {ok:false,verified:false,detail:'Defensive target moved or health fell while equipping'};
-      bot.attack(live);await pause(300);
-      if(epoch!==actionEpoch)throw Error('Owner cancelled defensive action');
+        return {ok:false,verified:false,
+          detail:'Unsafe or out-of-range hostile; do not blindly attack'};
+      // Reuse the independent, bounded melee executor rather than marking
+      // a single input as a successful defense. This enforces live weapon
+      // readback, target identity/range/health checks, cancellation and an
+      // actual target-specific entityDead receipt when a death is claimed.
+      const result=await fightObserved({bot,entityId:plan.targetId,
+        maxSwings:4,pause,allowed:()=>spawned&&epoch===actionEpoch});
+      if(epoch!==actionEpoch)throw Error('Defensive action cancelled');
       const remaining=bot.entities?.[plan.targetId];
-      const safe=!remaining?.position||
+      const clear=!remaining?.position ||
         remaining.position.distanceTo(bot.entity.position)>6;
-      return {ok:safe,verified:safe,detail:safe?
-        'Server now shows previous hostile outside 6-block defensive range':
-        'Attack dispatched; threat still present and defensive result NOT VERIFIED'};
+      const proven=result.verified===true||clear;
+      return {ok:proven,verified:proven,
+        detail:result.verified===true?
+          'Target-specific server death observed during bounded defense; attribution not claimed':
+          clear?'Original hostile moved beyond observed defensive range; death not claimed':
+          'Defensive attacks bounded; hostile still present: '+String(result.detail||'unknown')};
     }
     case 'eat':{
       const food=bot.inventory.items().find(i=>FOOD.test(i.name));if(!food)throw Error('No edible item');

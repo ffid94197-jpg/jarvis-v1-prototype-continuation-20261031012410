@@ -980,6 +980,11 @@ async function action(q){
         const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:observation});
         if(before!==actionEpoch)return {ok:false,error:'Superseded owner command cancelled stale language result'};
         if(!parsed.ok)return {ok:false,error:parsed.error};
+        // A language-model suggestion may not silently interrupt a running
+        // long mission. A separate explicit owner stop is required.
+        const safeWhileBusy=new Set(['auto_stop','stay','status','inventory','observe','auto_status']);
+        if((mode==='auto'||autoBusy) && !safeWhileBusy.has(parsed.command.command))
+          return {ok:false,error:'Autonomous mission still active; stop it explicitly before another effect'};
         return await action(parsed.command);
       }finally{languageBusy=false;}
     }

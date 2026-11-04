@@ -44,6 +44,12 @@ function strictFormat(turns){
  return messages;
 }
 const fail=error=>({ok:false,error});
+// Everyday number words use the same bounded, typed validation as numerals.
+const COUNT_WORDS=Object.freeze({a:1,an:1,one:1,two:2,three:3,four:4,five:5,six:6,
+ seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,
+ fifteen:15,sixteen:16});
+const COUNT_PATTERN='(?:\\d{1,2}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)';
+const asCount=value=>/^\d+$/.test(value)?Number(value):COUNT_WORDS[value];
 function canonicalIntent(raw){
  if(!raw||typeof raw!=='object'||Array.isArray(raw))return fail('Unstructured model intent rejected');
  if(raw.command==='unsupported'&&Object.keys(raw).every(k=>['command','reason'].includes(k)))
@@ -67,7 +73,7 @@ function canonicalIntent(raw){
 }
 function clean(text){
  if(typeof text!=='string'||text.length>600||!text.trim()||/[\x00-\x1f\x7f]/.test(text))return null;
- return text.trim().replace(/^jarvis(?:buddy)?[,:\s]+/i,'').trim().replace(/[.!?]+$/,'');
+ return text.trim().replace(/^(?:hey\s+)?jarvis(?:buddy)?[,:\s]+/i,'').trim().replace(/[.!?]+$/,'');
 }
 function directIntent(raw){
  const t=clean(raw);if(!t)return fail('Invalid owner instruction');
@@ -80,21 +86,25 @@ function directIntent(raw){
   [/^(follow me|follow along|stay with me)$/,{command:'follow'}],
   [/^(come here|come to me|come over)$/,{command:'come'}],
   [/^(stay here|stay put|wait here)$/,{command:'stay'}],
+  [/^(?:beat|defeat|kill) (?:the )?(?:ender )?dragon(?: in minecraft)?$/,{command:'auto_goal',goal:'dragon_run'}],
+  [/^(?:get|obtain|make|craft)(?: me)? (?:a )?(?:full |complete )?(?:set of )?netherite (?:gear|equipment|armor) (?:and|then) (?:beat|defeat|kill) (?:the )?(?:ender )?dragon$/,{command:'auto_goal',goal:'netherite_dragon_run'}],
+  [/^(?:beat|defeat|kill) (?:the )?(?:ender )?dragon (?:and|then) (?:get|obtain|make|craft)(?: me)? (?:a )?(?:full |complete )?(?:set of )?netherite (?:gear|equipment|armor)$/,{command:'auto_goal',goal:'dragon_then_netherite_run'}],
+  [/^(?:explore|scout)(?: the| this)? (?:cave|area|world|terrain)(?: in minecraft)?$/,{command:'auto_goal',goal:'explore'}],
   [/^(protect me|guard me|defend me|keep me safe)$/,{command:'auto_goal',goal:'guard'}],
   [/^(show|check|tell me) (your )?inventory$/,{command:'inventory'}],
   [/^(show|check|tell me) (your )?(status|progress)$/,{command:'auto_status'}]
  ];
  for(const [re,q] of rules)if(re.test(s))return canonicalIntent(q);
- const g=/^(mine|gather|collect|get|find|bring)( me)? (\d{1,2}) ([a-z_ ]{2,35})$/.exec(s);
+ const g=new RegExp('^(?:mine|gather|collect|get|find|bring)(?: me)? ('+COUNT_PATTERN+') ([a-z_ ]{2,35})$').exec(s);
  if(g){
-  const resource=normalizeResource(g[4].trim().replace(/ blocks?$/,''));
-  if(resource)return canonicalIntent({command:'auto_goal',goal:'gather',resource,targetCount:Number(g[3])});
+  const resource=normalizeResource(g[2].trim().replace(/ blocks?$/,''));
+  if(resource)return canonicalIntent({command:'auto_goal',goal:'gather',resource,targetCount:asCount(g[1])});
  }
- const c=/^(craft|make)( me)? (\d{1,2}) ([a-z_ ]{2,35})$/.exec(s);
+ const c=new RegExp('^(?:craft|make)(?: me)? ('+COUNT_PATTERN+') ([a-z_ ]{2,35})$').exec(s);
  if(c){
-  let item=c[4].trim().replace(/ /g,'_');
+  let item=c[2].trim().replace(/ /g,'_');
   if(!Object.hasOwn(RECIPES,item)&&item.endsWith('s'))item=item.slice(0,-1);
-  if(Object.hasOwn(RECIPES,item))return canonicalIntent({command:'auto_goal',goal:'craft',item,targetCount:Number(c[3])});
+  if(Object.hasOwn(RECIPES,item))return canonicalIntent({command:'auto_goal',goal:'craft',item,targetCount:asCount(c[1])});
  }
  return null; // More complex language requires a configured JARVIS-owned model.
 }

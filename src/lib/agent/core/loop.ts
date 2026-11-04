@@ -449,7 +449,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // stops must NOT launch a new Minecraft player as a side effect.
   const minecraftSafetyStop=/^(?:(?:hey\s+)?jarvis(?:buddy)?[,:!\s]+)?(?:please\s+)?(?:stop|pause|cancel|halt)\b/i
     .test(objective.trim());
-  const minecraftFirstJoinRequired=minecraftAiTask && !opts.replay &&
+  const minecraftFirstJoinRequired=minecraftAiTask && opts.replay===undefined &&
     !minecraftSafetyStop && !isMinecraftObservationOnlyObjective(objective);
   const minecraftAiGate = minecraftAiTask ?
     new MinecraftAiGate(objective,minecraftFirstJoinRequired) : null;

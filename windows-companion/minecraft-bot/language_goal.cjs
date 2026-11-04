@@ -23,7 +23,7 @@ const SYSTEM=[
  'If the owner asks an informational question without an action request, negates a task, or gives an ambiguous/unsupported goal, output {"command":"unsupported"}.',
  'Allowed commands: follow, come, stay, guard, status, inventory, observe, auto_status, auto_stop, auto_resume (only for an explicit owner continuation of a saved mission).',
  'Allowed auto_goal values: survive, wood, tools, explore, follow, guard, stone_age, iron_age, companion, dragon_run, netherite_dragon_run, dragon_then_netherite_run, gather, craft, equip, travel, sequence, build, farm_wheat.',
- 'Gather requires resource (logs,planks,sticks,cobblestone,raw_iron,iron_ingot,diamond,obsidian,flint,netherrack) and targetCount 1-64.',
+ 'Gather requires resource (logs,planks,sticks,cobblestone,raw_iron,iron_ingot,diamond,obsidian,flint,netherrack,dirt,sand,red_sand,gravel,mud) and targetCount 1-64. A generic gather must verify actual inventory pickup and cannot use cheats or arbitrary blocks.',
  'Long-horizon auto_goal craft supports selected recipes; craft_item supports any item found in the live Minecraft registry when the server-confirmed inventory contains ingredients, with bounded count 1-16.',
  'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
  'One action is never a whole mission. An action STARTED or DISPATCHED is not success; JARVIS must observe state and replan before any further effect.',

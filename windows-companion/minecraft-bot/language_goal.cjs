@@ -93,7 +93,14 @@ function directIntent(raw){
  const c=/^(craft|make)( me)? (\d{1,2}) ([a-z_ ]{2,35})$/.exec(s);
  if(c){
   let item=c[4].trim().replace(/ /g,'_');
-  if(!Object.hasOwn(RECIPES,item)&&item.endsWith('s'))item=item.slice(0,-1);
+  if(!Object.hasOwn(RECIPES,item)){
+   // Resolve ordinary English plurals against the actual recipe allowlist.
+   // Try both -es and -s forms so 'torches' -> 'torch' and 'chests' -> 'chest'.
+   const singular=[item.endsWith('ies')?item.slice(0,-3)+'y':null,
+    item.endsWith('es')?item.slice(0,-2):null,
+    item.endsWith('s')?item.slice(0,-1):null].filter(Boolean);
+   item=singular.find(candidate=>Object.hasOwn(RECIPES,candidate))||item;
+  }
   if(Object.hasOwn(RECIPES,item))return canonicalIntent({command:'auto_goal',goal:'craft',item,targetCount:Number(c[3])});
  }
  return null; // More complex language requires a configured JARVIS-owned model.

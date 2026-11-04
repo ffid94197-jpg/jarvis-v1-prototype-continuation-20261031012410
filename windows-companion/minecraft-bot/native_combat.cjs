@@ -45,13 +45,17 @@ async function equipObservedMelee(bot,allowed=()=>true){
  return {ok:true,weapon:wanted.name,detail:'Server-observed owned melee weapon equipped'};
 }
 const int=(value,low,high)=>Number.isInteger(value)&&value>=low&&value<=high;
-function validHostileTarget(bot,entityId){
- if(!int(entityId,0,200000)||!bot?.entity?.position)return null;
+function validPursuitTarget(bot,entityId,maxDistance=12){
+ if(!int(entityId,0,200000)||!bot?.entity?.position||
+    !Number.isFinite(maxDistance)||maxDistance<0||maxDistance>12)return null;
  const e=bot.entities?.[entityId];
  if(!e||!ALLOWED_HOSTILES.has(e.name)||!e.position||
     e.type==='player'||e.username||
-    bot.entity.position.distanceTo(e.position)>3.4)return null;
+    bot.entity.position.distanceTo(e.position)>maxDistance)return null;
  return e;
+}
+function validHostileTarget(bot,entityId){
+ return validPursuitTarget(bot,entityId,3.4);
 }
 async function fightObserved({bot,entityId,maxSwings=3,
  pause=ms=>new Promise(r=>setTimeout(r,ms)),allowed=()=>true}){
@@ -93,4 +97,4 @@ async function fightObserved({bot,entityId,maxSwings=3,
  }finally{bot.removeListener('entityDead',died);}
 }
 module.exports={ALLOWED_HOSTILES,MAX_SWINGS,MELEE_PRIORITY,
- chooseObservedMelee,equipObservedMelee,validHostileTarget,fightObserved};
+ chooseObservedMelee,equipObservedMelee,validHostileTarget,validPursuitTarget,fightObserved};

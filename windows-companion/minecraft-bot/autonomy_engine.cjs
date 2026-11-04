@@ -5,7 +5,7 @@
  * run shell commands, trust other players' chat, or claim task completion.
  */
 const {lateGamePlan} = require('./late_game.cjs');
-const {RESOURCES,resourcePlan}=require('./resource_goal.cjs');
+const {RESOURCES,SAFE_GENERIC_RESOURCES,resourcePlan}=require('./resource_goal.cjs');
 const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,buildPlan,validVolumeSpec,volumePlan}=require('./structure_goal.cjs');
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
@@ -464,7 +464,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   }
   function record(decision, outcome){
     if(state.status!=='running' || !decision)return;
-    const ok=outcome?.ok===true && outcome?.verified===true;
+    const ok=outcome?.ok===true && outcome?.verified===true &&
+      (decision.kind!=='survey_generic'||(
+        SAFE_GENERIC_RESOURCES.has(decision.resource)&&
+        outcome.proof==='generic_survey_move'));
     if(ok){
       // Only CONSECUTIVE unresolved attempts should exhaust an action's
       // bounded retry budget. Previously verified success left old failures
@@ -494,6 +497,15 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       if(decision.kind==='survey_ore'){state.failures[decision.ore==='iron'?'mine_iron':'mine_diamond']=0;}
       if(decision.kind==='travel_target' && outcome.proof==='travel_arrival')
         state.milestones.travelArrivalVerified=true;
+      if(decision.kind==='survey_generic'){
+        const trips=state.milestones.genericSurveyTrips &&
+          typeof state.milestones.genericSurveyTrips==='object'?
+          state.milestones.genericSurveyTrips:{};
+        const material=decision.resource;
+        trips[material]=Math.min(8,(Number.isInteger(trips[material])?trips[material]:0)+1);
+        state.milestones.genericSurveyTrips=trips;
+        state.failures.mine_generic=0;
+      }
       if(decision.kind==='survey_wood'){
         state.milestones.woodSurveyTrips=(state.milestones.woodSurveyTrips||0)+1;
         state.failures.collect_wood=0;

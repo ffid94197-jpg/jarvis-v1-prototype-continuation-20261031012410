@@ -1077,7 +1077,7 @@ async function autoTick(){
       width:active.width,depth:active.depth,height:active.height,shape:active.shape
     },Vec3);
   if(active.goal==='shelter' && !active.sequence)
-    gameWorld.shelterSite=chooseNativeShelterSite(bot,Vec3);
+    gameWorld.shelterSite=chooseNativeShelterSite(bot,Vec3,{width:active.width,depth:active.depth});
   if(active.goal==='sequence'||active.goal==='shelter'){
     const stages=active.sequence||gameWorld.shelterSite?.steps||[];
     gameWorld.buildCellsByStage=stages.map(s=>

@@ -26,7 +26,7 @@ const {SCAN_RADIUS,MAX_LOG_CANDIDATES,surveyTargets,rankLogs}=require('./wood_na
 const {collectObservedDrop,pickupFeet}=require('./drop_pickup.cjs');
 const {retreatStances}=require('./retreat_access.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
-const {validBuildSpec,observeBuild}=require('./structure_goal.cjs');
+const {BLOCKS,validBuildSpec,observeBuild}=require('./structure_goal.cjs');
 const {validFarmSpec,observeWheat}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {safeSurveyFeet}=require('./wood_navigation.cjs');
@@ -924,7 +924,7 @@ async function autoTick(){
     {goal:'farm_wheat',position:active.position,width:active.width,depth:active.depth,
       targetCount:active.targetCount},Vec3);
   if(active.goal==='build')gameWorld.buildCells=observeBuild(bot,
-    {goal:'build',position:active.position,block:active.block,axis:active.axis,length:active.length},Vec3);
+    {goal:'build',position:active.position,block:active.block,axis:active.axis,length:active.length,height:active.height},Vec3);
   if(active.goal==='sequence'){
     gameWorld.buildCellsByStage=(active.sequence||[]).map(s=>
       s.goal==='build'?observeBuild(bot,s,Vec3):null);
@@ -1048,6 +1048,24 @@ async function action(q){
     }
     case 'auto_stop':resumeAfterSpawn=false;setMode('stay');return {ok:true,status:'Autonomous gameplay stopped; movement cancelled'};
     case 'auto_goal':{
+      // A natural-language "build a wall" request is anchored to the live
+      // player position and facing. The model never invents world coordinates.
+      if(q.goal==='wall'){
+        const player=bot.entity?.position,yaw=bot.entity?.yaw;
+        if(!player||!Number.isFinite(yaw))return {ok:false,error:'Cannot ground a wall without live player position and facing'};
+        const fx=-Math.sin(yaw),fz=Math.cos(yaw);
+        const dx=Math.abs(fx)>Math.abs(fz)?Math.sign(fx):0;
+        const dz=dx===0?(Math.sign(fz)||1):0;
+        const axis=dx>0?'x+':dx<0?'x-':dz>0?'z+':'z-';
+        const choices=q.block?[q.block]:['cobblestone','oak_planks','spruce_planks','birch_planks','stone_bricks','dirt','netherrack'];
+        const block=choices.find(name=>BLOCKS.has(name)&&rawCount(bot,name)>0);
+        if(!block)return {ok:false,error:'No supported building block is currently owned; gather a safe block material first'};
+        q={command:'auto_goal',goal:'build',position:{
+          x:Math.floor(player.x)+dx*2,y:Math.floor(player.y),z:Math.floor(player.z)+dz*2
+        },block,axis,length:q.length||4,height:q.height||2,durationSeconds:q.durationSeconds||1800};
+        const normalizedError=validateCommand(q);
+        if(normalizedError)return {ok:false,error:normalizedError};
+      }
       if(q.goal==='farm_wheat' && bot.entity.position.distanceTo(
         new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>12)
         return {ok:false,error:'Wheat field origin must be within 12 blocks of actual player'};

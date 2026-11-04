@@ -112,4 +112,77 @@ function modelPrimitiveGrounded(command,ownerText,context){
  if(command.command==='use_item' && !scene?.joined)return false;
  return true;
 }
-module.exports={parseOwnerPrimitive,PRIMITIVE_FIELDS,GENERAL_ACTIONS,modelPrimitiveGrounded,itemName};
+/**
+ * Defend the long-horizon model route against changing the owner's objective.
+ * This only authorizes a typed proposal to proceed to the existing validator
+ * and runtime checks; it is not completion evidence or extra tool authority.
+ */
+function modelGoalGrounded(q,ownerText){
+ if(!q||q.command!=='auto_goal'||typeof q.goal!=='string')return false;
+ const s=String(ownerText||'').toLowerCase().replace(/_/g,' ');
+ const has=expression=>expression.test(s);
+ const itemMention=name=>typeof name==='string'&&
+   (s.includes(name.replace(/_/g,' '))||s.includes(name.replace(/_/g,' ')+'s'));
+ const explicitQuantity=()=>{
+  const counts=s.match(/\b(?:\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)\b/g);
+  return counts&&counts.length===1?amount(counts[0]):null;
+ };
+ const quantityMatches=qty=>{
+  if(!Number.isInteger(qty))return false;
+  const count=explicitQuantity();
+  return count===null?qty===1:qty===count;
+ };
+ switch(q.goal){
+  case 'dragon_run':return has(/\b(?:defeat|beat|kill|slay|fight)\b/)&&has(/\bdragon\b/);
+  case 'netherite_dragon_run':case 'dragon_then_netherite_run':
+   return has(/\bdragon\b/)&&has(/\bnetherite\b/)&&
+     has(/\b(?:defeat|beat|kill|slay|fight)\b/);
+  case 'survive':return has(/\b(?:survive|survival|stay alive)\b/);
+  case 'wood':return has(/\b(?:collect|gather|get|mine|find)\b/)&&has(/\b(?:wood|logs?)\b/);
+  case 'tools':return has(/\b(?:tools?|pickaxes?)\b/)&&has(/\b(?:craft|make|get|obtain|upgrade)\b/);
+  case 'stone_age':return has(/\bstone\b/)&&has(/\b(?:tools?|pickaxes?|swords?|age)\b/);
+  case 'iron_age':return has(/\biron\b/)&&has(/\b(?:tools?|pickaxes?|swords?|age|armor)\b/);
+  case 'explore':return has(/\b(?:explore|scout|search|survey)\b/);
+  case 'companion':return has(/\b(?:play|join|companion|teammate)\b/);
+  case 'follow':return has(/\bfollow\b/);
+  case 'guard':return has(/\b(?:guard|protect|defend)\b/);
+  case 'gather':{
+   const aliases=q.resource==='logs'?/\b(?:wood|logs?|timber)\b/:
+     q.resource==='iron_ingot'?/\biron ingots?\b/:
+     q.resource==='raw_iron'?/\braw iron\b/:
+     new RegExp('\\b'+String(q.resource||'').replace(/_/g,' ')+'s?\\b');
+   return has(/\b(?:gather|mine|collect|obtain|find|get|bring|dig)\b/)&&
+     aliases.test(s)&&quantityMatches(q.targetCount);
+  }
+  case 'craft':return has(/\b(?:craft|make)\b/)&&
+    itemMention(q.item)&&quantityMatches(q.targetCount);
+  case 'equip':return has(/\b(?:wear|equip|wield|hold|put on)\b/)&&itemMention(q.item);
+  case 'travel':{
+   if(!has(/\b(?:travel|walk|go|navigate|reach|head)\b/)||
+      !q.destination||typeof q.destination!=='object')return false;
+   const p=q.destination;
+   const triplets=s.match(/-?\d{1,8}[\s,]+-?\d{1,8}[\s,]+-?\d{1,8}/g)||[];
+   return triplets.some(t=>{
+    const xyz=t.match(/-?\d+/g)?.map(Number);
+    return xyz?.length===3&&xyz[0]===p.x&&xyz[1]===p.y&&xyz[2]===p.z;
+   });
+  }
+  case 'build':return has(/\b(?:build|construct|place)\b/)&&
+    itemMention(q.block)&&has(/\b(?:wall|line|row)\b/);
+  case 'farm_wheat':return has(/\b(?:farm|grow|plant|harvest)\b/)&&has(/\bwheat\b/);
+  case 'sequence':{
+   if(!Array.isArray(q.steps)||!has(/\b(?:then|after that|next)\b/))return false;
+   const pieces=s.split(/\s+(?:and then|then|after that|next)\s+/);
+   if(pieces.length!==q.steps.length)return false;
+   return q.steps.every((step,i)=>{
+    const normalized={command:'auto_goal',...step};
+    if(step.goal==='equip'&&step.destination!==undefined){
+      normalized.destinationSlot=step.destination;delete normalized.destination;
+    }
+    return modelGoalGrounded(normalized,pieces[i]);
+   });
+  }
+  default:return false;
+ }
+}
+module.exports={parseOwnerPrimitive,PRIMITIVE_FIELDS,GENERAL_ACTIONS,modelPrimitiveGrounded,modelGoalGrounded,itemName};

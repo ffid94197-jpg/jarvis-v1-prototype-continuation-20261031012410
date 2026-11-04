@@ -6,6 +6,7 @@
 const {validateCommand}=require('./friend_protocol.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
 const {RECIPES}=require('./general_goal.cjs');
+const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded}=require('./general_play_intent.cjs');
 const SIMPLE=new Set(['follow','come','stay','guard','status','inventory','observe','auto_status','auto_stop','auto_resume']);
 const FIXED=new Set(['survive','wood','tools','explore','follow','guard','stone_age','iron_age','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run']);
 const PARAMS={
@@ -22,7 +23,9 @@ const SYSTEM=[
  'Allowed commands: follow, come, stay, guard, status, inventory, observe, auto_status, auto_stop, auto_resume (only for an explicit owner continuation of a saved mission).',
  'Allowed auto_goal values: survive, wood, tools, explore, follow, guard, stone_age, iron_age, companion, dragon_run, netherite_dragon_run, dragon_then_netherite_run, gather, craft, equip, travel, sequence, build, farm_wheat.',
  'Gather requires resource (logs,planks,sticks,cobblestone,raw_iron,iron_ingot,diamond,obsidian,flint,netherrack) and targetCount 1-64.',
- 'Craft requires item (stick,crafting_table,chest,furnace,ladder,bread,shield,torch) and targetCount 1-16.',
+ 'Long-horizon auto_goal craft supports selected recipes; craft_item supports any item found in the live Minecraft registry when the server-confirmed inventory contains ingredients, with bounded count 1-16.',
+ 'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
+ 'One action is never a whole mission. An action STARTED or DISPATCHED is not success; JARVIS must observe state and replan before any further effect.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
  'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
  'Example: {"command":"auto_goal","goal":"gather","resource":"diamond","targetCount":3}.',
@@ -56,7 +59,15 @@ function canonicalIntent(raw){
   return fail('Request unsupported; no Minecraft action taken');
  if(SIMPLE.has(raw.command))
   return Object.keys(raw).length===1?{ok:true,command:{command:raw.command}}:fail('Unexpected model parameter');
- if(raw.command!=='auto_goal'||typeof raw.goal!=='string')return fail('Unregistered model action rejected');
+ if(Object.hasOwn(PRIMITIVE_FIELDS,raw.command)){
+   const allowed=['command',...PRIMITIVE_FIELDS[raw.command]];
+   if(Object.keys(raw).some(k=>!allowed.includes(k)))return fail('Unexpected primitive parameter');
+   const command={command:raw.command};
+   for(const key of PRIMITIVE_FIELDS[raw.command])if(raw[key]!==undefined)command[key]=raw[key];
+   const error=validateCommand(command);
+   return error?fail(error):{ok:true,command};
+  }
+  if(raw.command!=='auto_goal'||typeof raw.goal!=='string')return fail('Unregistered model action rejected');
  const keys=Object.hasOwn(PARAMS,raw.goal)?PARAMS[raw.goal]:(FIXED.has(raw.goal)?[]:null);
  if(!keys)return fail('Unsupported Minecraft goal');
  if(Object.keys(raw).some(k=>!['command','goal','durationSeconds',...keys].includes(k)))
@@ -106,7 +117,8 @@ function directIntent(raw){
   if(!Object.hasOwn(RECIPES,item)&&item.endsWith('s'))item=item.slice(0,-1);
   if(Object.hasOwn(RECIPES,item))return canonicalIntent({command:'auto_goal',goal:'craft',item,targetCount:asCount(c[1])});
  }
- return null; // More complex language requires a configured JARVIS-owned model.
+ const primitive=parseOwnerPrimitive(s);
+  return primitive?canonicalIntent(primitive):null; // Otherwise use configured owner model.
 }
 function modelConfig(env){
  if(env?.JARVIS_MODEL_BACKEND!=='ollama'||!env.JARVIS_OLLAMA_MODEL)return null;
@@ -126,7 +138,7 @@ async function interpretOwnerInstruction(input,{env=process.env,context='',fetch
  const send=fetchImpl||globalThis.fetch;
  if(typeof send!=='function')return fail('Model transport unavailable');
  const messages=[{role:'system',content:SYSTEM},...strictFormat([{role:'user',content:JSON.stringify({
-  ownerInstruction:text,observedMinecraftStatus:String(context).slice(0,1500)})}])];
+  ownerInstruction:text,observedMinecraftStatus:String(context).slice(0,1750)})}])];
  try{
   const response=await send(config.url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json'},
    body:JSON.stringify({model:config.model,messages,stream:false,format:'json',options:{num_predict:650}}),
@@ -136,7 +148,12 @@ async function interpretOwnerInstruction(input,{env=process.env,context='',fetch
   if(raw.length>32768)return fail('Oversized model response denied');
   const result=JSON.parse(raw),content=result?.message?.content;
   if(typeof content!=='string'||content.length>8192)return fail('Malformed model content');
-  return canonicalIntent(JSON.parse(content));
+  const proposed=canonicalIntent(JSON.parse(content));
+  if(!proposed.ok)return proposed;
+  if(Object.hasOwn(PRIMITIVE_FIELDS,proposed.command.command) &&
+     !modelPrimitiveGrounded(proposed.command,text,context))
+    return fail('Model proposed an unrelated or ungrounded Minecraft action; no effect taken');
+  return proposed;
  }catch{return fail('JARVIS model did not return an authorized JSON goal; no action taken');}
 }
 module.exports={strictFormat,canonicalIntent,directIntent,modelConfig,interpretOwnerInstruction};

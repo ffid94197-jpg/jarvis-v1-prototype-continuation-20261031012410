@@ -142,25 +142,41 @@ function volumePlan(world,progress={},delegate){
  const positions=volumePositions(progress),observed=world?.buildVolumeCells;
  if(!Array.isArray(observed)||observed.length!==positions.length)
   return {kind:'blocked',why:'Structure cell state is not currently server-observed'};
+ // First validate the ENTIRE target shape before selecting a placement.
+ // A roof tile may not have support until its adjacent edge tile is placed.
+ // 'unsupported' is therefore a dependency, not an automatic fatal error.
+ // Existing blocks and unloaded targets remain hard stops: never replace
+ // someone else's structure or guess unseen world state.
+ let ready=null,unsupported=0,matched=0;
  for(let i=0;i<positions.length;i++){
   const cell=observed[i],target=positions[i];
   if(!cell?.position||
      !['x','y','z'].every(k=>cell.position[k]===target[k])||
      !['matched','ready','blocked','unsupported','unloaded'].includes(cell.state))
    return {kind:'blocked',why:'Invalid or mismatched structure observation'};
-  if(cell.state==='matched')continue;
-  if(cell.state!=='ready')
-   return {kind:'blocked',why:'Structure cell '+i+' is '+cell.state+'; do not overwrite or float blocks'};
+  if(cell.state==='matched'){matched++;continue;}
+  if(cell.state==='blocked'||cell.state==='unloaded')
+   return {kind:'blocked',why:'Structure cell '+i+' is '+cell.state+
+     '; refusing to overwrite an existing or unobserved block'};
+  if(cell.state==='unsupported'){unsupported++;continue;}
+  if(ready===null)ready=target;
+ }
+ if(ready!==null){
   if((world.inventory?.raw?.[progress.block]||0)>0)
-   return {kind:'place_build_block',block:progress.block,position:target,
-    why:'Place one owner-approved structure cell; verify world and inventory'};
+   return {kind:'place_build_block',block:progress.block,position:ready,
+     why:'Place one currently supported, owner-approved structure cell and verify both receipts'};
   if(progress.block==='cobblestone'&&typeof delegate==='function'){
    const plan=delegate('gather',{resource:'cobblestone',targetCount:1});
    if(plan?.kind&&plan.kind!=='complete')return plan;
   }
   return {kind:'blocked',why:'No real survival inventory of requested '+progress.block};
  }
- return {kind:'complete',why:'Every structure cell matches the intended block in the loaded server world'};
+ if(unsupported>0)
+  return {kind:'blocked',why:unsupported+
+    ' remaining structure cells have no real support face; no unsafe floating placement'};
+ return matched===positions.length?
+  {kind:'complete',why:'Every structure cell matches the intended block in the loaded server world'}:
+  {kind:'blocked',why:'Structure observations cannot prove completion'};
 }
 // Deterministic single-instruction composition: reuse existing finite
 // floor, verified doorway walls and side-supported roof plans. No script,

@@ -353,7 +353,10 @@ function modelGoalGrounded(q,ownerText,context=''){
       new RegExp('\\b'+origin.replace(/ /g,'\\s+')+'\\b');
    if(!source.test(s)&&!s.includes(product))return false;
    const named=/\b(?:into|to make|for)\s+([a-z ]{2,35})$/.exec(s.trim());
-   return !named || named[1].trim().replace(/s$/,'')===product;
+   const label=named?.[1].trim();
+   const singular=label==='glass'?'glass':
+     label?.replace(/potatoes$/,'potato').replace(/s$/,'');
+   return !named || singular===product;
   }
   case 'equip':return has(/\b(?:wear|equip|wield|hold|put on)\b/)&&itemMention(q.item);
   case 'travel':{

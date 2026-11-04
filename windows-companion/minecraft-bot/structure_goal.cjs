@@ -87,7 +87,7 @@ function buildPlan(world,progress={},delegate){
  * as existing line builds. Floors, open walls and solids are not "houses":
  * roofs, doors and decorations require separately authorized goals.
  */
-const VOLUME_SHAPES=new Set(['floor','walls','solid','roof']);
+const VOLUME_SHAPES=new Set(['floor','walls','solid','roof','entrance_walls']);
 function validVolumeSpec(spec){
  if(!spec||typeof spec!=='object'||Array.isArray(spec)||
     Object.keys(spec).some(k=>!['goal','position','block','width','depth','height','shape'].includes(k))||
@@ -96,7 +96,9 @@ function validVolumeSpec(spec){
     !Number.isInteger(spec.depth)||spec.depth<1||spec.depth>5||
     !Number.isInteger(spec.height)||spec.height<1||spec.height>3||
     spec.width*spec.depth*spec.height>64||
-    (['floor','roof'].includes(spec.shape)&&spec.height!==1))return false;
+    (['floor','roof'].includes(spec.shape)&&spec.height!==1)||
+    (spec.shape==='entrance_walls'&&
+      (spec.width<3||spec.depth<3||spec.height<2)))return false;
  const p=spec.position;
  if(!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).length!==3||
     !['x','y','z'].every(k=>Number.isInteger(p[k])))return false;
@@ -110,8 +112,12 @@ function volumePositions(spec){
  for(let dy=0;dy<spec.height;dy++)
   for(let dz=0;dz<spec.depth;dz++)
    for(let dx=0;dx<spec.width;dx++){
-    if(spec.shape==='walls' && dx!==0&&dz!==0&&
+    if(['walls','entrance_walls'].includes(spec.shape) && dx!==0&&dz!==0&&
        dx!==spec.width-1&&dz!==spec.depth-1)continue;
+    // Reserve a two-high entry opening in the center of the front wall.
+    // No magical door item or claim of a furnished house is implied.
+    if(spec.shape==='entrance_walls' && dz===0 &&
+       dx===Math.floor(spec.width/2) && dy<2)continue;
     arr.push({x:p.x+dx,y:p.y+dy,z:p.z+dz});
    }
  return arr;
@@ -156,6 +162,27 @@ function volumePlan(world,progress={},delegate){
  }
  return {kind:'complete',why:'Every structure cell matches the intended block in the loaded server world'};
 }
+// Deterministic single-instruction composition: reuse existing finite
+// floor, verified doorway walls and side-supported roof plans. No script,
+ // invented world coordinates, new agent, or permission escalation.
+function roofedRoomSteps(spec){
+ if(!spec||typeof spec!=='object'||Array.isArray(spec)||
+   Object.keys(spec).some(k=>!['position','block','width','depth','wallHeight'].includes(k))||
+   !Number.isInteger(spec.width)||spec.width<3||spec.width>5||
+   !Number.isInteger(spec.depth)||spec.depth<3||spec.depth>5||
+   !Number.isInteger(spec.wallHeight)||spec.wallHeight<2||spec.wallHeight>3 ||
+   !spec.position||typeof spec.position!=='object')return null;
+ const {position,block,width,depth,wallHeight}=spec;
+ const at=y=>({x:position.x,y,z:position.z});
+ const list=[
+  {goal:'build_volume',position:at(position.y),block,width,depth,height:1,shape:'floor'},
+  {goal:'build_volume',position:at(position.y+1),block,width,depth,height:wallHeight,shape:'entrance_walls'},
+  {goal:'build_volume',position:at(position.y+1+wallHeight),block,width,depth,height:1,shape:'roof'}
+ ];
+ if(!list.every(validVolumeSpec))return null;
+ const blocks=list.reduce((sum,part)=>sum+volumePositions(part).length,0);
+ return blocks<=64?list:null;
+}
 module.exports={BLOCKS,AXES,validBuildSpec,buildPositions,observeBuild,buildPlan,
  VOLUME_SHAPES,validVolumeSpec,volumePositions,observeVolume,volumePlan,
- placementReference};
+ placementReference,roofedRoomSteps};

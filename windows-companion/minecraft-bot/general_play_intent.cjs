@@ -4,6 +4,7 @@
  * Parser output is UNTRUSTED until friend_protocol validates every field and
  * bot.cjs checks actual world state. No arbitrary scripts or admin commands.
  */
+const {roofedRoomSteps}=require('./structure_goal.cjs');
 const NUMBER_WORDS=Object.freeze({a:1,an:1,one:1,two:2,three:3,four:4,five:5,
  six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,
  fourteen:14,fifteen:15,sixteen:16});
@@ -304,6 +305,31 @@ function modelGoalGrounded(q,ownerText){
     itemMention(q.block)&&has(/\b(?:wall|line|row)\b/);
   case 'farm_wheat':return has(/\b(?:farm|grow|plant|harvest)\b/)&&has(/\bwheat\b/);
   case 'sequence':{
+   // Validate a model-proposed compact room plan against the *owner's*
+   // exact dimensions, material and origin. Three stages must be identical
+   // to the independent deterministic native recipe; no added side effects.
+   const text=s.replace(/^in minecraft\s+/,'').replace(/\s+in minecraft$/,'').trim();
+   const room=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2}) by (\d{1,2}) ([a-z_ ]{2,35}?) (?:roofed room|roofed shelter|shelter) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(text);
+   if(room){
+    const steps=roofedRoomSteps({
+     position:{x:Number(room[5]),y:Number(room[6]),z:Number(room[7])},
+     block:itemName(room[4]),width:Number(room[1]),depth:Number(room[2]),
+     wallHeight:Number(room[3])
+    });
+    return !!steps&&Array.isArray(q.steps)&&q.steps.length===steps.length&&
+      steps.every((expected,i)=>{
+       const got=q.steps[i];
+       if(!got||typeof got!=='object'||Array.isArray(got)||
+          Object.keys(got).length!==7||Object.keys(got).some(k=>!Object.hasOwn(expected,k)))
+         return false;
+       return Object.keys(expected).every(k=>
+         k==='position'?
+          got.position&&typeof got.position==='object'&&!Array.isArray(got.position)&&
+          Object.keys(got.position).length===3&&
+          ['x','y','z'].every(axis=>got.position[axis]===expected.position[axis]):
+         got[k]===expected[k]);
+      });
+   }
    if(!Array.isArray(q.steps)||!(
    has(/\b(?:then|after that|next)\b/)||
    has(/\band\s+(?:mine|craft|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b/)

@@ -7,6 +7,7 @@ const {validateCommand}=require('./friend_protocol.cjs');
 const {normalizeResource}=require('./resource_goal.cjs');
 const {RECIPES}=require('./general_goal.cjs');
 const {validStep}=require('./mission_sequence.cjs');
+const {roofedRoomSteps}=require('./structure_goal.cjs');
 const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName}=require('./general_play_intent.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 const SIMPLE=new Set(['follow','come','stay','guard','status','inventory','observe','auto_status','auto_stop','auto_resume']);
@@ -32,7 +33,7 @@ const SYSTEM=[
  'Other bounded native skills: inspect_villager {entityId}, trade_villager {entityId,tradeIndex,times}, transfer_container {position,item,count,operation}, enchant_item {position,item,choice}, attack_hostile {entityId,maxSwings}. Attack only a freshly observed owner-named allowed hostile, never a player, villager, passive mob, boss or creeper. An attack input is not proof of damage or death. The owner must explicitly request the exact target, offer, direction, item, and count. Only use freshly observed villagers/blocks; NEVER invent an ID or location, consume materials without owner approval, or claim success from a dispatch.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
  'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
- 'build_volume requires exactly position{x,y,z}, one supported survival block, width 1-5, depth 1-5, height 1-3 and shape floor, walls, roof or solid, maximum 64 cells. The owner must explicitly request the block and actual 2D/3D dimensions and a real origin. Floors have height 1. Do not claim arbitrary houses/roofs supported.',
+ 'build_volume requires exactly position{x,y,z}, one supported survival block, width 1-5, depth 1-5, height 1-3 and shape floor, walls, entrance_walls, roof or solid, maximum 64 cells. The owner must explicitly request the block and actual 2D/3D dimensions and a real origin. Floors have height 1. Do not claim arbitrary houses/roofs supported.',
  'Example: {"command":"auto_goal","goal":"gather","resource":"diamond","targetCount":3}.',
  'When impossible, output {"command":"unsupported"}. Nothing besides ONE JSON object.'
 ].join('\n');
@@ -112,6 +113,19 @@ function directIntent(raw){
   [/^(show|check|tell me) (your )?(status|progress)$/,{command:'auto_status'}]
  ];
  for(const [re,q] of rules)if(re.test(s))return canonicalIntent(q);
+ // A single explicitly dimensioned roofed-room request expands ONLY into
+ // three existing validated durable build_volume stages: floor, front
+ // doorway walls, then roof. The world origin is owner-provided, never
+ // invented by an LLM or an untrusted game sign.
+ const room=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2}) by (\d{1,2}) ([a-z_ ]{2,35}?) (?:roofed room|roofed shelter|shelter) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(s);
+ if(room){
+  const item=itemName(room[4]);
+  const steps=roofedRoomSteps({position:{
+    x:Number(room[5]),y:Number(room[6]),z:Number(room[7])},
+    block:item,width:Number(room[1]),depth:Number(room[2]),wallHeight:Number(room[3])});
+  return steps?canonicalIntent({command:'auto_goal',goal:'sequence',steps}):
+    fail('Room dimensions, material, site or total survival block budget unsupported');
+ }
  // Compose small independent, verifiable subgoals using the existing
  // goal-controller sequence. Generic one-off primitives are NOT silently
  // promoted to an open-ended mission, and all stage parameters are validated.

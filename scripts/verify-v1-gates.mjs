@@ -60,6 +60,7 @@ const checks=[
  ['MINECRAFT-VERIFIED-ROOF',['windows-companion/minecraft-bot/verify_roof_placement_offline.cjs']],
  ['MINECRAFT-WORKSTATION-RECOVERY',['windows-companion/minecraft-bot/verify_workstation_recovery_offline.cjs']],
  ['MINECRAFT-VERIFIED-MELEE',['windows-companion/minecraft-bot/verify_melee_selection_offline.cjs']],
+ ['MINECRAFT-ROOFED-ROOM',['windows-companion/minecraft-bot/verify_roofed_room_composition_offline.cjs']],
  // One launcher authorization context must satisfy BOTH the startup preflight
  // and the runtime companion gate. Guards the observed defect where an
  // owner-authorized minecraft_companion_join was denied three times because the

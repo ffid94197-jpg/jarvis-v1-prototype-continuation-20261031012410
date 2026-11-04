@@ -1126,6 +1126,14 @@ async function action(q){
       if(q.goal==='build_volume' && bot.entity.position.distanceTo(
         new Vec3(q.position.x+.5,q.position.y+.5,q.position.z+.5))>4.5)
         return {ok:false,error:'Multi-layer build origin must begin within 4.5 blocks of the player'};
+      // A composed nearby room starts at the actual observed world position,
+      // not at a remotely invented shell site. Later stages are re-observed.
+      if(q.goal==='sequence'&&q.steps?.[0]?.goal==='build_volume'){
+        const start=q.steps[0].position;
+        if(!start||bot.entity.position.distanceTo(
+          new Vec3(start.x+.5,start.y+.5,start.z+.5))>4.5)
+          return {ok:false,error:'Composed structure origin must start within 4.5 blocks of player'};
+      }
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
       if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip'].includes(q.goal) &&

@@ -226,6 +226,48 @@ export function mayStartNativeMinecraftGoal(
   // maps one-to-one to an authorized existing companion subgoal. The actual
   // companion independently revalidates validSequence before execution.
   if(!Array.isArray(args.steps)||args.steps.length<2||args.steps.length>8)return false;
+  // Native one-sentence roofed room authorization is constrained to a
+  // deterministic floor -> two-high entrance walls -> roof composition.
+  // All three 3D coordinates originate from the owner's explicit start,
+  // never the model or an untrusted in-game message.
+  const roomPhrase=s.replace(/^in minecraft[, :]*/,'')
+    .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
+    .replace(/\s+in minecraft$/,'').trim();
+  const room=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2}) by (\d{1,2}) ([a-z_ ]{2,35}?) (?:roofed room|roofed shelter|shelter) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(roomPhrase);
+  if(room){
+   if(args.steps.length!==3)return false;
+   const width=Number(room[1]),depth=Number(room[2]),wallHeight=Number(room[3]);
+   const block=room[4].trim().replace(/ /g,'_');
+   const p={x:Number(room[5]),y:Number(room[6]),z:Number(room[7])};
+   const knownMaterials=new Set(['cobblestone','dirt','oak_planks','spruce_planks',
+    'birch_planks','stone_bricks','netherrack']);
+   if(!knownMaterials.has(block)||!amount(width,3,5)||!amount(depth,3,5)||
+      !amount(wallHeight,2,3)||
+      2*width*depth+(2*width+2*depth-4)*wallHeight-2>64||
+      !['x','y','z'].every(k=>Number.isInteger(p[k as keyof typeof p]))||
+      p.y< -62||p.y+wallHeight+2>319||
+      Math.hypot(p.x-observed.position.x,p.y-observed.position.y,
+       p.z-observed.position.z)>4.5)return false;
+   const expected=[
+    {shape:'floor',height:1,y:p.y},
+    {shape:'entrance_walls',height:wallHeight,y:p.y+1},
+    {shape:'roof',height:1,y:p.y+wallHeight+1}
+   ];
+   return args.steps.every((stage,index)=>{
+    if(!stage||typeof stage!=='object'||Array.isArray(stage))return false;
+    const step=stage as Record<string,unknown>;
+    if(Object.keys(step).length!==7||
+       Object.keys(step).some(k=>!['goal','position','block','width','depth','height','shape'].includes(k))||
+       step.goal!=='build_volume'||step.block!==block||
+       step.width!==width||step.depth!==depth||
+       step.height!==expected[index].height||step.shape!==expected[index].shape||
+       !step.position||typeof step.position!=='object'||Array.isArray(step.position))
+       return false;
+    const q=step.position as Record<string,unknown>;
+    return Object.keys(q).length===3&&q.x===p.x&&
+      q.y===expected[index].y&&q.z===p.z;
+   });
+  }
   // Action conjunctions preserve the following verb; "logs and planks"
   // is not split or silently treated as an extra task.
   const stages=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);

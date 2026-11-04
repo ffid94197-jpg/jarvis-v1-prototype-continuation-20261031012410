@@ -401,7 +401,7 @@ export function mayStartNativeMinecraftGoal(
   const target=observed.threats?.find(t=>t?.id===entityId&&t.name===mob&&
     Number.isFinite(t.distance)&&t.distance<=12);
   if(!target)return false;
-  return /\b(?:defeat|kill|slay)\b/.test(s) &&
+  return /\b(?:defeat|kill|slay|eliminate|take out)\b/.test(s) &&
     new RegExp('\\b'+mob.replace(/_/g,' ')+'\\b').test(s) &&
     !/\b(?:player|villager|creeper|dragon|wither)\b/.test(s);
  }

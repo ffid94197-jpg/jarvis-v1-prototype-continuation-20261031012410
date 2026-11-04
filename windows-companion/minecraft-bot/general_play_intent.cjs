@@ -272,6 +272,10 @@ function modelGoalGrounded(q,ownerText){
    }
    return true;
   }
+  case 'shelter':{
+   const sentence=s.replace(/^in minecraft[, :]+/,'').replace(/\s+in minecraft$/,'');
+   return /^(?:build|construct|make)(?: me)? (?:a |the )?(?:small|simple|basic) (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?$/.test(sentence);
+  }
   case 'survive':return has(/\b(?:survive|survival|stay alive)\b/);
   case 'wood':return has(/\b(?:collect|gather|get|mine|find)\b/)&&has(/\b(?:wood|logs?)\b/);
   case 'tools':return has(/\b(?:tools?|pickaxes?)\b/)&&has(/\b(?:craft|make|get|obtain|upgrade)\b/);

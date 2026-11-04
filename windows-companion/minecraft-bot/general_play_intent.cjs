@@ -309,7 +309,7 @@ function modelGoalGrounded(q,ownerText){
    // exact dimensions, material and origin. Three stages must be identical
    // to the independent deterministic native recipe; no added side effects.
    const text=s.replace(/^in minecraft\s+/,'').replace(/\s+in minecraft$/,'').trim();
-   const room=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2}) by (\d{1,2}) ([a-z_ ]{2,35}) (?:roofed room|roofed shelter|shelter) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(text);
+   const room=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2}) by (\d{1,2}) ([a-z_ ]{2,35}?) (?:roofed room|roofed shelter|shelter) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(text);
    if(room){
     const steps=roofedRoomSteps({
      position:{x:Number(room[5]),y:Number(room[6]),z:Number(room[7])},

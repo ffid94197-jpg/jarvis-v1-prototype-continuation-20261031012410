@@ -246,7 +246,7 @@ function modelPrimitiveGrounded(command,ownerText,context){
  * This only authorizes a typed proposal to proceed to the existing validator
  * and runtime checks; it is not completion evidence or extra tool authority.
  */
-function modelGoalGrounded(q,ownerText){
+function modelGoalGrounded(q,ownerText,context=''){
  if(!q||q.command!=='auto_goal'||typeof q.goal!=='string')return false;
  const s=String(ownerText||'').toLowerCase().replace(/_/g,' ');
  const has=expression=>expression.test(s);
@@ -301,9 +301,15 @@ function modelGoalGrounded(q,ownerText){
    if(!/\b(?:defeat|kill|slay|eliminate|take out)\b/.test(s) ||
       !s.includes(String(mob).replace(/_/g,' '))||
       /\b(?:player|villager|creeper|dragon|wither)\b/.test(s))return false;
-   // A model cannot choose a new entity ID from free text. Live runtime and
-   // the independently gated Core recheck the ID against an observation.
-   return true;
+   // A model cannot choose a target ID not present in the current managed
+   // observation, or select arbitrarily among multiple same-name threats.
+   // The live executor still rechecks identity/range immediately before any
+   // movement or attack; this is grounding, not permission.
+   let scene;try{scene=JSON.parse(String(context||''));}catch{return false;}
+   const matches=Array.isArray(scene?.threats)?scene.threats.filter(t=>
+     t?.name===mob&&Number.isInteger(t.id)&&Number.isFinite(t.distance)&&
+     t.distance>=0&&t.distance<=12):[];
+   return matches.length===1&&matches[0].id===entityId;
   }
   case 'shelter':{
    const sentence=s.replace(/^in minecraft[, :]+/,'').replace(/\s+in minecraft$/,'');

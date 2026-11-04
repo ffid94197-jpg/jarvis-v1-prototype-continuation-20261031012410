@@ -17,7 +17,7 @@ check(source.includes("'place_block','interact_block','stay'"),
 check(source.includes("['navigate','dig_block','place_block','interact_block']"),
  'interact_block needs an explicit block target');
 const guarded=Function('args','target','point',
- source.slice(begin,end)+"return {ok:true,reason:'Isolated guard passed'};");
+ "const command='interact_block';"+source.slice(begin,end)+"return {ok:true,reason:'Isolated guard passed'};");
 const point=value=>value && typeof value==='object' &&
  ['x','y','z'].every(k=>Number.isFinite(value[k]));
 const position={x:2,y:64,z:2};

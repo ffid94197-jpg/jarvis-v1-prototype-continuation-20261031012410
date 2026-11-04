@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const assert=require('node:assert/strict');
-const {validBuildSpec,validWallSpec,buildPositions,observeBuild,buildPlan}=require('./structure_goal.cjs');
+const {validBuildSpec,validWallSpec,validPlatformSpec,buildPositions,observeBuild,buildPlan}=require('./structure_goal.cjs');
 let n=0;function check(x,reason){assert(x,reason);n++;}
 const spec={goal:'build',block:'cobblestone',axis:'x+',length:3,
  position:{x:4,y:64,z:9}};
@@ -17,6 +17,10 @@ check(validWallSpec(wall),'Simple wall request has a bounded typed contract');
 check(!validWallSpec({...wall,length:9}),'Wall length cannot exceed eight blocks');
 check(!validWallSpec({...wall,height:5}),'Wall height cannot exceed four blocks');
 check(!validWallSpec({...wall,script:'execute'}),'Wall intent rejects extra executable fields');
+check(validPlatformSpec({goal:'platform',length:3,width:4}),'Platform dimensions have a bounded typed contract');
+check(!validPlatformSpec({goal:'platform',length:9,width:4}),'Platform length cannot exceed eight rows');
+check(!validPlatformSpec({goal:'platform',length:3,width:9}),'Platform width cannot exceed eight blocks');
+check(!validPlatformSpec({goal:'platform',length:3,width:3,position:{x:0,y:64,z:0}}),'Platform cannot smuggle arbitrary coordinates');
 const layered={...spec,length:2,height:2};
 const layeredPositions=buildPositions(layered);
 check(layeredPositions.length===4&&layeredPositions[0].y===64&&layeredPositions[2].y===65,

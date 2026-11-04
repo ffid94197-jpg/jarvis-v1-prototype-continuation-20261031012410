@@ -25,6 +25,8 @@ verify({command:'auto_goal',goal:'gather',resource:'diamond',targetCount:2},{res
 verify({command:'auto_goal',goal:'craft',item:'chest',targetCount:2},{item:'chest',targetCount:2});
 verify({command:'auto_goal',goal:'build',block:'cobblestone',axis:'x+',length:3,position:{x:0,y:64,z:0}},
  {position:{x:0,y:64,z:0},block:'cobblestone',axis:'x+',length:3});
+verify({command:'auto_goal',goal:'build',block:'oak_planks',axis:'z+',length:4,height:2,position:{x:5,y:64,z:5}},
+ {position:{x:5,y:64,z:5},block:'oak_planks',axis:'z+',length:4,height:2});
 verify({command:'auto_goal',goal:'farm_wheat',position:{x:1,y:64,z:2},width:2,depth:2,targetCount:3},
  {position:{x:1,y:64,z:2},width:2,depth:2,targetCount:3});
 const seq=[{goal:'gather',resource:'logs',targetCount:2},{goal:'equip',item:'iron_helmet',destination:'head'}];

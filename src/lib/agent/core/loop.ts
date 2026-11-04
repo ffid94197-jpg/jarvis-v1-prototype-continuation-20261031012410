@@ -456,6 +456,33 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let minecraftAiDenied = 0;
   let minecraftFirstJoinPending=minecraftFirstJoinRequired;
   let minecraftFirstObservePending=minecraftAiTask&&!minecraftSafetyStop;
+  if (minecraftAiGate && opts.replay!==undefined){
+    // The native mission may run for hours after the Core's finite task
+    // budget pauses. On resume, reconstruct the original owner-task goal
+    // binding ONLY from a prior Guardian-admitted, durably SETTLED native
+    // auto_goal effect and its real companion ACK. No model summary or
+    // stale unrelated bot mission is accepted as proof.
+    try{
+      const durable=await db.effectRecord.findMany({
+        where:{taskId,tool:"minecraft_companion_command",status:"SETTLED"},
+        orderBy:{admittedAt:"desc"},take:40,
+        select:{argsJson:true,receiptJson:true,settledAt:true,admittedAt:true}
+      });
+      for(const row of durable){
+        try{
+          const a=JSON.parse(row.argsJson||"{}");
+          const receipt=JSON.parse(row.receiptJson||"{}");
+          if(a?.command!=="auto_goal"||typeof a.goal!=="string"||
+             receipt?.ok!==true || receipt?.detail?.botAcknowledged!==true ||
+             receipt?.detail?.command!=="auto_goal")continue;
+          const started=row.settledAt?.getTime()??row.admittedAt.getTime();
+          if(minecraftAiGate.restoreNativeMission(a.goal,started))break;
+        }catch{/* Damaged receipt cannot restore native-goal authority. */}
+      }
+    }catch{
+      console.warn("[minecraft] Durable native mission binding unavailable; completion remains unverified.");
+    }
+  }
   if (minecraftAiTask) messages.splice(messages.findIndex(m => m.role === "user"), 0, {role:"assistant",content:MINECRAFT_AI_INSTRUCTIONS});
   const minecraftMission = !minecraftAiTask && process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" && !opts.replay
     ? minecraftMissionFromObjective(objective) : null;

@@ -13,7 +13,7 @@ const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip']);
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
@@ -154,7 +154,7 @@ function decide(goal, world, failures={}, progress={}) {
   if(closest?.distance<=6 && !ALLOWED_HOSTILES.has(closest.name))
     return {kind:'retreat',why:'Observed threat is not an authorized generic melee target'};
   if(world.hunger<=12 && (inv.food||0)>0)return {kind:'eat',why:'Hunger low; edible inventory item detected'};
-  if(['dragon_run','netherite_dragon_run','dragon_then_netherite_run'].includes(goal) && world.hunger<=9 && (inv.food||0)===0)return {kind:'obtain_food',why:'Obtain safe food before autonomous survival progression'};
+  if(['dragon_run','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run'].includes(goal) && world.hunger<=9 && (inv.food||0)===0)return {kind:'obtain_food',why:'Obtain safe food before autonomous survival progression'};
   if(closest?.name==='creeper' && closest.distance<=7)return {kind:'retreat',why:'Avoid nearby creeper explosion'};
   if(goal==='survive' && world.hunger<=9 && (inv.food||0)===0)
     return {kind:'obtain_food',why:'Seek actual safe food or livestock; verify inventory pickup before consumption'};
@@ -236,19 +236,26 @@ function decide(goal, world, failures={}, progress={}) {
     if(inv.logs>=4)return {kind:'complete',why:'Four logs verified in inventory'};
     return failures.collect_wood>=3?{kind:'blocked',why:'Wood unavailable after three attempts'}:{kind:'collect_wood',why:'Need four logs'};
   }
-  if(goal==='dragon_run' || goal==='netherite_dragon_run' || goal==='dragon_then_netherite_run'){
+  if(goal==='dragon_run' || goal==='netherite_dragon_run' || goal==='dragon_then_netherite_run' ||
+     goal==='netherite_armor_run' || goal==='netherite_gear_run'){
     if((world.dimension && !String(world.dimension).includes('overworld')) || progress.milestones?.netherPortalBuilt)
       return lateGamePlan(world,{...progress,goal});
   }
-  if(goal==='stone_age' || goal==='iron_age' || goal==='dragon_run' || goal==='netherite_dragon_run' || goal==='dragon_then_netherite_run') {
+  if(goal==='stone_age' || goal==='iron_age' || goal==='dragon_run' || goal==='netherite_dragon_run' ||
+     goal==='dragon_then_netherite_run' || goal==='netherite_armor_run' || goal==='netherite_gear_run') {
     if(inv.stonePickaxe && inv.stoneSword) {
       if(goal==='stone_age')return {kind:'complete',why:'Stone pickaxe and stone sword verified in inventory'};
       if(inv.ironPickaxe){
         if(goal==='iron_age')return {kind:'complete',why:'Iron pickaxe verified in inventory'};
-        if(inv.diamondPickaxe && inv.diamondSword && inv.diamondHelmet && inv.diamondChestplate && inv.diamondLeggings && inv.diamondBoots)
+        const armorOnly=goal==='netherite_armor_run';
+        if(inv.diamondPickaxe && (armorOnly || inv.diamondSword) &&
+           inv.diamondHelmet && inv.diamondChestplate && inv.diamondLeggings && inv.diamondBoots)
           return lateGamePlan(world,{...progress,goal});
-        // Total: pickaxe 3, sword 2, helmet 5, chestplate 8, leggings 7, boots 4 = 29 diamonds.
-        const gear=[['diamond_pickaxe','diamondPickaxe',3],['diamond_sword','diamondSword',2],['diamond_chestplate','diamondChestplate',8],['diamond_leggings','diamondLeggings',7],['diamond_helmet','diamondHelmet',5],['diamond_boots','diamondBoots',4]];
+        // Armor-only goals must not craft an unrelated diamond sword.
+        const gear=[['diamond_pickaxe','diamondPickaxe',3],
+          ...(!armorOnly?[['diamond_sword','diamondSword',2]]:[]),
+          ['diamond_chestplate','diamondChestplate',8],['diamond_leggings','diamondLeggings',7],
+          ['diamond_helmet','diamondHelmet',5],['diamond_boots','diamondBoots',4]];
         for(const [name,key,cost] of gear){
           if(inv[key])continue;
           if((inv.diamonds||0)<cost)return failures.mine_diamond>=2?{kind:'survey_ore',ore:'diamond',index:number(progress.steps),why:'Explore new loaded terrain for diamond veins'}:{kind:'mine_diamond',why:'Find naturally generated diamond ore for '+name};
@@ -414,7 +421,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   // windows. This is NOT a completion, and never resumes a blocked, cancelled,
   // or owner-paused task. The next decision is recomputed from live world state.
   function renewMission(seconds=21600){
-    if(state.status!=='expired' || !['netherite_dragon_run','dragon_then_netherite_run','dragon_run','companion'].includes(state.goal))return false;
+    if(state.status!=='expired' || !['netherite_dragon_run','dragon_then_netherite_run','dragon_run','netherite_armor_run','netherite_gear_run','companion'].includes(state.goal))return false;
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)return false;
     const t=clock();
     if(!Number.isSafeInteger(state.since)||t<state.since)return false;

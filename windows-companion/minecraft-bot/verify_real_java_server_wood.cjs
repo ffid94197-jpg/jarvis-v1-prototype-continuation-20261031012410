@@ -73,11 +73,26 @@ async function main(){
   const state=await command({command:'observe'});
   assert(state.ok && !/creative/i.test(state.status||''),'Unverified server/world state');
   const stoneMode=process.env.JARVIS_MC_TEST_STONE==='1';
-  // One goal must drive every stage; do not interrupt a partial wood task and
-  // artificially turn it into a separate Stone task during acceptance.
-  const started=await command({command:'auto_goal',
-    goal:stoneMode?'stone_age':'wood',durationSeconds:stoneMode?900:600});
-  assert(started.ok,'Owner-authorized autonomous wood goal was rejected: '+JSON.stringify(started));
+  const naturalMode=process.env.JARVIS_MC_TEST_NATURAL_LANGUAGE==='1';
+  // This acceptance path starts the one continuous mission through ordinary
+  // owner language. The model's validated intent must be visible in the
+  // correlation receipt, then the real server must show the resulting work.
+  const naturalText=stoneMode
+    ? 'Please get us through the stone age: gather wood, make a crafting table, and craft a stone pickaxe and a stone sword.'
+    : 'Please collect four logs so we can make our first tools.';
+  const started=naturalMode
+    ? await command({command:'natural_goal',text:naturalText},30000)
+    : await command({command:'auto_goal',goal:stoneMode?'stone_age':'wood',durationSeconds:stoneMode?900:600});
+  assert(started.ok,'Owner-authorized autonomous goal was rejected: '+JSON.stringify(started));
+  if(naturalMode){
+    const expectedGoal=stoneMode?'stone_age':'gather';
+    assert(started.interpretedIntent?.command==='auto_goal' &&
+      started.interpretedIntent?.goal===expectedGoal,
+      'Natural-language request was not safely interpreted as '+expectedGoal+
+      ': '+JSON.stringify(started.interpretedIntent));
+    console.log('MINECRAFT_NATURAL_LANGUAGE_INTENT PASS goal='+expectedGoal+
+      ' request='+naturalText);
+  }
   let received='',lastState='';
   const until=Date.now()+205000;
   while(Date.now()<until && !exit){

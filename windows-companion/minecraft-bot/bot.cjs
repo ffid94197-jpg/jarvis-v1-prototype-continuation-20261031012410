@@ -1134,18 +1134,20 @@ async function action(q){
           const byNames=names=>inventoryItems.find(i=>names.includes(i.name));
           const name=live.name;
           const picks=['netherite_pickaxe','diamond_pickaxe','iron_pickaxe','stone_pickaxe','wooden_pickaxe','golden_pickaxe'];
-          const valuable=/^(?:deepslate_)?(?:diamond|redstone|emerald|gold)_ore$|^(?:ancient_debris|obsidian)$/;
+          const toughest=/^(?:ancient_debris|obsidian)$/;
+          const valuable=/^(?:deepslate_)?(?:diamond|redstone|emerald|gold)_ore$/;
           const ironOre=/^(?:deepslate_)?(?:iron|copper|lapis)_ore$/;
-          const hardStone=/^(?:stone|cobblestone|cobbled_deepslate|deepslate|stone_bricks|netherrack|(?:deepslate_)?[a-z_]+_ore|ancient_debris|obsidian)$/;
+          const hardStone=/^(?:stone|cobblestone|cobbled_deepslate|deepslate|stone_bricks|(?:deepslate_)?[a-z_]+_ore|ancient_debris|obsidian)$/;
           let tool=null;
-          if(valuable.test(name))tool=byNames(['netherite_pickaxe','diamond_pickaxe','iron_pickaxe']);
+          if(toughest.test(name))tool=byNames(['netherite_pickaxe','diamond_pickaxe']);
+          else if(valuable.test(name))tool=byNames(['netherite_pickaxe','diamond_pickaxe','iron_pickaxe']);
           else if(ironOre.test(name))tool=byNames(['netherite_pickaxe','diamond_pickaxe','iron_pickaxe','stone_pickaxe']);
           else if(hardStone.test(name))tool=byNames(picks);
           else if(/(?:_log|_wood|_planks)$/.test(name))
             tool=inventoryItems.find(i=>/_axe$/.test(i.name))||null;
           else if(/^(?:dirt|grass_block|coarse_dirt|rooted_dirt|gravel|sand|red_sand|mud|clay|snow_block)$/.test(name))
             tool=inventoryItems.find(i=>/_shovel$/.test(i.name))||null;
-          if((valuable.test(name)||ironOre.test(name)||hardStone.test(name))&&!tool)
+          if((toughest.test(name)||valuable.test(name)||ironOre.test(name)||hardStone.test(name))&&!tool)
             throw Error('Appropriate mining tool tier unavailable; no block broken');
           if(tool)await bot.equip(tool,'hand');
           if(!alive())throw Error('Dig cancelled');

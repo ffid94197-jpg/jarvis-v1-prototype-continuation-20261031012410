@@ -242,30 +242,55 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     return observed(false,'Bow activation returned without verified arrow consumption; hit not claimed');
   }
   async function findTemplate(epoch){
-    // Never loot a player's overworld storage. Chests must be observed in Nether
-    // vicinity of bastion materials. Does not assume every chest is a bastion.
-    if(!String(bot.game?.dimension||'').includes('nether'))return observed(false,'Not in Nether');
-    const bastion=lookup(bot,['polished_blackstone_bricks','blackstone','gilded_blackstone'],32);
-    if(!bastion)return walkScout(epoch,'bastion remnant');
-    const chest=lookup(bot,['chest','trapped_chest'],25);
-    if(!chest)return walkScout(epoch,'bastion chest');
-    const key=String(chest.position);if(session.visitedChests.has(key))return walkScout(epoch,'unopened bastion chest');
-    await move(chest.position,3,epoch,12000);
+    // Nether-only, actual loaded blackstone-type structure observations.
+    // Nearby unrelated player storage is NOT automatically Bastion loot.
+    if(!String(bot.game?.dimension||'').includes('nether'))
+      return observed(false,'Bastion-template search requires verified Nether dimension');
+    check(epoch);
+    const bastionBlocks=new Set(['polished_blackstone_bricks','blackstone','gilded_blackstone']);
+    const anchors=typeof bot.findBlocks==='function'?
+      bot.findBlocks({matching:b=>b&&bastionBlocks.has(b.name),maxDistance:32,count:64})||[]:[];
+    if(!anchors.length)return walkScout(epoch,'bastion remnant');
+    const chestPositions=bot.findBlocks?.({
+      matching:b=>b&&(b.name==='chest'||b.name==='trapped_chest'),
+      maxDistance:27,count:32
+    })||[];
+    const chests=chestPositions.filter(p=>{
+      const live=bot.blockAt(p);
+      const key=String(p);
+      return live&&['chest','trapped_chest'].includes(live.name)&&
+        !session.visitedChests.has(key) &&
+        anchors.some(a=>a.distanceTo(p)<=12);
+    }).sort((a,b)=>bot.entity.position.distanceTo(a)-bot.entity.position.distanceTo(b));
+    if(!chests.length)return walkScout(epoch,'uninspected bastion-adjacent chest');
+    // Select one real, still-loaded chest near a structure block. A chest
+    // with no template is recorded as inspected; the NEXT tick tries the
+    // other visible chests rather than repeatedly opening the nearest one.
+    const target=chests[0],key=String(target);
+    await move(target,3,epoch,12000);
+    check(epoch);
+    const chest=bot.blockAt(target);
+    if(!chest||!['chest','trapped_chest'].includes(chest.name)||
+       !bot.entity?.position||bot.entity.position.distanceTo(chest.position)>4.5)
+      return observed(false,'Bastion-adjacent chest changed or is no longer reachable');
     const before=count(bot,'netherite_upgrade_smithing_template');
     const ui=await bot.openContainer(chest);
     try{
-      const found=(ui.containerItems?.()||[]).find(i=>i.name==='netherite_upgrade_smithing_template');
+      check(epoch);
+      const found=(ui.containerItems?.()||[]).find(i=>
+        i.name==='netherite_upgrade_smithing_template'&&i.count>0);
       if(!found){
-        session.visitedChests.add(key); // Inspected, genuinely empty.
-        return observed(false,'Observed chest contained no Netherite upgrade template');
+        session.visitedChests.add(key);
+        return observed(false,'Inspected Bastion-adjacent chest had no Netherite upgrade template');
       }
       await ui.withdraw(found.type,found.metadata,1);
       check(epoch);
     }finally{ui.close();}
     const acquired=count(bot,'netherite_upgrade_smithing_template')>before;
     if(acquired)session.visitedChests.add(key);
-    return observed(acquired,acquired?'Bastion template acquired with server inventory proof':
-      'Template transfer unverified; preserve chest for another bounded attempt');
+    return observed(acquired,acquired?
+      'Netherite template received; physical survival inventory increased':
+      'Chest withdrawal not server-verified; do not invent ownership or skip chest');
   }
   async function constructPortal(epoch){
     if(count(bot,'obsidian')<14 && !session.portalBase)return observed(false,'Need 14 obsidian for rectangular Nether portal');

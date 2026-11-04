@@ -67,6 +67,22 @@ async function send(command,extra={}){
   check(chats.some(s=>s.includes('Hi Owner')),'friendly greeting after actual spawn');
   check((await send('status')).status.includes('"ownerVisible":true'),'owner visibility reported');
   check((await send('inventory')).status.includes('oak_log:2'),'inventory observed');
+  // The stdin envelope has an ID for ACK correlation, but it must not be
+  // leaked into the strictly typed command. This used to reject every
+  // natural_goal and auto_goal with an "extra parameters" error.
+  const natural=await send('natural_goal',{text:'show your inventory'});
+  check(natural.ok && natural.status.includes('oak_log:2'),
+    'stdin natural-language instruction reaches existing typed inventory action');
+  const deniedNatural=await send('natural_goal',{text:'show your inventory',shell:'cmd /c fake'});
+  check(!deniedNatural.ok && /no extra fields/i.test(deniedNatural.error),
+    'natural-language stdin still rejects unrelated payload fields');
+  const survival=await send('auto_goal',{goal:'gather',resource:'diamond',targetCount:1,durationSeconds:300});
+  check(!survival.ok && /server-confirmed survival game mode/i.test(survival.error),
+    'stdin auto_goal reaches server-game-mode authorization rather than failing on envelope ID');
+  const deniedGoal=await send('auto_goal',{goal:'gather',resource:'diamond',targetCount:1,
+    durationSeconds:300,shell:'cmd /c fake'});
+  check(!deniedGoal.ok && /Unexpected autonomous parameter/i.test(deniedGoal.error),
+    'stdin auto_goal retains fail-closed extra-parameter validation');
   check((await send('follow')).ok,'follow supported');
   check(goalsSet.some(g=>g instanceof GoalFollow),'real Pathfinder follow goal constructed');
   check((await send('come')).status.includes('STARTED'),'come reports started, not completion');

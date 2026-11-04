@@ -131,7 +131,10 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
   const crystals=Object.values(bot.entities||{}).filter(e=>e?.name==='end_crystal' && e?.position);
   return {joined:!!p,dimension:bot.game?.dimension||'minecraft:overworld',
     smithingTableNearby,netherPortalNearby,strongholdPortalFrameNearby,strongholdMissingEyes,endPortalPresent,endPortalActivated,
-    wornNetherite,wornDiamond,heldNetheriteSword,equipped,exitPortalPresent, dragonPresent:dragons.length>0,dragonId:dragons[0]?.id||null,
+    wornNetherite,wornDiamond,heldNetheriteSword,equipped,exitPortalPresent,
+    dragonPresent:dragons.length>0,dragonId:dragons[0]?.id??null,
+    dragonDistance:p&&dragons[0]?.position?
+      Math.round(p.distanceTo(dragons[0].position)*10)/10:null,
     dragonDeadObserved:dragonDead,crystalsNearby:crystals.length,
     health:number(bot.health,20),hunger:number(bot.food,20),workbenchNearby,
      // Only the native Mineflayer runtime advertises physical workstation
@@ -268,7 +271,14 @@ function decide(goal, world, failures={}, progress={}) {
   }
   if(goal==='dragon_run' || goal==='netherite_dragon_run' || goal==='dragon_then_netherite_run' ||
      goal==='netherite_armor_run' || goal==='netherite_gear_run'){
-    if((world.dimension && !String(world.dimension).includes('overworld')) || progress.milestones?.netherPortalBuilt)
+    // A verified trip through an existing portal is just as valid as
+    // building a new portal. Do not replay the early wooden/diamond setup
+    // when the native mission is already in Nether/End progression, or when
+    // a Dragon death was witnessed and the bot returned to the Overworld.
+    if((world.dimension && !String(world.dimension).includes('overworld')) ||
+       progress.milestones?.netherPortalBuilt ||
+       progress.milestones?.netherPortalUsed ||
+       progress.milestones?.dragonKilled)
       return lateGamePlan(world,{...progress,goal});
   }
   if(goal==='stone_age' || goal==='iron_age' || goal==='dragon_run' || goal==='netherite_dragon_run' ||
@@ -567,6 +577,14 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         :{kind:'scout_survival',reason:'stone_recovery',index:state.steps,
           why:'Stone mining stalled; move to genuinely new safe loaded terrain'};
     }
+    // Do not let a 3.6-second projectile flight destroy a 12-hour Dragon
+    // mission. If a crystal survives two verified arrow attempts, change
+    // the physical shooting angle using a finite safe waypoint search.
+    if(d.kind==='destroy_end_crystal' && (state.failures.destroy_end_crystal||0)>=2)
+      d=(state.milestones.crystalRecoveryTrips||0)>=6
+        ?{kind:'blocked',why:'Six verified alternate crystal shooting regions exhausted'}
+        :{kind:'scout_survival',reason:'crystal_recovery',index:state.steps,
+          why:'Crystal survived ranged shots; seek a different verified safe stance'};
     if(d.kind==='survey_ore' && (state.failures.survey_ore||0)>=12)
       d={kind:'blocked',why:'Twelve failed physically observed ore surveys; manual reconciliation required'};
     if(d.kind==='scout_survival' && state.goal==='explore' &&
@@ -588,6 +606,32 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         {kind:'survey_workstation',index:state.steps,
          why:'Failed workstation placement: search different safe loaded work area before retrying'};
     }
+    // Bounded repair is not an endless success claim. Several late-game
+    // skills legitimately explore multiple new regions, but once actual
+    // failed attempts exhaust a finite budget, surface an owner-visible
+    // BLOCKED outcome instead of burning time until a 12-hour lease ends.
+    // Successful server-observed results still reset consecutive failures.
+    const lateFailureBudgets={
+      loot_bastion_template:12,mine_ancient_debris:12,
+      hunt_blazes:12,hunt_endermen:12,collect_gold:12,
+      track_stronghold:12,search_dragon:12,
+      mine_obsidian:10,prepare_archery:10,
+      obtain_food:10,enter_nether:8,enter_overworld:8,
+      activate_end_portal:8,enter_end:8,exit_end:8,
+      destroy_end_crystal:12,fight_dragon:12,advance_dragon:8,
+      collect_flint:10,mine_netherrack:10
+    };
+    if(Object.hasOwn(lateFailureBudgets,d.kind) &&
+       (state.failures[d.kind]||0)>=lateFailureBudgets[d.kind])
+      d={kind:'blocked',why:'Real-game '+d.kind+' exhausted '+
+        lateFailureBudgets[d.kind]+
+        ' consecutive unverified attempts; preserve receipts and require new observed conditions'};
+    if(d.kind==='advance_dragon' &&
+       (state.milestones.dragonApproachTrips||0)>=24)
+      d={kind:'blocked',why:'Twenty-four proven safe Dragon approach regions failed to bring combat into range'};
+    if(d.kind==='fight_dragon' &&
+       (state.milestones.dragonAttackInputs||0)>=96)
+      d={kind:'blocked',why:'Ninety-six observed Dragon attack attempts did not prove the real Dragon death'};
     state.lastDecision=d;
     if(d.kind==='complete'){state.status='complete';state.why=d.why;}
     if(d.kind==='blocked'){state.status='blocked';state.why=d.why;}
@@ -607,6 +651,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       (decision.kind!=='survey_resource' ||
         (Object.hasOwn(ORE_RESOURCE_RULES,decision.resource)&&
           outcome.proof==='safe_scout_move')) &&
+      (decision.kind!=='advance_dragon' ||
+        outcome.proof==='dragon_approach') &&
       (decision.kind!=='fight_bound_hostile' ||
         (outcome.proof==='bound_hostile_death' &&
           outcome.targetId===state.entityId && outcome.mob===state.mob)) &&
@@ -620,6 +666,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       state.failures[decision.kind]=0;
       state.successes++;
       // A verified receipt from the wrong action cannot grant a victory milestone.
+      if(decision.kind==='advance_dragon'&&outcome.proof==='dragon_approach')
+        state.milestones.dragonApproachTrips=Math.min(24,
+          (state.milestones.dragonApproachTrips||0)+1);
       if(decision.kind==='fight_bound_hostile'&&
          outcome.proof==='bound_hostile_death'&&
          outcome.targetId===state.entityId&&outcome.mob===state.mob){
@@ -634,6 +683,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       if(['observe_dragon','search_dragon','fight_dragon'].includes(decision.kind) &&
          outcome.proof==='dragon_seen')
         state.milestones.dragonSeen=true;
+      if(decision.kind==='fight_dragon' && outcome.proof==='dragon_seen' &&
+         state.milestones.dragonKilled!==true)
+        state.milestones.dragonAttackInputs=Math.min(96,
+          (state.milestones.dragonAttackInputs||0)+1);
       // A portal observation alone never proves a dragon death. The combined
       // victory proof is emitted only by the live skill after seeing the dragon,
       // observing its entityDead event and finding an End exit portal.
@@ -692,10 +745,14 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         }
         if(decision.reason==='shelter_site')
           state.milestones.shelterSiteTrips=Math.min(6,(state.milestones.shelterSiteTrips||0)+1);
+        if(decision.reason==='crystal_recovery'){
+          state.milestones.crystalRecoveryTrips=Math.min(6,(state.milestones.crystalRecoveryTrips||0)+1);
+          state.failures.destroy_end_crystal=0;
+        }
       }}
     else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;
     state.lastResult={kind:decision.kind,verified:ok,detail:String(outcome?.detail||'unverified').slice(0,140)};
-    if(!ok && !['mine_iron','mine_diamond','mine_obsidian','mine_ancient_debris','hunt_blazes','hunt_endermen','track_stronghold','search_dragon','collect_flint','collect_gold','loot_bastion_template','prepare_archery','obtain_food','mine_netherrack','survey_ore'].includes(decision.kind) && (state.failures[decision.kind]||0)>=3){
+    if(!ok && !['mine_iron','mine_diamond','mine_obsidian','mine_ancient_debris','hunt_blazes','hunt_endermen','track_stronghold','search_dragon','collect_flint','collect_gold','loot_bastion_template','prepare_archery','obtain_food','mine_netherrack','survey_ore','destroy_end_crystal','fight_dragon','advance_dragon'].includes(decision.kind) && (state.failures[decision.kind]||0)>=3){
       state.status='blocked';state.why='Repeated unverified or failing action: '+decision.kind;
     }
   }

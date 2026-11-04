@@ -65,6 +65,8 @@ function lateGamePlan(world,progress={}){
       if(world.dragonPresent){
         if(!m.dragonSeen)return action('observe_dragon','Record live dragon entity before combat');
         if(world.crystalsNearby>0)return action('destroy_end_crystal','Destroy actual healing crystals');
+        if(Number.isFinite(world.dragonDistance)&&world.dragonDistance>54)
+          return action('advance_dragon','Move only to verified safe End-island ground while Dragon remains outside bow range');
         return action('fight_dragon','Damage observed dragon until death event',{dragonId:world.dragonId});
       }
       return action('search_dragon','Dragon absent but no death+portal proof; search rather than claim victory');
@@ -150,6 +152,8 @@ function lateGamePlan(world,progress={}){
     if(world.dragonPresent){
       if(!m.dragonSeen)return action('observe_dragon','Record live dragon entity before combat');
       if(world.crystalsNearby>0)return action('destroy_end_crystal','Destroy observed healing crystals before dragon damage');
+      if(Number.isFinite(world.dragonDistance)&&world.dragonDistance>54)
+        return action('advance_dragon','Approach observed Dragon horizontally on safe loaded End terrain');
       return action('fight_dragon','Damage observed dragon; require actual death event to certify win',{dragonId:world.dragonId});
     }
     return action('search_dragon','Scout End island for real dragon or exit portal');

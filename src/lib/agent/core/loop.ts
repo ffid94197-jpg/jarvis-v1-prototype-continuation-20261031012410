@@ -27,7 +27,7 @@ import { createModelBridge, modelIdentityContext, type ModelBridge } from "./mod
 import { adviseTask } from "./laya";
 import { directWindowsLaunch } from "./windowsIntent";
 import { directMinecraftMission, minecraftMissionFromObjective } from "./minecraftIntent";
-import { MinecraftAiGate, isMinecraftAiObjective, firstMinecraftObservationDecision, MINECRAFT_AI_INSTRUCTIONS } from "./minecraftAiGate";
+import { MinecraftAiGate, isMinecraftAiObjective, isMinecraftObservationOnlyObjective, firstMinecraftObservationDecision, MINECRAFT_AI_INSTRUCTIONS } from "./minecraftAiGate";
 import { directCapabilityDiscovery } from "./capabilityIntent";
 import { classifyModelFailure } from "./modelErrors";
 import { db } from "@/lib/db";
@@ -442,11 +442,47 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // The independently executing companion owns the ongoing gameplay loop.
   const minecraftAiTask = process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" &&
     process.env.JARVIS_MINECRAFT_AI_PLANNER_ENABLED === "1" && isMinecraftAiObjective(objective);
-  // AI mode deliberately bypasses the historical fixed two-step Minecraft router.
-  // It MUST use LAYA/model pinning, independent observations and Guardian checks.
-  const minecraftAiGate = minecraftAiTask ? new MinecraftAiGate(objective) : null;
+  // Model-assisted gameplay cannot observe an unjoined Mineflayer companion.
+  // Bootstrap exactly one owner-authorized join BEFORE the first read-only
+  // game observation. Only this Core-authored step may join; the model is
+  // never granted a generic bot-spawning tool. Pure questions and safety
+  // stops must NOT launch a new Minecraft player as a side effect.
+  const minecraftSafetyStop=/^(?:(?:hey\s+)?jarvis(?:buddy)?[,:!\s]+)?(?:please\s+)?(?:stop|pause|cancel|halt)\b/i
+    .test(objective.trim());
+  const minecraftFirstJoinRequired=minecraftAiTask && opts.replay===undefined &&
+    !minecraftSafetyStop && !isMinecraftObservationOnlyObjective(objective);
+  const minecraftAiGate = minecraftAiTask ?
+    new MinecraftAiGate(objective,minecraftFirstJoinRequired) : null;
   let minecraftAiDenied = 0;
-  let minecraftFirstObservePending = minecraftAiTask;
+  let minecraftFirstJoinPending=minecraftFirstJoinRequired;
+  let minecraftFirstObservePending=minecraftAiTask&&!minecraftSafetyStop;
+  if (minecraftAiGate && opts.replay!==undefined){
+    // The native mission may run for hours after the Core's finite task
+    // budget pauses. On resume, reconstruct the original owner-task goal
+    // binding ONLY from a prior Guardian-admitted, durably SETTLED native
+    // auto_goal effect and its real companion ACK. No model summary or
+    // stale unrelated bot mission is accepted as proof.
+    try{
+      const durable=await db.effectRecord.findMany({
+        where:{taskId,tool:"minecraft_companion_command",status:"SETTLED"},
+        orderBy:{admittedAt:"desc"},take:40,
+        select:{argsJson:true,receiptJson:true,settledAt:true,admittedAt:true}
+      });
+      for(const row of durable){
+        try{
+          const a=JSON.parse(row.argsJson||"{}");
+          const receipt=JSON.parse(row.receiptJson||"{}");
+          if(a?.command!=="auto_goal"||typeof a.goal!=="string"||
+             receipt?.ok!==true || receipt?.detail?.botAcknowledged!==true ||
+             receipt?.detail?.command!=="auto_goal")continue;
+          const started=row.settledAt?.getTime()??row.admittedAt.getTime();
+          if(minecraftAiGate.restoreNativeMission(a.goal,started))break;
+        }catch{/* Damaged receipt cannot restore native-goal authority. */}
+      }
+    }catch{
+      console.warn("[minecraft] Durable native mission binding unavailable; completion remains unverified.");
+    }
+  }
   if (minecraftAiTask) messages.splice(messages.findIndex(m => m.role === "user"), 0, {role:"assistant",content:MINECRAFT_AI_INSTRUCTIONS});
   const minecraftMission = !minecraftAiTask && process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" && !opts.replay
     ? minecraftMissionFromObjective(objective) : null;
@@ -622,13 +658,18 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         stepsUsed === 0 && !opts.replay && !minecraftIntent ? directWindowsLaunch(objective) : null;
       const capabilityIntent = process.env.JARVIS_WINDOWS_AGENT_ENABLED === "1" &&
         stepsUsed === 0 && !opts.replay && !localIntent && !minecraftIntent ? directCapabilityDiscovery(objective) : null;
-      // First AI Minecraft action must be genuine game observation, never a
-      // model-selected substitute like status/inventory. This single read-only
-      // bootstrap still passes the normal Guardian and executor chain.
-      // It is not a fixed gameplay mission and gives the model no tool authority.
-      const firstMinecraftObserve = minecraftFirstObservePending ? firstMinecraftObservationDecision() : null;
-      minecraftFirstObservePending = false;
-      raw = firstMinecraftObserve ? JSON.stringify(firstMinecraftObserve) :
+      // Core-authored, one-time companion join is needed only for an
+      // effectful Minecraft task when the AI planner owns the mission.
+      // Guardian and the short-lived AI bootstrap gate both authorize it.
+      // Mandatory first game-state observation follows the join.
+      const firstMinecraftJoin=minecraftFirstJoinPending?
+        {action:"tool" as const,tool:"minecraft_companion_join",args:{}}:null;
+      if(firstMinecraftJoin)minecraftFirstJoinPending=false;
+      const firstMinecraftObserve=!firstMinecraftJoin&&minecraftFirstObservePending?
+        firstMinecraftObservationDecision():null;
+      if(firstMinecraftObserve)minecraftFirstObservePending=false;
+      raw = firstMinecraftJoin ? JSON.stringify(firstMinecraftJoin) :
+        firstMinecraftObserve ? JSON.stringify(firstMinecraftObserve) :
         minecraftIntent ? JSON.stringify(minecraftIntent) : localIntent ? JSON.stringify(localIntent) : capabilityIntent ?
         JSON.stringify(capabilityIntent) : await llmJson(model!, messages);
     } catch (err) {
@@ -1241,6 +1282,15 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       }
     }
 
+    if(minecraftAiGate && tool==="minecraft_companion_join" && !result.ok){
+      // A failed join is not a game observation, does not prove a world
+      // was loaded and must not feed the model a fictitious scene.
+      await settleAndReport(taskId,effectJournalDegraded?"effect_unknown":"failed",
+        stepsUsed,"Minecraft AI bootstrap JOIN FAILED; companion not confirmed spawned. "+
+        String(result.error||"No confirmed server spawn").slice(0,180),
+        emit,{effectsHappened});
+      return;
+    }
     // An explicit Minecraft owner objective starts a long-lived independent
     // companion after exactly TWO journaled effects. Chat concludes PARTIAL:
     // join/start acknowledgment is never proof of gameplay or dragon victory.

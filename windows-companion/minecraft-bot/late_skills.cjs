@@ -224,7 +224,20 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const beforeArrows=count(bot,'arrow');
     await bot.equip(bow,'hand');
     check(epoch);
-    const aim=target.position.offset(0,Math.min(5,dist*dist/135),0);
+    // Dragon flight is dynamic; a stationary crosshair misses a moving
+    // target even when the arrow is physically consumed. Lead only with
+    // genuinely observed bounded entity velocity; no invented position,
+    // predicted hit receipt or extra Minecraft action authority.
+    const motion=target.velocity;
+    const validVelocity=motion &&
+      [motion.x,motion.y,motion.z].every(v=>Number.isFinite(v) && Math.abs(v)<=2);
+    const tickLead=target.name==='ender_dragon' && validVelocity?
+      Math.max(2,Math.min(14,dist/3)):0;
+    const axis=v=>Math.max(-9,Math.min(9,v*tickLead));
+    const dx=validVelocity?axis(motion.x):0,
+      dy=validVelocity?axis(motion.y):0,
+      dz=validVelocity?axis(motion.z):0;
+    const aim=target.position.offset(dx,Math.min(5,dist*dist/135)+dy,dz);
     await bot.lookAt(aim,true);
     bot.activateItem();
     try{await delay(1200);}finally{bot.deactivateItem();}
@@ -242,30 +255,55 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     return observed(false,'Bow activation returned without verified arrow consumption; hit not claimed');
   }
   async function findTemplate(epoch){
-    // Never loot a player's overworld storage. Chests must be observed in Nether
-    // vicinity of bastion materials. Does not assume every chest is a bastion.
-    if(!String(bot.game?.dimension||'').includes('nether'))return observed(false,'Not in Nether');
-    const bastion=lookup(bot,['polished_blackstone_bricks','blackstone','gilded_blackstone'],32);
-    if(!bastion)return walkScout(epoch,'bastion remnant');
-    const chest=lookup(bot,['chest','trapped_chest'],25);
-    if(!chest)return walkScout(epoch,'bastion chest');
-    const key=String(chest.position);if(session.visitedChests.has(key))return walkScout(epoch,'unopened bastion chest');
-    await move(chest.position,3,epoch,12000);
+    // Nether-only, actual loaded blackstone-type structure observations.
+    // Nearby unrelated player storage is NOT automatically Bastion loot.
+    if(!String(bot.game?.dimension||'').includes('nether'))
+      return observed(false,'Bastion-template search requires verified Nether dimension');
+    check(epoch);
+    const bastionBlocks=new Set(['polished_blackstone_bricks','blackstone','gilded_blackstone']);
+    const anchors=typeof bot.findBlocks==='function'?
+      bot.findBlocks({matching:b=>b&&bastionBlocks.has(b.name),maxDistance:32,count:64})||[]:[];
+    if(!anchors.length)return walkScout(epoch,'bastion remnant');
+    const chestPositions=bot.findBlocks?.({
+      matching:b=>b&&(b.name==='chest'||b.name==='trapped_chest'),
+      maxDistance:27,count:32
+    })||[];
+    const chests=chestPositions.filter(p=>{
+      const live=bot.blockAt(p);
+      const key=String(p);
+      return live&&['chest','trapped_chest'].includes(live.name)&&
+        !session.visitedChests.has(key) &&
+        anchors.some(a=>a.distanceTo(p)<=12);
+    }).sort((a,b)=>bot.entity.position.distanceTo(a)-bot.entity.position.distanceTo(b));
+    if(!chests.length)return walkScout(epoch,'uninspected bastion-adjacent chest');
+    // Select one real, still-loaded chest near a structure block. A chest
+    // with no template is recorded as inspected; the NEXT tick tries the
+    // other visible chests rather than repeatedly opening the nearest one.
+    const target=chests[0],key=String(target);
+    await move(target,3,epoch,12000);
+    check(epoch);
+    const chest=bot.blockAt(target);
+    if(!chest||!['chest','trapped_chest'].includes(chest.name)||
+       !bot.entity?.position||bot.entity.position.distanceTo(chest.position)>4.5)
+      return observed(false,'Bastion-adjacent chest changed or is no longer reachable');
     const before=count(bot,'netherite_upgrade_smithing_template');
     const ui=await bot.openContainer(chest);
     try{
-      const found=(ui.containerItems?.()||[]).find(i=>i.name==='netherite_upgrade_smithing_template');
+      check(epoch);
+      const found=(ui.containerItems?.()||[]).find(i=>
+        i.name==='netherite_upgrade_smithing_template'&&i.count>0);
       if(!found){
-        session.visitedChests.add(key); // Inspected, genuinely empty.
-        return observed(false,'Observed chest contained no Netherite upgrade template');
+        session.visitedChests.add(key);
+        return observed(false,'Inspected Bastion-adjacent chest had no Netherite upgrade template');
       }
       await ui.withdraw(found.type,found.metadata,1);
       check(epoch);
     }finally{ui.close();}
     const acquired=count(bot,'netherite_upgrade_smithing_template')>before;
     if(acquired)session.visitedChests.add(key);
-    return observed(acquired,acquired?'Bastion template acquired with server inventory proof':
-      'Template transfer unverified; preserve chest for another bounded attempt');
+    return observed(acquired,acquired?
+      'Netherite template received; physical survival inventory increased':
+      'Chest withdrawal not server-verified; do not invent ownership or skip chest');
   }
   async function constructPortal(epoch){
     if(count(bot,'obsidian')<14 && !session.portalBase)return observed(false,'Need 14 obsidian for rectangular Nether portal');
@@ -535,9 +573,19 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       // eyes into an already full frame (no hardcoded state bits).
       if(frame.getProperties?.().eye === true)continue;
       await move(frame.position,3,epoch,12000);
+      check(epoch);
+      const current=bot.blockAt(p);
+      if(!current||current.name!=='end_portal_frame')
+        return observed(false,'End portal frame changed or unloaded during approach');
+      if(current.getProperties?.().eye===true)continue;
+      if(!bot.entity?.position ||
+         bot.entity.position.distanceTo(current.position)>4.5)
+        return observed(false,'End frame is not within measured interaction range');
       const liveEye=item(bot,'ender_eye')||item(bot,'eye_of_ender');
-      if(!liveEye)break; // Don't use a stale item after it was consumed.
-      await bot.equip(liveEye,'hand');await bot.activateBlock(frame);
+      if(!liveEye)break; // Do not reuse a consumed Eye.
+      await bot.equip(liveEye,'hand');
+      check(epoch);
+      await bot.activateBlock(current);
       await delay(250);check(epoch);
       if(bot.blockAt(p)?.getProperties?.().eye===true)inserted++;
       if(lookup(bot,['end_portal'],30))return observed(true,'End portal blocks appeared after frame activation');
@@ -548,6 +596,41 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       ? observed(true,`Verified ${inserted} newly filled frame(s); portal not yet activated`)
       : observed(false,'No new eye states or active End portal were observed');
   }
+  async function approachDragon(epoch){
+    check(epoch);
+    if(String(bot.game?.dimension||'').replace(/^minecraft:/,'')!=='the_end' ||
+       !bot.entity?.position || bot.health<11)
+      return observed(false,'Dragon approach requires live End survival state and safe health');
+    const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon'&&e?.position);
+    if(!dragon)return observed(false,'No observed Dragon direction for horizontal approach');
+    const here=bot.entity.position.clone();
+    const dx=dragon.position.x-here.x,dz=dragon.position.z-here.z;
+    const mag=Math.hypot(dx,dz);
+    if(!Number.isFinite(mag)||mag<6)
+      return observed(false,'No safe horizontal Dragon approach bearing');
+    const heading={x:dx/mag,z:dz/mag};
+    const threats=Object.values(bot.entities||{}).filter(e=>e?.position&&
+      (ALLOWED_HOSTILES.has(e.name)||e.name==='end_crystal'));
+    const waypoints=surveyTargets(bot,here,Vec3).map(p=>{
+      const along=(p.x-here.x)*heading.x+(p.z-here.z)*heading.z;
+      const sideways=Math.abs((p.x-here.x)*heading.z-(p.z-here.z)*heading.x);
+      return {p,along,sideways};
+    }).filter(o=>o.along>=4&&o.sideways<=Math.max(5,o.along*.8)&&
+       !threats.some(t=>o.p.distanceTo(t.position)<9))
+      .sort((a,b)=>b.along-a.along||a.sideways-b.sideways).slice(0,4);
+    if(!waypoints.length)
+      return observed(false,'No real standable loaded End waypoint toward Dragon');
+    for(const {p} of waypoints){
+      check(epoch);
+      try{
+        await move(p,2,epoch,14000);check(epoch);
+        const actual=bot.entity?.position;
+        if(actual&&actual.distanceTo(here)>=3&&actual.distanceTo(p)<=4)
+          return observed(true,'Server-observed horizontal approach on safe End-island ground; no Dragon damage claimed','dragon_approach');
+      }catch(error){check(epoch);}
+    }
+    return observed(false,'Bounded Dragon approach did not reach observed safe terrain');
+  }
   async function fightDragon(epoch){
     const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon'&&e?.position);
     if(!dragon)return observed(false,'No live dragon entity in loaded world');
@@ -555,15 +638,27 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const live=digest(bot,getOwner());
     if(live.wornDiamond!==true && live.wornNetherite!==true)
       return observed(false,'Four diamond or Netherite armor slots must be server-observed as worn');
-    const sword=bot.inventory.items().find(i=>i.name==='netherite_sword'||i.name==='diamond_sword');
-    if(!sword)return observed(false,'Diamond or Netherite sword not available');
-    if(bot.entity.position.distanceTo(dragon.position)>5){
+    const sword=bot.inventory.items().find(i=>
+      i.name==='netherite_sword'||i.name==='diamond_sword')||
+      (['netherite_sword','diamond_sword'].includes(bot.heldItem?.name)?bot.heldItem:null);
+    if(!sword)return observed(false,'Diamond or Netherite sword not physically owned');
+    if(!bot.entity?.position)return observed(false,'Player position not observed for dragon battle');
+    const distance=bot.entity.position.distanceTo(dragon.position);
+    if(distance>54)return observed(false,'Dragon outside maximum actual bow range');
+    if(distance>5){
       return shootVisibleEntity(dragon,epoch);
     }
-    await bot.equip(sword,'hand');bot.attack(dragon);check(epoch);
-    noteDragonAttack(session,dragon);
+    if(bot.health<10)return observed(false,'Health too low for melee at dragon perch');
+    if(bot.heldItem?.name!==sword.name)await bot.equip(sword,'hand');
+    check(epoch);
+    const current=bot.entities?.[dragon.id];
+    if(!current?.position||current.name!=='ender_dragon' ||
+       bot.entity.position.distanceTo(current.position)>5)
+      return observed(false,'Original observed Dragon changed before actual melee strike');
+    bot.attack(current);check(epoch);
+    noteDragonAttack(session,current);
     await delay(350);check(epoch);
-    return observed(true,'Melee attack dispatched at visible dragon; death not claimed','dragon_seen');
+    return observed(true,'Bounded melee attack dispatched at the observed Dragon; no damage or death claimed','dragon_seen');
   }
   async function destroyCrystal(epoch){
     const c=bot.nearestEntity(e=>e?.name==='end_crystal' && e?.position);
@@ -604,11 +699,26 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       return observed(false,'Crystal still too close to safely attack');
     const shot=await shootVisibleEntity(current,epoch);
     if(!shot.ok)return shot;
-    await delay(250);check(epoch);
-    const destroyed=!bot.entities?.[c.id];
-    return observed(destroyed,destroyed?
-      'Server no longer reports the selected crystal after a verified ranged shot':
-      'Verified survival arrow consumed, but crystal destruction still unproven');
+    // A shot can require several server ticks and an actual arrow flight
+    // before the End crystal emits its removal event. Reporting failure
+    // after only 250ms consumes the finite failure budget before impact.
+    for(let attempt=0;attempt<18;attempt++){
+      check(epoch);
+      const live=bot.entities?.[c.id];
+      if(!live?.position){
+        const here=bot.entity?.position;
+        const inLoadedRange=here && here.distanceTo(current.position)<=54;
+        return observed(!!inLoadedRange,inLoadedRange?
+          'Crystal disappeared from server entity view within loaded bow range after physically verified shot; hit attribution not assumed':
+          'Crystal out of observed range; removal cannot be inferred',
+          inLoadedRange?'end_crystal_removed':undefined);
+      }
+      if(live.name!=='end_crystal')
+        return observed(false,'Crystal entity ID was recycled; destruction cannot be inferred');
+      await delay(200);
+    }
+    return observed(false,
+      'Arrow consumed but crystal still visible after bounded projectile-flight observation');
   }
   async function smithGear(plan,epoch){
     if(!NETHERITE.includes(plan.item) || plan.base!==plan.item.replace('netherite_','diamond_'))
@@ -876,6 +986,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       }
       case 'destroy_end_crystal':return destroyCrystal(epoch);
       case 'fight_dragon':return fightDragon(epoch);
+      case 'advance_dragon':return approachDragon(epoch);
       case 'observe_dragon':{const dragon=bot.nearestEntity(e=>e?.name==='ender_dragon');
         if(!dragon)return observed(false,'No dragon entity to observe');
         if(!observeDragon(session,dragon))return observed(false,'Dragon identity unverified');

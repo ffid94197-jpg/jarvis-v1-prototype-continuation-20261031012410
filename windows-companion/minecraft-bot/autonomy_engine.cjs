@@ -13,7 +13,7 @@ const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip']);
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip']);
 const HOSTILES = new Set(['zombie','husk','drowned','skeleton','stray','spider','creeper','witch','pillager','endermite','silverfish','blaze','ghast','hoglin','zoglin','piglin_brute','wither_skeleton','magma_cube','ender_dragon','wither']);
 const FOOD = /^(bread|baked_potato|cooked_.*|apple|golden_apple|carrot|potato|melon_slice|pumpkin_pie|beetroot|mushroom_stew|rabbit_stew|suspicious_stew|sweet_berries)$/;
 function number(v, fallback=0) { return Number.isFinite(v)?v:fallback; }
@@ -174,6 +174,21 @@ function decide(goal, world, failures={}, progress={}) {
   // An owner can give ONE high-level instruction to play together. This
   // mission remains alive until stopped; it chooses and verifies its own
   // survival, crafting and movement actions instead of requiring commands.
+  if(goal==='defeat_hostile'){
+    if(progress.milestones?.defeatedId===progress.entityId &&
+       progress.milestones?.defeatedMob===progress.mob)
+      return {kind:'complete',why:'Bound hostile target server entityDead event independently observed'};
+    const target=threats.find(t=>t?.id===progress.entityId&&t?.name===progress.mob);
+    if(!target)return {kind:'blocked',
+      why:'Previously selected hostile is no longer observed; death NOT independently proven'};
+    if(!ALLOWED_HOSTILES.has(target.name))
+      return {kind:'blocked',why:'Selected entity no longer an authorized hostile'};
+    if(target.distance>3.4)return {kind:'blocked',
+      why:'Selected hostile moved outside observed safe melee range; no blind pursuit'};
+    if(world.health<12)return {kind:'retreat',why:'Insufficient health for bounded target-specific combat'};
+    return {kind:'fight_bound_hostile',targetId:progress.entityId,mob:progress.mob,
+      why:'Continue target-bound guarded melee only while same hostile is observed'};
+  }
   if(goal==='craft'||goal==='equip')return generalPlan(world,{...progress,goal},
     (needed,extra)=>decide(needed,world,failures,{...progress,...extra}));
   if(goal==='gather')return resourcePlan(world,failures,progress,needed=>decide(needed,world,failures,progress));
@@ -397,6 +412,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   function start(goal,seconds=300,spec={}){
     if(!GOALS.has(goal))throw Error('Unsupported autonomous gameplay goal');
     if(!Number.isInteger(seconds)||seconds<10||seconds>maxSeconds)throw Error('Duration out of bounds');
+    if(goal==='defeat_hostile' && (!ALLOWED_HOSTILES.has(spec?.mob) ||
+       !Number.isInteger(spec?.entityId)||spec.entityId<0||spec.entityId>200000))
+      throw Error('Combat mission requires specific approved observed hostile ID');
     if(goal==='farm_wheat' && !validFarmSpec({goal,position:spec?.position,
       width:spec?.width,depth:spec?.depth,targetCount:spec?.targetCount}))
       throw Error('Invalid bounded wheat farming goal');
@@ -422,6 +440,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       throw Error('Gather requires supported resource and targetCount 1-64');
     const t=clock();state={milestones:{},goal,status:'running',since:t,deadline:t+seconds*1000,steps:0,successes:0,failures:{},lastDecision:null,lastResult:null,why:null,
       ...(goal==='gather'?{resource:spec.resource,targetCount:spec.targetCount}:{}),
+      ...(goal==='defeat_hostile'?{mob:spec.mob,entityId:spec.entityId}:{}),
       ...(goal==='craft'?{item:spec.item,targetCount:spec.targetCount}:{}),
       ...(goal==='equip'?{item:spec.item,destination:spec.destination}:{}),
       ...(goal==='build'?{position:{...spec.position},block:spec.block,axis:spec.axis,length:spec.length}:{}),
@@ -451,7 +470,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     return true;
   }
   function resumeAfterRespawn(){
-    if(state.status!=='paused'||!GOALS.has(state.goal)||clock()>=state.deadline)return false;
+    if(state.status!=='paused'||!GOALS.has(state.goal)||clock()>=state.deadline ||
+       state.goal==='defeat_hostile')return false;
     state.status='running';state.why='Restarted after respawn; no inventory or completion proof assumed';
     state.failures={};state.milestones={};state.steps=0;state.lastDecision=null;state.lastResult=null;
     // Death may have destroyed inventory. Recheck earlier stages from live
@@ -566,7 +586,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         outcome.proof==='safe_scout_move') &&
       (decision.kind!=='survey_resource' ||
         (Object.hasOwn(ORE_RESOURCE_RULES,decision.resource)&&
-          outcome.proof==='safe_scout_move'));
+          outcome.proof==='safe_scout_move')) &&
+      (decision.kind!=='fight_bound_hostile' ||
+        (outcome.proof==='bound_hostile_death' &&
+          outcome.targetId===state.entityId && outcome.mob===state.mob));
     if(ok){
       // Only CONSECUTIVE unresolved attempts should exhaust an action's
       // bounded retry budget. Previously verified success left old failures
@@ -574,6 +597,12 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       state.failures[decision.kind]=0;
       state.successes++;
       // A verified receipt from the wrong action cannot grant a victory milestone.
+      if(decision.kind==='fight_bound_hostile'&&
+         outcome.proof==='bound_hostile_death'&&
+         outcome.targetId===state.entityId&&outcome.mob===state.mob){
+        state.milestones.defeatedId=state.entityId;
+        state.milestones.defeatedMob=state.mob;
+      }
       if(decision.kind==='build_nether_portal' && outcome.proof==='nether_portal')
         state.milestones.netherPortalBuilt=true;
       if(['observe_dragon','search_dragon','fight_dragon'].includes(decision.kind) &&

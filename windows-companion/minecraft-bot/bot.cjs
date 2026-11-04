@@ -261,9 +261,20 @@ async function craftNamed(name,count,epoch,table=null){
   const item=bot.registry?.itemsByName?.[name];
   if(!item)throw Error('Item not available for this Minecraft version');
   const before=(digest(bot,leader).inventory.raw[name]||0);
-  const recipes=bot.recipesFor(item.id,null,1,table);
+  if(!Number.isInteger(count)||count<1||count>16)
+    throw Error('Craft quantity must be between 1 and 16 items');
+  // Mineflayer count means RECIPE OPERATIONS, not produced items. A log-to-
+  // planks recipe yields four items per operation; blindly crafting count
+  // times silently spends 4x the material. Query for the requested minimum
+  // output, then dispatch only the necessary number of operations.
+  const recipes=bot.recipesFor(item.id,null,count,table);
   if(!recipes?.length)throw Error('Required crafting ingredients or workstation unavailable');
-  await bot.craft(recipes[0],count,table);
+  const perCraft=recipes[0]?.result?.count;
+  if(!Number.isInteger(perCraft)||perCraft<1||perCraft>64)
+    throw Error('Invalid Minecraft recipe output count');
+  const operations=Math.ceil(count/perCraft);
+  if(epoch!==actionEpoch)throw Error('Craft cancelled by owner');
+  await bot.craft(recipes[0],operations,table);
   // The server can acknowledge a crafting operation before the inventory
   // packet settles. Readback immediately after craft() incorrectly rejected
   // real planks/sticks, then retried a spent log and deadlocked the mission.
@@ -273,9 +284,10 @@ async function craftNamed(name,count,epoch,table=null){
     check:()=>{if(epoch!==actionEpoch)throw Error('Craft cancelled by owner')},
     wait:pause,deadline:Date.now()+3500,
   });
-  return {ok:result.ok,verified:result.ok,
-    detail:`${name}: inventory ${before} -> ${result.after}`+
-      (result.ok?' (server receipt)':' (recipe dispatched, result unverified)')};
+  const verified=result.ok===true && result.after>=before+count;
+  return {ok:verified,verified,
+    detail:`${name}: inventory ${before} -> ${result.after}; requested at least ${count}`+
+      (verified?' (server receipt)':' (result unverified or incomplete)')};
 }
 const lateSkills=createLateSkills({bot,navigate,craftNamed,getEpoch:()=>actionEpoch,getOwner:()=>leader,digest,Vec3});
 async function collectVerifiedDrop(blockPosition,beforeCount,readCount,epoch,label){
@@ -960,7 +972,12 @@ async function action(q){
       languageBusy=true;
       const before=actionEpoch;
       try{
-        const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:conciseStatus()});
+        // Send a valid, compact fresh world observation, not truncated JSON or
+        // the older status blob without grounded block coordinates.
+        const observation=projectWorld(
+          digest(bot,leader,{dragonDead:lateSkills.session.dragonDied}),
+          loadedTargets(bot),lastAction,mode);
+        const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:observation});
         if(before!==actionEpoch)return {ok:false,error:'Superseded owner command cancelled stale language result'};
         if(!parsed.ok)return {ok:false,error:parsed.error};
         return await action(parsed.command);
@@ -1120,14 +1137,24 @@ async function action(q){
       return {ok:true,status:'Dig STARTED toward safe loaded mining stance; result pending; use observe.lastAction and inventory delta'};
     }
     case 'equip_item':{
+      if(mode==='auto'||autoBusy)return {ok:false,error:'Autonomous mission is active; stop it before changing equipment'};
       const item=bot.inventory.items().find(i=>i.name===q.item);
       if(!item)return {ok:false,error:'Item not in inventory'};
-      await bot.equip(item,q.destination||'hand');
-      return {ok:true,status:'Equip request completed for '+q.item};
+      setMode('stay');const epoch=actionEpoch;
+      const destination=q.destination||'hand';
+      await bot.equip(item,destination);
+      if(epoch!==actionEpoch)return {ok:false,error:'Equipment change cancelled'};
+      const slot=destination==='hand'?bot.heldItem:
+        bot.inventory?.slots?.[bot.getEquipmentDestSlot(destination)];
+      const verified=slot?.name===q.item;
+      return {ok:verified,status:'Equip '+q.item+
+        (verified?' verified in '+destination:' dispatched but equipment slot unverified')};
     }
     case 'craft_item':{
+      if(mode==='auto'||autoBusy)return {ok:false,error:'Autonomous mission is active; stop it before manual crafting'};
+      setMode('stay');const epoch=actionEpoch;
       const station=bot.findBlock({matching:b=>b?.name==='crafting_table',maxDistance:4});
-      const result=await craftNamed(q.item,q.count,actionEpoch,station||null);
+      const result=await craftNamed(q.item,q.count,epoch,station||null);
       return {ok:result.ok===true,status:result.detail||'Craft attempted'};
     }
     case 'place_block':{

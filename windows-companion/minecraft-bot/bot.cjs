@@ -19,6 +19,7 @@ const {interpretOwnerInstruction} = require('./language_goal.cjs');
 const {itemName:normalizeCraftItemName}=require('./general_play_intent.cjs');
 const {digest, createController, FOOD, HOSTILES, resolveOwnerEntity} = require('./autonomy_engine.cjs');
 const {createLateSkills} = require('./late_skills.cjs');
+const {createAdvancedActions}=require('./advanced_survival_actions.cjs');
 const {compileRecipeCatalog}=require('./mindcraft_recipe_graph.cjs');
 const {planSurveyStep}=require('./terrain_survey.cjs');
 const {findExposedOre}=require('./ore_access.cjs');
@@ -66,6 +67,7 @@ const failedDigTargets=new Map();
 const autopilot=createController({maxSeconds:43200,maxSteps:20000});
 const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-mission.json'),{host,port,owner:leader});
 let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
+let advancedBusy=false;
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const MOB_NAMES=new Set(['zombie','skeleton','spider','husk','drowned']);
 function ack(id,ok,status,error){
@@ -979,6 +981,8 @@ async function action(q){
   const bad=validateCommand(q);
   if(bad)return {ok:false,error:bad};
   if(!spawned)return {ok:false,error:'Minecraft bot has not spawned'};
+  if(advancedBusy&&!['auto_stop','stop','stay','status','inventory','auto_status','observe'].includes(q.command))
+    return {ok:false,error:'An advanced gameplay transaction is still in flight; reconcile first'};
   switch(q.command){
     case 'natural_goal':{
       // The LLM interprets only; it cannot bypass the existing JARVIS executor.
@@ -1059,6 +1063,25 @@ async function action(q){
       }catch(err){mode='stay';return {ok:false,error:String(err.message||err).slice(0,120)};}
     }
     // General player primitives are owner-authorized, bounded and report observed outcomes.
+    case 'inspect_villager':case 'trade_villager':case 'transfer_container':case 'enchant_item':{
+      if(mode==='auto'||autoBusy||advancedBusy)
+        return {ok:false,error:'Active autonomous mission or another transaction must finish or be stopped explicitly'};
+      setMode('stay');const epoch=actionEpoch;advancedBusy=true;
+      const advanced=createAdvancedActions({bot,Vec3,pause,allowed:()=>epoch===actionEpoch&&spawned});
+      try{
+        const result=q.command==='inspect_villager'?
+          await advanced.inspectVillager(q.entityId):
+          q.command==='trade_villager'?
+          await advanced.tradeVillager(q):
+          q.command==='transfer_container'?
+          await advanced.transferContainer(q):
+          await advanced.enchantItem(q);
+        return {ok:result.ok===true,verified:result.verified===true,
+          status:String(result.detail||'Outcome unverified').slice(0,1600)};
+      }catch(err){
+        return {ok:false,verified:false,error:'Transaction not verified: '+String(err.message||err).slice(0,160)};
+      }finally{advancedBusy=false;}
+    }
     case 'inspect_block':{
       const b=bot.blockAt(new Vec3(q.position.x,q.position.y,q.position.z));
       return {ok:!!b,status:b?JSON.stringify({name:b.name,position:q.position,metadata:b.metadata}):'Block not loaded'};

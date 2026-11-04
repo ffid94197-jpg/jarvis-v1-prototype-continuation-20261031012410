@@ -480,7 +480,7 @@ export function mayStartNativeMinecraftGoal(
    .replace(/\s+in minecraft$/,'');
   // No invented coordinates or materials. Owner may choose bounded
   // dimensions; live Mineflayer builds the exact verified geometry.
-  const dims=/^(?:build|construct|make)(?: me)? (?:a |the )?([34]) by ([34])(?: small| simple| basic)? (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?$/.exec(sentence);
+  const dims=/^(?:build|construct|make)(?: me)? (?:a |the )?([34])\s*(?:by|x|×)\s*([34])(?: small| simple| basic)? (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?$/.exec(sentence);
   if(dims)return args.width===Number(dims[1])&&args.depth===Number(dims[2]);
   if(args.width!==undefined||args.depth!==undefined)return false;
   return /^(?:build|construct|make)(?: me)? (?:a |the )?(?:small|simple|basic) (?:cobblestone |stone )?(?:shelter|hut)(?: here| nearby| near you)?$/.test(sentence);

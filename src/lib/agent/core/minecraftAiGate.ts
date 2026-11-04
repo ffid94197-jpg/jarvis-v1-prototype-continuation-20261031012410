@@ -398,7 +398,9 @@ export function mayStartNativeMinecraftGoal(
   if(end){
    const expected=item.replace(/_/g,' '),named=end[1].trim();
    const plain=expected.replace(/^cooked /,'');
-   if(named!==expected&&named!==plain&&named.replace(/s$/,'')!==expected)
+   const singular=named==='glass'?'glass':
+     named.replace(/potatoes$/,'potato').replace(/s$/,'');
+   if(named!==expected&&named!==plain&&singular!==expected)
      return false;
   }
   return true;

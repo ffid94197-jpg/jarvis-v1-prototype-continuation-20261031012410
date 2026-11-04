@@ -55,7 +55,7 @@ function validateCommand(input) {
     if(Object.keys(input).some(key=>!allowedKeys.has(key)))return 'Unexpected autonomous parameter';
     const noUnrelatedParameters=
       (input.goal==='defeat_hostile' &&
-        input.steps===undefined&&input.destination===undefined&&input.resource===undefined&&
+        input.steps===undefined&&input.destination===undefined&&input.arrivalRange===undefined&&input.resource===undefined&&
         input.targetCount===undefined&&input.item===undefined&&input.position===undefined&&
         input.block===undefined&&input.width===undefined&&input.depth===undefined&&
         input.height===undefined&&input.shape===undefined&&input.destinationSlot===undefined) ||

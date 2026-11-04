@@ -447,7 +447,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // game observation. Only this Core-authored step may join; the model is
   // never granted a generic bot-spawning tool. Pure questions and safety
   // stops must NOT launch a new Minecraft player as a side effect.
-  const minecraftSafetyStop=/^(?:(?:hey\\s+)?jarvis(?:buddy)?[,:!\\s]+)?(?:please\\s+)?(?:stop|pause|cancel|halt)\\b/i
+  const minecraftSafetyStop=/^(?:(?:hey\s+)?jarvis(?:buddy)?[,:!\s]+)?(?:please\s+)?(?:stop|pause|cancel|halt)\b/i
     .test(objective.trim());
   const minecraftFirstJoinRequired=minecraftAiTask && !opts.replay &&
     !minecraftSafetyStop && !isMinecraftObservationOnlyObjective(objective);

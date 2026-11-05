@@ -66,6 +66,7 @@ public final class JarvisBridgeServer {
     // Accessed only from server.execute; bounded to avoid indefinite replay state.
     private static final Map<String, Long> seen = new HashMap<>();
     private static final Map<UUID, Run> tasks = new HashMap<>();
+    private static final java.util.Set<UUID> safetyStopped = new java.util.HashSet<>();
 
     private JarvisBridgeServer() {}
 
@@ -147,6 +148,7 @@ public final class JarvisBridgeServer {
         allowedWorld = null;
         seen.clear();
         tasks.clear();
+        safetyStopped.clear();
         if (old != null) try { old.close(); } catch (Exception ignored) {}
     }
 
@@ -269,6 +271,7 @@ public final class JarvisBridgeServer {
                 } else { status = previous.state; note = previous.note; }
             }
             case "stop" -> {
+                safetyStopped.add(companionId);
                 // Owner-bound emergency stop works even if the JARVIS Node process
                 // restarted and lost its in-memory task map. Do not require old taskId.
                 ctrl.stop();

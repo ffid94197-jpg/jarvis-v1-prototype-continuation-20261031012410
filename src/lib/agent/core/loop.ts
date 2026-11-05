@@ -1242,7 +1242,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     emit({ type: "step", step: { seq, kind: "tool_call", tool, args: argsJson } });
     await persistStep(taskId, seq, "tool_call", { tool, argsJson });
 
-    const result = await executeTool(taskId, tool, guardian, isCancelled);
+    const result = await executeTool(taskId, tool, guardian, isCancelled, opts.ownerId);
 
     stepsUsed++;
     emitStatus("executing");

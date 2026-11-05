@@ -30,6 +30,7 @@ type NativeMissionReceipt = {
   since:number;
   milestones:Record<string,unknown>;
   item?:string;
+  resource?:string;
   targetCount?:number;
   operation?:string;
   crop?:string;
@@ -635,6 +636,7 @@ export class MinecraftAiGate {
   private nativeSmeltItem:string|null=null;
   private nativeSmeltQuantity:number|null=null;
   private nativeCraft:{item:string;count:number}|null=null;
+  private nativeGather:{resource:string;count:number}|null=null;
   private nativeTransfer:{item:string;count:number;operation:string}|null=null;
   private nativeCrop:{crop:string;count:number}|null=null;
   private nativeWheatCount:number|null=null;
@@ -653,7 +655,7 @@ export class MinecraftAiGate {
        !Number.isSafeInteger(startedAt)||startedAt<0 ||
        startedAt>Date.now()+60000)return false;
     const expected=minecraftMissionFromObjective(this.objective);
-    if(expected&&goal===expected){
+    if(expected&&goal===expected&&goal!=='gather'){
       this.nativeGoalStarted=goal;
       this.nativeGoalStartedAt=startedAt;
       return true;
@@ -662,7 +664,8 @@ export class MinecraftAiGate {
     // string alone. Defer restoring its owner-task binding until the next
     // fresh, idle Mineflayer scene can independently revalidate the EXACT
     // saved tool arguments against current owner language.
-    const hint=goal==='craft'?/\b(?:craft|make)\b/i:
+    const hint=goal==='gather'?/\b(?:gather|collect|mine|obtain|get|fetch|bring|acquire)\b/i:
+      goal==='craft'?/\b(?:craft|make)\b/i:
       goal==='smelt'?/\b(?:smelt|cook|bake|refine)\b/i:
       goal==='sequence'?/\b(?:then|after that|next|and)\b/i:
       goal==='shelter'?/\b(?:shelter|hut)\b/i:null;
@@ -910,6 +913,10 @@ export class MinecraftAiGate {
       this.nativeCraft=admitted&&args.goal==='craft'&&
         typeof args.item==='string'&&Number.isInteger(args.targetCount)?
         {item:args.item,count:args.targetCount as number}:null;
+      this.nativeGather=admitted&&args.goal==='gather'&&
+        typeof args.resource==='string'&&Number.isInteger(args.targetCount)&&
+        (args.targetCount as number)>=1&&(args.targetCount as number)<=64?
+        {resource:args.resource,count:args.targetCount as number}:null;
       this.nativeTransfer=admitted&&args.goal==='transfer'&&
         typeof args.item==='string' && Number.isInteger(args.targetCount) &&
         ['deposit','withdraw'].includes(String(args.operation))?
@@ -948,6 +955,10 @@ export class MinecraftAiGate {
               milestones:parsed.milestones as Record<string,unknown>,
               ...(typeof parsed.item==='string'&&/^[a-z_]{2,64}$/.test(parsed.item)?
                  {item:parsed.item}:{}),
+              ...(typeof parsed.resource==='string'&&
+                 ['logs','planks','sticks','cobblestone','raw_iron','iron_ingot',
+                  'diamond','obsidian','flint','netherrack'].includes(parsed.resource)?
+                 {resource:parsed.resource}:{}),
               ...(typeof parsed.operation==='string'&&
                  ['deposit','withdraw'].includes(parsed.operation)?
                  {operation:parsed.operation}:{}),
@@ -990,6 +1001,11 @@ export class MinecraftAiGate {
             typeof pending.args.item==='string'&&
             Number.isInteger(pending.args.targetCount)?
             {item:String(pending.args.item),count:Number(pending.args.targetCount)}:null;
+          this.nativeGather=pending.goal==='gather'&&
+            typeof pending.args.resource==='string'&&
+            Number.isInteger(pending.args.targetCount)&&
+            Number(pending.args.targetCount)>=1&&Number(pending.args.targetCount)<=64?
+            {resource:String(pending.args.resource),count:Number(pending.args.targetCount)}:null;
           this.nativeStageCount=pending.goal==='sequence' &&
             Array.isArray(pending.args.steps)?pending.args.steps.length:
             pending.goal==='shelter'?3:null;
@@ -1008,6 +1024,39 @@ export class MinecraftAiGate {
     const raw=o.inventory.raw||{};
     const logs=Object.entries(raw).filter(([name])=>/_log$/.test(name)).reduce((n,[,v])=>n+(Number.isFinite(v)?v:0),0);
     const pick=raw.wooden_pickaxe||o.inventory.woodenPickaxe||0;
+    if(this.nativeGoalStarted==='gather'){
+      const receipt=this.nativeStatus, requested=this.nativeGather;
+      const started=this.nativeGoalStartedAt;
+      const milestone=receipt?.milestones;
+      const expectedItem=requested?.resource==='logs'?'log':
+        requested?.resource==='sticks'?'stick':requested?.resource;
+      // Never convert a held inventory count into proof of THIS gathering
+      // operation. Both task-bound signed progress and fresh physical inventory
+      // are required, including the server's initial count for the mission.
+      const observedCount=expectedItem==='log'?logs:
+        expectedItem==='planks'?
+          Object.entries(raw).filter(([name])=>name.endsWith('_planks'))
+            .reduce((n,[,v])=>n+(Number.isFinite(v)?v:0),0):
+          expectedItem?Number(raw[expectedItem])||0:0;
+      const initial=Number(milestone?.initialCount);
+      const current=Number(milestone?.currentCount);
+      const newly=Number(milestone?.newItems);
+      if(!receipt||!requested||started===null||
+         receipt.goal!=='gather'||receipt.status!=='complete'||
+         o.nativeGoal!=='gather'||receipt.resource!==requested.resource||
+         receipt.targetCount!==requested.count||
+         !Number.isSafeInteger(receipt.since)||
+         Math.abs(receipt.since-started)>60000||
+         milestone?.gatherDone!==true||
+         ![initial,current,newly].every(n=>Number.isSafeInteger(n)&&n>=0)||
+         current-initial<requested.count||
+         newly<requested.count||newly!==Math.max(0,current-initial)||
+         observedCount<current)
+        return {verified:false,reason:'Gather mission lacks matching task-bound signed NEW-item receipt and fresh physical inventory readback'};
+      return {verified:true,reason:'Native gather completed this owner mission with '+
+        newly+' newly collected '+requested.resource+
+        ', independently matched to baseline inventory and fresh game-server holdings'};
+    }
     if(this.nativeGoalStarted==='farm_wheat'){
       const receipt=this.nativeStatus,requested=this.nativeWheatCount,
         started=this.nativeGoalStartedAt;

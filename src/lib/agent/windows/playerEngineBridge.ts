@@ -96,7 +96,9 @@ function observation(p:Packet) {
       woodenPickaxe:inv.wooden_pickaxe||0},health:state.health,hunger:state.hunger,
     joined:true,busy:p.status==="running"||p.status==="accepted"||
       (typeof p.observations?.activeTaskId==="string" && UUID.test(p.observations.activeTaskId)),
-    dimension:p.worldId,
+    dimension:typeof s.dimension==="string" &&
+      ["minecraft:overworld","minecraft:the_nether","minecraft:the_end"].includes(s.dimension)?
+      s.dimension:"unknown",
     nativeGoal:typeof s.nativeGoal==="string" && /^[a-z_]{3,64}$/.test(s.nativeGoal)?s.nativeGoal:null,
     wornNetherite:netheriteBySlot.every((item,index)=>state.armorSlots[index]===item),
     heldNetheriteSword:state.mainHand==="netherite_sword",

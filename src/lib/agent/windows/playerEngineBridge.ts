@@ -173,6 +173,14 @@ export async function runGuardianApprovedPlayerEngine(
       return {ok:stopped.status==="cancelled",evidence:{backend:"playerengine",
         status:stopped.status,cancellationObserved:stopped.status==="cancelled"}};
     }
+    if(cmd==="auto_resume") {
+      if(current)throw Error("Native task must settle or be cancelled before restart");
+      const restored=await send("resume",randomUUID(),cfg,auth,{},2500);
+      return {ok:restored.status==="observed",
+        evidence:{backend:"playerengine",resumeLatchCleared:restored.status==="observed",
+          oldTaskRestarted:false,physicalReceipt:restored.observations},
+        error:restored.status==="observed"?undefined:"Safety latch was not cleared"};
+    }
     if(current)throw Error("Previous native action remains unresolved: inspect/status before another effect");
     let op:string, extra:Record<string,unknown>, requestedCount=0,item:string|undefined;
     let blockName:string|undefined,equipDestination:string|undefined;

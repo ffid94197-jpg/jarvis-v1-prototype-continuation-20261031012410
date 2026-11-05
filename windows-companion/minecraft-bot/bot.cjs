@@ -33,6 +33,7 @@ const {normalizeResource,SAFE_GENERIC_RESOURCES}=require('./resource_goal.cjs');
 const {validBuildSpec,observeBuild,validVolumeSpec,observeVolume,
   placementReference}=require('./structure_goal.cjs');
 const {validFarmSpec,observeWheat}=require('./wheat_goal.cjs');
+const {observeCrop}=require('./crop_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {safeSurveyFeet}=require('./wood_navigation.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
@@ -395,7 +396,15 @@ async function autoExecute(plan,epoch){
       return {ok:observed===plan.item,verified:observed===plan.item,
         detail:'Server equipment '+plan.destination+': '+String(observed||'unverified')};
     }
-    case 'harvest_wheat':case 'plant_wheat':{
+    case 'harvest_wheat':case 'plant_wheat':
+    case 'harvest_crop':case 'plant_crop':{
+      const cropType=plan.kind.endsWith('_crop')?plan.crop:'wheat';
+      if(!['wheat','carrots','potatoes'].includes(cropType))
+        return {ok:false,verified:false,detail:'Unsupported crop identity'};
+      const itemType=cropType==='wheat'?'wheat':
+        cropType==='carrots'?'carrot':'potato';
+      const seedType=cropType==='wheat'?'wheat_seeds':itemType;
+      const harvesting=plan.kind.startsWith('harvest_');
       const p=plan.position;
       const target=new Vec3(p.x,p.y,p.z),prior=bot.blockAt(target);
       const floor=bot.blockAt(target.offset(0,-1,0));
@@ -421,30 +430,41 @@ async function autoExecute(plan,epoch){
       if(epoch!==actionEpoch)throw Error('Owner cancelled wheat farming');
       const crop=bot.blockAt(target),actualFloor=bot.blockAt(target.offset(0,-1,0));
       if(actualFloor?.name!=='farmland')return {ok:false,verified:false,detail:'Farmland changed during travel'};
-      if(plan.kind==='harvest_wheat'){
+      if(harvesting){
         const observedAge=Number(crop?.getProperties?.().age);
-        if(crop?.name!=='wheat'||!Number.isInteger(observedAge)||observedAge!==7 ||
+        if(crop?.name!==cropType||!Number.isInteger(observedAge)||observedAge!==7 ||
            !bot.canDigBlock?.(crop))
           return {ok:false,verified:false,detail:'Wheat is no longer mature and diggable'};
-        const beforeWheat=rawCount(bot,'wheat');
+        const beforeCrop=rawCount(bot,itemType);
         await bot.dig(crop);
         if(epoch!==actionEpoch)throw Error('Owner cancelled wheat harvest');
-        if(bot.blockAt(target)?.name==='wheat')
-          return {ok:false,verified:false,detail:'Mature wheat removal not observed'};
-        return collectVerifiedDrop(target,beforeWheat,()=>rawCount(bot,'wheat'),epoch,'Wheat harvest');
+        if(bot.blockAt(target)?.name===cropType)
+          return {ok:false,verified:false,detail:'Mature crop removal not observed'};
+        const result=await collectVerifiedDrop(target,beforeCrop,
+          ()=>rawCount(bot,itemType),epoch,'Verified '+cropType+' harvest');
+        if(plan.kind==='harvest_wheat')return result;
+        const actual=rawCount(bot,itemType)-beforeCrop;
+        const ok=result?.ok===true&&result?.verified===true &&
+          Number.isSafeInteger(actual)&&actual>=1&&actual<=64;
+        return {ok,verified:ok,
+          ...(ok?{proof:'crop_harvest',crop:cropType,count:actual}:{}),
+          detail:ok?String(result.detail||'Actual crop inventory readback verified'):
+            'Harvested block changed but new crop inventory unverified'};
       }
       if(!crop||!['air','cave_air'].includes(crop.name))
         return {ok:false,verified:false,detail:'Planting target is not empty farmland'};
-      const seed=bot.inventory.items().find(i=>i.name==='wheat_seeds'&&i.count>0);
-      if(!seed)return {ok:false,verified:false,detail:'No server-verified wheat seeds'};
-      const beforeSeed=rawCount(bot,'wheat_seeds');
+      const seed=bot.inventory.items().find(i=>i.name===seedType&&i.count>0);
+      if(!seed)return {ok:false,verified:false,detail:'No server-verified '+seedType};
+      const beforeSeed=rawCount(bot,seedType);
       await bot.equip(seed,'hand');
       if(epoch!==actionEpoch)throw Error('Owner cancelled wheat planting');
       await bot.placeBlock(actualFloor,new Vec3(0,1,0));
       for(let j=0;j<8;j++){
         if(epoch!==actionEpoch)throw Error('Owner cancelled wheat planting');
-        if(bot.blockAt(target)?.name==='wheat'&&rawCount(bot,'wheat_seeds')<beforeSeed)
-          return {ok:true,verified:true,detail:'Wheat seed consumed; crop present on verified farmland'};
+        if(bot.blockAt(target)?.name===cropType&&rawCount(bot,seedType)<beforeSeed)
+          return {ok:true,verified:true,
+            ...(plan.kind==='plant_crop'?{proof:'crop_planted',crop:cropType}:{}),
+            detail:'Real '+seedType+' consumed and '+cropType+' crop present on farmland'};
         await pause(200);
       }
       return {ok:false,verified:false,detail:'New wheat crop plus seed consumption not both verified'};
@@ -1219,6 +1239,11 @@ async function autoTick(){
     gameWorld.transferBlock=target&&['chest','trapped_chest','barrel'].includes(target.name)?
       {name:target.name,position:{...p}}:null;
   }
+  if(active.goal==='farm_crop')
+    gameWorld.cropCells=observeCrop(bot,{
+      goal:'farm_crop',crop:active.crop,position:active.position,
+      width:active.width,depth:active.depth,targetCount:active.targetCount
+    },Vec3);
   if(active.goal==='farm_wheat')gameWorld.wheatCells=observeWheat(bot,
     {goal:'farm_wheat',position:active.position,width:active.width,depth:active.depth,
       targetCount:active.targetCount},Vec3);
@@ -1394,7 +1419,7 @@ async function action(q){
       }
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
-      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','smelt','transfer','equip'].includes(q.goal) &&
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','wood','gather','travel','build','build_volume','farm_wheat','farm_crop','sequence','craft','smelt','transfer','equip'].includes(q.goal) &&
          bot.game?.gameMode!=='survival')
         return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an

@@ -30,8 +30,8 @@ async function gate(req:NextRequest,write:boolean){
 }
 function error(e:unknown){
   const x=e as {status?:number;message?:string};
-  return Response.json({error:x?.message||"JARVIS evolution subsystem unavailable"},
-    {status:Number.isInteger(x?.status)&&x.status!>=400&&x.status!<=599?x.status:503});
+  const status=typeof x?.status==="number" && x.status>=400 && x.status<=599?x.status:503;
+  return Response.json({error:x?.message||"JARVIS evolution subsystem unavailable"},{status});
 }
 const headers={"Cache-Control":"no-store"};
 

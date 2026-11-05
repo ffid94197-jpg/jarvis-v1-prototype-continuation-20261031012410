@@ -311,7 +311,41 @@ public final class JarvisBridgeServer {
         AltoClefController ctrl = companion.getController();
         String status;
         String note;
+        JsonArray viewedOffers=null;
+        Integer inspectedVillagerId=null;
         switch (op) {
+            case "villager_offers" -> {
+                int targetId=args.get("entityId").getAsInt();
+                VillagerEntity selected=null;
+                for(Entity candidate:((ServerWorld)companion.getWorld()).iterateEntities()) {
+                    if(candidate instanceof VillagerEntity v && v.getId()==targetId &&
+                        v.isAlive() && v.squaredDistanceTo(companion)<=10*10) {
+                        selected=v;break;
+                    }
+                }
+                if(selected==null)throw new IllegalArgumentException("villager-not-observed");
+                JsonArray liveOffers=new JsonArray();
+                net.minecraft.village.TradeOfferList offers=selected.getOffers();
+                for(int i=0;i<Math.min(8,offers.size());i++) {
+                    net.minecraft.village.TradeOffer offer=offers.get(i);
+                    JsonObject details=new JsonObject();
+                    details.addProperty("index",i);
+                    ItemStack first=offer.getOriginalFirstBuyItem();
+                    ItemStack second=offer.getSecondBuyItem();
+                    ItemStack output=offer.getSellItem();
+                    details.addProperty("firstItem",Registries.ITEM.getId(first.getItem()).toString());
+                    details.addProperty("firstCount",first.getCount());
+                    details.addProperty("secondItem",second.isEmpty()?"":Registries.ITEM.getId(second.getItem()).toString());
+                    details.addProperty("secondCount",second.getCount());
+                    details.addProperty("outputItem",Registries.ITEM.getId(output.getItem()).toString());
+                    details.addProperty("outputCount",output.getCount());
+                    details.addProperty("disabled",offer.isDisabled());
+                    liveOffers.add(details);
+                }
+                viewedOffers=liveOffers;
+                inspectedVillagerId=targetId;
+                status="observed";note="server-observed-trading-options-no-trade-performed";
+            }
             case "inspect" -> { status = "observed"; note = "snapshot-only"; }
             case "status" -> {
                 Run previous = tasks.get(taskId);
@@ -674,6 +708,10 @@ public final class JarvisBridgeServer {
             default -> { status = "failed"; note = "unsupported-operation-fail-closed"; }
         }
         JsonObject snapshot = snapshot(companion);
+        if(viewedOffers!=null){
+            snapshot.add("villagerOffers",viewedOffers);
+            snapshot.addProperty("inspectedVillagerId",inspectedVillagerId);
+        }
         snapshot.addProperty("safetyStopped",safetyStopped.contains(companionId));
         snapshot.addProperty("recoveryRequired",journal.hasUnresolved(companionId));
         for (Run candidate : tasks.values()) {

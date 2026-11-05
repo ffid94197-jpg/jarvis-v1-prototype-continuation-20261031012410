@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import PerceptionPanel from "./PerceptionPanel";
 import IntegrationsPanel from "./IntegrationsPanel";
 import EvolutionPanel from "./EvolutionPanel";
+import NativeMinecraftMissionStatusPanel from "./NativeMinecraftMissionStatusPanel";
 import {OwnerVoiceSettings, WakeStrip} from "./OwnerVoice";
 import MemoryManager from "./MemoryManager";
 import RoutineManager from "./RoutineManager";
@@ -115,7 +116,7 @@ export default function ModelManager({settingsOpen,onClose,busyTask,onCommand,la
       </div>
     {busyTask && <p role="status">Finish or cancel the current task before switching models.</p>}
     {message && <p role="status" aria-live="polite" className="nexus-settings-status">{message}</p>}
-    {tab==="integrations" && <><IntegrationsPanel/><EvolutionPanel busyTask={busyTask} onRunSkill={instruction=>{closeSettings();onCommand(instruction);}}/></>}
+    {tab==="integrations" && <><IntegrationsPanel/><EvolutionPanel busyTask={busyTask} onRunSkill={instruction=>{closeSettings();onCommand(instruction);}}/><NativeMinecraftMissionStatusPanel/></>}
     {tab==="memory" && <MemoryManager onClose={closeSettings}/>}
     {tab==="routines" && <><AutonomyTierPanel/><RoutineManager onClose={closeSettings}/></>}
     <div hidden={tab!=="voice"} className="nexus-settings-section"><h3>Wake Word & Spoken Replies</h3><p>Enable listening to “Jarvis”, review recognized requests, control spoken replies, or interrupt speech. Microphone access requires your permission. When enabled, wake listening continues after closing Settings until you disable it here.</p><WakeStrip onCommand={onCommand} busyTask={busyTask} latestReply={latestReply}/><OwnerVoiceSettings/></div>

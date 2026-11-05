@@ -325,6 +325,8 @@ public final class JarvisBridgeServer {
             }
         }
         if("spawn".equals(op)){
+            if(!"1".equals(System.getenv("JARVIS_MC_BRIDGE_SPAWN_ENABLED")))
+                throw new IllegalArgumentException("native-spawn-owner-opt-in-disabled");
             // Spawn is a SEPARATE explicit owner request; the ordinary Core
             // JOIN/observe route never reaches this branch. It cannot create
             // a second bot, adopt an unowned one or choose a UUID on the fly.
@@ -1130,6 +1132,9 @@ public final class JarvisBridgeServer {
     private static JsonObject snapshot(CompanionEntity companion) {
         JsonObject out = new JsonObject();
         out.addProperty("companionUuid", companion.getUuid().toString());
+        out.addProperty("ownerUuid",companion.getOwnerUuid()==null?"":companion.getOwnerUuid().toString());
+        out.addProperty("ownerPaired",companion.getOwnerUuid()!=null &&
+            companion.getController()!=null);
         out.addProperty("dimension",
             companion.getWorld().getRegistryKey().getValue().toString());
         out.addProperty("x", companion.getX());

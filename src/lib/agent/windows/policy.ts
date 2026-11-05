@@ -321,6 +321,27 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:"Minecraft action requires an approved input and duration 100–1500ms."};
     return {ok:true,prepared:{operation:"minecraft_input",action:args.action,durationMs:args.durationMs as number}};
   }
+  // Native Fabric gameplay is opt-in and requires pinned loopback identity.
+  // It must not inherit Mineflayer's Java LAN name/port prerequisites.
+  const playerEngineSelected=process.env.JARVIS_MC_BACKEND==="playerengine";
+  const nativeMinecraftPreflight=():string|null=>{
+    if(!playerEngineSelected)return null;
+    if(process.env.JARVIS_MC_BRIDGE_ENABLE!=="1")
+      return "PlayerEngine adapter is disabled by operator";
+    const key=process.env.JARVIS_MC_BRIDGE_SECRET||"";
+    const principal=process.env.JARVIS_MC_BRIDGE_OWNER_PRINCIPAL||"";
+    const own=process.env.JARVIS_MC_BRIDGE_OWNER_UUID||"";
+    const bot=process.env.JARVIS_MC_BRIDGE_COMPANION_UUID||"";
+    const world=process.env.JARVIS_MC_BRIDGE_WORLD||"";
+    const port=Number(process.env.JARVIS_MC_BRIDGE_PORT||"48251");
+    const uid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if(!principal||Buffer.byteLength(key,"utf8")<32 ||
+       !uid.test(own)||!uid.test(bot)||
+       !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(world)||
+       !Number.isInteger(port)||port<1024||port>65535)
+      return "PlayerEngine owner UUID, companion UUID, world, principal, port or secret unavailable";
+    return null;
+  };
   // Declarative Minecraft goals share JARVIS's existing Guardian boundary.
   // The companion independently revalidates. This grants NO raw code/tool authority.
   const validMinecraftGoal=(r:Record<string,unknown>,step=false):boolean=>{
@@ -421,7 +442,11 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     return false;
   };
   if (tool === "minecraft_companion_command") {
-    if (process.env.JARVIS_MINECRAFT_LAN_ENABLED !== "1") return {ok:false,reason:"Enable Minecraft LAN companion."};
+    if(playerEngineSelected){
+      const failure=nativeMinecraftPreflight();
+      if(failure)return {ok:false,reason:failure};
+    }else if (process.env.JARVIS_MINECRAFT_LAN_ENABLED !== "1")
+      return {ok:false,reason:"Enable Minecraft LAN companion."};
     const command=String(args.command||"");
     const allowed=["follow","stop","jump","move","look","status","come","stay","guard","collect_wood","inventory","say","observe","auto_goal","auto_status","auto_stop",
       "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block","interact_entity","use_item","natural_goal","auto_checkpoint","auto_resume"];
@@ -478,6 +503,11 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     return {ok:true,prepared};
   }
   if (tool === "minecraft_companion_join" || tool === "minecraft_companion_stop") {
+    if(playerEngineSelected){
+      const failure=nativeMinecraftPreflight();
+      if(failure)return {ok:false,reason:failure};
+      return {ok:true,prepared:{operation:tool==="minecraft_companion_join"?"minecraft_join":"minecraft_stop"}};
+    }
     if (process.env.JARVIS_MINECRAFT_LAN_ENABLED !== "1") {
       // Name every variable the launcher preflight also requires, so a
       // half-configured Minecraft setup is diagnosable from the denial instead

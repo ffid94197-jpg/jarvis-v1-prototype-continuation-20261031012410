@@ -29,6 +29,7 @@ export default function EvolutionPanel({onRunSkill,busyTask=false}:{onRunSkill?:
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState(""),[notice,setNotice]=useState("");
   const [details,setDetails]=useState<Detail|null>(null);
+  const [sourceTaskId,setSourceTaskId]=useState("");
   const [skillDraft,setSkillDraft]=useState("");
   const [skillInputs,setSkillInputs]=useState("{}");
   const [repairDraft,setRepairDraft]=useState("");
@@ -96,6 +97,26 @@ export default function EvolutionPanel({onRunSkill,busyTask=false}:{onRunSkill?:
             style={{display:"block",width:"100%",background:"#071923",border:"1px solid #4b8296",
               color:"#e7f2fb",padding:8,borderRadius:6,boxSizing:"border-box"}}/>
         </label>
+        <div style={{display:"grid",gap:6,padding:10,
+          border:"1px solid rgba(130,175,190,.28)",borderRadius:8}}>
+          <strong>Learn from a completed JARVIS task</strong>
+          <p style={small}>Stages a new reviewable recipe only from the complete,
+            successful, same-owner Core trace of a bounded read/file-discovery task.
+            No private file contents, GUI clicks or unverified side effects are copied.
+            Leave the task ID blank to select the latest completed owned task.</p>
+          <label style={{fontSize:12}}>Completed task UUID (optional)
+            <input value={sourceTaskId} onChange={e=>setSourceTaskId(e.target.value)}
+              placeholder="Use most recent completed task"
+              style={{display:"block",width:"100%",boxSizing:"border-box",
+                background:"#071923",border:"1px solid #4b8296",
+                color:"#e7f2fb",padding:8,borderRadius:6}}/>
+          </label>
+          <button type="button" style={button} disabled={busy}
+            onClick={()=>void action("learn_skill",sourceTaskId.trim()?
+              {sourceTaskId:sourceTaskId.trim()}:{})}>
+            STAGE LEARNED SKILL FOR REVIEW
+          </button>
+        </div>
         {data.skills.length===0&&<p style={small}>No owner skills staged.</p>}
         {data.skills.map(skill=><div key={skill.id} style={{padding:10,
           border:"1px solid rgba(130,175,190,.25)",borderRadius:8}}>

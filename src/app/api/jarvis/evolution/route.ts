@@ -7,6 +7,8 @@ import {NextRequest} from "next/server";
 import {requireActiveSession} from "@/lib/agent/auth/session";
 import {mutationOriginError} from "@/lib/agent/auth/origin";
 import {authorizeToolCall} from "@/lib/agent/guardian/guardian";
+import {db} from "@/lib/db";
+import {learnFromCompletedTask} from "@/lib/agent/evolution/learnFromTask.mjs";
 import {
   listSkills,getSkill,stageSkill,changeSkill,expandSkill,EvolutionError
 } from "@/lib/agent/evolution/skillForge.mjs";
@@ -63,13 +65,14 @@ export async function POST(req:NextRequest){
   // Every actual OWNER mutation is audited by the same mandatory Guardian
   // ledger as ordinary agent tools. Only this authenticated/origin-checked
   // control plane may present ownerControlPlane=true; Core cannot do so.
-  const mutations=new Set(["stage_skill","approve_skill","disable_skill",
+  const mutations=new Set(["stage_skill","approve_skill","disable_skill","learn_skill",
     "stage_repair","approve_repair","apply_repair","rollback_repair"]);
   if(typeof body.action==="string" && mutations.has(body.action)){
     const decision=await authorizeToolCall(
       {taskId:null,ownerId:owner,ownerControlPlane:true},
       "evolution_owner_control",
-      {action:body.action,id:typeof body.id==="string"?body.id:undefined}
+      {action:body.action,id:typeof body.id==="string"?body.id:undefined,
+       sourceTaskId:typeof body.sourceTaskId==="string"?body.sourceTaskId:undefined}
     );
     if(decision.verdict!=="allow")
       return Response.json({error:decision.reason||"Guardian owner action denied"},{status:403});
@@ -78,6 +81,9 @@ export async function POST(req:NextRequest){
     switch(body.action){
       case "stage_skill":
         return Response.json(await stageSkill(owner,body.manifest),{headers});
+      case "learn_skill":
+        return Response.json(await learnFromCompletedTask(owner,db,
+          typeof body.sourceTaskId==="string"?body.sourceTaskId:undefined),{headers});
       case "skill_details":
         return Response.json(await getSkill(owner,body.id),{headers});
       case "approve_skill":

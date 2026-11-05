@@ -270,10 +270,11 @@ export async function executeTool(
     integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;arguments?:Record<string,unknown>};
     memory?: {ownerId:string;query:string;limit:number};
     world?: {ownerId:string;query:string;limit:number};
-    evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs";id?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
+    evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill";id?:string;sourceTaskId?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
   };
   switch (tool) {
     case "evolution_skill_stage":
+    case "evolution_skill_learn":
     case "evolution_skill_list":
     case "evolution_skill_run":
     case "evolution_skill_expand":
@@ -284,6 +285,13 @@ export async function executeTool(
         return {ok:false,tool,evidence:"",error:"Guardian evolution owner/session unavailable"};
       const ownerId=request.ownerId;
       try{
+        if(request.action==="learn_skill"){
+          const {learnFromCompletedTask}=await import("../evolution/learnFromTask.mjs");
+          const learned=await learnFromCompletedTask(ownerId,db,request.sourceTaskId);
+          return {ok:true,tool,
+            evidence:"Task-derived skill STAGED from same-owner successful durable receipts; owner approval still required",
+            detail:{...learned,executed:false,ownerApprovalRequired:true}};
+        }
         if(request.action==="stage_skill"){
           const {stageSkill}=await import("../evolution/skillForge.mjs");
           const result=await stageSkill(ownerId,request.manifest);

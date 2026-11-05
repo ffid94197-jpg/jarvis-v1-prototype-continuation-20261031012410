@@ -1184,7 +1184,7 @@ public final class JarvisBridgeServer {
                         boolean high=name.endsWith("_log") || name.endsWith("_ore") ||
                             name.equals("crafting_table") || name.equals("furnace") ||
                             name.equals("chest") || name.equals("barrel") ||
-                            name.equals("obsidian") ||
+                            name.equals("obsidian") || name.equals("enchanting_table") ||
                             name.endsWith("_door") || name.endsWith("_trapdoor") ||
                             name.endsWith("_button") || name.equals("lever");
                         boolean supporting=name.equals("grass_block") || name.equals("dirt") ||

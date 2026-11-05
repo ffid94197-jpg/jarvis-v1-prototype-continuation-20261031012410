@@ -506,13 +506,14 @@ export async function executeTool(
     case "windows_minecraft_input":
     case "minecraft_companion_command":
     case "minecraft_companion_join":
+    case "minecraft_companion_spawn":
     case "minecraft_companion_stop": {
       if (!prepared.desktop) return {ok:false,tool,evidence:"",error:"Guardian desktop arguments missing"};
       // The native backend is opt-in; default Mineflayer remains untouched.
       // Never accept owner identity from a model argument or the skill registry.
       if(process.env.JARVIS_MC_BACKEND==="playerengine" &&
          (tool==="minecraft_companion_command" || tool==="minecraft_companion_join" ||
-          tool==="minecraft_companion_stop")){
+          tool==="minecraft_companion_stop" || tool==="minecraft_companion_spawn")){
         if(!ownerId)return {ok:false,tool,evidence:"",error:"Authenticated Core owner missing"};
         const native=await runGuardianApprovedPlayerEngine(taskId,ownerId,prepared.desktop,decision,isCancelled);
         return {ok:native.ok,tool,

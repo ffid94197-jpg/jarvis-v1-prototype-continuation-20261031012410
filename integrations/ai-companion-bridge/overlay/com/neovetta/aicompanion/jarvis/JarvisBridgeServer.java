@@ -274,10 +274,20 @@ public final class JarvisBridgeServer {
                 } else { status = previous.state; note = previous.note; }
             }
             case "stop" -> {
-                safetyStopped.add(companionId);
-                // Owner-bound emergency stop works even if the JARVIS Node process
-                // restarted and lost its in-memory task map. Do not require old taskId.
+                String scope=field(args,"scope");
+                if (!scope.equals("task") && !scope.equals("companion"))
+                    throw new IllegalArgumentException("stop-scope");
+                if (scope.equals("task")) {
+                    boolean matched=false;
+                    for (Run run : tasks.values()) {
+                        if (run.companion.equals(companionId) &&
+                            run.coreTaskId.equals(authorizedCoreTask) &&
+                            "running".equals(run.state)) { matched=true;break; }
+                    }
+                    if (!matched) throw new IllegalArgumentException("no-running-task-for-cancellation");
+                }
                 ctrl.stop();
+                safetyStopped.add(companionId);
                 for (Run run : tasks.values()) {
                     if (companionId.equals(run.companion) && "running".equals(run.state)) {
                         run.state="cancelled";
@@ -285,7 +295,7 @@ public final class JarvisBridgeServer {
                         run.note="owner-emergency-stop-observed";
                     }
                 }
-                status="cancelled"; note="owner-companion-emergency-stop-issued";
+                status="cancelled"; note="companion-emergency-stop-latched";
             }
             case "resume" -> {
                 if (!safetyStopped.remove(companionId))

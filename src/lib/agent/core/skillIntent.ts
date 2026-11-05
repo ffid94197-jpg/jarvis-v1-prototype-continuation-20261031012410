@@ -19,6 +19,7 @@ export function directApprovedSkillIntent(objective:string):{
     if(Object.keys(inputs).length>8)return null;
     for(const [key,value] of Object.entries(inputs)){
       if(!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(key)||
+         ["__proto__","prototype","constructor"].includes(key)||
          !["string","number","boolean"].includes(typeof value) ||
          String(value).length>240 || (typeof value==="number"&&!Number.isFinite(value)))
         return null;

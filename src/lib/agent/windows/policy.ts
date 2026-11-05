@@ -462,6 +462,17 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     //
     // STOP is deliberately exempt: halting a running companion must stay
     // available even when the connection configuration is broken.
+    if (tool === "minecraft_companion_join" && process.env.JARVIS_MINECRAFT_ENGINE === "ai-companion") {
+      const config = String(process.env.JARVIS_MINECRAFT_AI_COMPANION_CONFIG || "").trim();
+      const player = String(process.env.JARVIS_MINECRAFT_PLAYER || "").trim();
+      if (!config && !process.env.APPDATA) {
+        return {ok:false,reason:"Set JARVIS_MINECRAFT_AI_COMPANION_CONFIG to the Fabric instance config/jarvis-bridge.json path."};
+      }
+      if (!/^[A-Za-z0-9_]{1,16}$/.test(player) || player.toLowerCase() === "jarvisbuddy") {
+        return {ok:false,reason:"JARVIS_MINECRAFT_PLAYER must be the real human owner of the AI Companion entity, not JarvisBuddy."};
+      }
+      return {ok:true,prepared:{operation:"minecraft_join"}};
+    }
     if (tool === "minecraft_companion_join") {
       const host = process.env.JARVIS_MINECRAFT_LAN_HOST || "127.0.0.1";
       if (host !== "127.0.0.1" && host !== "localhost") {

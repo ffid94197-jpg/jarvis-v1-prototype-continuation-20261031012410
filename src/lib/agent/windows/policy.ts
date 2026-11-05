@@ -500,7 +500,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:"Villager inspect needs a bounded observed entity ID"};
     if(command==="trade_villager" &&
        (!Number.isInteger(args.entityId)||Number(args.entityId)<0||Number(args.entityId)>200000||
-        !Number.isInteger(args.tradeIndex)||Number(args.tradeIndex)<0||Number(args.tradeIndex)>31||
+        !Number.isInteger(args.tradeIndex)||Number(args.tradeIndex)<0||Number(args.tradeIndex)>7||
         !Number.isInteger(args.times)||Number(args.times)<1||Number(args.times)>4))
       return {ok:false,reason:"Trade requires observed villager ID, offer index 0-31 and 1-4 trades"};
     if(command==="transfer_container" &&

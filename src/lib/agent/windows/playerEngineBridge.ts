@@ -13,7 +13,8 @@ type SendRequest={taskId:string;idempotencyKey:string;operation:string;worldId:s
 const client = require("../../../../integrations/ai-companion-bridge/guardian-ipc-client.cjs") as
   {sendAuthorizedObjective(request:SendRequest,options:{port:number;host:"127.0.0.1";secret:string;timeoutMs:number}):Promise<Packet>};
 export type PlayerEngineResult={ok:boolean;evidence?:Record<string,unknown>;error?:string};
-const active = new Map<string,{runId:string;operation:string;item?:string;before?:number;destination?:{x:number;y:number;z:number}}>();
+const active = new Map<string,{runId:string;operation:string;item?:string;before?:number;
+  destination?:{x:number;y:number;z:number};equipDestination?:string;blockName?:string}>();
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Settings={port:number;secret:string;worldId:string;ownerUuid:string;companionUuid:string};
 function settings(ownerId:string):Settings {
@@ -31,7 +32,8 @@ function settings(ownerId:string):Settings {
     throw Error("PlayerEngine owner/world/secret settings unavailable");
   return {port,secret,worldId,ownerUuid,companionUuid};
 }
-function extract(o:Packet):{health:number;hunger:number;position:{x:number;y:number;z:number};items:Record<string,number>;armor:Set<string>} {
+function extract(o:Packet):{health:number;hunger:number;position:{x:number;y:number;z:number};
+  items:Record<string,number>;armor:Set<string>;armorSlots:string[];mainHand:string} {
   const s=o.observations;
   if(!s || s.companionUuid===undefined)throw Error("Missing server observation");
   const p={x:Number(s.x),y:Number(s.y),z:Number(s.z)};
@@ -51,7 +53,12 @@ function extract(o:Packet):{health:number;hunger:number;position:{x:number;y:num
   for(const entry of s.inventory){const {item,count}=normalizedName(entry);items[item]=(items[item]||0)+count;}
   const armor=new Set<string>();
   for(const entry of s.armor){const {item}=normalizedName(entry);armor.add(item);}
-  return {health:Number(s.health),hunger:Number(s.hunger),position:p,items,armor};
+  if(!Array.isArray(s.armorSlots)||s.armorSlots.length!==4 ||
+     s.armorSlots.some(v=>typeof v!=="string"||!/^[a-z0-9_]{0,64}$/.test(v)) ||
+     typeof s.mainHand!=="string"||!/^[a-z0-9_]{0,64}$/.test(s.mainHand))
+      throw Error("Missing accurate equipment-slot observations");
+  return {health:Number(s.health),hunger:Number(s.hunger),position:p,items,armor,
+    armorSlots:s.armorSlots as string[],mainHand:s.mainHand};
 }
 function observation(p:Packet) {
   const state=extract(p), inv=state.items;
@@ -81,6 +88,22 @@ async function send(op:string, id:string, c:Settings, extra:Record<string,unknow
   extract(response);
   if(response.observations?.companionUuid!==c.companionUuid)throw Error("Wrong companion in signed server receipt");
   return response;
+}
+function physicalCount(items:Record<string,number>,item:string):number {
+  if(item==="log")return Object.keys(items).filter(k=>k.endsWith("_log")).reduce((n,k)=>n+(items[k]||0),0);
+  return items[item]||0;
+}
+function authorizedCoords(v:unknown):v is {x:number;y:number;z:number} {
+  if(!v || typeof v!=="object" || Array.isArray(v))return false;
+  const p=v as Record<string,unknown>;
+  return Object.keys(p).length===3 && ["x","y","z"].every(k=>Number.isInteger(p[k])&&
+    Math.abs(p[k] as number)<=29999984);
+}
+function observedEquipment(packet:Packet,item:string,destination:string):boolean {
+  const snapshot=extract(packet);
+  const slots:Record<string,number>={feet:0,legs:1,torso:2,head:3};
+  return destination==="hand"?snapshot.mainHand===item:
+    Object.hasOwn(slots,destination)&&snapshot.armorSlots[slots[destination]]===item;
 }
 function distance(a:{x:number;y:number;z:number},b:{x:number;y:number;z:number}) {
   return Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -119,24 +142,47 @@ export async function runGuardianApprovedPlayerEngine(
     }
     if(current)throw Error("Previous native action remains unresolved: inspect/status before another effect");
     let op:string, extra:Record<string,unknown>, requestedCount=0,item:string|undefined;
-    if(cmd==="collect_wood"){op="gather";item="oak_log";requestedCount=1;extra={item,count:1};}
-    else if(cmd==="craft_item" && typeof desktop.item==="string" &&
-      typeof desktop.count==="number" && Number.isInteger(desktop.count) &&
-      desktop.count>=1 && desktop.count<=16) {
-      op="craft";item=desktop.item;requestedCount=desktop.count!;extra={item,count:requestedCount};
-    } else if(cmd==="navigate" && desktop.position){
-      op="travel";extra={...desktop.position};
-    } else throw Error("PlayerEngine operation not supported; no Mineflayer fallback mixed into this backend");
+    let blockName:string|undefined,equipDestination:string|undefined;
+    let target:{x:number;y:number;z:number}|undefined;
+    if(cmd==="collect_wood"){
+      op="gather";item="log";requestedCount=1;extra={item,count:1};
+    }else if(cmd==="craft_item"&&typeof desktop.item==="string"&&
+      typeof desktop.count==="number"&&Number.isInteger(desktop.count)&&
+      desktop.count>=1&&desktop.count<=16){
+      op="craft";item=desktop.item;requestedCount=desktop.count;extra={item,count:requestedCount};
+    }else if(cmd==="navigate"&&authorizedCoords(desktop.position)){
+      op="travel";target=desktop.position;extra={...target};
+    }else if(cmd==="dig_block"&&authorizedCoords(desktop.position)){
+      op="dig";target=desktop.position;extra={...target};
+    }else if(cmd==="place_block"&&typeof desktop.item==="string"&&
+      authorizedCoords(desktop.reference)&&authorizedCoords(desktop.face)){
+      const face=desktop.face;
+      if(Math.abs(face.x)+Math.abs(face.y)+Math.abs(face.z)!==1)
+        throw Error("Only one adjacent block face is supported");
+      target={x:desktop.reference.x+face.x,y:desktop.reference.y+face.y,z:desktop.reference.z+face.z};
+      if(!authorizedCoords(target))throw Error("Block placement target outside world");
+      op="build";blockName=desktop.item;extra={...target,block:blockName};
+    }else if(cmd==="equip_item"&&typeof desktop.item==="string"&&
+      ["hand","head","torso","legs","feet"].includes(String(desktop.destination))){
+      op="equip";item=desktop.item;equipDestination=String(desktop.destination);
+      extra={item,destination:equipDestination};
+    }else if(cmd==="attack_hostile"&&Number.isInteger(desktop.entityId)&&
+      (desktop.entityId as number)>=0&&(desktop.entityId as number)<=200000){
+      op="combat";extra={entityId:desktop.entityId};
+    }else throw Error("PlayerEngine operation unsupported; no mixed Mineflayer fallback in this backend");
     const baseline=await send("inspect",randomUUID(),cfg,{},2500);
     if (typeof baseline.observations?.activeTaskId==="string")
       throw Error("Another native task is running on this companion; reconcile or emergency-stop it before another effect");
-    const before=item?(extract(baseline).items[item]||0):undefined;
+    const before=item?physicalCount(extract(baseline).items,item):undefined;
     if(isCancelled())throw Error("Cancelled before native task dispatch");
     const runId=randomUUID();
+    // Record the operation BEFORE submitting it; a dropped reply is an
+    // ambiguous external mutation and must never enable a blind retry.
+    active.set(coreTaskId,{runId,operation:op,item,before,destination:target,
+      equipDestination,blockName});
     const started=await send(op,runId,cfg,extra,30000);
     if(!["accepted","running","observed"].includes(started.status))
-      throw Error("Native task not admitted by game engine");
-    active.set(coreTaskId,{runId,operation:op,item,before,destination:desktop.position});
+      throw Error("Native task admission failed; inspect status before any retry");
     const until=Date.now()+29500;
     while(Date.now()<until) {
       if(isCancelled()) {
@@ -148,10 +194,22 @@ export async function runGuardianApprovedPlayerEngine(
       if(polled.status==="running"||polled.status==="accepted")continue;
       active.delete(coreTaskId);
       const after=extract(polled);
-      const physicallyAdded=item?after.items[item]||0:0;
-      const arrived=desktop.position?distance(after.position,desktop.position)<=2.5:false;
-      const proved=polled.status==="observed" &&
-        (op==="travel"?arrived:Boolean(item && physicallyAdded>=Number(before)+requestedCount));
+      const physicallyAdded=item?physicalCount(after.items,item):0;
+      const arrived=target?distance(after.position,target)<=2.5:false;
+      const targetBlock=polled.observations?.targetBlock;
+      const observedBlock=targetBlock && typeof targetBlock==="object" ?
+        (targetBlock as Record<string,unknown>).block:null;
+      const blockedResult=op==="dig"?observedBlock==="air":
+        op==="build"?observedBlock===blockName:false;
+      const equipped=op==="equip" && item && equipDestination ?
+        observedEquipment(polled,item,equipDestination) : false;
+      const defeated=op==="combat" && polled.observations?.targetAlive===false;
+      const physicalProof=op==="travel"?arrived:
+        op==="dig"||op==="build"?blockedResult:
+        op==="equip"?equipped:
+        op==="combat"?defeated:
+        Boolean(item && physicallyAdded>=Number(before)+requestedCount);
+      const proved=polled.status==="observed" && physicalProof;
       if(op==="craft" && proved) {
         // An inventory increase alone is not evidence that the item was crafted.
         return {ok:false,error:"Item acquired but crafting-method proof not yet available",

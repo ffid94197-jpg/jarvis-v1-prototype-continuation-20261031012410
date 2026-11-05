@@ -209,6 +209,7 @@ export async function expandSkill(owner,id,inputs={}){
     throw new EvolutionError("Invalid skill inputs");
   for(const [k,v] of Object.entries(inputs)){
     if(!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(k)||
+       ["__proto__","constructor","prototype"].includes(k)||
        !["string","number","boolean"].includes(typeof v)||
        String(v).length>240)
       throw new EvolutionError("Invalid skill input");

@@ -213,12 +213,39 @@ export async function runGuardianApprovedPlayerEngine(
     const auth={auditId:decision.auditId,coreTaskId};
     const cfg=settings(ownerId);
     const cmd=desktop.operation==="minecraft_command"?desktop.command:
-      desktop.operation==="minecraft_join"?"join":desktop.operation==="minecraft_stop"?"auto_stop":null;
+      desktop.operation==="minecraft_join"?"join":
+      desktop.operation==="minecraft_spawn"?"spawn":
+      desktop.operation==="minecraft_stop"?"auto_stop":null;
     if(!cmd)throw Error("Unsupported PlayerEngine tool");
     if(isCancelled() && !["auto_stop","stop","stay"].includes(cmd))throw Error("Operator cancellation before admission");
     let current=active.get(coreTaskId);
     if(!current && cmd==="auto_status")
       current=await restoreNativeMissionFromCore(coreTaskId,ownerId,cfg);
+    if(cmd==="spawn"){
+      if(current)throw Error("Native task active; explicit reconciliation needed before spawn");
+      if(process.env.JARVIS_MC_BRIDGE_SPAWN_ENABLED!=="1")
+        throw Error("Operator has disabled native companion spawning");
+      if(isCancelled())throw Error("Operator cancelled before spawn");
+      const runId=randomUUID();
+      active.set(coreTaskId,{runId,operation:"spawn"});
+      // An absent reply means UNKNOWN, not a clean failure or permission
+      // to create a second companion. The Fabric journal quarantines it.
+      const receipt=await send("spawn",runId,cfg,auth,{},5000);
+      const scene=receipt.observations;
+      const paired=receipt.status==="observed" &&
+        scene?.companionUuid===cfg.companionUuid &&
+        scene?.ownerUuid===cfg.ownerUuid && scene?.ownerPaired===true &&
+        scene?.dimension==="minecraft:overworld" &&
+        scene?.recoveryRequired!==true && scene?.safetyStopped!==true;
+      if(paired)active.delete(coreTaskId);
+      return {ok:paired,evidence:{
+        backend:"playerengine",command:"spawn",nativeSpawnVerified:paired,
+        joinedVerified:paired,ownerPaired:paired,
+        worldId:cfg.worldId,ownerUuid:cfg.ownerUuid,
+        companionUuid:cfg.companionUuid,realWorldReadback:paired},
+        error:paired?undefined:
+          "Signed native spawn/owner pairing not verified; do not retry an unknown world mutation"};
+    }
     if(["join","observe","status","inventory","auto_status"].includes(cmd)){
       const packet=await send(current?"status":"inspect",current?.runId||randomUUID(),cfg,auth,{},2500);
       if(packet.status==="failed" && current)throw Error("Native task status failed");

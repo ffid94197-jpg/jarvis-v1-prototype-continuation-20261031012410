@@ -26,7 +26,7 @@
 import { createModelBridge, modelIdentityContext, type ModelBridge } from "./modelProvider";
 import { adviseTask } from "./laya";
 import { directWindowsLaunch } from "./windowsIntent";
-import { directMinecraftMission, minecraftMissionFromObjective } from "./minecraftIntent";
+import { directMinecraftMission, minecraftMissionFromObjective, directNativeCompanionSpawn } from "./minecraftIntent";
 import { MinecraftAiGate, isMinecraftAiObjective, isMinecraftObservationOnlyObjective, firstMinecraftObservationDecision, MINECRAFT_AI_INSTRUCTIONS } from "./minecraftAiGate";
 import { directCapabilityDiscovery } from "./capabilityIntent";
 import { classifyModelFailure } from "./modelErrors";
@@ -460,7 +460,11 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // Direct Minecraft missions are handled through the Core's normal
   // Guardian/audit/effect controls without requiring a cloud model call.
   // The independently executing companion owns the ongoing gameplay loop.
-  const minecraftAiTask = process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" &&
+  // Spawn is a separate explicit owner request. Never let the regular
+  // Minecraft AI bootstrap join or a model convert playing into spawning.
+  const nativeSpawnIntent=!opts.replay?directNativeCompanionSpawn(objective):null;
+  const minecraftAiTask = !nativeSpawnIntent &&
+    process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" &&
     process.env.JARVIS_MINECRAFT_AI_PLANNER_ENABLED === "1" && isMinecraftAiObjective(objective);
   // Model-assisted gameplay cannot observe an unjoined Mineflayer companion.
   // Bootstrap exactly one owner-authorized join BEFORE the first read-only
@@ -513,7 +517,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   const deterministicSkillIntent=!opts.replay?directApprovedSkillIntent(objective):null;
   let deterministicSkillStarted=false;
   let model: ModelBridge | null = null;
-  if (!minecraftMission && !deterministicSkillIntent) try {
+  if (!minecraftMission && !deterministicSkillIntent && !nativeSpawnIntent) try {
     // Durable model pin: even after a task is paused or the owner changes
     // the selected provider, resume cannot silently disclose its context to
     // a different API. The -1 step is not a tool effect and is never replayed.
@@ -576,7 +580,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let goalPlan: GoalPlan | null = null;
   let goalWatchdog = new GoalProgressWatchdog(undefined, autonomyLimits);
   if (process.env.JARVIS_GOAL_PLANNER_ENABLED === "1" && !minecraftMission &&
-      !deterministicSkillIntent && requiresGoalPlan(objective)) {
+      !deterministicSkillIntent && !nativeSpawnIntent && requiresGoalPlan(objective)) {
     let planningStage = "PLAN_DB_LOOKUP_FAILED";
     try {
       const prior = await db.agentStep.findFirst({
@@ -732,6 +736,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         ? JSON.stringify({action:"final",answer:skillExecutionIncomplete
             ? "Owner-approved skill stopped before all stages were verified; no complete-success claim is permitted."
             : "Owner-approved skill stages have returned executor receipts; the Core will independently arbitrate completion."})
+        : nativeSpawnIntent && stepsUsed===0 ? JSON.stringify(nativeSpawnIntent)
         : firstMinecraftJoin ? JSON.stringify(firstMinecraftJoin) :
         firstMinecraftObserve ? JSON.stringify(firstMinecraftObserve) :
         minecraftIntent ? JSON.stringify(minecraftIntent) : localIntent ? JSON.stringify(localIntent) : capabilityIntent ?
@@ -1098,7 +1103,10 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       minecraftAiDenied=0;
     }
 
-    const guardian = await authorizeToolCall({ taskId, ownerId: opts.ownerId }, tool, args);
+    const guardian = await authorizeToolCall({
+      taskId,ownerId:opts.ownerId,
+      coreSpawnIntent:!!nativeSpawnIntent && tool==="minecraft_companion_spawn"
+    },tool,args);
 
     if (guardian.verdict === "deny") {
       if(queuedSkillStep)haltSkill("Guardian denied queued action");
@@ -1428,6 +1436,20 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       }
     }
 
+    if(nativeSpawnIntent && tool==="minecraft_companion_spawn"){
+      const paired=result.ok &&
+        result.detail?.nativeSpawnVerified===true &&
+        result.detail?.ownerPaired===true &&
+        result.detail?.joinedVerified===true &&
+        result.detail?.realWorldReadback===true;
+      await settleAndReport(taskId,
+        effectJournalDegraded?"effect_unknown":paired?"completed":"effect_unknown",
+        stepsUsed,paired
+          ? "Owner-approved native Minecraft companion spawned and paired to the exact configured owner and entity UUID. This establishes ONLY a verified spawn, not survival gameplay or Ender Dragon success."
+          : "Native companion spawn was not independently verified. World effect may be unknown; inspect the configured UUID and durable game journal before any retry.",
+        emit,{effectsHappened});
+      return;
+    }
     if(minecraftAiGate && tool==="minecraft_companion_join" && !result.ok){
       // A failed join is not a game observation, does not prove a world
       // was loaded and must not feed the model a fictitious scene.

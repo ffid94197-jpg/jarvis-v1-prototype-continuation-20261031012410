@@ -2,7 +2,7 @@ import {readFileSync} from "node:fs";
 import {join} from "node:path";
 /** Operator opt-in Windows capabilities. Never infer privileges from model output. */
 export interface DesktopPrepared {
-  operation: "open_url" | "open_app" | "open_settings" | "discover_apps" | "find_capability" | "youtube_oldest" | "screen_watch" | "minecraft_join" | "minecraft_stop" | "browser_search" | "browser_inspect" | "browser_read_page" | "browser_click_link" | "browser_fill_search" | "browser_scroll" | "list_windows" | "focus_app" | "desktop_state" | "desktop_windows" | "desktop_focus" | "desktop_click" | "desktop_move" | "desktop_type" | "desktop_keys" | "desktop_scroll" | "launch_installed" | "minecraft_command" | "minecraft_input" | "native_open_url" | "native_inspect" | "native_action" | "native_verify" | "desktop_observe";
+  operation: "open_url" | "open_app" | "open_settings" | "discover_apps" | "find_capability" | "youtube_oldest" | "screen_watch" | "minecraft_join" | "minecraft_spawn" | "minecraft_stop" | "browser_search" | "browser_inspect" | "browser_read_page" | "browser_click_link" | "browser_fill_search" | "browser_scroll" | "list_windows" | "focus_app" | "desktop_state" | "desktop_windows" | "desktop_focus" | "desktop_click" | "desktop_move" | "desktop_type" | "desktop_keys" | "desktop_scroll" | "launch_installed" | "minecraft_command" | "minecraft_input" | "native_open_url" | "native_inspect" | "native_action" | "native_verify" | "desktop_observe";
   goal?: string;
   url?: string;
   app?: string;
@@ -451,6 +451,19 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       r.steps.every(x=>validMinecraftGoal(x as Record<string,unknown>,true));
     return false;
   };
+  if(tool==="minecraft_companion_spawn"){
+    // A dedicated tool, never an alias for ordinary JOIN. The server checks
+    // the owner and preconfigured entity UUID independently on the game thread.
+    if(Object.keys(args).length!==0)
+      return {ok:false,reason:"Native spawn must not accept model-selected UUIDs, names, locations or options"};
+    if(!playerEngineSelected)
+      return {ok:false,reason:"Native Fabric spawning is unavailable in the default Mineflayer backend"};
+    const failure=nativeMinecraftPreflight();
+    if(failure)return {ok:false,reason:failure};
+    if(process.env.JARVIS_MC_BRIDGE_SPAWN_ENABLED!=="1")
+      return {ok:false,reason:"Owner has not enabled JARVIS_MC_BRIDGE_SPAWN_ENABLED=1"};
+    return {ok:true,prepared:{operation:"minecraft_spawn"}};
+  }
   if (tool === "minecraft_companion_command") {
     if(playerEngineSelected){
       const failure=nativeMinecraftPreflight();

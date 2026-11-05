@@ -91,6 +91,20 @@ final class JarvisNativeJournal {
 
     boolean known(UUID runId) {return known.contains(runId);}
 
+    /** An unloaded but once-owned entity may still exist in a saved chunk.
+     * Never spawn a second configured UUID just because it is not loaded.
+     * Owner/admin reconciliation of old world state is a separate operation.
+     */
+    boolean hasSpawnHistory(UUID companion) {
+        for(JsonObject record:records.values()){
+            if(record.has("operation") && record.has("companionUuid") &&
+               "spawn".equals(record.get("operation").getAsString()) &&
+               companion.toString().equals(record.get("companionUuid").getAsString()))
+                return true;
+        }
+        return false;
+    }
+
     void admit(UUID runId,UUID coreTaskId,UUID companion,String world,String op) throws IOException {
         if (known.size()>=MAX_RECORDS) throw new IOException("Native journal full");
         if (known.contains(runId)) throw new IOException("Duplicate native mutation ID");

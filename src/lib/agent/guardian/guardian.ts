@@ -92,6 +92,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "windows_minecraft_input",
   "minecraft_companion_command",
   "minecraft_companion_join",
+  "minecraft_companion_spawn",
   "minecraft_companion_stop",
   "adoption_stage_github", "adoption_list", "adoption_skill", "adoption_mcp_list", "adoption_mcp_call",
   "evolution_skill_stage", "evolution_skill_list", "evolution_skill_expand", "evolution_skill_run",
@@ -140,7 +141,7 @@ async function writeAudit(
 
 /** THE GATE. Authorize (and audit) one tool call. Fail-closed everywhere. */
 export async function authorizeToolCall(
-  ctx: { taskId: string | null; ownerId?:string; ownerControlPlane?:boolean },
+  ctx: { taskId: string | null; ownerId?:string; ownerControlPlane?:boolean; coreSpawnIntent?:boolean },
   tool: string,
   rawArgs: Record<string, unknown>,
 ): Promise<GuardianDecision> {
@@ -414,6 +415,19 @@ export async function authorizeToolCall(
       case "windows_desktop_keys":
       case "windows_desktop_scroll":
       case "windows_minecraft_input":
+      case "minecraft_companion_spawn": {
+        // This context flag is set ONLY by runTask's exact explicit-spawn
+        // intent parser. A model-selected spawn tool cannot assert it.
+        if(ctx.coreSpawnIntent!==true || !ctx.ownerId || !ctx.taskId ||
+           Object.keys(rawArgs).length!==0){
+          decision=deny("Explicit Core-authored owner spawn intent required");break;
+        }
+        const validated=validateDesktopTool(tool,rawArgs);
+        decision=validated.ok
+          ? {verdict:"allow",prepared:{desktop:validated.prepared}}
+          : deny(validated.reason);
+        break;
+      }
       case "minecraft_companion_command":
       case "minecraft_companion_join":
       case "minecraft_companion_stop": {

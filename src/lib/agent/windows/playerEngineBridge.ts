@@ -108,7 +108,7 @@ export async function runGuardianApprovedPlayerEngine(
         status:JSON.stringify(world),verifiedGameReadback:true}};
     }
     if(cmd==="auto_stop"||cmd==="stop"||cmd==="stay") {
-      if(!current)return {ok:true,evidence:{backend:"playerengine",status:"no-active-native-task"}};
+      if(!current)return {ok:false,error:"No tracked native task to cancel; game-state stop unverified"};
       const stopped=await send("cancel",current.runId,cfg,{},2500);
       active.delete(coreTaskId);
       return {ok:stopped.status==="cancelled",evidence:{backend:"playerengine",
@@ -118,7 +118,8 @@ export async function runGuardianApprovedPlayerEngine(
     let op:string, extra:Record<string,unknown>, requestedCount=0,item:string|undefined;
     if(cmd==="collect_wood"){op="gather";item="oak_log";requestedCount=1;extra={item,count:1};}
     else if(cmd==="craft_item" && typeof desktop.item==="string" &&
-      Number.isInteger(desktop.count) && desktop.count!>=1 && desktop.count!<=16) {
+      typeof desktop.count==="number" && Number.isInteger(desktop.count) &&
+      desktop.count>=1 && desktop.count<=16) {
       op="craft";item=desktop.item;requestedCount=desktop.count!;extra={item,count:requestedCount};
     } else if(cmd==="navigate" && desktop.position){
       op="travel";extra={...desktop.position};

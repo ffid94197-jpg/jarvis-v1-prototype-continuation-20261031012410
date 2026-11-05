@@ -4,7 +4,8 @@ import {useCallback,useEffect,useState,type CSSProperties} from "react";
 
 type Skill={id:string;name:string;description:string;status:string;digest:string;stageCount:number;createdAt:string};
 type Repair={id:string;path:string;state:string;diagnosis:string;beforeSha256:string;afterSha256:string;createdAt:string};
-type EvolutionState={skills:Skill[];repairs:Repair[];ownerApprovalRequired:boolean};
+type Recovery={id:string;path:string;state:string;observed:string;requiresOwnerReconciliation:boolean};
+type EvolutionState={skills:Skill[];repairs:Repair[];recovery:Recovery[];ownerApprovalRequired:boolean};
 type Detail=Record<string,unknown>;
 
 const panel:CSSProperties={display:"grid",gap:12,marginTop:18,padding:16,
@@ -24,7 +25,7 @@ async function callApi(body:Record<string,unknown>):Promise<Detail>{
   return data as Detail;
 }
 export default function EvolutionPanel(){
-  const [data,setData]=useState<EvolutionState>({skills:[],repairs:[],ownerApprovalRequired:true});
+  const [data,setData]=useState<EvolutionState>({skills:[],repairs:[],recovery:[],ownerApprovalRequired:true});
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState(""),[notice,setNotice]=useState("");
   const [details,setDetails]=useState<Detail|null>(null);
@@ -35,7 +36,8 @@ export default function EvolutionPanel(){
     const body=await response.json().catch(()=>({error:"Unavailable"}));
     if(!response.ok)throw Error(body.error||"Owner role/session required");
     setData({skills:Array.isArray(body.skills)?body.skills:[],
-      repairs:Array.isArray(body.repairs)?body.repairs:[],ownerApprovalRequired:true});
+      repairs:Array.isArray(body.repairs)?body.repairs:[],
+      recovery:Array.isArray(body.recovery)?body.recovery:[],ownerApprovalRequired:true});
   },[]);
   useEffect(()=>{let mounted=true;reload().catch(e=>{if(mounted)setError(String(e));})
     .finally(()=>{if(mounted)setLoading(false);});
@@ -73,6 +75,15 @@ export default function EvolutionPanel(){
       {loading&&<p>Reading owner registry…</p>}
       {error&&<p role="alert" style={{color:"#f8c08a"}}>{error}</p>}
       {notice&&<p role="status" style={{color:"#a9e0c1"}}>{notice}</p>}
+      {data.recovery.length>0&&<div role="alert" style={{border:"1px solid #db9759",
+        borderRadius:8,padding:10,background:"rgba(102,53,12,.28)"}}>
+        <strong>Recovery required: {data.recovery.length} uncertain patch operation(s)</strong>
+        <p style={small}>JARVIS has not replayed or auto-applied them. Review the current
+          file state, then use explicit owner rollback where the exact file hash allows it.</p>
+        {data.recovery.map(entry=><p key={entry.id} style={small}>
+          {entry.path}: {entry.state} · disk: {entry.observed}
+        </p>)}
+      </div>}
       <div style={{display:"grid",gap:8}}>
         <h4 style={{margin:0}}>Skill Forge</h4>
         <p style={small}>A model may stage a declarative skill. Review each proposed tool and

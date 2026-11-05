@@ -31,6 +31,29 @@ Additional prototype source now includes:
 
 **Remaining build-only limitations:** unimplemented native villager purchase transactions, enchanting, multi-operation advanced container and world interactions, broad generic construction beyond bounded primitives, hardening of all long-horizon edge cases, and remaining general-purpose Windows/AI autonomy coverage. Also, this code has NOT been compiled or field-accepted. GitHub Actions have not been used in this pass.
 
+## Native Node-process restart recovery
+
+An owner-authorized native `auto_goal` stores its randomly generated native
+run UUID and start time in the **existing, durably SETTLED Core effect receipt**,
+together with the original world, owner UUID, companion UUID and native
+operation. The original Core task UUID remains the authoritative parent.
+
+When the **same Core task** resumes after a Node process restart, an explicit
+`auto_status` can restore the native run binding only from owner-matching
+settled effect records. JARVIS refuses restoration when a Core effect is
+ADMITTED/EFFECT_UNKNOWN, when the receipt is damaged or missing a provenance
+field, when the goal/world/companion differs, or when the stored start time
+is stale. It then requests a **new authenticated, HMAC-signed** status from the
+still-running Fabric server. A past accepted-dispatch receipt is never
+accepted as a successful game-state result.
+
+**Important limits:** This does not resurrect a Fabric world, a killed server
+task, or an already-settled Core task as a new owner command. Cross-task
+historical mission monitoring, recovery from an interrupted Minecraft
+server and durable autonomous completion across a world restart still need
+separate accepted implementation. No automatic reexecution of a previous
+mutating goal is permitted.
+
 ## Architecture and code
 
 - Pinned AI Companion upstream: \`adevivo/ai-companion@6bb1df1a06258ca712b66f1404dd05204f25b9c7\`, LGPL-3.0; PlayerEngine / AltoClef / Automatone.

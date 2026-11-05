@@ -498,7 +498,8 @@ def validate_action(body):
                 return False
             goal=record['goal']
             fixed={'survive','wood','tools','explore','follow','guard','stone_age','iron_age',
-                   'dragon_run','netherite_dragon_run','dragon_then_netherite_run','companion'}
+                   'dragon_run','netherite_armor_run','netherite_gear_run',
+                   'netherite_dragon_run','dragon_then_netherite_run','companion'}
             fields={
                 'gather':{'resource','targetCount'},
                 'travel':{'destination','arrivalRange'},

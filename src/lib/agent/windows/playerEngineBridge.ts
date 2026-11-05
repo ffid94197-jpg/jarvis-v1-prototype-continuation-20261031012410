@@ -14,9 +14,10 @@ type SendRequest={taskId:string;idempotencyKey:string;operation:string;worldId:s
 const client = require("../../../../integrations/ai-companion-bridge/guardian-ipc-client.cjs") as
   {sendAuthorizedObjective(request:SendRequest,options:{port:number;host:"127.0.0.1";secret:string;timeoutMs:number}):Promise<Packet>};
 export type PlayerEngineResult={ok:boolean;evidence?:Record<string,unknown>;error?:string};
-const active = new Map<string,{runId:string;operation:string;item?:string;before?:number;
+type NativeRun={runId:string;operation:string;item?:string;before?:number;
   destination?:{x:number;y:number;z:number};equipDestination?:string;blockName?:string;
-  missionGoal?:string;missionSince?:number}>();
+  missionGoal?:string;missionSince?:number};
+const active = new Map<string,NativeRun>();
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Settings={port:number;secret:string;worldId:string;ownerUuid:string;companionUuid:string};
 function settings(ownerId:string):Settings {
@@ -42,12 +43,18 @@ function settings(ownerId:string):Settings {
  */
 async function restoreNativeMissionFromCore(
   coreTaskId:string,ownerId:string,cfg:Settings
-):Promise<(typeof active extends Map<string,infer V>?V:never)|undefined>{
+):Promise<NativeRun|undefined>{
   const task=await db.agentTask.findUnique({
     where:{id:coreTaskId},select:{ownerId:true}
   });
   if(!task || task.ownerId!==ownerId)
     throw Error("Native mission owner provenance unavailable");
+  const uncertain=await db.effectRecord.count({
+    where:{taskId:coreTaskId,tool:"minecraft_companion_command",
+      status:{in:["ADMITTED","EFFECT_UNKNOWN"]}}
+  });
+  if(uncertain>0)
+    throw Error("Native mission has unsettled Core effects; reconcile before restoring");
   const rows=await db.effectRecord.findMany({
     where:{taskId:coreTaskId,tool:"minecraft_companion_command",status:"SETTLED"},
     orderBy:{admittedAt:"desc"},take:40,
@@ -65,11 +72,13 @@ async function restoreNativeMissionFromCore(
          !UUID.test(String(proof.nativeRunId||"")) ||
          proof.worldId!==cfg.worldId || proof.ownerUuid!==cfg.ownerUuid ||
          proof.companionUuid!==cfg.companionUuid ||
+         typeof proof.nativeOperation!=="string" ||
+         !["endgame","farm","smelt","sequence","transfer"].includes(proof.nativeOperation) ||
          typeof proof.nativeSince!=="number" ||
          !Number.isSafeInteger(proof.nativeSince) ||
          proof.nativeSince>Date.now()+30000 ||
          Date.now()-proof.nativeSince>14*60*60*1000)continue;
-      const restored={runId:String(proof.nativeRunId),operation:"endgame",
+      const restored={runId:String(proof.nativeRunId),operation:proof.nativeOperation,
         missionGoal:args.goal,missionSince:proof.nativeSince};
       active.set(coreTaskId,restored);
       return restored;
@@ -367,7 +376,7 @@ export async function runGuardianApprovedPlayerEngine(
       return {ok:admitted,
         evidence:{botAcknowledged:admitted,backend:"playerengine",
           command:"auto_goal",goal,status:receipt.status,
-          nativeRunId:runId,nativeSince,worldId:cfg.worldId,
+          nativeRunId:runId,nativeSince,nativeOperation:op,worldId:cfg.worldId,
           ownerUuid:cfg.ownerUuid,companionUuid:cfg.companionUuid,
           missionStartedOnly:true,missionReceipt:receipt.observations?.missionStatus},
         error:admitted?undefined:

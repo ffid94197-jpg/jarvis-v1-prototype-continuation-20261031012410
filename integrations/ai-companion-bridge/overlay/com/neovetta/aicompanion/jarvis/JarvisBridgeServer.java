@@ -72,6 +72,7 @@ public final class JarvisBridgeServer {
 
     private static final class Run {
         final UUID companion;
+        final UUID coreTaskId;
         final AltoClefController ctrl;
         final long deadline;
         final CompanionEntity entity;
@@ -88,8 +89,9 @@ public final class JarvisBridgeServer {
         volatile long settledAt;
         volatile String state = "running";
         volatile String note = "task-dispatched-not-verified";
-        Run(UUID companion, AltoClefController ctrl, CompanionEntity entity, long budgetMs) {
-            this.companion=companion; this.ctrl=ctrl; this.entity=entity;
+        Run(UUID companion, UUID coreTaskId, AltoClefController ctrl, CompanionEntity entity, long budgetMs) {
+            this.companion=companion; this.coreTaskId=coreTaskId;
+            this.ctrl=ctrl; this.entity=entity;
             this.deadline=System.currentTimeMillis()+budgetMs;
         }
     }
@@ -266,8 +268,9 @@ public final class JarvisBridgeServer {
             case "inspect" -> { status = "observed"; note = "snapshot-only"; }
             case "status" -> {
                 Run previous = tasks.get(taskId);
-                if (previous == null || !previous.companion.equals(companionId)) {
-                    status = "failed"; note = "no-active-task";
+                if (previous == null || !previous.companion.equals(companionId) ||
+                        !previous.coreTaskId.equals(authorizedCoreTask)) {
+                    status = "failed"; note = "no-owned-task";
                 } else { status = previous.state; note = previous.note; }
             }
             case "stop" -> {
@@ -293,7 +296,8 @@ public final class JarvisBridgeServer {
             }
             case "cancel" -> {
                 Run previous = tasks.get(taskId);
-                if (previous == null || !previous.companion.equals(companionId))
+                if (previous == null || !previous.companion.equals(companionId) ||
+                        !previous.coreTaskId.equals(authorizedCoreTask))
                     throw new IllegalArgumentException("task-mismatch");
                 ctrl.cancelUserTask();
                 previous.state = "cancelled";
@@ -309,7 +313,7 @@ public final class JarvisBridgeServer {
                     if (existing.companion.equals(companionId) && "running".equals(existing.state))
                         throw new IllegalArgumentException("companion-busy");
                 }
-                Run run = new Run(companionId, ctrl, companion, budget);
+                Run run = new Run(companionId, authorizedCoreTask, ctrl, companion, budget);
                 Task task;
                 if ("travel".equals(op)) {
                     BlockPos pos = position(args);

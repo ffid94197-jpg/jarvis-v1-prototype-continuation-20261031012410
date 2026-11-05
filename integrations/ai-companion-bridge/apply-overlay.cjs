@@ -18,12 +18,15 @@ const overlayRel="aicompanion/src/main/java/com/neovetta/aicompanion/jarvis/Jarv
 const originalMain=read(mainRel),originalEngine=read(engRel),originalService=read(serviceRel);
 const mainCall="        ConversationManager.init();";
 const mainPatch="        if (!com.neovetta.aicompanion.jarvis.JarvisBridgeServer.enabled()) ConversationManager.init();\n        com.neovetta.aicompanion.jarvis.JarvisBridgeServer.install();";
+const idleCall='if ((!this.getUserTaskChain().isActive() || this.getUserTaskChain().isRunningIdleTask())';
+const idlePatch='if (!"1".equals(System.getenv("JARVIS_MC_BRIDGE_ENABLE")) && (!this.getUserTaskChain().isActive() || this.getUserTaskChain().isRunningIdleTask())';
 const engineCall="      ConversationManager.injectOnTick(server);";
 const serviceCall='   private Map<String, JsonElement> chatCompletion(JsonObject requestBody) throws Exception {';
 const servicePatch='   private Map<String, JsonElement> chatCompletion(JsonObject requestBody) throws Exception {\n      if ("1".equals(System.getenv("JARVIS_MC_BRIDGE_ENABLE"))) throw new SecurityException("JARVIS-only mode disables independent companion LLM requests");';
 const enginePatch='      if (!"1".equals(System.getenv("JARVIS_MC_BRIDGE_ENABLE"))) ConversationManager.injectOnTick(server);';
 if(!originalMain.includes(mainCall)&&!originalMain.includes(mainPatch))fatal("main source no longer matches pinned API");
 if(!originalEngine.includes(engineCall)&&!originalEngine.includes(enginePatch))fatal("engine source no longer matches pinned API");
+if(!originalEngine.includes(idleCall)&&!originalEngine.includes(idlePatch))fatal("independent idle task source seam changed");
 if(!originalService.includes(serviceCall)&&!originalService.includes(servicePatch))fatal("LLM service source no longer matches pinned API");
 const clean=run("git",["status","--porcelain","--untracked-files=all"]);
 if(clean && !(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalService.includes(servicePatch)))fatal("submodule contains existing edits; preserve them before overlay");
@@ -35,7 +38,7 @@ if(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&origi
  process.exit(0);
 }
 const nextMain=editOnce(originalMain,mainCall,mainPatch),
-      nextEngine=editOnce(originalEngine,engineCall,enginePatch),
+      nextEngine=editOnce(editOnce(originalEngine,engineCall,enginePatch),idleCall,idlePatch),
       nextService=editOnce(originalService,serviceCall,servicePatch);
 const engProps=read("engine/gradle.properties"),appProps=read("aicompanion/gradle.properties");
 if(!/minecraft_version\s*=\s*1\.20\.1/.test(engProps) ||

@@ -807,6 +807,8 @@ export class MinecraftAiGate {
       }
       const owner=this.objective.toLowerCase();
       const option=/\bfirst\b/.test(owner)?0:/\bsecond\b/.test(owner)?1:/\bthird\b/.test(owner)?2:null;
+      if(!/(?:use|spend) my (?:xp|experience(?: levels?)?)/.test(owner))
+        return {ok:false,reason:'Enchanting may spend owner XP only on explicit owner consent'};
       if(nearby.name!=='enchanting_table' ||
          Object.keys(args).some(k=>!['command','position','item','choice'].includes(k))||
          !/\benchant\b/.test(owner)||option!==args.choice)

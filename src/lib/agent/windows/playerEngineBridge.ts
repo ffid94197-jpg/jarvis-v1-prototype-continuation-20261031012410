@@ -402,6 +402,76 @@ export async function runGuardianApprovedPlayerEngine(
       }
       return {ok:false,error:"Native villager trade receipt/inventory mismatch; reconcile before retry"};
     }
+    if(cmd==="enchant_item"){
+      if(current)throw Error("Native mutation already pending; owner must reconcile first");
+      if(process.env.JARVIS_MC_BRIDGE_OWNER_XP_ENCHANT_ENABLE!=="1")
+        throw Error("Owner has not opted in to native XP enchanting");
+      const position=desktop.position,item=desktop.item,choice=desktop.choice;
+      if(!authorizedCoords(position)||typeof item!=="string" ||
+         !/^[a-z0-9_]{1,64}$/.test(item) ||
+         !Number.isInteger(choice)||typeof choice!=="number"||
+         choice<0||choice>2)
+        throw Error("Enchant requires exact live table, source item and owner-chosen option");
+      const inspection=await send("inspect_block",randomUUID(),cfg,auth,
+        {...position},2500);
+      const table=inspection.observations?.inspectedBlock;
+      if(inspection.status!=="observed" || !table || typeof table!=="object" ||
+         Array.isArray(table) ||
+         (table as Record<string,unknown>).name!=="minecraft:enchanting_table" ||
+         (table as Record<string,unknown>).x!==position.x ||
+         (table as Record<string,unknown>).y!==position.y ||
+         (table as Record<string,unknown>).z!==position.z)
+        throw Error("Requested enchanting table is not freshly server-observed");
+      const before=extract(inspection);
+      if(before.items[item]!==1 ||
+         (before.items.lapis_lazuli||0)<choice+1 ||
+         inspection.observations?.recoveryRequired===true ||
+         inspection.observations?.safetyStopped===true ||
+         typeof inspection.observations?.activeTaskId==="string")
+        throw Error("Enchantment source item, lapis, or native recovery precondition failed");
+      if(isCancelled())throw Error("Owner cancelled before enchanted item mutation");
+      const runId=randomUUID();
+      active.set(coreTaskId,{runId,operation:"enchant",
+        missionGoal:"enchant",missionSince:Date.now()});
+      const response=await send("enchant",runId,cfg,auth,{
+        ...position,item,choice
+      },10000);
+      if(response.status!=="observed")
+        return {ok:false,error:"Vanilla enchanting did not settle; actual XP/item outcome may be unknown"};
+      const state=response.observations?.missionStatus as Record<string,unknown>|undefined;
+      const metrics=state?.milestones as Record<string,unknown>|undefined;
+      const after=extract(response);
+      const output=item==="book"?"enchanted_book":item;
+      const physicallyMatched=(before.items.lapis_lazuli||0)-
+        (after.items.lapis_lazuli||0)===choice+1 &&
+        (item==="book"?
+          (after.items.book||0)===0 &&
+          (after.items.enchanted_book||0)===(before.items.enchanted_book||0)+1:
+          after.items[item]===before.items[item]);
+      const proved=state?.goal==="enchant" &&
+        state?.status==="complete" &&
+        state.inputItem===item && state.outputItem===output &&
+        state.choice===choice && metrics?.enchantDone===true &&
+        typeof metrics.xpBefore==="number" && typeof metrics.xpAfter==="number" &&
+        metrics.xpBefore-metrics.xpAfter===choice+1 &&
+        typeof metrics.lapisBefore==="number"&&typeof metrics.lapisAfter==="number"&&
+        metrics.lapisBefore-metrics.lapisAfter===choice+1 &&
+        typeof metrics.enchantmentCount==="number" &&
+        Number.isInteger(metrics.enchantmentCount) && metrics.enchantmentCount>=1 &&
+        physicallyMatched;
+      if(proved){
+        active.delete(coreTaskId);
+        return {ok:true,evidence:{
+          backend:"playerengine",command:"enchant_item",
+          item,outputItem:output,choice,ownerXpSpent:choice+1,
+          companionLapisSpent:choice+1,
+          enchantmentCount:metrics!.enchantmentCount,
+          genuineVanillaEnchantmentObserved:true,
+          ownerAssistedXp:true,realWorldReadback:true,
+          status:JSON.stringify(state)}};
+      }
+      return {ok:false,error:"Enchanted item/owner XP/lapis receipt mismatch; no retry without reconciliation"};
+    }
     if(cmd==="auto_goal") {
       const endgames=new Set(["dragon_run","netherite_armor_run","netherite_gear_run",
         "netherite_dragon_run","dragon_then_netherite_run"]);

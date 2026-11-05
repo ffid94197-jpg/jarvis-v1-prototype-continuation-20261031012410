@@ -141,7 +141,7 @@ async function writeAudit(
 
 /** THE GATE. Authorize (and audit) one tool call. Fail-closed everywhere. */
 export async function authorizeToolCall(
-  ctx: { taskId: string | null; ownerId?:string; ownerControlPlane?:boolean; coreSpawnIntent?:boolean },
+  ctx: { taskId: string | null; ownerId?:string; ownerControlPlane?:boolean; coreSpawnIntent?:boolean; coreOwnerXpConsent?:boolean },
   tool: string,
   rawArgs: Record<string, unknown>,
 ): Promise<GuardianDecision> {
@@ -431,6 +431,11 @@ export async function authorizeToolCall(
       case "minecraft_companion_command":
       case "minecraft_companion_join":
       case "minecraft_companion_stop": {
+        if(tool==="minecraft_companion_command" &&
+           rawArgs.command==="enchant_item" &&
+           ctx.coreOwnerXpConsent!==true){
+          decision=deny("Real owner XP spending requires explicit consent bound to the original Core objective");break;
+        }
         const d = validateDesktopTool(tool, rawArgs);
         decision = d.ok ? {verdict:"allow",prepared:{desktop:d.prepared}} : deny(d.reason);
         break;

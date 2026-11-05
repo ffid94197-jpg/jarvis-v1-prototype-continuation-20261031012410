@@ -73,6 +73,47 @@ Limits: this does not automatically recover an unloaded prior companion,
 despawn one, reset the server's owner roster, defeat the Dragon or guarantee
 general-purpose gameplay. No real Windows/Fabric acceptance has yet run.
 
+## Owner-assisted real vanilla enchanting (not independent bot XP)
+
+The pinned \`CompanionEntity\` does not own an autonomous vanilla
+experience-level system. The original JARVIS extension therefore supports a
+narrow, **owner-assisted** vanilla enchantment, NOT free enchanted items or
+a claim that the bot has learned independent XP collection.
+
+The user must explicitly say something like:
+**"Jarvis, enchant my diamond sword at the observed table using the first
+option; use my XP."**
+The chosen item, first/second/third option and the observed real
+\`enchanting_table\` position must all match the owner's words and the latest
+game-server scene. A named *owner* intent never authorizes unrelated XP spending.
+
+Deployment requires **both** trusted server processes to opt in with
+\`JARVIS_MC_BRIDGE_OWNER_XP_ENCHANT_ENABLE=1\`. Guardian also requires a
+separate Core-bound \`coreOwnerXpConsent\` flag derived from the original
+owner task; the model cannot invent this flag or mint the original audit.
+
+On the server thread, the actual online survival-mode owner and companion
+must stand near the **same loaded enchanting table**. The companion must
+hold exactly one unenchanted item of the requested kind and sufficient real
+lapis. A vanilla \`EnchantmentScreenHandler\` calculates actual bookshelf-
+and enchantment-seed-sensitive options, spends the owner's genuine XP and
+the handler's lapis, and produces the real enchanted output. The adapter
+debits the companion's corresponding actual lapis and swaps in the output.
+It never directly installs an enchantment or supplies a synthetic resource.
+
+The native journal writes ADMITTED **before** the vanilla button action.
+The signed observation includes actual XP-level delta, lapis delta,
+enchanted-item identity and enchantment count; the JARVIS Core validates
+those physical postconditions and admits a completion claim only after
+an OBSERVED settlement. If receipt or server accounting is uncertain,
+there is no automatic retry. Owner consultation and reconciliation are
+required to avoid double-spending XP or duplicating an item.
+
+**Limits:** owner XP is a deliberate resource cost; this feature does not
+enable the companion to earn/use its own XP autonomously. Full vanilla
+interactive enchanting GUI acceptance, inventory handling and Fabric
+compilation remain outstanding and cannot be claimed from source alone.
+
 ## Owner-authorized native villager trading
 
 The opt-in PlayerEngine backend implements a bounded **real trade** transaction

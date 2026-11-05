@@ -1105,7 +1105,10 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
 
     const guardian = await authorizeToolCall({
       taskId,ownerId:opts.ownerId,
-      coreSpawnIntent:!!nativeSpawnIntent && tool==="minecraft_companion_spawn"
+      coreSpawnIntent:!!nativeSpawnIntent && tool==="minecraft_companion_spawn",
+      coreOwnerXpConsent:tool==="minecraft_companion_command" &&
+        args.command==="enchant_item" &&
+        /\b(?:use|spend) my (?:xp|experience(?: levels?)?)\b/i.test(objective)
     },tool,args);
 
     if (guardian.verdict === "deny") {

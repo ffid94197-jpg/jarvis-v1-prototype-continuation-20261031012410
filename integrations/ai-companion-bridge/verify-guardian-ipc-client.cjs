@@ -5,7 +5,7 @@ const {createEnvelope,verifyReceipt,sendAuthorizedObjective}=require("./guardian
 const secret="a".repeat(64);
 const taskId=crypto.randomUUID(),idempotencyKey=crypto.randomUUID(),receiptId=crypto.randomUUID();
 const request={taskId,idempotencyKey,operation:"inspect",worldId:"owner.local",arguments:{target:"inventory"},budgetMs:2000,
- guardian:{approved:true,receiptId,taskId,worldId:"owner.local",operation:"inspect"}};
+ guardian:{approved:true,receiptId,coreTaskId:crypto.randomUUID(),taskId,worldId:"owner.local",operation:"inspect"}};
 const frame=createEnvelope(request,secret);
 assert.equal(frame.body.operation,"inspect");
 assert.match(frame.mac,/^[0-9a-f]{64}$/);
@@ -15,6 +15,7 @@ assert.throws(()=>createEnvelope({...request,guardian:{...request.guardian,taskI
 assert.throws(()=>createEnvelope({...request,arguments:{payload:"x".repeat(20000)}},secret),/OVERSIZE_ARGUMENTS/);
 assert.throws(()=>createEnvelope(request,"weak"),/KEY_MISSING/);
 const body={version:1,taskId,idempotencyKey,nonce:frame.body.nonce,worldId:"owner.local",observedAt:Date.now(),status:"observed",
+ guardianReceiptId:receiptId,coreTaskId:request.guardian.coreTaskId,
  observations:{inventory:[{item:"oak_log",count:1}]}};
 const fixture=(b)=>{
  const payload=Buffer.from(JSON.stringify(b),"utf8").toString("base64url");

@@ -8,6 +8,7 @@ const GOAL_FIELDS=Object.freeze({
  travel:['destination','arrivalRange'],
  craft:['item','targetCount'],
  smelt:['item','targetCount'],
+ transfer:['position','item','targetCount','operation'],
  equip:['item','destinationSlot'],
  shelter:['width','depth'],
  defeat_hostile:['mob','entityId'],

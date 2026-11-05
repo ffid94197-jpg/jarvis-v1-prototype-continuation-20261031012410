@@ -135,22 +135,22 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     const ui=await bot.openFurnace(furnace);
     let loadedByThisAction=false;
     try{
-      // Check existing furnace contents before taking more ingredients.
-      // One item at a time prevents a mission from abandoning a bulk input
-      // inside a furnace and repeatedly mining new raw resources.
-      if(!ui.outputItem() && !ui.inputItem()){
-        const material=item(bot,input);
-        if(!material)return observed(false,'No '+input+' in inventory or existing furnace input');
-        const rawBefore=count(bot,input);
-        await ui.putInput(material.type,null,1);
-        check(epoch);
-        // A pre-existing output in somebody else's furnace is genuine loot,
-        // but it is NOT proof that this current owner's SMELT goal produced
-        // that item. Credit the action only when a real input item was
-        // consumed from this bot's inventory into this furnace.
-        loadedByThisAction=count(bot,input)<rawBefore &&
-          (ui.inputItem()?.name===input || ui.outputItem()?.name===output);
-      }
+      // A shared furnace may already contain someone else's input or
+      // completed output. Do NOT withdraw either. Both input and output
+      // must be empty BEFORE inserting our own single raw ingredient.
+      // A previous ambiguous attempt with input left inside also stops
+      // here: manual reconciliation is safer than duplicate production.
+      if(ui.outputItem()||ui.inputItem())
+        return observed(false,'Furnace already contains an unowned or unsettled input/output; no attribution or withdrawal permitted');
+      const material=item(bot,input);
+      if(!material)return observed(false,'No physically owned '+input+' to smelt');
+      const rawBefore=count(bot,input);
+      await ui.putInput(material.type,null,1);
+      check(epoch);
+      loadedByThisAction=count(bot,input)===rawBefore-1 &&
+        ui.inputItem()?.name===input;
+      if(!loadedByThisAction)
+        return observed(false,'Furnace input transfer lacked both raw-inventory decrement and actual input slot proof');
       if(!ui.outputItem() && !ui.fuelItem()){
         const fuel=bot.inventory.items().find(i=>
           ['coal','charcoal','blaze_rod'].includes(i.name) || i.name.endsWith('_planks'));
@@ -159,7 +159,7 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       }
       for(let j=0;j<65;j++){
         check(epoch);
-        if(ui.outputItem()?.name===output){
+        if(ui.outputItem()?.name===output && loadedByThisAction){
           await ui.takeOutput();
           for(let attempt=0;attempt<18;attempt++){
             check(epoch);

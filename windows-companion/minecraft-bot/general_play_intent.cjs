@@ -6,6 +6,7 @@
  */
 const {roofedRoomSteps}=require('./structure_goal.cjs');
 const {SMELT_RECIPES}=require('./smelt_goal.cjs');
+const {validTransferSpec}=require('./container_goal.cjs');
 // A whole armor set is an owner-defined four-slot objective, not permission
 // to select arbitrary equipment or execute raw Minecraft actions.
 function armorEquipSteps(ownerText){
@@ -344,6 +345,24 @@ function modelGoalGrounded(q,ownerText,context=''){
   }
   case 'craft':return has(/\b(?:craft|make)\b/)&&
     itemMention(q.item)&&quantityMatches(q.targetCount);
+  case 'transfer':{
+   if(!validTransferSpec({goal:'transfer',position:q.position,item:q.item,
+       targetCount:q.targetCount,operation:q.operation}))return false;
+   const deposit=/\b(?:deposit|store|put)\b/.test(s);
+   const withdraw=/\b(?:withdraw|take|retrieve)\b/.test(s);
+   if(q.operation==='deposit'?!deposit:!withdraw)return false;
+   if(!s.includes(String(q.item).replace(/_/g,' ')))return false;
+   const coords=s.match(/-?\d{1,8}[\s,]+-?\d{1,8}[\s,]+-?\d{1,8}/g)||[];
+   if(coords.length!==1 || coords[0].match(/-?\d+/g)?.map(Number).some((v,i)=>v!==[q.position.x,q.position.y,q.position.z][i]))return false;
+   // Explicit coordinates are not additional item quantities.
+   const pre=s.slice(0,s.indexOf(coords[0]));
+   const quantities=pre.match(/\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)\b/g)||[];
+   if(quantities.length!==1||amount(quantities[0])!==q.targetCount)return false;
+   let scene;try{scene=JSON.parse(context);}catch{return false;}
+   return Array.isArray(scene?.nearbyBlocks)&&scene.nearbyBlocks.some(block=>
+     ['chest','trapped_chest','barrel'].includes(block?.name)&&
+     ['x','y','z'].every(k=>block[k]===q.position[k]));
+  }
   case 'smelt':{
    const rule=SMELT_RECIPES[q.item];
    if(!rule||!has(/\b(?:smelt|cook|refine|bake)\b/) ||

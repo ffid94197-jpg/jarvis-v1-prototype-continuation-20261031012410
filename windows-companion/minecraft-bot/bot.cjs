@@ -709,6 +709,47 @@ async function autoExecute(plan,epoch){
           clear?'Original hostile moved beyond observed defensive range; death not claimed':
           'Defensive attacks bounded; hostile still present: '+String(result.detail||'unknown')};
     }
+    case 'approach_container':{
+      const p=plan.position;
+      if(!p||!['x','y','z'].every(k=>Number.isInteger(p[k])) ||
+         epoch!==actionEpoch)throw Error('Container approach cancelled or invalid');
+      const target=new Vec3(p.x,p.y,p.z),block=bot.blockAt(target);
+      if(!block||!['chest','trapped_chest','barrel'].includes(block.name))
+        return {ok:false,verified:false,detail:'Owner-named container changed or is unloaded'};
+      if(bot.entity.position.distanceTo(target)>16)
+        return {ok:false,verified:false,detail:'Container outside authorized local approach envelope'};
+      const arrived=await navigate(target,2,epoch,14000);
+      if(epoch!==actionEpoch)throw Error('Container approach cancelled');
+      const live=bot.blockAt(target);
+      const ok=arrived===true&&live?.name===block.name&&
+        bot.entity.position.distanceTo(target)<=4;
+      return {ok,verified:ok,...(ok?{proof:'container_approach'}:{}),
+        detail:ok?'Physical approach to exact, unchanged container verified; nothing transferred':
+          'Target container no longer safely reachable or identity changed'};
+    }
+    case 'transfer_inventory':{
+      const p=plan.position;
+      if(epoch!==actionEpoch)throw Error('Container transfer cancelled');
+      if(!p||!['x','y','z'].every(k=>Number.isInteger(p[k])))
+        return {ok:false,verified:false,detail:'Invalid owner-named container coordinates'};
+      const at=bot.blockAt(new Vec3(p.x,p.y,p.z));
+      if(!at||!['chest','trapped_chest','barrel'].includes(at.name)||
+         bot.entity?.position?.distanceTo(at.position)>4.5)
+        return {ok:false,verified:false,detail:'Exact container absent or outside current interaction range'};
+      const advanced=createAdvancedActions({bot,Vec3,pause,
+        allowed:()=>spawned&&epoch===actionEpoch&&mode==='auto'});
+      // Reuse the existing dual player+container inventory readback.
+      // Never create a second item-transfer primitive or infer that the
+      // player's inventory changing alone proves chest settlement.
+      const result=await advanced.transferContainer({
+        position:p,item:plan.item,count:plan.count,operation:plan.operation});
+      if(epoch!==actionEpoch)throw Error('Container transfer cancelled');
+      const ok=result?.ok===true&&result?.verified===true;
+      return {ok,verified:ok,
+        ...(ok?{proof:'container_transfer',position:{...p},
+           item:plan.item,count:plan.count,operation:plan.operation}:{}),
+        detail:String(result?.detail||'Container transfer not settled').slice(0,190)};
+    }
     case 'recover_health':{
       // Passive recovery has no movement, attack, mining or world edit.
       // Remain in the current position only while the server still shows
@@ -1169,6 +1210,15 @@ async function autoTick(){
   if(mode!=='auto'||autoBusy||!spawned)return;
   const gameWorld=digest(bot,leader,{dragonDead:lateSkills.session.dragonDied});
   const active=autopilot.status();
+  if(active.goal==='transfer'){
+    const p=active.position;
+    const target=p&&['x','y','z'].every(k=>Number.isInteger(p[k]))?
+      bot.blockAt(new Vec3(p.x,p.y,p.z)):null;
+    // This observation is from the current server-loaded world, never
+    // from model-provided text or persisted checkpoints.
+    gameWorld.transferBlock=target&&['chest','trapped_chest','barrel'].includes(target.name)?
+      {name:target.name,position:{...p}}:null;
+  }
   if(active.goal==='farm_wheat')gameWorld.wheatCells=observeWheat(bot,
     {goal:'farm_wheat',position:active.position,width:active.width,depth:active.depth,
       targetCount:active.targetCount},Vec3);
@@ -1344,7 +1394,7 @@ async function action(q){
       }
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
-      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','smelt','equip'].includes(q.goal) &&
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','smelt','transfer','equip'].includes(q.goal) &&
          bot.game?.gameMode!=='survival')
         return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an

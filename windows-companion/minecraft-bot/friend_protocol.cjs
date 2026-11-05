@@ -7,6 +7,7 @@ const {validBuildSpec,validVolumeSpec}=require('./structure_goal.cjs');
 const {validFarmSpec}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {validSmeltSpec}=require('./smelt_goal.cjs');
+const {validTransferSpec}=require('./container_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop','auto_checkpoint','auto_resume']);
 function validateCommand(input) {
@@ -52,15 +53,21 @@ function validateCommand(input) {
       (input.goal!=='shelter'||validShelter))||validBoundHostile||validTravel||validBuild||validVolume||validFarm||
       (input.goal==='craft' && validCraftSpec({goal:'craft',item:input.item,targetCount:input.targetCount}))||
       (input.goal==='smelt' && validSmeltSpec({goal:'smelt',item:input.item,targetCount:input.targetCount}))||
+      (input.goal==='transfer' && validTransferSpec({goal:'transfer',
+        position:input.position,item:input.item,targetCount:input.targetCount,
+        operation:input.operation}))||
       (input.goal==='equip' && validEquipSpec({goal:'equip',item:input.item,destination:input.destinationSlot}))||
       (input.goal==='gather' && RESOURCES.has(input.resource) &&
         Number.isInteger(input.targetCount) &&
         input.targetCount>=1&&input.targetCount<=64)||
       (input.goal==='sequence' && validSequence(input.steps));
     const allowedKeys=new Set(['command','goal','durationSeconds','resource','targetCount',
-      'destination','arrivalRange','steps','position','block','axis','length','width','depth','height','shape','item','destinationSlot','mob','entityId']);
+      'destination','arrivalRange','steps','position','block','axis','length','width','depth','height','shape','item','destinationSlot','mob','entityId','operation']);
     if(Object.keys(input).some(key=>!allowedKeys.has(key)))return 'Unexpected autonomous parameter';
     const noUnrelatedParameters=
+      (input.goal==='transfer' &&
+        Object.keys(input).every(k=>['command','goal','durationSeconds',
+          'position','item','targetCount','operation'].includes(k))) ||
       (input.goal==='defeat_hostile' &&
         input.steps===undefined&&input.destination===undefined&&input.arrivalRange===undefined&&input.resource===undefined&&
         input.targetCount===undefined&&input.item===undefined&&input.position===undefined&&
@@ -98,14 +105,15 @@ function validateCommand(input) {
         input.arrivalRange===undefined);
     return validGoal && noUnrelatedParameters &&
       (input.goal==='defeat_hostile'||(input.mob===undefined&&input.entityId===undefined)) &&
-      (['craft','equip','smelt'].includes(input.goal)||input.item===undefined) &&
+      (['craft','equip','smelt','transfer'].includes(input.goal)||input.item===undefined) &&
+      (input.goal==='transfer'||input.operation===undefined) &&
       (input.goal==='equip'||input.destinationSlot===undefined) &&
-      (['craft','smelt','gather','farm_wheat'].includes(input.goal)||input.targetCount===undefined) &&
+      (['craft','smelt','transfer','gather','farm_wheat'].includes(input.goal)||input.targetCount===undefined) &&
       (input.goal==='build_volume'||['height','shape'].every(k=>input[k]===undefined)) &&
       (['build','build_volume'].includes(input.goal)||['block','axis','length'].every(k=>input[k]===undefined)) &&
       (input.goal==='build_volume'||input.height===undefined&&input.shape===undefined) &&
       (['farm_wheat','build_volume','shelter'].includes(input.goal)||['width','depth'].every(k=>input[k]===undefined)) &&
-      (['build','build_volume','farm_wheat'].includes(input.goal)||input.position===undefined) &&
+      (['build','build_volume','farm_wheat','transfer'].includes(input.goal)||input.position===undefined) &&
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&
           input.durationSeconds<=43200)) ? null :

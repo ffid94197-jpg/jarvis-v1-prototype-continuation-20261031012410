@@ -11,7 +11,7 @@ const VICTORY=['dragonSeen','dragonKilled','exitPortalObserved','endReturned',
 // in the compact receipt: JARVIS Core checks the smelting count against
 // the exact original owner request, and bow/bridge counts explain bounded
 // End attempt exhaustion without claiming hit or island arrival.
-const REQUIRED_COUNTERS=['smeltedOutput','dragonRangedShots',
+const REQUIRED_COUNTERS=['transferDone','smeltedOutput','dragonRangedShots',
  'dragonStanceTrips','endBridgeTiles'];
 const boundedString=(x,n)=>typeof x==='string'?x.slice(0,n):null;
 const boundedNum=x=>Number.isFinite(x)?x:null;
@@ -50,6 +50,7 @@ function compactAutonomyStatus(state){
   ...(state.sequenceIndex!==undefined?{sequenceIndex:boundedNum(state.sequenceIndex)}:{}),
   ...(state.resource!==undefined?{resource:boundedString(state.resource,64)}:{}),
   ...(state.item!==undefined?{item:boundedString(state.item,64)}:{}),
+  ...(state.goal==='transfer'?{operation:boundedString(state.operation,16)}:{}),
   ...(state.targetCount!==undefined?{targetCount:boundedNum(state.targetCount)}:{}),
   ...(state.goal==='shelter'&&state.width!==undefined&&state.depth!==undefined?
     {width:boundedNum(state.width),depth:boundedNum(state.depth)}:{})

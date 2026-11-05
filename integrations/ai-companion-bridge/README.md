@@ -4,6 +4,20 @@
 This is part of Prototype JARVIS, **not** the original Windows-native PC Work JARVIS.
 Do not enable this instead of the existing Mineflayer/MCP bot until the acceptance gates below pass.
 
+## Scope after code integration (5 Nov 2026)
+
+This opt-in branch now includes an actual source-level Core-to-Fabric path:
+
+- Core and Guardian audit -> native executor -> HMAC loopback service -> AltoClef task -> real server observations.
+- **Supported native operations:** inspect/status, collect (including mixed tree logs), typed craft-item acquisition, travel up to 160 blocks, equip armor/tools, dig selected loaded blocks, place one allow-listed block, fight one nearby allow-listed hostile, owner-wide emergency stop, task-scoped cancel, explicit resume of an emergency-stop latch. Unsupported actions are rejected.
+- Native JARVIS-controlled sessions disable upstream chat-brain packet delivery, upstream independent LLM requests, and idle command planning.
+- Signed requests carry the actual Guardian audit-record UUID and original Core task UUID; signed responses echo both. Server validates owner, companion identity, world allow-list, deadline and task-binding.
+- Per-task receipts expose real main-hand, exact four armor slots, inventory, health, hunger, coordinates, nearby loaded blocks and visible mobs.
+- Local contract test entry: `npm run test:minecraft-playerengine-ipc`. **The test scripts have been authored but not run here.**
+- Owner cancellation via the existing task cancellation API now sends a scoped, audited native stop request when there is a recorded Minecraft effect.
+
+**Still not a fully built/released prototype:** This branch has not passed Java/Gradle compilation, Next.js TypeScript typechecking, the new local contract tests, security acceptance, the complete 200k Internet prompt evaluation, or Minecraft Java playthrough. Full Netherite, Dragon, broad arbitrary gameplay, and independent final acceptance are not demonstrated. A development commit is not proof of those milestones.
+
 ## Architecture and code
 
 - Pinned AI Companion upstream: \`adevivo/ai-companion@6bb1df1a06258ca712b66f1404dd05204f25b9c7\`, LGPL-3.0; PlayerEngine / AltoClef / Automatone.
@@ -16,7 +30,7 @@ The Java overlay selects a loaded, alive, owner-bound \`CompanionEntity\`, and d
 
 **Implemented as opt-in source:** `src/lib/agent/windows/playerEngineBridge.ts` is now called from the existing Core/Guardian executor when `JARVIS_MC_BACKEND=playerengine` is explicitly set. The Core's server-derived owner principal is passed into the adapter. It supports readback, joined-companion check, bounded oak-log acquisition, craft-item acquisition (without claiming method-of-crafting proof), travel, and cancellation of its tracked native task. Unsupported operations fail closed; **there is no mixed Mineflayer fallback in this opt-in mode**.
 
-**Still not implemented:** independently verifiable Guardian audit proof IDs, durable task replay status across Node/Fabric restart, complete combat/build/equip/Netherite/Dragon task bindings, all-version portability, live game acceptance, full general-purpose natural-language coverage and all-prototype final validation. Build and live integration of these new code paths have not been independently verified.
+**Still not implemented or accepted:** cross-process durable replay history across Fabric restart, full general-purpose gameplay including long-horizon Netherite and Dragon proof, multi-block creative construction, complete crafting-method evidence, all-version portability, live gameplay acceptance, full 200,000 Internet prompt evaluation, final independent Windows acceptance. The real Guardian audit UUID is now carried end-to-end, but independent authority/security testing remains mandatory.
 
 ## Enable only for isolated LAN development
 

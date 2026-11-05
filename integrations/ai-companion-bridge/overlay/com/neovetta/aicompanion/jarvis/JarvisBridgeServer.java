@@ -432,7 +432,11 @@ public final class JarvisBridgeServer {
                     task=new KillEntityTask(target);
                 }
                 if (task == null) throw new IllegalArgumentException("missing-task");
+                // Journal-before-effect. A crash after this write leaves an
+                // explicit quarantine rather than a silently retried action.
+                ledger.admit(taskId,authorizedCoreTask,companionId,worldId,op);
                 tasks.put(taskId, run);
+                try {
                 ctrl.runUserTask(task, () -> {
                     if (!"running".equals(run.state)) return;
                     boolean added = run.item != null &&
@@ -449,10 +453,26 @@ public final class JarvisBridgeServer {
                     boolean killed = run.combatTarget != null && !run.combatTarget.isAlive();
                     boolean proved = added||arrived||equipped||changedBlock||killed ||
                             (run.endgame != null && run.endgame.completed());
-                    run.state=proved?"observed":"failed";
+                    try {
+                        // Postcondition failure is EFFECT_UNKNOWN, not a
+                        // claim of zero side effects or clean completion.
+                        ledger.settle(taskId,proved?"OBSERVED":"EFFECT_UNKNOWN");
+                        run.state=proved?"observed":"failed";
+                        run.note=proved?"server-postcondition-and-durable-receipt":
+                            "engine-done-effect-requires-reconciliation";
+                    } catch (Exception ex) {
+                        run.state="failed";
+                        run.note="effect-unknown-journal-settlement-failed";
+                    }
                     run.settledAt=System.currentTimeMillis();
-                    run.note=proved?"engine-completed-with-server-postcondition":"engine-done-no-postcondition";
                 });
+                } catch (RuntimeException ex) {
+                    run.state="failed";
+                    run.note="native-dispatch-may-have-started";
+                    run.settledAt=System.currentTimeMillis();
+                    // Leave the journal in ADMITTED quarantine. No replay.
+                    throw ex;
+                }
                 status = "accepted";
                 note = "dispatched-not-verified";
             }
@@ -460,6 +480,7 @@ public final class JarvisBridgeServer {
         }
         JsonObject snapshot = snapshot(companion);
         snapshot.addProperty("safetyStopped",safetyStopped.contains(companionId));
+        snapshot.addProperty("recoveryRequired",ledger.hasUnresolved(companionId));
         for (Run candidate : tasks.values()) {
             if (!candidate.companion.equals(companionId) ||
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||

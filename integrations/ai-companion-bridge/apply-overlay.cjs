@@ -14,7 +14,8 @@ if(run("git",["rev-parse","HEAD"])!==PIN)fatal("upstream commit does not match p
 const mainRel="aicompanion/src/main/java/com/neovetta/aicompanion/AiCompanion.java";
 const engRel="engine/src/autoclef/java/adris/altoclef/AltoClefController.java";
 const serviceRel="engine/src/autoclef/java/adris/altoclef/player2api/Player2APIService.java";
-const overlayRel="aicompanion/src/main/java/com/neovetta/aicompanion/jarvis/JarvisBridgeServer.java";
+const overlayNames=["JarvisBridgeServer.java","JarvisEndgameTask.java"];
+const overlayRoot="aicompanion/src/main/java/com/neovetta/aicompanion/jarvis";
 const originalMain=read(mainRel),originalEngine=read(engRel),originalService=read(serviceRel);
 const mainCall="        ConversationManager.init();";
 const brainCall='        registerBrainReceivers();';
@@ -33,10 +34,14 @@ if(!originalEngine.includes(idleCall)&&!originalEngine.includes(idlePatch))fatal
 if(!originalService.includes(serviceCall)&&!originalService.includes(servicePatch))fatal("LLM service source no longer matches pinned API");
 const clean=run("git",["status","--porcelain","--untracked-files=all"]);
 if(clean && !(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalService.includes(servicePatch)))fatal("submodule contains existing edits; preserve them before overlay");
-const target=path.join(upstream,overlayRel);
-const content=fs.readFileSync(path.join(bridge,"overlay/com/neovetta/aicompanion/jarvis/JarvisBridgeServer.java"),"utf8");
+const overlayFiles=overlayNames.map(name=>({
+ target:path.join(upstream,overlayRoot,name),
+ content:fs.readFileSync(path.join(bridge,"overlay/com/neovetta/aicompanion/jarvis",name),"utf8")
+}));
 if(originalMain.includes(mainPatch)&&originalMain.includes(brainPatch)&&originalEngine.includes(enginePatch)&&originalEngine.includes(idlePatch)&&originalService.includes(servicePatch)) {
- if(!fs.existsSync(target)||fs.readFileSync(target,"utf8")!==content)fatal("existing overlay differs; refusing overwrite");
+ if(overlayFiles.some(file=>!fs.existsSync(file.target)||
+    fs.readFileSync(file.target,"utf8")!==file.content))
+     fatal("existing overlay differs; refusing overwrite");
  console.log("JARVIS AI Companion overlay already applied");
  process.exit(0);
 }
@@ -47,11 +52,12 @@ const engProps=read("engine/gradle.properties"),appProps=read("aicompanion/gradl
 if(!/minecraft_version\s*=\s*1\.20\.1/.test(engProps) ||
    !/minecraft_version\s*=\s*1\.20\.1/.test(appProps) ||
    !/mod_version\s*=\s*1\.1\.19/.test(engProps))fatal("unsupported Fabric/PlayerEngine build version");
-if(!fs.existsSync(path.dirname(target)))fs.mkdirSync(path.dirname(target),{recursive:true});
+if(!fs.existsSync(path.join(upstream,overlayRoot)))
+    fs.mkdirSync(path.join(upstream,overlayRoot),{recursive:true});
 // All preconditions checked before modifying upstream. Original tracked files remain recoverable by Git.
 fs.writeFileSync(path.join(upstream,engRel),nextEngine,"utf8");
 fs.writeFileSync(path.join(upstream,serviceRel),nextService,"utf8");
 fs.writeFileSync(path.join(upstream,mainRel),nextMain,"utf8");
-fs.writeFileSync(target,content,"utf8");
+for(const file of overlayFiles)fs.writeFileSync(file.target,file.content,"utf8");
 console.log("Overlay applied to pinned 1.20.1 source; build with JDK 17.");
 console.log("No tests or game sessions were run. Do not mark gameplay accepted.");

@@ -13,7 +13,6 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -141,7 +140,7 @@ final class JarvisNativeInventoryTransfer {
             if(remaining!=0)throw new IllegalStateException("container-source-race");
         }
         inv.markDirty();
-        companion.getLivingInventory().setChanged();
+        companion.getLivingInventory().markDirty();
         int ap=count(main,item),ac=countContainer(inv,item);
         if(ap!=(deposit?bp-amount:bp+amount) || ac!=(deposit?bc+amount:bc-amount))
             throw new IllegalStateException("transfer-postcondition-unknown");

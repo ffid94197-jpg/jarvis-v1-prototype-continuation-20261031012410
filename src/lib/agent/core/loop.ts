@@ -506,8 +506,14 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   if (minecraftAiTask) messages.splice(messages.findIndex(m => m.role === "user"), 0, {role:"assistant",content:MINECRAFT_AI_INSTRUCTIONS});
   const minecraftMission = !minecraftAiTask && process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" && !opts.replay
     ? minecraftMissionFromObjective(objective) : null;
+  // Explicit owner-approved Skill Forge runs are complete declarative plans.
+  // Their steps use the ORIGINAL Guardian/Core executor and do not require
+  // another AI model call or provider quota. Ambiguous natural-language
+  // requests continue to use LAYA and the normal planner.
+  const deterministicSkillIntent=!opts.replay?directApprovedSkillIntent(objective):null;
+  let deterministicSkillStarted=false;
   let model: ModelBridge | null = null;
-  if (!minecraftMission) try {
+  if (!minecraftMission && !deterministicSkillIntent) try {
     // Durable model pin: even after a task is paused or the owner changes
     // the selected provider, resume cannot silently disclose its context to
     // a different API. The -1 step is not a tool effect and is never replayed.
@@ -569,7 +575,8 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // asks a different model to invent a new plan after a crash.
   let goalPlan: GoalPlan | null = null;
   let goalWatchdog = new GoalProgressWatchdog(undefined, autonomyLimits);
-  if (process.env.JARVIS_GOAL_PLANNER_ENABLED === "1" && !minecraftMission && requiresGoalPlan(objective)) {
+  if (process.env.JARVIS_GOAL_PLANNER_ENABLED === "1" && !minecraftMission &&
+      !deterministicSkillIntent && requiresGoalPlan(objective)) {
     let planningStage = "PLAN_DB_LOOKUP_FAILED";
     try {
       const prior = await db.agentStep.findFirst({
@@ -694,7 +701,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         queuedSkillStep=true;
       }
       const approvedSkillIntent=stepsUsed===0 && !opts.replay
-        ? directApprovedSkillIntent(objective):null;
+        ? deterministicSkillIntent:null;
       const minecraftIntent = !minecraftAiTask && process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" &&
         !opts.replay && stepsUsed <= 1 ? directMinecraftMission(objective,stepsUsed) : null;
       const localIntent = process.env.JARVIS_WINDOWS_AGENT_ENABLED === "1" &&
@@ -713,6 +720,10 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       if(firstMinecraftObserve)minecraftFirstObservePending=false;
       raw = nextApprovedSkillStep
         ? JSON.stringify({action:"tool",tool:nextApprovedSkillStep.tool,args:nextApprovedSkillStep.args})
+        : deterministicSkillIntent && deterministicSkillStarted && !skillQueue
+        ? JSON.stringify({action:"final",answer:skillExecutionIncomplete
+            ? "Owner-approved skill stopped before all stages were verified; no complete-success claim is permitted."
+            : "Owner-approved skill stages have returned executor receipts; the Core will independently arbitrate completion."})
         : approvedSkillIntent ? JSON.stringify(approvedSkillIntent)
         : firstMinecraftJoin ? JSON.stringify(firstMinecraftJoin) :
         firstMinecraftObserve ? JSON.stringify(firstMinecraftObserve) :
@@ -1340,6 +1351,8 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     // A skill run is only an approved recipe EXPANSION. The Core now takes
     // responsibility for the next individually audited stage. The recipe
     // itself is NEVER an effect authorization or proof of completion.
+    if(tool==="evolution_skill_run" && deterministicSkillIntent)
+      deterministicSkillStarted=true;
     if(tool==="evolution_skill_run" && !result.ok) {
       skillExecutionIncomplete=true;
     }

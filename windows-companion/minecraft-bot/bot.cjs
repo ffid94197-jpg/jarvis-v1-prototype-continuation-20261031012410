@@ -70,6 +70,14 @@ let spawned=false, mode='follow', actionEpoch=0, followTimer, moveTimer, lastAct
 const failedDigTargets=new Map();
 const autopilot=createController({maxSeconds:43200,maxSteps:20000});
 const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-mission.json'),{host,port,owner:leader});
+// Keep the exact crop output visible in compact game observations even when
+// the player carries dozens of unrelated stacks. No invented quantity.
+function nativeObservationItem(){
+  const state=autopilot.status();
+  return state.goal==='farm_crop'?
+    (state.crop==='carrots'?'carrot':state.crop==='potatoes'?'potato':null):
+    state.item;
+}
 let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
 let advancedBusy=false;
 let guardBusy=false;
@@ -1349,7 +1357,7 @@ async function action(q){
         const observation=projectWorld(
           digest(bot,leader,{dragonDead:lateSkills.session.dragonDied}),
           loadedTargets(bot,{includeGeneral:true}),lastAction,mode,
-          autopilot.status().goal,autopilot.status().item);
+          autopilot.status().goal,nativeObservationItem());
         const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:observation});
         if(before!==actionEpoch)return {ok:false,error:'Superseded owner command cancelled stale language result'};
         if(!parsed.ok)return {ok:false,error:parsed.error};
@@ -1368,7 +1376,7 @@ async function action(q){
       // Compact, valid JSON (<1900 chars) so the managed companion cannot
       // silently truncate a late-game observation and mislead the planner.
       return {ok:true,status:projectWorld(snapshot,loadedTargets(bot,{includeGeneral:true}),lastAction,mode,
-        autopilot.status().goal,autopilot.status().item)};
+        autopilot.status().goal,nativeObservationItem())};
     }
     case 'auto_status':return {ok:true,status:compactAutonomyStatus(autopilot.status())};
     case 'auto_checkpoint':{

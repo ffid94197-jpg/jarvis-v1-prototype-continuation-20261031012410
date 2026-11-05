@@ -329,9 +329,29 @@ public final class JarvisBridge {
         String companionId = out.get("companionId").getAsString();
         UUID id = parseUuid(companionId);
         UUID activeId = id == null ? null : ACTIVE_BY_COMPANION.get(id);
-        TaskReceipt receipt = activeId == null ? null : TASKS.get(activeId);
-        out.add("task", receipt == null ? idleTask() : receipt.toJson());
+        TaskReceipt receipt = activeId == null ? latestTaskFor(id) : TASKS.get(activeId);
+        JsonObject task = receipt == null ? idleTask() : receipt.toJson();
+        if (receipt != null) {
+            task.addProperty("since", receipt.startedAt > 0 ? receipt.startedAt : receipt.createdAt);
+            task.addProperty("status", receipt.state.equals("completed") ? "complete" :
+                    (receipt.state.equals("queued") || receipt.state.equals("running")) ? "running" : receipt.state);
+            JsonObject milestones = new JsonObject();
+            milestones.addProperty("dragonDeadObserved", out.get("dragonDeadObserved").getAsBoolean());
+            milestones.addProperty("wornNetherite", out.get("wornNetherite").getAsBoolean());
+            task.add("milestones", milestones);
+        }
+        out.add("task", task);
         return out;
+    }
+
+    private static TaskReceipt latestTaskFor(UUID companionId) {
+        if (companionId == null) return null;
+        TaskReceipt newest = null;
+        for (TaskReceipt receipt : TASKS.values()) {
+            if (!companionId.equals(receipt.companionId)) continue;
+            if (newest == null || receipt.createdAt > newest.createdAt) newest = receipt;
+        }
+        return newest;
     }
 
     private static JsonObject idleTask() {
@@ -892,6 +912,7 @@ public final class JarvisBridge {
         final String command;
         volatile String state = "queued";
         volatile String error = "";
+        final long createdAt = System.currentTimeMillis();
         volatile long startedAt = 0;
         volatile long finishedAt = 0;
         TaskReceipt(UUID id, UUID companionId, String ownerName, String goal, String command) {
@@ -904,6 +925,10 @@ public final class JarvisBridge {
             out.addProperty("companionId", companionId.toString());
             out.addProperty("goal", goal);
             out.addProperty("state", state);
+            out.addProperty("status", "completed".equals(state) ? "complete" :
+                    ("queued".equals(state) || "running".equals(state)) ? "running" : state);
+            out.addProperty("since", startedAt > 0 ? startedAt : createdAt);
+            out.add("milestones", new JsonObject());
             out.addProperty("accepted", !"failed".equals(state));
             out.addProperty("completed", "completed".equals(state));
             out.addProperty("verified", false);

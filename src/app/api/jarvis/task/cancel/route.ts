@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { companionCancel } from "@/lib/agent/windows/bridge";
+import {authorizeToolCall} from "@/lib/agent/guardian/guardian";
+import {runGuardianApprovedPlayerEngine} from "@/lib/agent/windows/playerEngineBridge";
 import { requestCancel } from "@/lib/agent/core/cancelRegistry";
 import { transitionTask } from "@/lib/agent/core/taskState";
 import {
@@ -47,6 +49,26 @@ export async function POST(req: NextRequest) {
   // Best-effort cancellation for external Windows browser actions. It cannot
   // prove instantaneous stop during a blocking OS/browser navigation.
   void companionCancel(taskId);
+  // When the prototype's opt-in native Fabric backend owns this Core task,
+  // send a separate owner-authenticated, durably audited emergency stop.
+  // A lost Node task map must NOT prevent an owner from stopping the entity.
+  let nativeStopVerified:boolean|null=null;
+  if(process.env.JARVIS_MC_BACKEND==="playerengine") {
+    try {
+      const effect=await db.effectRecord.findFirst({where:{
+        taskId,tool:{in:["minecraft_companion_command","minecraft_companion_join"]}
+      }});
+      if(effect) {
+        const authorization=await authorizeToolCall(
+          {taskId,ownerId:ctx.principalId},"minecraft_companion_stop",{});
+        if(authorization.verdict==="allow" && authorization.prepared?.desktop) {
+          const receipt=await runGuardianApprovedPlayerEngine(taskId,ctx.principalId,
+            authorization.prepared.desktop,authorization);
+          nativeStopVerified=receipt.ok;
+        } else nativeStopVerified=false;
+      }
+    } catch {nativeStopVerified=false;}
+  }
 
   // PHASE 02 (§7.4): STOP is an explicit state, not just a Boolean.
   // planned/planning/executing → cancel_requested is a compare-and-set;
@@ -62,17 +84,19 @@ export async function POST(req: NextRequest) {
         ok: true,
         taskId,
         cancelled: true,
+        nativeStopVerified,
         state: cas.ok ? "cancel_requested" : task.status,
         note: cas.ok ? undefined : "STOP flag set; durable CAS lost a race — current state reported honestly.",
       });
     }
     if (task && task.status === "cancel_requested") {
-      return Response.json({ ok: true, taskId, cancelled: true, state: "cancel_requested" });
+      return Response.json({ ok: true, taskId, cancelled: true, nativeStopVerified, state: "cancel_requested" });
     }
     return Response.json({
       ok: true,
       taskId,
       cancelled: false,
+      nativeStopVerified,
       state: task?.status ?? "unknown",
       note: "Task is not in a cancellable state (already settled).",
     });
@@ -80,5 +104,5 @@ export async function POST(req: NextRequest) {
     // journal best-effort; the in-memory flag is the operative control
   }
 
-  return Response.json({ ok: true, taskId, cancelled: true });
+  return Response.json({ ok: true, taskId, cancelled: true, nativeStopVerified });
 }

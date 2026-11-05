@@ -90,6 +90,7 @@ public final class JarvisBridgeServer {
         JarvisEndgameTask endgame;
         JarvisNativeSequenceTask sequence;
         JarvisNativeVillagerTrade.Result trade;
+        JarvisNativeOwnerEnchant.Result enchant;
         String transferItem;
         String transferDirection;
         int transferCount;
@@ -524,6 +525,44 @@ public final class JarvisBridgeServer {
                 status=previous.state;
                 note=previous.note;
             }
+            case "enchant" -> {
+                if(!"1".equals(System.getenv("JARVIS_MC_BRIDGE_OWNER_XP_ENCHANT_ENABLE")))
+                    throw new IllegalArgumentException("owner-xp-enchant-explicit-operator-opt-in-required");
+                if(safetyStopped.contains(companionId)||journal.hasUnresolved(companionId))
+                    throw new IllegalArgumentException("native-enchant-recovery-required");
+                if(tasks.containsKey(taskId)||tasks.size()>=2048)
+                    throw new IllegalArgumentException("native-enchant-replay-or-capacity");
+                for(Run pending:tasks.values()){
+                    if(pending.companion.equals(companionId) &&
+                       "running".equals(pending.state))
+                        throw new IllegalArgumentException("companion-busy");
+                }
+                BlockPos table=position(args);
+                String item=field(args,"item");
+                int choice=args.get("choice").getAsInt();
+                if(!item.matches("[a-z0-9_]{1,64}")||choice<0||choice>2)
+                    throw new IllegalArgumentException("enchant-owner-choice-invalid");
+                Run record=new Run(companionId,authorizedCoreTask,ctrl,companion,budget);
+                journal.admit(taskId,authorizedCoreTask,companionId,worldId,op);
+                tasks.put(taskId,record);
+                try{
+                    JarvisNativeOwnerEnchant.Result enchanted=
+                        JarvisNativeOwnerEnchant.enchant(companion,owner,table,item,choice);
+                    record.enchant=enchanted;
+                    if(!enchanted.verified)
+                        throw new IllegalStateException("vanilla-enchantment-postcondition-unknown");
+                    journal.settle(taskId,"OBSERVED");
+                    record.state="observed";
+                    record.note="vanilla-owner-expense-and-companion-enchantment-verified";
+                }catch(Exception ex){
+                    try{journal.settle(taskId,"EFFECT_UNKNOWN");}
+                    catch(Exception ignored){/* preserve ADMITTED quarantine */}
+                    record.state="failed";
+                    record.note="native-enchant-effect-unknown-reconciliation-required";
+                }
+                record.settledAt=System.currentTimeMillis();
+                status=record.state;note=record.note;
+            }
             case "trade" -> {
                 if(safetyStopped.contains(companionId)||journal.hasUnresolved(companionId))
                     throw new IllegalArgumentException("native-trade-recovery-required");
@@ -863,7 +902,33 @@ public final class JarvisBridgeServer {
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
                     (candidate.endgame == null && candidate.cropGoal == null &&
                      candidate.smeltGoal == null && candidate.sequence == null &&
-                     candidate.transferItem == null && candidate.trade == null)) continue;
+                     candidate.transferItem == null && candidate.trade == null &&
+                     candidate.enchant == null)) continue;
+            if(candidate.enchant!=null) {
+                JarvisNativeOwnerEnchant.Result result=candidate.enchant;
+                snapshot.addProperty("nativeGoal","enchant");
+                JsonObject summary=new JsonObject();
+                summary.addProperty("goal","enchant");
+                summary.addProperty("status",candidate.state.equals("observed") &&
+                    result.verified?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("inputItem",result.inputItem);
+                summary.addProperty("outputItem",result.outputItem);
+                summary.addProperty("choice",result.option);
+                JsonObject milestones=new JsonObject();
+                milestones.addProperty("enchantDone",candidate.state.equals("observed") &&
+                    result.verified);
+                milestones.addProperty("requiredLevel",result.requiredLevel);
+                milestones.addProperty("xpBefore",result.xpBefore);
+                milestones.addProperty("xpAfter",result.xpAfter);
+                milestones.addProperty("lapisBefore",result.lapisBefore);
+                milestones.addProperty("lapisAfter",result.lapisAfter);
+                milestones.addProperty("enchantmentCount",result.enchantmentCount);
+                milestones.addProperty("ownerXpSpent",result.xpBefore-result.xpAfter);
+                summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
             if(candidate.trade!=null) {
                 JarvisNativeVillagerTrade.Result result=candidate.trade;
                 snapshot.addProperty("nativeGoal","trade");

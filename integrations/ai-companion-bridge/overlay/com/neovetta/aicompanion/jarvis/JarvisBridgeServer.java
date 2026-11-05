@@ -9,6 +9,8 @@ import adris.altoclef.tasks.construction.DestroyBlockTask;
 import adris.altoclef.tasks.construction.PlaceBlockTask;
 import adris.altoclef.tasks.entity.KillEntityTask;
 import adris.altoclef.tasks.resources.CollectCropTask;
+import adris.altoclef.tasks.container.SmeltInFurnaceTask;
+import adris.altoclef.util.SmeltTarget;
 import adris.altoclef.util.ItemTarget;
 import adris.altoclef.tasksystem.Task;
 import com.google.gson.JsonArray;
@@ -83,6 +85,9 @@ public final class JarvisBridgeServer {
         final long deadline;
         final long since = System.currentTimeMillis();
         JarvisEndgameTask endgame;
+        String smeltGoal;
+        String smeltOutput;
+        int smeltTarget;
         String cropGoal;
         String cropKind;
         String cropItem;
@@ -368,7 +373,7 @@ public final class JarvisBridgeServer {
                 status=previous.state;
                 note=previous.note;
             }
-            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "endgame", "farm" -> {
+            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "endgame", "farm", "smelt" -> {
                 if (safetyStopped.contains(companionId)) throw new IllegalArgumentException("owner-safety-stop-latched");
                 if (tasks.containsKey(taskId)) throw new IllegalArgumentException("duplicate-task");
                 if (tasks.size() >= 2048) throw new IllegalArgumentException("task-capacity");
@@ -377,7 +382,7 @@ public final class JarvisBridgeServer {
                         throw new IllegalArgumentException("companion-busy");
                 }
                 long runtimeBudget = budget;
-                if ("endgame".equals(op) || "farm".equals(op)) {
+                if ("endgame".equals(op) || "farm".equals(op) || "smelt".equals(op)) {
                     int duration = args.get("durationSeconds").getAsInt();
                     if (duration < 10 || duration > 43200)
                         throw new IllegalArgumentException("mission-duration-out-of-range");
@@ -390,6 +395,24 @@ public final class JarvisBridgeServer {
                     JarvisEndgameTask mission=new JarvisEndgameTask(companion,goal);
                     run.endgame=mission;
                     task=mission;
+                } else if ("smelt".equals(op)) {
+                    String goal=field(args,"goal");
+                    String output=field(args,"item");
+                    int count=args.get("targetCount").getAsInt();
+                    if (!"smelt".equals(goal)||count<1||count>16 ||
+                            !SMELT_RECIPES.containsKey(output))
+                        throw new IllegalArgumentException("smelting-goal-denied");
+                    Item out=Registries.ITEM.get(new Identifier("minecraft",output));
+                    if(out==Items.AIR)throw new IllegalArgumentException("unknown-smelting-output");
+                    int held=countItem(companion,output);
+                    if(held>192 || held+count>256)
+                        throw new IllegalArgumentException("smelt-output-budget");
+                    run.item=output;run.initialCount=held;run.addedCount=count;
+                    run.smeltGoal=goal;run.smeltOutput=output;run.smeltTarget=count;
+                    Task operationTask=new SmeltInFurnaceTask(new SmeltTarget(
+                        new ItemTarget(out,held+count),
+                        new ItemTarget(SMELT_RECIPES.get(output),count)));
+                    task=operationTask;
                 } else if ("farm".equals(op)) {
                     String goal=field(args,"goal");
                     String crop=field(args,"crop");
@@ -687,6 +710,16 @@ public final class JarvisBridgeServer {
     }
 
 
+    private static final Map<String,String> SMELT_RECIPES=Map.of(
+        "iron_ingot","raw_iron",
+        "gold_ingot","raw_gold",
+        "glass","sand",
+        "charcoal","log",
+        "netherite_scrap","ancient_debris",
+        "cooked_beef","beef",
+        "cooked_porkchop","porkchop",
+        "cooked_chicken","chicken"
+    );
     private static final java.util.Set<String> BUILD_BLOCKS=java.util.Set.of(
         "cobblestone","cobbled_deepslate","oak_planks","spruce_planks",
         "stone","dirt","oak_log","glass","sandstone","netherrack");

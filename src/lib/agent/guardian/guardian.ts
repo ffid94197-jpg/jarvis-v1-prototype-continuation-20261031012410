@@ -39,8 +39,8 @@ export interface PreparedArgs {
   integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;operation?:string;arguments?:Record<string,unknown>};
   memory?: {ownerId:string;query:string;limit:number};
   world?: {ownerId:string;query:string;limit:number};
-  evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs";
-    id?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
+  evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill";
+    id?:string;sourceTaskId?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
 }
 
 export interface GuardianDecision {
@@ -95,7 +95,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "minecraft_companion_stop",
   "adoption_stage_github", "adoption_list", "adoption_skill", "adoption_mcp_list", "adoption_mcp_call",
   "evolution_skill_stage", "evolution_skill_list", "evolution_skill_expand", "evolution_skill_run",
-  "evolution_repair_stage", "evolution_repair_list", "evolution_owner_control",
+  "evolution_repair_stage", "evolution_repair_list", "evolution_skill_learn", "evolution_owner_control",
 ] as const;
 
 export type GuardianTool = (typeof GUARDIAN_KNOWN_TOOLS)[number];
@@ -154,24 +154,43 @@ export async function authorizeToolCall(
         if(ctx.ownerControlPlane!==true || ctx.taskId!==null || !ctx.ownerId) {
           decision=deny("Owner-only trusted control plane authorization required");break;
         }
-        const permitted=new Set(["stage_skill","approve_skill","disable_skill",
+        const permitted=new Set(["stage_skill","approve_skill","disable_skill","learn_skill",
           "stage_repair","approve_repair","apply_repair","rollback_repair"]);
         const action=rawArgs.action;
         if(typeof action!=="string"||!permitted.has(action) ||
-           Object.keys(rawArgs).some(k=>!["action","id"].includes(k))) {
+           Object.keys(rawArgs).some(k=>!["action","id","sourceTaskId"].includes(k))){
           decision=deny("Unsupported owner evolution mutation");break;
         }
-        if(!action.startsWith("stage_") &&
-           (typeof rawArgs.id!=="string" ||
-            !/^(?:sk|rp)_[0-9a-f]{32}$/.test(rawArgs.id) ||
-            (action.endsWith("skill")&&!rawArgs.id.startsWith("sk_")) ||
-            (action.endsWith("repair")&&!rawArgs.id.startsWith("rp_")))){
+        if(action==="learn_skill"){
+          if(rawArgs.id!==undefined ||
+             (rawArgs.sourceTaskId!==undefined &&
+              (typeof rawArgs.sourceTaskId!=="string" ||
+               !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(rawArgs.sourceTaskId)))){
+            decision=deny("Invalid same-owner completed source task ID");break;
+          }
+        }else if(rawArgs.sourceTaskId!==undefined ||
+           (!action.startsWith("stage_") &&
+             (typeof rawArgs.id!=="string" ||
+              !/^(?:sk|rp)_[0-9a-f]{32}$/.test(rawArgs.id) ||
+              (action.endsWith("skill")&&!rawArgs.id.startsWith("sk_")) ||
+              (action.endsWith("repair")&&!rawArgs.id.startsWith("rp_"))))){
           decision=deny("Exact type-matching candidate ID required");break;
         }
         decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
-          action:action as "stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs",
-          id:typeof rawArgs.id==="string"?rawArgs.id:undefined}}};
+          action:action as "stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill",
+          id:typeof rawArgs.id==="string"?rawArgs.id:undefined,
+          sourceTaskId:typeof rawArgs.sourceTaskId==="string"?rawArgs.sourceTaskId:undefined}}};
         break;
+      }
+      case "evolution_skill_learn": {
+        if(!ctx.ownerId || Object.keys(rawArgs).some(k=>k!=="sourceTaskId") ||
+           (rawArgs.sourceTaskId!==undefined &&
+            (typeof rawArgs.sourceTaskId!=="string" ||
+             !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(rawArgs.sourceTaskId)))){
+          decision=deny("Owner and optional real source task UUID required");break;
+        }
+        decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
+          action:"learn_skill",sourceTaskId:rawArgs.sourceTaskId as string|undefined}}};break;
       }
       case "evolution_skill_stage": {
         if(!ctx.ownerId){decision=deny("Authenticated owner required");break;}

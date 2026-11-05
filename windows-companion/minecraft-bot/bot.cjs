@@ -1394,7 +1394,7 @@ async function action(q){
       }
       // The Dragon/Netherite acceptance path is survival-only. Never allow
       // creative/spectator/adventure game modes to generate a fake victory.
-      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','smelt','equip'].includes(q.goal) &&
+      if(['dragon_then_netherite_run','netherite_dragon_run','dragon_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','wood','gather','travel','build','build_volume','farm_wheat','sequence','craft','smelt','transfer','equip'].includes(q.goal) &&
          bot.game?.gameMode!=='survival')
         return {ok:false,error:'Autonomous survival goal requires server-confirmed survival game mode'};
       // A repeated model/tool call must not erase progress or interrupt an

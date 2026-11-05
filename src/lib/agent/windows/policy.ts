@@ -532,7 +532,12 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       if(args.durationSeconds!==undefined)prepared.durationSeconds=args.durationSeconds as number;
       const fields=["resource","targetCount","destination","arrivalRange","steps","position","block","axis",
         "length","width","depth","height","shape","item","destinationSlot","crop","operation"];
-      for(const key of fields)if(args[key]!==undefined)(prepared as unknown as Record<string,unknown>)[key]=args[key];
+      for(const key of fields)if(args[key]!==undefined) {
+        // "operation" in the original goal means deposit/withdraw; do not
+        // override the Windows companion's transport operation discriminator.
+        const outputKey=key==="operation"?"operationDirection":key;
+        (prepared as unknown as Record<string,unknown>)[outputKey]=args[key];
+      }
     }
     if(command==='natural_goal')prepared.text=args.text as string;
     if(['navigate','dig_block','inspect_block','interact_block'].includes(command))prepared.position=args.position as {x:number;y:number;z:number};

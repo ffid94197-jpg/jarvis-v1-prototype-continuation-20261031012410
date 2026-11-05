@@ -234,7 +234,7 @@ export async function runGuardianApprovedPlayerEngine(
         const spec=desktop as unknown as Record<string,unknown>;
         if(!Array.isArray(spec.steps) || spec.steps.length<1 || spec.steps.length>8 ||
            spec.steps.some(step=>!step||typeof step!=="object"||Array.isArray(step)||
-             !["gather","craft","smelt","equip","travel","tools","stone_age","iron_age"].includes(String(
+             !["gather","craft","smelt","equip","travel","tools","stone_age","iron_age","build"].includes(String(
                (step as Record<string,unknown>).goal||""))))
           throw Error("Unsupported native sequence stage or invalid owner-declared plan");
         op="sequence";

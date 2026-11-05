@@ -39,6 +39,15 @@ const allowedPath=p=>{
      p.split("/").some(part=>!part||part==="."||part===".."||
        !/^[a-zA-Z0-9._ -]{1,80}$/.test(part)))
     throw new RepairError("Only a safe workspace-relative file path is permitted");
+  const parts=p.toLowerCase().split("/");
+  const blocked=new Set(["node_modules",".git",".github",".next","dist","build",
+    "package.json","package-lock.json","pnpm-lock.yaml","yarn.lock",
+    "tsconfig.json","next.config.ts","next.config.js"]);
+  if(parts.some(part=>part.startsWith(".")||blocked.has(part)) ||
+     ["src/lib/agent/guardian/","src/lib/agent/auth/",
+      "src/lib/agent/evolution/","src/app/api/jarvis/"].some(prefix=>
+        p.toLowerCase().startsWith(prefix)))
+    throw new RepairError("JARVIS protected configuration/security file is immune to self-repair");
   return p;
 };
 async function boundedFile(rel){

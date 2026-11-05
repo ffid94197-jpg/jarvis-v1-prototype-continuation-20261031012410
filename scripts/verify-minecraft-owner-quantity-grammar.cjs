@@ -30,7 +30,8 @@ const intent=load('src/lib/agent/core/minecraftIntent.ts');
 const gate=load('src/lib/agent/core/minecraftAiGate.ts',{'./minecraftIntent':intent});
 const {directResourceGatherFromObjective:direct,minecraftMissionFromObjective,
        directMinecraftMission,parseMinecraftCount}=intent;
-const {singleInventoryResourceGoal,mayStartNativeMinecraftGoal,cobblestoneGoalQuantity}=gate;
+const {singleInventoryResourceGoal,mayStartNativeMinecraftGoal,cobblestoneGoalQuantity,
+       isMinecraftAiObjective,isMinecraftObservationOnlyObjective}=gate;
 const pairs=[
   ['Jarvis, gather 16 cobblestone in Minecraft','cobblestone',16],
   ['Hey Jarvis, in Minecraft collect twenty-one diamonds','diamond',21],
@@ -105,5 +106,18 @@ for(const phrase of [
   assert.equal(mayStartNativeMinecraftGoal(phrase,proposed(1),observed),false,phrase);
   checks++;
 }
+for(const ownerAction of [
+  'Get twenty one diamonds in Minecraft',
+  'Bring me two diamonds in Minecraft',
+  'Fetch three diamonds in Minecraft',
+  'Acquire seven diamonds in Minecraft'
+]){
+  assert.equal(isMinecraftAiObjective(ownerAction),true,ownerAction);
+  checks++;
+}
+assert.equal(isMinecraftObservationOnlyObjective(
+  'Observe Minecraft and fetch eight diamonds'),false,
+  'A request to observe and fetch is NOT read-only');
+checks++;
 assert.equal(cobblestoneGoalQuantity('Mine fifty-two cobblestone in Minecraft'),52);checks++;
 console.log('Minecraft owner quantity / Guardian AI proposal contract: '+checks+' checks PASS');

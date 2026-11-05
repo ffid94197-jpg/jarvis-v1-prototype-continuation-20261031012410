@@ -32,6 +32,12 @@ export const MINECRAFT_COUNT_TOKEN = "(?:" +
   ].sort((a,b)=>b.length-a.length).join("|") +
   "|\\d+)";
 
+// Keep units identical between direct source intent, model proposal admission
+// and final proof. In particular "twenty-one pieces OF obsidian" must not
+// degrade to an unspecified count of 1 in the model's secondary route.
+export const MINECRAFT_COUNT_UNIT =
+  "(?:(?:blocks?|pieces?|units?)\\s+of\\s+|(?:blocks?|pieces?|units?|of)\\s+)?";
+
 export function parseMinecraftCount(raw:string):number|null {
   if(typeof raw!=="string" || raw.length>30)return null;
   const s=raw.trim().toLowerCase().replace(/-/g," ").replace(/\s+/g," ");
@@ -73,7 +79,7 @@ export function directResourceGatherFromObjective(objective:string):
   const match=new RegExp(
     "^(?:gather|collect|mine|obtain|acquire|get|fetch|bring me)\\s+"+
     "("+MINECRAFT_COUNT_TOKEN+")\\s+"+
-    "(?:(?:blocks?|pieces?|units?)\\s+of\\s+|(?:blocks?|pieces?|units?|of)\\s+)?"+
+    MINECRAFT_COUNT_UNIT+
     "(logs?|wood|timber|planks?|sticks?|cobblestone|raw iron|iron ingots?|diamonds?|obsidian|flint|netherrack)$"
   ).exec(s);
   if(!match)return null;

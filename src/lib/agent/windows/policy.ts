@@ -37,6 +37,16 @@ export interface DesktopPrepared {
   destination?: string;
   count?: number;
   entityId?: number;
+  maxSwings?: number;
+  tradeIndex?: number;
+  times?: number;
+  choice?: number;
+  targetCount?: number;
+  width?: number;
+  depth?: number;
+  height?: number;
+  shape?: string;
+  crop?: string;
   hand?: string;
   action?: string;
   elementId?: string;
@@ -488,7 +498,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       prepared.goal=args.goal as string;
       if(args.durationSeconds!==undefined)prepared.durationSeconds=args.durationSeconds as number;
       const fields=["resource","targetCount","destination","arrivalRange","steps","position","block","axis",
-        "length","width","depth","item","destinationSlot"];
+        "length","width","depth","height","shape","item","destinationSlot","crop","operation"];
       for(const key of fields)if(args[key]!==undefined)(prepared as unknown as Record<string,unknown>)[key]=args[key];
     }
     if(command==='natural_goal')prepared.text=args.text as string;

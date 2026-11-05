@@ -135,6 +135,24 @@ const summary=r=>({id:r.id,path:r.path,state:r.state,diagnosis:r.diagnosis,
 export async function listRepairs(owner){
   return (await load(owner)).map(summary);
 }
+/** Fail-closed boot-sentry diagnostic. NEVER mutates a patch or auto-runs code. */
+export async function inspectRecovery(owner){
+  const entries=(await load(owner)).filter(x=>
+    ["applying","rolling_back","effect_unknown"].includes(x.state)).slice(0,32);
+  const recovery=[];
+  for(const entry of entries){
+    let observed="unreadable";
+    try{
+      const file=await boundedFile(entry.path);
+      observed=file.hash===entry.beforeSha256?"original":
+        file.hash===entry.afterSha256?"candidate":"externally_changed";
+    }catch{}
+    recovery.push({id:entry.id,path:entry.path,state:entry.state,
+      observed,requiresOwnerReconciliation:true,
+      automaticExecution:false,willNotBlindlyRetry:true});
+  }
+  return recovery;
+}
 export async function getRepair(owner,id){
   validId(id);
   const item=(await load(owner)).find(r=>r.id===id);

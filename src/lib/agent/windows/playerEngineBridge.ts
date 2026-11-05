@@ -176,12 +176,18 @@ export async function runGuardianApprovedPlayerEngine(
         if(!summary || typeof summary!=="object" || Array.isArray(summary))
           return {ok:false,error:"No live native mission status for this authorized Core task"};
         const state=summary as Record<string,unknown>;
-        if(typeof state.goal!=="string" || typeof state.status!=="string" ||
+        if(!current?.missionGoal || state.goal!==current.missionGoal ||
+           typeof state.status!=="string" ||
            !Number.isSafeInteger(state.since) ||
-           !state.milestones || typeof state.milestones!=="object")
-          return {ok:false,error:"Malformed or mismatched native mission status"};
+           !Number.isSafeInteger(current.missionSince) ||
+           Math.abs(Number(state.since)-current.missionSince)>60000 ||
+           !state.milestones || typeof state.milestones!=="object" ||
+           Array.isArray(state.milestones))
+          return {ok:false,error:"Native mission receipt does not belong to this Core task"};
+        const encoded=JSON.stringify(state);
+        if(encoded.length>1800)return {ok:false,error:"Native status exceeds bounded Core evidence parser"};
         return {ok:true,evidence:{botAcknowledged:true,command:"auto_status",
-          backend:"playerengine",status:JSON.stringify(state),realWorldReadback:true}};
+          backend:"playerengine",status:encoded,realWorldReadback:true}};
       }
       return {ok:true,evidence:{botAcknowledged:true,command:cmd,backend:"playerengine",
         status:JSON.stringify(world),verifiedGameReadback:true}};

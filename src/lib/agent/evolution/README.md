@@ -50,7 +50,7 @@ This is a safe repair candidate and rollback feature, **not** unrestricted auton
 - \`stage_skill\` (\`manifest\`), \`skill_details\` (\`id\`), \`approve_skill\` (\`id\`), \`disable_skill\` (\`id\`), \`expand_skill\` (\`id\`, optional \`inputs\`).
 - \`stage_repair\` (\`candidate\`), \`repair_details\` (\`id\`), \`approve_repair\` (\`id\`), \`apply_repair\` (\`id\`), \`rollback_repair\` (\`id\`).
 
-All API endpoints derive the owner from the active authenticated JARVIS session and require the OWNER role. Mutations use the existing same-origin policy. Model tool calls cannot approve, apply or roll back a patch.
+All API endpoints derive the owner from the active authenticated JARVIS session and require the OWNER role. Mutations use the existing same-origin policy **and** a separate mandatory Guardian audit through the trusted `evolution_owner_control` gate; if audit storage is unavailable, no mutation occurs. Model tool calls cannot assert the trusted owner-control flag, approve, apply or roll back a patch.
 
 **Model-facing tools:** \`evolution_skill_stage\`, \`evolution_skill_list\`,
 \`evolution_skill_expand\`, \`evolution_repair_stage\`, \`evolution_repair_list\`. All pass through JARVIS Guardian and durable audit; staging writes also use the Core effect journal. No backdoor executable skill runner exists.

@@ -101,7 +101,9 @@ function observation(p:Packet) {
     wornNetherite:netheriteBySlot.every((item,index)=>state.armorSlots[index]===item),
     heldNetheriteSword:state.mainHand==="netherite_sword",
     dragonDeadObserved:s.dragonDeadObserved===true,
-    exitPortalPresent:s.exitPortalPresent===true,nearbyBlocks,villagers,threats,
+    exitPortalPresent:s.exitPortalPresent===true,
+    nativeRecoveryRequired:s.recoveryRequired===true,
+    nativeSafetyStopped:s.safetyStopped===true,nearbyBlocks,villagers,threats,
     lastAction:"PlayerEngine game-server observation; no inferred scenery or victory"
   };
 }
@@ -209,6 +211,9 @@ export async function runGuardianApprovedPlayerEngine(
         throw Error("Unsupported or unbounded owner mission");
       if(current)throw Error("Active native mission unresolved; inspect before any new mission");
       const before=await send("inspect",randomUUID(),cfg,auth,{},2500);
+      if(before.observations?.recoveryRequired===true ||
+         before.observations?.safetyStopped===true)
+        throw Error("Native recovery or E-stop latch active: explicitly reconcile before new mission");
       if(typeof before.observations?.activeTaskId==="string")
         throw Error("Previous game-server task must be reconciled before starting a mission");
       if(isCancelled())throw Error("Owner cancellation before native endgame admission");
@@ -258,6 +263,9 @@ export async function runGuardianApprovedPlayerEngine(
       op="combat";extra={entityId:desktop.entityId};
     }else throw Error("PlayerEngine operation unsupported; no mixed Mineflayer fallback in this backend");
     const baseline=await send("inspect",randomUUID(),cfg,auth,{},2500);
+    if(baseline.observations?.recoveryRequired===true ||
+       baseline.observations?.safetyStopped===true)
+      throw Error("Unreconciled native operation or safety stop; owner must explicitly resume");
     if (typeof baseline.observations?.activeTaskId==="string")
       throw Error("Another native task is running on this companion; reconcile or emergency-stop it before another effect");
     const before=item?physicalCount(extract(baseline).items,item):undefined;

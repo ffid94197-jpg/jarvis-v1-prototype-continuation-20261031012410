@@ -99,6 +99,9 @@ public final class JarvisBridgeServer {
         int transferPlayerAfter;
         int transferContainerBefore;
         int transferContainerAfter;
+        String gatherGoal;
+        String gatherResource;
+        int gatherTargetCount;
         String smeltGoal;
         String smeltOutput;
         int smeltTarget;
@@ -654,7 +657,8 @@ public final class JarvisBridgeServer {
                         throw new IllegalArgumentException("companion-busy");
                 }
                 long runtimeBudget = budget;
-                if ("endgame".equals(op) || "farm".equals(op) || "smelt".equals(op) || "sequence".equals(op)) {
+                if ("endgame".equals(op) || "farm".equals(op) || "smelt".equals(op) || "sequence".equals(op) ||
+                    ("gather".equals(op) && args.has("goal"))) {
                     int duration = args.get("durationSeconds").getAsInt();
                     if (duration < 10 || duration > 43200)
                         throw new IllegalArgumentException("mission-duration-out-of-range");
@@ -738,6 +742,29 @@ public final class JarvisBridgeServer {
                         new Item[]{seed},
                         run.cropCells::contains);
                     sampleFarmCells(run);
+                } else if("gather".equals(op) && args.has("goal")) {
+                    if(!"gather".equals(field(args,"goal")))
+                        throw new IllegalArgumentException("wrong-gather-goal");
+                    String resource=field(args,"resource");
+                    int count=args.get("targetCount").getAsInt();
+                    if(!Set.of("logs","planks","sticks","cobblestone",
+                        "raw_iron","iron_ingot","diamond","obsidian","flint",
+                        "netherrack").contains(resource) || count<1||count>64)
+                        throw new IllegalArgumentException("unapproved-resource-or-count");
+                    String name=resource.equals("logs")?"log":
+                        resource.equals("sticks")?"stick":resource;
+                    if(!TaskCatalogue.taskExists(name))
+                        throw new IllegalArgumentException("catalogue-cannot-gather-resource");
+                    int initial=countItem(companion,name);
+                    if(initial>192||initial+count>256)
+                        throw new IllegalArgumentException("gather-output-budget");
+                    run.item=name;
+                    run.initialCount=initial;
+                    run.addedCount=count;
+                    run.gatherGoal="gather";
+                    run.gatherResource=resource;
+                    run.gatherTargetCount=count;
+                    task=TaskCatalogue.getItemTask(name,initial+count);
                 } else if ("travel".equals(op)) {
                     BlockPos pos = position(args);
                     if (companion.getBlockPos().getSquaredDistance(pos) > 160.0 * 160.0)
@@ -902,6 +929,7 @@ public final class JarvisBridgeServer {
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
                     (candidate.endgame == null && candidate.cropGoal == null &&
                      candidate.smeltGoal == null && candidate.sequence == null &&
+                     candidate.gatherGoal == null &&
                      candidate.transferItem == null && candidate.trade == null &&
                      candidate.enchant == null)) continue;
             if(candidate.enchant!=null) {
@@ -998,6 +1026,27 @@ public final class JarvisBridgeServer {
                 milestones.addProperty("stageCount",sequence.total());
                 milestones.addProperty("currentStage",sequence.stage());
                 summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
+            if(candidate.gatherGoal!=null) {
+                snapshot.addProperty("nativeGoal","gather");
+                JsonObject summary=new JsonObject();
+                int current=countItem(companion,candidate.item);
+                int fresh=Math.max(0,current-candidate.initialCount);
+                boolean finished=candidate.state.equals("observed") &&
+                    fresh>=candidate.gatherTargetCount;
+                summary.addProperty("goal","gather");
+                summary.addProperty("status",finished?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("resource",candidate.gatherResource);
+                summary.addProperty("targetCount",candidate.gatherTargetCount);
+                JsonObject milestone=new JsonObject();
+                milestone.addProperty("newItems",fresh);
+                milestone.addProperty("initialCount",candidate.initialCount);
+                milestone.addProperty("currentCount",current);
+                milestone.addProperty("gatherDone",finished);
+                summary.add("milestones",milestone);
                 snapshot.add("missionStatus",summary);
                 break;
             }

@@ -62,6 +62,7 @@ import { parseInventorySource, validateInventoryDraft } from "./inventoryIntegri
 import { AutonomyGate, REPEATABLE_INPUT_TOOLS, DESKTOP_GUI_EFFECTS, hasDirectProof, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
 import {acceptedSkillQueue, type ActiveSkillQueue} from "./approvedSkillQueue";
+import {directApprovedSkillIntent} from "./skillIntent";
 import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan, type GoalWatchdogLimits } from "./goalPlanner";
 import { AUTONOMY_PROFILES, deriveStepBudget, type AutonomyProfile } from "./autonomyPolicy";
 
@@ -692,6 +693,8 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         skillQueue.next++;
         queuedSkillStep=true;
       }
+      const approvedSkillIntent=stepsUsed===0 && !opts.replay
+        ? directApprovedSkillIntent(objective):null;
       const minecraftIntent = !minecraftAiTask && process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" &&
         !opts.replay && stepsUsed <= 1 ? directMinecraftMission(objective,stepsUsed) : null;
       const localIntent = process.env.JARVIS_WINDOWS_AGENT_ENABLED === "1" &&
@@ -710,6 +713,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       if(firstMinecraftObserve)minecraftFirstObservePending=false;
       raw = nextApprovedSkillStep
         ? JSON.stringify({action:"tool",tool:nextApprovedSkillStep.tool,args:nextApprovedSkillStep.args})
+        : approvedSkillIntent ? JSON.stringify(approvedSkillIntent)
         : firstMinecraftJoin ? JSON.stringify(firstMinecraftJoin) :
         firstMinecraftObserve ? JSON.stringify(firstMinecraftObserve) :
         minecraftIntent ? JSON.stringify(minecraftIntent) : localIntent ? JSON.stringify(localIntent) : capabilityIntent ?

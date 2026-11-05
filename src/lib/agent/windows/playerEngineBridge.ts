@@ -14,7 +14,8 @@ const client = require("../../../../integrations/ai-companion-bridge/guardian-ip
   {sendAuthorizedObjective(request:SendRequest,options:{port:number;host:"127.0.0.1";secret:string;timeoutMs:number}):Promise<Packet>};
 export type PlayerEngineResult={ok:boolean;evidence?:Record<string,unknown>;error?:string};
 const active = new Map<string,{runId:string;operation:string;item?:string;before?:number;
-  destination?:{x:number;y:number;z:number};equipDestination?:string;blockName?:string}>();
+  destination?:{x:number;y:number;z:number};equipDestination?:string;blockName?:string;
+  missionGoal?:string;missionSince?:number}>();
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Settings={port:number;secret:string;worldId:string;ownerUuid:string;companionUuid:string};
 function settings(ownerId:string):Settings {
@@ -95,8 +96,12 @@ function observation(p:Packet) {
       woodenPickaxe:inv.wooden_pickaxe||0},health:state.health,hunger:state.hunger,
     joined:true,busy:p.status==="running"||p.status==="accepted"||
       (typeof p.observations?.activeTaskId==="string" && UUID.test(p.observations.activeTaskId)),
-    dimension:p.worldId,nativeGoal:null,wornNetherite:netheriteBySlot.every((item,index)=>state.armorSlots[index]===item),
-    dragonDeadObserved:false,exitPortalPresent:false,nearbyBlocks,villagers,threats,
+    dimension:p.worldId,
+    nativeGoal:typeof s.nativeGoal==="string" && /^[a-z_]{3,64}$/.test(s.nativeGoal)?s.nativeGoal:null,
+    wornNetherite:netheriteBySlot.every((item,index)=>state.armorSlots[index]===item),
+    heldNetheriteSword:state.mainHand==="netherite_sword",
+    dragonDeadObserved:s.dragonDeadObserved===true,
+    exitPortalPresent:s.exitPortalPresent===true,nearbyBlocks,villagers,threats,
     lastAction:"PlayerEngine game-server observation; no inferred scenery or victory"
   };
 }
@@ -155,13 +160,25 @@ export async function runGuardianApprovedPlayerEngine(
     if(!cmd)throw Error("Unsupported PlayerEngine tool");
     if(isCancelled() && !["auto_stop","stop","stay"].includes(cmd))throw Error("Operator cancellation before admission");
     const current=active.get(coreTaskId);
-    if(["join","observe","status","inventory"].includes(cmd)){
+    if(["join","observe","status","inventory","auto_status"].includes(cmd)){
       const packet=await send(current?"status":"inspect",current?.runId||randomUUID(),cfg,auth,{},2500);
       if(packet.status==="failed" && current)throw Error("Native task status failed");
       const world=observation(packet);
       if(current && !world.busy)active.delete(coreTaskId);
       if(cmd==="join")return {ok:true,evidence:{joinedVerified:true,botAcknowledged:true,
         backend:"playerengine",worldId:cfg.worldId,companionUuid:cfg.companionUuid}};
+      if(cmd==="auto_status") {
+        const summary=packet.observations?.missionStatus;
+        if(!summary || typeof summary!=="object" || Array.isArray(summary))
+          return {ok:false,error:"No live native mission status for this authorized Core task"};
+        const state=summary as Record<string,unknown>;
+        if(typeof state.goal!=="string" || typeof state.status!=="string" ||
+           !Number.isSafeInteger(state.since) ||
+           !state.milestones || typeof state.milestones!=="object")
+          return {ok:false,error:"Malformed or mismatched native mission status"};
+        return {ok:true,evidence:{botAcknowledged:true,command:"auto_status",
+          backend:"playerengine",status:JSON.stringify(state),realWorldReadback:true}};
+      }
       return {ok:true,evidence:{botAcknowledged:true,command:cmd,backend:"playerengine",
         status:JSON.stringify(world),verifiedGameReadback:true}};
     }
@@ -181,6 +198,34 @@ export async function runGuardianApprovedPlayerEngine(
         evidence:{backend:"playerengine",resumeLatchCleared:restored.status==="observed",
           oldTaskRestarted:false,physicalReceipt:restored.observations},
         error:restored.status==="observed"?undefined:"Safety latch was not cleared"};
+    }
+    if(cmd==="auto_goal") {
+      const goals=new Set(["dragon_run","netherite_armor_run","netherite_gear_run",
+        "netherite_dragon_run","dragon_then_netherite_run"]);
+      const goal=String(desktop.goal||"");
+      const seconds=desktop.durationSeconds;
+      if(!goals.has(goal)||!Number.isInteger(seconds) ||
+         (seconds as number)<10||(seconds as number)>43200)
+        throw Error("Unsupported or unbounded owner mission");
+      if(current)throw Error("Active native mission unresolved; inspect before any new mission");
+      const before=await send("inspect",randomUUID(),cfg,auth,{},2500);
+      if(typeof before.observations?.activeTaskId==="string")
+        throw Error("Previous game-server task must be reconciled before starting a mission");
+      if(isCancelled())throw Error("Owner cancellation before native endgame admission");
+      const runId=randomUUID();
+      // Record intent before the remote effect. A dropped acknowledgement may
+      // still have started a mission; there is NEVER a blind automatic retry.
+      active.set(coreTaskId,{runId,operation:"endgame",missionGoal:goal,
+        missionSince:Date.now()});
+      const receipt=await send("endgame",runId,cfg,auth,
+        {goal,durationSeconds:seconds},30000);
+      return {ok:["accepted","running","observed"].includes(receipt.status),
+        evidence:{botAcknowledged:["accepted","running","observed"].includes(receipt.status),
+          backend:"playerengine",command:"auto_goal",goal,
+          status:receipt.status,missionStartedOnly:true,
+          missionReceipt:receipt.observations?.missionStatus},
+        error:["accepted","running","observed"].includes(receipt.status)?undefined:
+          "Native endgame not admitted; reconcile game state before a retry"};
     }
     if(current)throw Error("Previous native action remains unresolved: inspect/status before another effect");
     let op:string, extra:Record<string,unknown>, requestedCount=0,item:string|undefined;

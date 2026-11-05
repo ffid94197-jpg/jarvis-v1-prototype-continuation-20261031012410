@@ -178,7 +178,7 @@ async function atomicReplace(target,newText){
   if(!st.isFile()||st.isSymbolicLink())throw new RepairError("Target changed type");
   const temp=target+".jarvis-repair-"+crypto.randomBytes(10).toString("hex");
   try {
-    const mode=(st.mode & 0o777) & 0o766;
+    const mode=st.mode & 0o777;
     const handle=await fs.open(temp,"wx",mode || 0o600);
     try{await handle.writeFile(newText,"utf8");await handle.sync();}
     finally{await handle.close();}
@@ -188,7 +188,15 @@ async function atomicReplace(target,newText){
 }
 async function backup(owner,item,bytes){
   const target=path.join(dir(owner),item.id+".original");
-  const handle=await fs.open(target,"wx",0o600);
+  let handle;
+  try{handle=await fs.open(target,"wx",0o600);}
+  catch(e){
+    if(e?.code!=="EEXIST")throw e;
+    const existing=await fs.readFile(target);
+    if(digest(existing)!==item.beforeSha256)
+      throw new RepairError("Existing source backup failed integrity validation",503);
+    return;
+  }
   try{await handle.writeFile(bytes);await handle.sync();}
   finally{await handle.close();}
 }
@@ -230,7 +238,7 @@ export async function rollbackRepair(owner,id){
   validId(id);
   return serialized(owner,async()=>{
     const items=await load(owner),item=items.find(r=>r.id===id);
-    if(!item||!["applied","applying","effect_unknown"].includes(item.state))
+    if(!item||!["applied","applying","effect_unknown","rolling_back"].includes(item.state))
       throw new RepairError("Only an applied or ambiguous patch can be rolled back",409);
     const before=await fs.readFile(path.join(dir(owner),item.id+".original")).catch(()=>null);
     if(!before||digest(before)!==item.beforeSha256)

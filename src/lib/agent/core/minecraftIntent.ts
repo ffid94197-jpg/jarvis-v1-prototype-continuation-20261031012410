@@ -67,3 +67,20 @@ export function directMinecraftMission(objective:string, step:number) {
   return {action:"tool" as const,tool:"minecraft_companion_command",
     args:{command:"auto_goal",goal,durationSeconds:21600}};
 }
+
+/**
+ * Explicit owner-only one-shot spawn, NOT a general "play Minecraft" join.
+ * No model output may supply the UUID, owner, coordinates or entity name.
+ * Core sends a special Guardian context token only for this exact intent.
+ */
+export function directNativeCompanionSpawn(objective:string):
+  {action:"tool";tool:"minecraft_companion_spawn";args:Record<string,never>}|null {
+  if(typeof objective!=="string"||objective.length>180)return null;
+  const normalized=objective.trim().toLowerCase().replace(/[.!]+$/,"")
+    .replace(/^(?:hey\s+)?jarvis(?:buddy)?[,!:\s]+/,"")
+    .replace(/^(?:please\s+|can you please\s+|could you please\s+)/,"")
+    .replace(/\s+/g," ");
+  if(!/^(?:spawn|summon|create)\s+(?:(?:my|the|a)\s+)?(?:(?:minecraft|jarvis|ai)\s+)?(?:companion|jarvisbuddy)(?:\s+(?:in|inside)\s+minecraft)?$/.test(normalized))
+    return null;
+  return {action:"tool",tool:"minecraft_companion_spawn",args:{}};
+}

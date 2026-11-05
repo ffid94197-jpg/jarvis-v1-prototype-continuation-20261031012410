@@ -2,6 +2,7 @@ package com.neovetta.aicompanion.jarvis;
 
 import adris.altoclef.AltoClefController;
 import adris.altoclef.TaskCatalogue;
+import adris.altoclef.tasks.InteractWithBlockTask;
 import adris.altoclef.tasks.movement.GetToBlockTask;
 import adris.altoclef.tasks.misc.EquipArmorTask;
 import adris.altoclef.tasks.misc.HoldItemTask;
@@ -30,6 +31,8 @@ import net.minecraft.block.Block;
 import net.minecraft.block.CropBlock;
 import net.minecraft.block.FarmlandBlock;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.BlockState;
+import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -105,6 +108,7 @@ public final class JarvisBridgeServer {
         BlockPos arrival;
         BlockPos blockPos;
         String blockId;
+        Boolean interactiveBefore;
         boolean expectAir;
         String equipDestination;
         String equipItem;
@@ -374,7 +378,7 @@ public final class JarvisBridgeServer {
                 status=previous.state;
                 note=previous.note;
             }
-            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "endgame", "farm", "smelt", "sequence" -> {
+            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "interact", "endgame", "farm", "smelt", "sequence" -> {
                 if (safetyStopped.contains(companionId)) throw new IllegalArgumentException("owner-safety-stop-latched");
                 if (tasks.containsKey(taskId)) throw new IllegalArgumentException("duplicate-task");
                 if (tasks.size() >= 2048) throw new IllegalArgumentException("task-capacity");
@@ -521,6 +525,23 @@ public final class JarvisBridgeServer {
                     run.blockPos=pos;
                     run.blockId=blockName;
                     task=new PlaceBlockTask(pos,block);
+                } else if ("interact".equals(op)) {
+                    BlockPos pos=position(args);
+                    ServerWorld level=(ServerWorld)companion.getWorld();
+                    if(!withinReach(companion,pos) || !loaded(level,pos))
+                        throw new IllegalArgumentException("interact-target-not-observed");
+                    BlockState state=level.getBlockState(pos);
+                    String blockName=Registries.BLOCK.getId(state.getBlock()).getPath();
+                    boolean toggle=blockName.endsWith("_door") ||
+                        blockName.endsWith("_trapdoor") || blockName.endsWith("_button") ||
+                        blockName.equals("lever");
+                    if(!toggle || (!state.contains(Properties.OPEN) &&
+                                   !state.contains(Properties.POWERED)))
+                        throw new IllegalArgumentException("unsupported-interaction");
+                    run.blockPos=pos;
+                    run.blockId=blockName;
+                    run.interactiveBefore=interactionState(state);
+                    task=new InteractWithBlockTask(ItemTarget.EMPTY,pos,false);
                 } else if ("dig".equals(op)) {
                     BlockPos pos=position(args);
                     if (!withinReach(companion,pos) || !loaded((ServerWorld)companion.getWorld(),pos))
@@ -564,11 +585,16 @@ public final class JarvisBridgeServer {
                             (run.expectAir ? run.entity.getWorld().getBlockState(run.blockPos).isAir() :
                             run.blockId.equals(Registries.BLOCK.getId(run.entity.getWorld()
                                .getBlockState(run.blockPos).getBlock()).getPath()));
+                    boolean interacted = run.interactiveBefore != null &&
+                            run.blockPos != null &&
+                            loaded((ServerWorld)run.entity.getWorld(),run.blockPos) &&
+                            !interactionState(run.entity.getWorld().getBlockState(run.blockPos))
+                                == run.interactiveBefore;
                     boolean killed = run.combatTarget != null && !run.combatTarget.isAlive();
                     boolean farmProved=run.cropGoal!=null &&
                             run.harvestedCells>=run.cropTargetCount &&
                             countItem(run.entity,run.cropItem)>=run.cropInitialCount+run.cropTargetCount;
-                    boolean proved = added||arrived||equipped||changedBlock||killed ||farmProved||
+                    boolean proved = added||arrived||equipped||changedBlock||interacted||killed ||farmProved||
                             (run.endgame != null && run.endgame.completed()) ||
                             (run.sequence != null && run.sequence.isFinished());
                     try {
@@ -688,6 +714,11 @@ public final class JarvisBridgeServer {
                     blockProof.addProperty("block",Registries.BLOCK.getId(
                         companion.getWorld().getBlockState(pos).getBlock()).getPath());
                 } else blockProof.addProperty("block","chunk-unloaded");
+                if (receiptTask.interactiveBefore != null &&
+                        loaded((ServerWorld)companion.getWorld(),pos))
+                    blockProof.addProperty("interactionChanged",
+                        interactionState(companion.getWorld().getBlockState(pos))
+                          != receiptTask.interactiveBefore);
                 snapshot.add("targetBlock",blockProof);
             }
             if (receiptTask.combatTarget != null)
@@ -804,6 +835,12 @@ public final class JarvisBridgeServer {
         if (slot<0) return false;
         ItemStack equipped=entity.getLivingInventory().armor.get(slot);
         return !equipped.isEmpty() && Registries.ITEM.getId(equipped.getItem()).getPath().equals(item);
+    }
+
+    private static boolean interactionState(BlockState state) {
+        if(state.contains(Properties.OPEN))return state.get(Properties.OPEN);
+        if(state.contains(Properties.POWERED))return state.get(Properties.POWERED);
+        throw new IllegalArgumentException("not-an-interactive-state");
     }
 
     private static JsonObject snapshot(CompanionEntity companion) {

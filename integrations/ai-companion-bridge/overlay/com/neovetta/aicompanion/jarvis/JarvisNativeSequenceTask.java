@@ -100,11 +100,11 @@ public final class JarvisNativeSequenceTask extends Task {
                 if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999980)
                     throw new IllegalArgumentException("build-stage-coordinate");
             String material=row.get("block").getAsString();
-            if(!Set.of("cobblestone","oak_planks","stone","dirt","spruce_planks").contains(material))
+            if(!Set.of("cobblestone","oak_planks","dirt","spruce_planks","birch_planks","stone_bricks","netherrack").contains(material))
                 throw new IllegalArgumentException("build-stage-material");
             String axis=row.get("axis").getAsString();
             int length=row.get("length").getAsInt();
-            if(!Set.of("x","z").contains(axis)||length<1||length>8)
+            if(!Set.of("x+","x-","z+","z-").contains(axis)||length<1||length>8)
                 throw new IllegalArgumentException("build-stage-size");
         } else if(goal.equals("equip")){
             String item=row.get("item").getAsString();
@@ -195,7 +195,8 @@ public final class JarvisNativeSequenceTask extends Task {
             if(count(constructionMaterial)<length)
                 throw new IllegalArgumentException("not-enough-owner-building-material");
             for(int i=0;i<length;i++){
-                BlockPos pos=origin.add(axis.equals("x")?i:0,0,axis.equals("z")?i:0);
+                BlockPos pos=origin.add(axis.equals("x+")?i:axis.equals("x-")?-i:0,
+                    0,axis.equals("z+")?i:axis.equals("z-")?-i:0);
                 if(entity.getBlockPos().getSquaredDistance(pos)>12*12 ||
                    !world.getChunkManager().isChunkLoaded(pos.getX()>>4,pos.getZ()>>4) ||
                    !world.getBlockState(pos).isAir())

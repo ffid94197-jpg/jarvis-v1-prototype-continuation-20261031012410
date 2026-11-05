@@ -89,6 +89,14 @@ public final class JarvisBridgeServer {
         final long since = System.currentTimeMillis();
         JarvisEndgameTask endgame;
         JarvisNativeSequenceTask sequence;
+        String transferItem;
+        String transferDirection;
+        int transferCount;
+        boolean transferDone;
+        int transferPlayerBefore;
+        int transferPlayerAfter;
+        int transferContainerBefore;
+        int transferContainerAfter;
         String smeltGoal;
         String smeltOutput;
         int smeltTarget;
@@ -378,6 +386,49 @@ public final class JarvisBridgeServer {
                 status=previous.state;
                 note=previous.note;
             }
+            case "transfer" -> {
+                if (safetyStopped.contains(companionId) || journal.hasUnresolved(companionId))
+                    throw new IllegalArgumentException("companion-needs-recovery");
+                if (tasks.containsKey(taskId) || tasks.size()>=2048)
+                    throw new IllegalArgumentException("native-task-capacity-or-replay");
+                for (Run run : tasks.values())
+                    if(run.companion.equals(companionId) && "running".equals(run.state))
+                        throw new IllegalArgumentException("companion-busy");
+                String goal=field(args,"goal"),item=field(args,"item");
+                String direction=field(args,"direction");
+                int count=args.get("targetCount").getAsInt();
+                if(!goal.equals("transfer") || count<1 || count>64)
+                    throw new IllegalArgumentException("invalid-owner-transfer");
+                BlockPos pos=position(args);
+                Run record=new Run(companionId,authorizedCoreTask,ctrl,companion,budget);
+                record.transferItem=item;
+                record.transferDirection=direction;
+                record.transferCount=count;
+                // Admission before either inventory changes. No automatic
+                // replay is allowed after partial mutation or dropped receipt.
+                journal.admit(taskId,authorizedCoreTask,companionId,worldId,op);
+                tasks.put(taskId,record);
+                try {
+                    JarvisNativeInventoryTransfer.Result moved=
+                        JarvisNativeInventoryTransfer.move(companion,pos,item,count,direction);
+                    record.transferPlayerBefore=moved.beforePlayer;
+                    record.transferPlayerAfter=moved.afterPlayer;
+                    record.transferContainerBefore=moved.beforeContainer;
+                    record.transferContainerAfter=moved.afterContainer;
+                    journal.settle(taskId,"OBSERVED");
+                    record.transferDone=true;
+                    record.state="observed";
+                    record.note="server-inventory-conservation-and-durable-settlement";
+                } catch (Exception ex) {
+                    try {journal.settle(taskId,"EFFECT_UNKNOWN");}
+                    catch (Exception ignored) { /* preserve ADMITTED quarantine */ }
+                    record.state="failed";
+                    record.note="native-transfer-effect-unknown-reconciliation-required";
+                }
+                record.settledAt=System.currentTimeMillis();
+                status=record.state;
+                note=record.note;
+            }
             case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "interact", "endgame", "farm", "smelt", "sequence" -> {
                 if (safetyStopped.contains(companionId)) throw new IllegalArgumentException("owner-safety-stop-latched");
                 if (tasks.containsKey(taskId)) throw new IllegalArgumentException("duplicate-task");
@@ -629,7 +680,33 @@ public final class JarvisBridgeServer {
             if (!candidate.companion.equals(companionId) ||
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
                     (candidate.endgame == null && candidate.cropGoal == null &&
-                     candidate.smeltGoal == null && candidate.sequence == null)) continue;
+                     candidate.smeltGoal == null && candidate.sequence == null &&
+                     candidate.transferItem == null)) continue;
+            if (candidate.transferItem != null) {
+                snapshot.addProperty("nativeGoal","transfer");
+                JsonObject summary=new JsonObject();
+                summary.addProperty("goal","transfer");
+                summary.addProperty("status",candidate.transferDone &&
+                    candidate.state.equals("observed")?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("item",candidate.transferItem);
+                summary.addProperty("operation",candidate.transferDirection);
+                summary.addProperty("targetCount",candidate.transferCount);
+                JsonObject milestones=new JsonObject();
+                milestones.addProperty("transferDone",candidate.transferDone &&
+                    candidate.state.equals("observed") &&
+                    Math.abs(candidate.transferPlayerAfter-candidate.transferPlayerBefore)
+                        == candidate.transferCount &&
+                    Math.abs(candidate.transferContainerAfter-candidate.transferContainerBefore)
+                        == candidate.transferCount);
+                milestones.addProperty("playerBefore",candidate.transferPlayerBefore);
+                milestones.addProperty("playerAfter",candidate.transferPlayerAfter);
+                milestones.addProperty("containerBefore",candidate.transferContainerBefore);
+                milestones.addProperty("containerAfter",candidate.transferContainerAfter);
+                summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
             if (candidate.sequence != null) {
                 JarvisNativeSequenceTask sequence=candidate.sequence;
                 snapshot.addProperty("nativeGoal","sequence");

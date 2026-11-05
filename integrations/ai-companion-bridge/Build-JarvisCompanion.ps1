@@ -14,7 +14,7 @@ if (-not $BuildOnly) {
   if ($LASTEXITCODE -ne 0) { throw 'Overlay installation failed; preserved upstream edits.' }
 }
 if ($ApplyOnly) { Write-Host 'JARVIS overlay installed; no build executed.'; exit 0 }
-foreach ($name in @('JarvisBridgeServer.java', 'JarvisEndgameTask.java', 'JarvisNativeJournal.java', 'JarvisNativeSequenceTask.java')) {
+foreach ($name in @('JarvisBridgeServer.java', 'JarvisEndgameTask.java', 'JarvisNativeJournal.java', 'JarvisNativeSequenceTask.java', 'JarvisNativeInventoryTransfer.java')) {
   $sourceOverlay = Join-Path $bridge ('overlay\com\neovetta\aicompanion\jarvis\' + $name)
   $installedOverlay = Join-Path $upstream ('aicompanion\src\main\java\com\neovetta\aicompanion\jarvis\' + $name)
   if (-not (Test-Path $installedOverlay)) {

@@ -117,6 +117,22 @@ function privateFingerprint(s: string): string {
   // A hashed fingerprint, never raw tool arguments/error text.
   return createHash('sha256').update(s).digest('hex');
 }
+/** Canonicalize *already admitted* bounded tool parameters. Tool argument
+ * object insertion order and volatile error wording must not reset the
+ * identical-action failure counter. This only affects retry detection;
+ * it changes neither Guardian authorization nor original tool arguments.
+ */
+function stableFailureArgs(input: unknown, depth=0): unknown {
+  if(depth>=12)return '[nested]';
+  if(Array.isArray(input))return input.slice(0,128).map(v=>stableFailureArgs(v,depth+1));
+  if(input&&typeof input==='object')
+    return Object.fromEntries(Object.keys(input as Record<string,unknown>)
+      .sort().slice(0,128)
+      .map(key=>[key,stableFailureArgs((input as Record<string,unknown>)[key],depth+1)]));
+  if(typeof input==='string')return input.slice(0,1024);
+  if(input===null || typeof input==='number' || typeof input==='boolean')return input;
+  return '[nonjson]';
+}
 /**
  * Absolute DURABILITY bound on persisted in-scope replans. This must stay at
  * least as large as the most permissive autonomy tier so that a tier downgrade
@@ -174,7 +190,12 @@ export class GoalProgressWatchdog {
   acknowledgeReplan(){this.pendingReplan=false;}
   observe(tool:string,args:Record<string,unknown>,receipt:{ok:boolean;error?:string}): 'continue'|'replan'|'blocked' {
     if (receipt.ok) {this.lastFailureKey='';this.failures=0;return 'continue';}
-    const key=privateFingerprint(tool+'|'+JSON.stringify(args)+'|'+String(receipt.error??'').slice(0,160));
+    // A network exception, library error and timeout may have different
+    // message text for the SAME repeatedly failed physical action. Counting
+    // the error string lets a model loop indefinitely on unchanged inputs.
+    // Hash only the canonical tool+arguments; receipt.ok still resets on
+    // independently confirmed success.
+    const key=privateFingerprint(tool+'|'+JSON.stringify(stableFailureArgs(args)));
     this.failures=key===this.lastFailureKey?this.failures+1:1;
     this.lastFailureKey=key;
     // Identical-failure threshold is a fixed safety property (mirrors

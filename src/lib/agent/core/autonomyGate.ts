@@ -36,7 +36,7 @@ export function desktopObjectiveRequiresActions(objective: string): boolean {
   return desktopAction || (gameTarget && gameAction) || directGameCommand;
 }
 export type StepResult = {ok:boolean;detail?:Record<string,unknown>;error?:string};
-function hasDirectProof(r: StepResult):boolean {
+export function hasDirectProof(r: StepResult):boolean {
   const d=r.detail ?? {};
   return r.ok && (PROVEN_FLAGS.some(flag=>d[flag] === true) || d["proofVerified"] === true);
 }

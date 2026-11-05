@@ -256,6 +256,7 @@ public final class JarvisBridgeServer {
                     if (existing.companion.equals(companionId) && "running".equals(existing.state))
                         throw new IllegalArgumentException("companion-busy");
                 }
+                Run run = new Run(companionId, ctrl, companion, budget);
                 Task task;
                 if ("travel".equals(op)) {
                     int x = args.get("x").getAsInt(), y = args.get("y").getAsInt(), z = args.get("z").getAsInt();
@@ -273,7 +274,6 @@ public final class JarvisBridgeServer {
                     task = TaskCatalogue.getItemTask(item, current + count);
                 }
                 if (task == null) throw new IllegalArgumentException("missing-task");
-                Run run = new Run(companionId, ctrl, companion, budget);
                 if ("travel".equals(op)) run.arrival = new BlockPos(
                     args.get("x").getAsInt(), args.get("y").getAsInt(), args.get("z").getAsInt());
                 tasks.put(taskId, run);

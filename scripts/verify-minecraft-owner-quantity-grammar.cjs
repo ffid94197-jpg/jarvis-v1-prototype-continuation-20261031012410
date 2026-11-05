@@ -40,7 +40,9 @@ const pairs=[
   ['Can you please bring me sixty four sticks in Minecraft?','sticks',64],
   ['I want you to obtain thirty-two pieces of obsidian in Minecraft','obsidian',32],
   ['Jarvis, mine twenty five raw iron in Minecraft','raw_iron',25],
-  ['Inside Minecraft, collect forty flint','flint',40]
+  ['Inside Minecraft, collect forty flint','flint',40],
+  ['Mine thirty-two blocks of cobblestone in Minecraft','cobblestone',32],
+  ['Gather twenty-one pieces of obsidian in Minecraft','obsidian',21]
 ];
 let checks=0;
 for(const [phrase,resource,count] of pairs){
@@ -91,7 +93,8 @@ const proposed=(targetCount)=>({
 for(const [phrase,count] of [
   ['Get twenty one diamonds in Minecraft',21],
   ['Mine 17 diamonds in Minecraft',17],
-  ['Gather sixty-four diamonds in Minecraft',64]
+  ['Gather sixty-four diamonds in Minecraft',64],
+  ['Get twenty-one pieces of diamonds in Minecraft',21]
 ]){
   assert.equal(singleInventoryResourceGoal(phrase)?.quantity,count,phrase);
   assert.equal(mayStartNativeMinecraftGoal(phrase,proposed(count),observed),true,phrase);
@@ -120,4 +123,7 @@ assert.equal(isMinecraftObservationOnlyObjective(
   'A request to observe and fetch is NOT read-only');
 checks++;
 assert.equal(cobblestoneGoalQuantity('Mine fifty-two cobblestone in Minecraft'),52);checks++;
+assert.equal(cobblestoneGoalQuantity('Mine twenty-five pieces of cobblestone in Minecraft'),25);checks++;
+assert.equal(mayStartNativeMinecraftGoal('Get twenty-one pieces of diamond in Minecraft',
+ proposed(1),observed),false,'AI may not shrink a pieces-of request to one');checks++;
 console.log('Minecraft owner quantity / Guardian AI proposal contract: '+checks+' checks PASS');

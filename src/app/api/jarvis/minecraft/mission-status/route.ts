@@ -35,26 +35,28 @@ export async function GET(req:NextRequest){
   try{
     // A signed game-server snapshot is only meaningful for a real durable
     // admitted owner mission. Query the existing journal, not model text.
-    const admitted=await db.effectRecord.findFirst({
+    const rows=await db.effectRecord.findMany({
       where:{taskId,tool:"minecraft_companion_command",status:"SETTLED"},
-      orderBy:{admittedAt:"desc"},select:{argsJson:true,receiptJson:true}
+      orderBy:{admittedAt:"desc"},take:40,
+      select:{argsJson:true,receiptJson:true}
     });
-    if(!admitted)
-      return Response.json({error:"No settled native mission admission for this task"},{status:404,headers});
-    let evidence:Record<string,unknown>;
-    let input:Record<string,unknown>;
-    try{
-      input=JSON.parse(admitted.argsJson||"{}");
-      const source=JSON.parse(admitted.receiptJson||"{}");
-      evidence=source?.detail;
-    }catch{
-      return Response.json({error:"Native mission admission receipt is invalid"},{status:409,headers});
+    let input:Record<string,unknown>|null=null;
+    for(const row of rows){
+      try {
+        const a=JSON.parse(row.argsJson||"{}") as Record<string,unknown>;
+        const source=JSON.parse(row.receiptJson||"{}");
+        const evidence=source?.detail as Record<string,unknown>|undefined;
+        if(a.command!=="auto_goal" || typeof a.goal!=="string" ||
+           source?.ok!==true || !evidence ||
+           evidence.command!=="auto_goal" || evidence.goal!==a.goal ||
+           evidence.botAcknowledged!==true || evidence.missionStartedOnly!==true ||
+           typeof evidence.nativeRunId!=="string" ||
+           !TASK.test(evidence.nativeRunId))continue;
+        input=a;break;
+      }catch{/* A damaged receipt cannot mint mission authority. */}
     }
-    if(!input || input.command!=="auto_goal" ||
-       typeof input.goal!=="string" || !evidence ||
-       evidence.command!=="auto_goal" || evidence.goal!==input.goal ||
-       evidence.botAcknowledged!==true || evidence.missionStartedOnly!==true)
-      return Response.json({error:"Latest durable receipt was not an approved native mission"},{status:409,headers});
+    if(!input)
+      return Response.json({error:"No durable, owner-approved native mission admission found"},{status:404,headers});
     // A real, NEW durable Guardian audit is required even for the read-only
     // status. The native transport binds the audit ID to the original task.
     const authorization=await authorizeToolCall(

@@ -59,7 +59,7 @@ import { arbitrateCompletion } from "./verifier";
 import { classifyRequestIntent, isModelDisclosureQuestion } from "./requestIntent";
 import { needsPriorTaskContext, priorTaskContext, selectPriorTask } from "./priorTaskContext";
 import { parseInventorySource, validateInventoryDraft } from "./inventoryIntegrity";
-import { AutonomyGate, REPEATABLE_INPUT_TOOLS, desktopObjectiveRequiresActions } from "./autonomyGate";
+import { AutonomyGate, REPEATABLE_INPUT_TOOLS, DESKTOP_GUI_EFFECTS, hasDirectProof, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
 import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan, type GoalWatchdogLimits } from "./goalPlanner";
 import { AUTONOMY_PROFILES, deriveStepBudget, type AutonomyProfile } from "./autonomyPolicy";
@@ -1324,7 +1324,15 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     // Voyager-inspired failure-feedback loop, still governed entirely by
     // the existing Guardian/executor. Revision text has NO effect authority.
     if (goalPlan && !isCancelled()) {
-      const watch = goalWatchdog.observe(tool,args,result);
+      // A desktop tool can ACK a click, keypress or window-launch without
+      // demonstrating that the requested UI effect happened. Treat an
+      // unproven GUI ACK as a pending/ineffective attempt for the *advisory*
+      // milestone watchdog, not verified task progress. Core's separate
+      // UIA supervisor still owns the authoritative live postcondition.
+      const watchdogReceipt = DESKTOP_GUI_EFFECTS.has(tool) && !hasDirectProof(result)
+        ? {ok:false,error:"GUI_EFFECT_DISPATCHED_WITHOUT_VERIFIED_POSTCONDITION"}
+        : result;
+      const watch = goalWatchdog.observe(tool,args,watchdogReceipt);
       try {
         await db.agentStep.create({data:{taskId,seq:stepsUsed*10+1,kind:"goal_watchdog",note:JSON.stringify(goalWatchdog.snapshot())}});
       } catch {

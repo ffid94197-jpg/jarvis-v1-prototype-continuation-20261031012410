@@ -10,7 +10,8 @@ export const DESKTOP_GUI_EFFECTS = new Set([
   "windows_launch_installed", "windows_desktop_focus", "windows_desktop_click",
   "windows_desktop_move", "windows_desktop_type", "windows_desktop_keys",
   "windows_desktop_scroll", "windows_focus_app", "windows_minecraft_input",
-  "windows_browser_click_link", "windows_browser_fill_search", "windows_youtube_oldest",
+  "windows_browser_click_link", "windows_browser_fill_search", "windows_browser_scroll",
+  "windows_browser_search", "windows_youtube_oldest",
 ]);
 export const REPEATABLE_INPUT_TOOLS = new Set([
   "windows_desktop_focus", "windows_desktop_click", "windows_desktop_move",
@@ -36,7 +37,7 @@ export function desktopObjectiveRequiresActions(objective: string): boolean {
   return desktopAction || (gameTarget && gameAction) || directGameCommand;
 }
 export type StepResult = {ok:boolean;detail?:Record<string,unknown>;error?:string};
-function hasDirectProof(r: StepResult):boolean {
+export function hasDirectProof(r: StepResult):boolean {
   const d=r.detail ?? {};
   return r.ok && (PROVEN_FLAGS.some(flag=>d[flag] === true) || d["proofVerified"] === true);
 }

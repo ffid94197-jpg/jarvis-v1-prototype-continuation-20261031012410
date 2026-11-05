@@ -10,6 +10,7 @@ import com.google.gson.JsonParser;
 import com.neovetta.aicompanion.AiCompanion;
 import com.neovetta.aicompanion.entity.CompanionEntity;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -56,9 +57,14 @@ public final class JarvisBridgeServer {
 
     private static final class Run {
         final UUID companion;
+        final AltoClefController ctrl;
+        final long deadline;
+        volatile long settledAt;
         volatile String state = "running";
         volatile String note = "task-dispatched-not-verified";
-        Run(UUID companion) { this.companion = companion; }
+        Run(UUID companion, AltoClefController ctrl, long budgetMs) {
+            this.companion=companion; this.ctrl=ctrl; this.deadline=System.currentTimeMillis()+budgetMs;
+        }
     }
 
     public static boolean enabled() {
@@ -68,6 +74,7 @@ public final class JarvisBridgeServer {
     public static void install() {
         if (!enabled()) return;
         ServerLifecycleEvents.SERVER_STARTED.register(JarvisBridgeServer::start);
+        ServerTickEvents.END_SERVER_TICK.register(JarvisBridgeServer::enforceDeadlines);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> stop());
     }
 
@@ -91,7 +98,7 @@ public final class JarvisBridgeServer {
         try {
             ServerSocket sock = new ServerSocket();
             sock.setReuseAddress(false);
-            sock.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 8);
+            sock.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), port), 8);
             listener = sock;
             running = server;
             secret = key;
@@ -184,7 +191,7 @@ public final class JarvisBridgeServer {
         if (!nonce.matches("[a-f0-9]{32}")) throw new IllegalArgumentException("nonce");
         Iterator<Map.Entry<String, Long>> it = seen.entrySet().iterator();
         while (it.hasNext()) if (now - it.next().getValue() > SKEW_MS * 2) it.remove();
-        if (seen.size() >= 4096) seen.clear(); // fail-closed under excessive request pressure
+        if (seen.size() >= 4096) throw new IllegalArgumentException("replay-capacity");
         if (seen.putIfAbsent(nonce, now) != null) throw new IllegalArgumentException("replay");
         UUID taskId = id(b, "taskId");
         UUID idempotency = id(b, "idempotencyKey");
@@ -232,11 +239,17 @@ public final class JarvisBridgeServer {
                 if (previous == null || !previous.companion.equals(companionId)) throw new IllegalArgumentException("task-mismatch");
                 ctrl.cancelUserTask();
                 previous.state = "cancelled";
+                previous.settledAt = now;
                 previous.note = "cancel-sent-observe-before-retry";
                 status = "cancelled"; note = previous.note;
             }
             case "gather", "mine", "craft", "travel" -> {
                 if (tasks.containsKey(taskId)) throw new IllegalArgumentException("duplicate-task");
+                if (tasks.size() >= 2048) throw new IllegalArgumentException("task-capacity");
+                for (Run existing : tasks.values()) {
+                    if (existing.companion.equals(companionId) && "running".equals(existing.state))
+                        throw new IllegalArgumentException("companion-busy");
+                }
                 Task task;
                 if ("travel".equals(op)) {
                     int x = args.get("x").getAsInt(), y = args.get("y").getAsInt(), z = args.get("z").getAsInt();
@@ -251,9 +264,15 @@ public final class JarvisBridgeServer {
                     task = TaskCatalogue.getItemTask(item, count);
                 }
                 if (task == null) throw new IllegalArgumentException("missing-task");
-                Run run = new Run(companionId);
+                Run run = new Run(companionId, ctrl, budget);
                 tasks.put(taskId, run);
-                ctrl.runUserTask(task, () -> { run.state="observed"; run.note="engine-callback-observe-postconditions"; });
+                ctrl.runUserTask(task, () -> {
+                    if ("running".equals(run.state)) {
+                        run.state="observed";
+                        run.settledAt=System.currentTimeMillis();
+                        run.note="engine-callback-observe-postconditions";
+                    }
+                });
                 status = "accepted"; note = "dispatched-not-verified";
             }
             default -> { status = "failed"; note = "unsupported-operation-fail-closed"; }
@@ -270,6 +289,23 @@ public final class JarvisBridgeServer {
         receipt.addProperty("status",status);
         receipt.add("observations",snapshot);
         return receipt;
+    }
+
+    private static void enforceDeadlines(MinecraftServer server) {
+        if (running != server) return;
+        long now = System.currentTimeMillis();
+        Iterator<Map.Entry<UUID, Run>> it = tasks.entrySet().iterator();
+        while (it.hasNext()) {
+            Run run = it.next().getValue();
+            if ("running".equals(run.state) && now >= run.deadline) {
+                try { run.ctrl.cancelUserTask(); } catch (Exception ignored) {}
+                run.state = "failed";
+                run.note = "task-budget-expired-cancelled";
+                run.settledAt = now;
+            }
+            if (!"running".equals(run.state) && run.settledAt > 0 && now-run.settledAt > 1800000)
+                it.remove();
+        }
     }
 
     private static JsonObject snapshot(CompanionEntity companion) {

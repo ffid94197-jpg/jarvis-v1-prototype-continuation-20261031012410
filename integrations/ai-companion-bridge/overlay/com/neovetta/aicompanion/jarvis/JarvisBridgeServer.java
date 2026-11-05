@@ -354,10 +354,14 @@ public final class JarvisBridgeServer {
                     Item item=Registries.ITEM.get(new Identifier("minecraft",itemName));
                     if (item==Items.AIR) throw new IllegalArgumentException("unknown-equipment");
                     boolean armor=!"hand".equals(destination);
-                    if (armor && !(item instanceof net.minecraft.item.ArmorItem))
-                        throw new IllegalArgumentException("not-armor");
+                    if (armor && (!(item instanceof net.minecraft.item.ArmorItem) ||
+                            !(destination.equals("head") && itemName.endsWith("_helmet") ||
+                              destination.equals("torso") && itemName.endsWith("_chestplate") ||
+                              destination.equals("legs") && itemName.endsWith("_leggings") ||
+                              destination.equals("feet") && itemName.endsWith("_boots"))))
+                        throw new IllegalArgumentException("armor-slot-mismatch");
                     if (!armor && !(itemName.endsWith("_sword") || itemName.endsWith("_pickaxe") ||
-                            itemName.endsWith("_axe") || itemName.equals("bow") || itemName.equals("crossbow")))
+                            itemName.endsWith("_axe") || itemName.equals("bow") || itemName.equals("crossbow") || itemName.equals("trident")))
                         throw new IllegalArgumentException("not-weapon-or-tool");
                     run.equipDestination=destination;
                     run.equipItem=itemName;

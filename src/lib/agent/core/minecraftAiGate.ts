@@ -637,6 +637,10 @@ export class MinecraftAiGate {
   private nativeSmeltQuantity:number|null=null;
   private nativeCraft:{item:string;count:number}|null=null;
   private nativeGather:{resource:string;count:number}|null=null;
+  // Standalone primitive gather must grow inventory from the FIRST trusted
+  // observation and have an observed, admitted gameplay effect in this run.
+  private primitiveBaseline:{resource:string;count:number}|null=null;
+  private readonly primitiveEffectTools=new Set<string>();
   private nativeTransfer:{item:string;count:number;operation:string}|null=null;
   private nativeCrop:{crop:string;count:number}|null=null;
   private nativeWheatCount:number|null=null;
@@ -977,6 +981,26 @@ export class MinecraftAiGate {
     }
     if(args.command==='observe'){
       const latest=observationFromResult(result);
+      // Capture only ONCE for this Core execution. On budget resume there is
+      // no trusted prior inventory baseline in memory: do not backfill it from
+      // a late observation or mistake preexisting items for task output.
+      if(latest && this.primitiveBaseline===null){
+        const resourceGoal=singleInventoryResourceGoal(this.objective);
+        const resource=resourceGoal?.resource||
+          (/\bcobblestone\b/i.test(this.objective)&&
+            /\b(?:mine|dig|collect|gather|obtain|acquire)\b/i.test(this.objective)?
+            'cobblestone':null);
+        if(resource){
+          const raw=latest.inventory.raw||{};
+          const count=resource==='logs'?
+            Math.max(Number(latest.inventory.logs)||0,
+              Object.entries(raw).filter(([key])=>key.endsWith('_log'))
+                .reduce((total,[,n])=>total+(Number.isFinite(n)?n:0),0)):
+            Number(raw[resource])||0;
+          if(Number.isSafeInteger(count)&&count>=0)
+            this.primitiveBaseline={resource,count};
+        }
+      }
       if(latest){
         const signature=this.sceneSignature(latest);
         this.sameIdleObservations=latest.busy?0:(signature===this.lastSceneSignature?this.sameIdleObservations+1:0);
@@ -1012,6 +1036,17 @@ export class MinecraftAiGate {
         }
       }
     }else if(CONTROLLED_EFFECTS.has(String(args.command))){
+      // An effect ACK alone is not completion, but only a real successful
+      // gameplay action may explain a later fresh inventory delta.
+      const resultRecord=result && typeof result==='object'?
+        result as Record<string,unknown>:null;
+      const detail=resultRecord?.detail && typeof resultRecord.detail==='object'?
+        resultRecord.detail as Record<string,unknown>:null;
+      if(this.primitiveBaseline && resultRecord?.ok===true &&
+         (detail?.botAcknowledged===true || detail?.verifiedGameReadback===true ||
+          detail?.observed===true) &&
+         ['dig_block','collect_wood','craft_item'].includes(String(args.command)))
+        this.primitiveEffectTools.add(String(args.command));
       if(args.command!=='auto_goal')this.nativeStatus=null;
       this.fresh=false;
       this.sameIdleObservations=0;
@@ -1212,20 +1247,29 @@ export class MinecraftAiGate {
       const count=Number(raw.cobblestone)||0;
       const required=cobblestoneGoalQuantity(objective);
       if(required===null)return {verified:false,reason:'Unsupported or invalid cobblestone quantity; manual clarification required'};
-      return count>=required ? {verified:true,reason:`Fresh inventory independently reports ${count} cobblestone (at least ${required} required)`} :
-        {verified:false,reason:`Only ${count} cobblestone observed in current inventory; ${required} required`};
+      const baseline=this.primitiveBaseline?.resource==='cobblestone'?this.primitiveBaseline.count:null;
+      const verified=baseline!==null&&this.primitiveEffectTools.has('dig_block')&&
+        count-baseline>=required;
+      return verified?
+        {verified:true,reason:`Fresh inventory gained ${count-baseline} cobblestone after a successful task-bound dig; requested ${required}`}:
+        {verified:false,reason:'Cobblestone requires a witnessed digging action and fresh task-relative inventory increase; old inventory alone is not completion'};
     }
     const collection=singleInventoryResourceGoal(objective);
     if(collection){
       const count=collection.resource==='logs'?Math.max(logs,Number(o.inventory.logs)||0):
         Number(raw[collection.resource])||0;
-      // The receipt proves CURRENT holdings, not a specific acquisition action.
-      // Do not report 'mined' or 'crafted' without an action-level server receipt.
-      return count>=collection.quantity?
-        {verified:true,reason:'Current Mineflayer inventory confirms '+count+' '+
-          collection.resource+' (requested '+collection.quantity+'); acquisition method not attested'}:
-        {verified:false,reason:'Observed '+count+' '+collection.resource+
-          '; need '+collection.quantity+' for the requested inventory goal'};
+      const baseline=this.primitiveBaseline?.resource===collection.resource?
+        this.primitiveBaseline.count:null;
+      const methodRequiresDig=/\b(?:mine|dig|excavate)\b/.test(s);
+      const relevant=methodRequiresDig?
+        this.primitiveEffectTools.has('dig_block'):
+        this.primitiveEffectTools.has('dig_block')||
+        this.primitiveEffectTools.has('collect_wood')||
+        this.primitiveEffectTools.has('craft_item');
+      if(baseline===null||!relevant||count-baseline<collection.quantity)
+        return {verified:false,reason:'No matching current-task observed gameplay effect plus fresh inventory increase; old holdings alone cannot satisfy a new acquisition request'};
+      return {verified:true,reason:'Fresh inventory gained '+(count-baseline)+' '+
+        collection.resource+' since the original game observation, following a task-bound real gameplay action'};
     }
     if(/\b(?:wooden pickaxe|wooden tools?|craft tools?)\b/.test(s))
       return pick>0 ? {verified:true,reason:'Wooden pickaxe observed in current inventory'} :

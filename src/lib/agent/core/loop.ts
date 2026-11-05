@@ -61,6 +61,7 @@ import { needsPriorTaskContext, priorTaskContext, selectPriorTask } from "./prio
 import { parseInventorySource, validateInventoryDraft } from "./inventoryIntegrity";
 import { AutonomyGate, REPEATABLE_INPUT_TOOLS, DESKTOP_GUI_EFFECTS, hasDirectProof, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
+import {acceptedSkillQueue, type ActiveSkillQueue} from "./approvedSkillQueue";
 import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan, type GoalWatchdogLimits } from "./goalPlanner";
 import { AUTONOMY_PROFILES, deriveStepBudget, type AutonomyProfile } from "./autonomyPolicy";
 
@@ -361,6 +362,20 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
    */
   const settlementLines: string[] = [];
   const autonomy = new AutonomyGate(opts.pendingGuiVerification ?? 0);
+  // Approved Skill Forge stages run INSIDE THIS Core loop, not a new agent.
+  // This volatile queue is never replayed blindly after a crash or pause.
+  let skillQueue:ActiveSkillQueue|null=null;
+  const haltSkill=(reason:string)=>{
+    if(!skillQueue)return;
+    const pending=Math.max(0,skillQueue.steps.length-skillQueue.next);
+    settlementLines.push(`Skill '${skillQueue.name}' HALTED: ${reason.slice(0,150)}; ${pending} queued stage(s) not executed.`);
+    skillQueue=null;
+    // This advisory notice carries NO authorization. The next model decision
+    // still needs a fresh Guardian audit; it must not silently retry effects.
+    messages.push({role:"user",content:
+      "CORE SKILL EXECUTION HALTED: "+reason.slice(0,180)+
+      ". No further pre-approved steps will run automatically. Inspect actual state or report PARTIAL; never blind-retry an uncertain effect."});
+  };
 
   let installedCatalog="";
   try {
@@ -645,6 +660,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     // ——— ask the model for the next single action ———
     emitStatus("executing");
     let raw: string;
+    let queuedSkillStep=false;
     try {
       // Exact single-step Windows launches are routed deterministically so
       // "open settings" cannot be mistaken for File Explorer by the LLM.
@@ -652,6 +668,12 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       // High-level Minecraft requests autonomously join and initiate the
       // persistent goal with two Guardian-authorized, journaled tool effects.
       // After that, the BOT owns observe/plan/act/verify, not the chat model.
+      const nextApprovedSkillStep=skillQueue && skillQueue.next<skillQueue.steps.length
+        ? skillQueue.steps[skillQueue.next] : null;
+      if(nextApprovedSkillStep && skillQueue) {
+        skillQueue.next++;
+        queuedSkillStep=true;
+      }
       const minecraftIntent = !minecraftAiTask && process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" &&
         !opts.replay && stepsUsed <= 1 ? directMinecraftMission(objective,stepsUsed) : null;
       const localIntent = process.env.JARVIS_WINDOWS_AGENT_ENABLED === "1" &&
@@ -668,7 +690,9 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       const firstMinecraftObserve=!firstMinecraftJoin&&minecraftFirstObservePending?
         firstMinecraftObservationDecision():null;
       if(firstMinecraftObserve)minecraftFirstObservePending=false;
-      raw = firstMinecraftJoin ? JSON.stringify(firstMinecraftJoin) :
+      raw = nextApprovedSkillStep
+        ? JSON.stringify({action:"tool",tool:nextApprovedSkillStep.tool,args:nextApprovedSkillStep.args})
+        : firstMinecraftJoin ? JSON.stringify(firstMinecraftJoin) :
         firstMinecraftObserve ? JSON.stringify(firstMinecraftObserve) :
         minecraftIntent ? JSON.stringify(minecraftIntent) : localIntent ? JSON.stringify(localIntent) : capabilityIntent ?
         JSON.stringify(capabilityIntent) : await llmJson(model!, messages);
@@ -962,6 +986,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       : tool==="write_file"
         ? validateInventoryDraft(args.path, args.content, inventorySource) : null;
     if (inventoryMismatch) {
+      if(queuedSkillStep)haltSkill("source-fidelity preflight rejected the queued write");
       inventoryDraftCorrections++;
       stepsUsed++;
       await persistStep(taskId,seq,"error",{tool,note:inventoryMismatch.slice(0,500)});
@@ -986,6 +1011,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     if (minecraftAiGate) {
       const gate = minecraftAiGate.check(tool,args);
       if (!gate.ok) {
+        if(queuedSkillStep)haltSkill("Minecraft safety gate denied queued action");
         minecraftAiDenied++;
         stepsUsed++;
         await persistStep(taskId,seq,"guardian_deny",{tool,argsJson,note:`Minecraft AI boundary: ${gate.reason}`});
@@ -1004,6 +1030,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     const guardian = await authorizeToolCall({ taskId, ownerId: opts.ownerId }, tool, args);
 
     if (guardian.verdict === "deny") {
+      if(queuedSkillStep)haltSkill("Guardian denied queued action");
       denials++;
       emit({
         type: "step",
@@ -1046,6 +1073,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     if (isEffectfulToolInvocation(tool,args)) {
       const effectKey = canonicalKey(tool, args);
       if (!STEP_SCOPED_EFFECTS.has(tool) && !REPEATABLE_INPUT_TOOLS.has(tool) && executedEffects.has(effectKey)) {
+        if(queuedSkillStep)haltSkill("duplicate effect already recorded; fresh observation required");
         // Journal-derived duplicate (pre-admission fast path — same
         // guarantee, belt+suspenders with the durable table).
         stepsUsed++;
@@ -1187,6 +1215,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     // then the durable budget pause, keeping the hard cap meaningful no
     // matter which guard fired.
     if (skipExecution) {
+      if(queuedSkillStep)haltSkill("effect was skipped or required reconciliation");
       if (isCancelled()) {
         const text = "Task cancelled by the operator. All execution has stopped; partial progress is recorded in the task journal.";
         await persistStep(taskId, seq + 1, "pause", { note: "cancelled at budget boundary (guard path)" });

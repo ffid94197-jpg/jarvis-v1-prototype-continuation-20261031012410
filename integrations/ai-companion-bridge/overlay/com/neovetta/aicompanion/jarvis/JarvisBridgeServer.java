@@ -59,11 +59,17 @@ public final class JarvisBridgeServer {
         final UUID companion;
         final AltoClefController ctrl;
         final long deadline;
+        final CompanionEntity entity;
+        String item;
+        int initialCount;
+        int addedCount;
+        BlockPos arrival;
         volatile long settledAt;
         volatile String state = "running";
         volatile String note = "task-dispatched-not-verified";
-        Run(UUID companion, AltoClefController ctrl, long budgetMs) {
-            this.companion=companion; this.ctrl=ctrl; this.deadline=System.currentTimeMillis()+budgetMs;
+        Run(UUID companion, AltoClefController ctrl, CompanionEntity entity, long budgetMs) {
+            this.companion=companion; this.ctrl=ctrl; this.entity=entity;
+            this.deadline=System.currentTimeMillis()+budgetMs;
         }
     }
 
@@ -261,16 +267,26 @@ public final class JarvisBridgeServer {
                     int count = args.get("count").getAsInt();
                     if (!item.matches("[a-z0-9_]{1,64}") || count < 1 || count > 64
                             || !TaskCatalogue.taskExists(item)) throw new IllegalArgumentException("task-target-denied");
-                    task = TaskCatalogue.getItemTask(item, count);
+                    int current = countItem(companion, item);
+                    if (current > 192 || current + count > 256) throw new IllegalArgumentException("target-over-budget");
+                    run.item = item; run.initialCount = current; run.addedCount = count;
+                    task = TaskCatalogue.getItemTask(item, current + count);
                 }
                 if (task == null) throw new IllegalArgumentException("missing-task");
-                Run run = new Run(companionId, ctrl, budget);
+                Run run = new Run(companionId, ctrl, companion, budget);
+                if ("travel".equals(op)) run.arrival = new BlockPos(
+                    args.get("x").getAsInt(), args.get("y").getAsInt(), args.get("z").getAsInt());
                 tasks.put(taskId, run);
                 ctrl.runUserTask(task, () -> {
                     if ("running".equals(run.state)) {
-                        run.state="observed";
+                        boolean present = run.item != null &&
+                            countItem(run.entity, run.item) >= run.initialCount + run.addedCount;
+                        boolean arrived = run.arrival != null &&
+                            run.entity.getBlockPos().isWithinDistance(run.arrival, 2.5);
+                        run.state = present || arrived ? "observed" : "failed";
                         run.settledAt=System.currentTimeMillis();
-                        run.note="engine-callback-observe-postconditions";
+                        run.note=present ? "new-server-inventory-confirmed" :
+                            arrived ? "server-position-arrival-confirmed" : "engine-done-no-postcondition";
                     }
                 });
                 status = "accepted"; note = "dispatched-not-verified";
@@ -315,6 +331,7 @@ public final class JarvisBridgeServer {
         out.addProperty("y", companion.getY());
         out.addProperty("z", companion.getZ());
         out.addProperty("health", companion.getHealth());
+        out.addProperty("hunger", companion.getHungerManager().getFoodLevel());
         JsonArray inventory = new JsonArray();
         for (ItemStack stack : companion.getLivingInventory().main) addStack(inventory,stack);
         out.add("inventory", inventory);
@@ -323,6 +340,15 @@ public final class JarvisBridgeServer {
         out.add("armor", armor);
         return out;
     }
+    private static int countItem(CompanionEntity companion, String item) {
+        int total=0;
+        for (ItemStack stack : companion.getLivingInventory().main) {
+            if (!stack.isEmpty() && Registries.ITEM.getId(stack.getItem()).getPath().equals(item))
+                total += stack.getCount();
+        }
+        return total;
+    }
+
     private static void addStack(JsonArray out, ItemStack stack) {
         if (stack.isEmpty()) return;
         JsonObject row = new JsonObject();

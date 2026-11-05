@@ -570,6 +570,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       (prepared as unknown as Record<string,unknown>).operationDirection=args.operation;
     }
     if(command==='enchant_item'){
+      if(playerEngineSelected && process.env.JARVIS_MC_BRIDGE_OWNER_XP_ENCHANT_ENABLE!=="1")
+        return {ok:false,reason:"Owner XP enchanting requires JARVIS_MC_BRIDGE_OWNER_XP_ENCHANT_ENABLE=1"};
       prepared.position=args.position as {x:number;y:number;z:number};
       prepared.item=args.item as string;
       prepared.choice=args.choice as number;

@@ -207,9 +207,10 @@ export async function runGuardianApprovedPlayerEngine(
       const endgames=new Set(["dragon_run","netherite_armor_run","netherite_gear_run",
         "netherite_dragon_run","dragon_then_netherite_run"]);
       const farms=new Set(["farm_crop","farm_wheat"]);
+      const smelts=new Set(["smelt"]);
       const goal=String(desktop.goal||"");
       const seconds=desktop.durationSeconds;
-      if((!endgames.has(goal)&&!farms.has(goal))||!Number.isInteger(seconds) ||
+      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal))||!Number.isInteger(seconds) ||
          (seconds as number)<10||(seconds as number)>43200)
         throw Error("Unsupported or unbounded owner mission");
       if(current)throw Error("Active native mission unresolved; inspect before any new mission");
@@ -222,6 +223,18 @@ export async function runGuardianApprovedPlayerEngine(
       if(isCancelled())throw Error("Owner cancellation before native mission admission");
       let op="endgame";
       let details:Record<string,unknown>={goal,durationSeconds:seconds};
+      if(smelts.has(goal)) {
+        const spec=desktop as unknown as Record<string,unknown>;
+        const permitted=new Set(["iron_ingot","gold_ingot","glass","charcoal",
+          "netherite_scrap","cooked_beef","cooked_porkchop","cooked_chicken"]);
+        if(typeof spec.item!=="string" || !permitted.has(spec.item) ||
+           typeof spec.targetCount!=="number" || !Number.isInteger(spec.targetCount) ||
+           spec.targetCount<1 || spec.targetCount>16)
+          throw Error("Unapproved or unbounded native furnace goal");
+        op="smelt";
+        details={goal,item:spec.item,targetCount:spec.targetCount,
+          durationSeconds:seconds};
+      }
       if(farms.has(goal)){
         const spec=desktop as unknown as Record<string,unknown>;
         if(!authorizedCoords(spec.position) ||

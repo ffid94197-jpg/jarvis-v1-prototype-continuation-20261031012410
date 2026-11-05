@@ -2,7 +2,7 @@
  * Model output is untrusted; this module has NO direct game/tool authority.
  * Only a genuine companion observation can unlock a bounded action.
  */
-import {minecraftMissionFromObjective, MINECRAFT_COUNT_TOKEN, parseMinecraftCount} from "./minecraftIntent";
+import {minecraftMissionFromObjective, MINECRAFT_COUNT_TOKEN, MINECRAFT_COUNT_UNIT, parseMinecraftCount} from "./minecraftIntent";
 
 export type MinecraftAiObservation = {
   position: {x:number;y:number;z:number};
@@ -146,7 +146,7 @@ export function cobblestoneGoalQuantity(objective:string): number | null {
   const quantity=new RegExp(
     "\\b(?:exactly\\s+|at\\s+least\\s+|minimum\\s+of\\s+|just\\s+|only\\s+)?("+
     MINECRAFT_COUNT_TOKEN+
-    ")\\s+(?:(?:blocks?|pieces?|units?|of)\\s+)?cobblestone\\b"
+    ")\\s+"+MINECRAFT_COUNT_UNIT+"cobblestone\\b"
   ).exec(s);
   if(!quantity)return 3; // legacy implicit cobblestone goal
   const amount=parseMinecraftCount(quantity[1]) ??
@@ -193,7 +193,7 @@ export function singleInventoryResourceGoal(objective:string):
  const {goal,match}=matches[0];
  const before=s.slice(Math.max(0,match!.index-42),match!.index);
  const specified=new RegExp(
-   "\\b("+MINECRAFT_COUNT_TOKEN+")\\s+(?:(?:blocks?|pieces?|units?|of)\\s+)?$"
+   "\\b("+MINECRAFT_COUNT_TOKEN+")\\s+"+MINECRAFT_COUNT_UNIT+"$"
  ).exec(before);
  const quantity=specified?parseMinecraftCount(specified[1]):goal.defaultCount;
  if(quantity===null)return null;
@@ -240,7 +240,7 @@ export function mayStartNativeMinecraftGoal(
   for(const name of names){
    const re=new RegExp(
      '\\b('+MINECRAFT_COUNT_TOKEN+')\\s+'+
-     '(?:(?:blocks?|pieces?|units?|of)\\s+)?'+
+     MINECRAFT_COUNT_UNIT+
      name.replace(/_/g,' ')+'s?\\b'
    );
    const m=re.exec(s);

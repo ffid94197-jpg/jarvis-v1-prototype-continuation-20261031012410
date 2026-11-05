@@ -93,7 +93,7 @@ export function isMinecraftAiObjective(objective:string):boolean {
   // "wood" requests, and never enable the game route without an action intent.
   const minecraftScope=/\b(?:minecraft|minecraft_companion_command|jarvisbuddy|ender dragon|netherite)\b/.test(s);
   const resourceScope=/\b(?:cobblestone|cobbled deepslate|stone pickaxe|wooden pickaxe|iron pickaxe|diamond pickaxe|raw iron|raw gold|raw copper|iron ingots?|gold ingots?|copper ingots?|netherite scraps?|ender pearls?|blaze rods?|ancient debris|diamond ore|iron ore|gold ore|redstone ore|end portal|nether portal|stronghold)\b/.test(s);
-  const actionGoal=/\b(?:play|gather|collect|craft|mine|dig|excavate|defeat|kill|attack|beat|slay|finish|complete|win|start|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|cook|bake|refine|enchant|explore|travel|find|place|equip|wear|wield|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(s);
+  const actionGoal=/\b(?:play|gather|collect|get|bring|fetch|acquire|craft|mine|dig|excavate|defeat|kill|attack|beat|slay|finish|complete|win|start|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|cook|bake|refine|enchant|explore|travel|find|place|equip|wear|wield|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(s);
   if (minecraftScope && minecraftReadbackQuestion(objective)) return true;
   if (!(minecraftScope || resourceScope) || !actionGoal) return false;
   // Only reject a question/refusal when it is the request's intent. A valid
@@ -117,7 +117,7 @@ export function isMinecraftObservationOnlyObjective(objective:string):boolean {
   const primary=s.split(/\b(?:do not|don't|never|stop if|if blocked|if an action fails)\b/,1)[0];
   const observation=/\b(?:observe|inspect)\b/.test(primary) ||
     /\b(?:minecraft_companion_command)\b/.test(primary) && /\bobserve\b/.test(primary);
-  const effects=/\b(?:craft|mine|gather|collect|dig|place|navigate|build|defeat|kill|attack|equip|wear|wield|play|survive|progress|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|enchant|explore|travel|find|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(primary);
+  const effects=/\b(?:craft|mine|gather|collect|get|bring|fetch|acquire|dig|place|navigate|build|defeat|kill|attack|equip|wear|wield|play|survive|progress|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|enchant|explore|travel|find|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(primary);
   return observation && !effects;
 }
 
@@ -161,7 +161,7 @@ export function cobblestoneGoalQuantity(objective:string): number | null {
 export function singleInventoryResourceGoal(objective:string):
   {resource:string;quantity:number}|null {
  const s=objective.toLowerCase();
- if(!/\b(?:gather|collect|obtain|mine|get|find|bring|acquire)\b/.test(s) ||
+ if(!/\b(?:gather|collect|obtain|mine|get|find|bring|fetch|acquire)\b/.test(s) ||
     /\b(?:and|then|craft|make|build|equip|smelt|trade|enchant|upgrade|fight|defeat|portal|all|many|enough|stacks?)\b/.test(s))
    return null;
  const supported:Array<{name:string;pattern:RegExp;defaultCount:number}>=[
@@ -380,7 +380,7 @@ export function mayStartNativeMinecraftGoal(
   if(resource==='sand' && /\bred sand\b/.test(s))return false;
   if(typeof resource!=='string'||!Object.hasOwn(resources,resource) ||
     !resources[resource].test(s) || !amount(args.targetCount,1,64) ||
-    !/\b(?:collect|gather|mine|dig|obtain|find|get|bring|acquire)\b/.test(s))return false;
+    !/\b(?:collect|gather|mine|dig|obtain|find|get|bring|fetch|acquire)\b/.test(s))return false;
   const aliases=resource==='logs'?['log','wood','timber']:
    resource==='iron_ingot'?['iron_ingot']:
    [resource];

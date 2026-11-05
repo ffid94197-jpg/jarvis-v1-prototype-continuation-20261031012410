@@ -91,7 +91,8 @@ function generalPlan(world,progress={},delegate){
    catalog.nodes[progress.item].length>0;
  if(hasVersionedRecipe || !Object.hasOwn(RECIPES,progress.item)){
   const versioned=planRecipeStep(catalog,inv.raw,progress.item,
-   current+Math.max(1,progress.targetCount-produced),{
+   Math.max(1,progress.targetCount-produced),{
+   freshOutput:true,
    workbenchNearby:world?.workbenchNearby===true,logs:inv.logs||0,planks:inv.planks||0,
    delegate
   });

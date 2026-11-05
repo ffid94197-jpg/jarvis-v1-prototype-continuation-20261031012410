@@ -89,6 +89,7 @@ public final class JarvisBridgeServer {
         final long since = System.currentTimeMillis();
         JarvisEndgameTask endgame;
         JarvisNativeSequenceTask sequence;
+        JarvisNativeVolumeTask volume;
         JarvisNativeVillagerTrade.Result trade;
         JarvisNativeOwnerEnchant.Result enchant;
         String transferItem;
@@ -648,7 +649,7 @@ public final class JarvisBridgeServer {
                 status=record.state;
                 note=record.note;
             }
-            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "interact", "endgame", "farm", "smelt", "sequence" -> {
+            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "interact", "endgame", "farm", "smelt", "sequence", "shelter", "build_volume" -> {
                 if (safetyStopped.contains(companionId)) throw new IllegalArgumentException("owner-safety-stop-latched");
                 if (tasks.containsKey(taskId)) throw new IllegalArgumentException("duplicate-task");
                 if (tasks.size() >= 2048) throw new IllegalArgumentException("task-capacity");
@@ -658,7 +659,8 @@ public final class JarvisBridgeServer {
                 }
                 long runtimeBudget = budget;
                 if ("endgame".equals(op) || "farm".equals(op) || "smelt".equals(op) || "sequence".equals(op) ||
-                    ("gather".equals(op) && args.has("goal"))) {
+                    ("gather".equals(op) && args.has("goal")) ||
+                    "shelter".equals(op) || "build_volume".equals(op)) {
                     int duration = args.get("durationSeconds").getAsInt();
                     if (duration < 10 || duration > 43200)
                         throw new IllegalArgumentException("mission-duration-out-of-range");
@@ -671,6 +673,13 @@ public final class JarvisBridgeServer {
                     JarvisEndgameTask mission=new JarvisEndgameTask(companion,goal);
                     run.endgame=mission;
                     task=mission;
+                } else if("shelter".equals(op) || "build_volume".equals(op)) {
+                    String goal=field(args,"goal");
+                    if(!op.equals(goal))
+                        throw new IllegalArgumentException("owner-construction-goal-mismatch");
+                    JarvisNativeVolumeTask volume=new JarvisNativeVolumeTask(companion,args);
+                    run.volume=volume;
+                    task=volume;
                 } else if ("sequence".equals(op)) {
                     String goal=field(args,"goal");
                     if(!"sequence".equals(goal))
@@ -890,7 +899,8 @@ public final class JarvisBridgeServer {
                             countItem(run.entity,run.cropItem)>=run.cropInitialCount+run.cropTargetCount;
                     boolean proved = added||arrived||equipped||changedBlock||interacted||killed ||farmProved||
                             (run.endgame != null && run.endgame.completed()) ||
-                            (run.sequence != null && run.sequence.isFinished());
+                            (run.sequence != null && run.sequence.isFinished()) ||
+                            (run.volume != null && run.volume.complete());
                     try {
                         // Postcondition failure is EFFECT_UNKNOWN, not a
                         // claim of zero side effects or clean completion.
@@ -929,7 +939,7 @@ public final class JarvisBridgeServer {
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
                     (candidate.endgame == null && candidate.cropGoal == null &&
                      candidate.smeltGoal == null && candidate.sequence == null &&
-                     candidate.gatherGoal == null &&
+                     candidate.gatherGoal == null && candidate.volume == null &&
                      candidate.transferItem == null && candidate.trade == null &&
                      candidate.enchant == null)) continue;
             if(candidate.enchant!=null) {
@@ -1026,6 +1036,25 @@ public final class JarvisBridgeServer {
                 milestones.addProperty("stageCount",sequence.total());
                 milestones.addProperty("currentStage",sequence.stage());
                 summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
+            if(candidate.volume!=null) {
+                JarvisNativeVolumeTask volume=candidate.volume;
+                snapshot.addProperty("nativeGoal",volume.goal());
+                JsonObject summary=new JsonObject();
+                boolean complete=candidate.state.equals("observed") &&
+                    volume.complete() &&
+                    volume.cellsVerified()==volume.cellsTotal();
+                summary.addProperty("goal",volume.goal());
+                summary.addProperty("status",complete?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                JsonObject milestone=new JsonObject();
+                milestone.addProperty("cellsPlanned",volume.cellsTotal());
+                milestone.addProperty("cellsVerified",volume.cellsVerified());
+                milestone.addProperty("constructionDone",complete);
+                milestone.addProperty("stage",volume.stage());
+                summary.add("milestones",milestone);
                 snapshot.add("missionStatus",summary);
                 break;
             }

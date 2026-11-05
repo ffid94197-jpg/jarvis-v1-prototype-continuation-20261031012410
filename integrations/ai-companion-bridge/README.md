@@ -144,6 +144,45 @@ item grant, and no independent LLM is invoked by the Fabric companion.
 **Source-only; the native Fabric artifact and live-game outcome have not yet
 been independently accepted.** Do not advertise guaranteed game success.
 
+## Native survival shelter and bounded multi-layer construction
+
+The JARVIS Prototype now contains a dedicated original
+\`JarvisNativeVolumeTask\`, integrated as opt-in \`auto_goal shelter\` and
+\`auto_goal build_volume\` native gameplay goals.
+
+- **Small shelter:** on explicit "build a small shelter" owner intent, the
+  Fabric controller selects an already-loaded, empty and naturally
+  supported 3×3 site near the companion (or an explicitly owner-approved
+  3×3 through 4×4 footprint). It plans a real cobblestone floor, two-high
+  perimeter walls with one front entrance opening, and a real roof.
+  No model-generated site coordinates, free blocks or Creative-mode
+  world edits are admitted for this preset.
+- **Owner-defined volume:** a precise original user request provides a
+  nearby block origin, 1–4 width/depth, 1–3 height, allowed survival
+  material and shape \`floor\`, \`walls\`, \`roof\` or \`solid\`.
+  Every derived target cell must be distinct and the full structure must
+  fit within **64** exact cells.
+- All target cells are checked for being already loaded and empty, with
+  no living entity inside. Shelters additionally require real solid
+  natural ground beneath each floor cell. Existing structures are not
+  overwritten, and the agent never generates new terrain to inspect.
+- The controller uses pinned AltoClef tasks to gather missing actual
+  material when needed and place one block at a time. Each completed
+  stage is independently checked against the real game-server block
+  state. One failed, obstructed or unsupported cell halts completion;
+  it cannot claim that a roof exists from finished walls alone.
+- JARVIS Core/Guardian and the native journal must admit the overall
+  mission before any gameplay action. Status is bound to the original
+  task, signed by the loopback peer, and includes planned cell count,
+  verified cell count, current construction stage and exact completion
+  indicator. Unknown effects and server restarts require reconciliation,
+  not blind retry.
+
+This is native source **under independent build and field acceptance**.
+A failed pathfinder, missing survival material or unsupported world
+layout must report BLOCKED/partial; full arbitrary building and real
+player-space completion are **not** certified by adding the source.
+
 ## One-instruction native resource-gathering mission
 
 A bounded JARVIS-survival goal can now use the upstream AltoClef resource

@@ -480,10 +480,11 @@ export async function runGuardianApprovedPlayerEngine(
       const sequenced=new Set(["sequence"]);
       const transfers=new Set(["transfer"]);
       const gathered=new Set(["gather"]);
+      const construction=new Set(["shelter","build_volume"]);
       const goal=String(desktop.goal||"");
       const seconds=desktop.durationSeconds===undefined?
         (endgames.has(goal)?21600:3600):desktop.durationSeconds;
-      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal)&&!transfers.has(goal)&&!gathered.has(goal))||!Number.isInteger(seconds) ||
+      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal)&&!transfers.has(goal)&&!gathered.has(goal)&&!construction.has(goal))||!Number.isInteger(seconds) ||
          (seconds as number)<10||(seconds as number)>43200)
         throw Error("Unsupported or unbounded owner mission");
       if(current)throw Error("Active native mission unresolved; inspect before any new mission");
@@ -505,6 +506,39 @@ export async function runGuardianApprovedPlayerEngine(
           throw Error("Unsupported native sequence stage or invalid owner-declared plan");
         op="sequence";
         details={goal,steps:spec.steps,durationSeconds:seconds};
+      }
+      if(construction.has(goal)){
+        const spec=desktop as unknown as Record<string,unknown>;
+        const width=spec.width===undefined&&goal==="shelter"?3:spec.width;
+        const depth=spec.depth===undefined&&goal==="shelter"?3:spec.depth;
+        if(!Number.isInteger(width)||!Number.isInteger(depth)||
+           Number(width)<(goal==="shelter"?3:1) ||
+           Number(depth)<(goal==="shelter"?3:1) ||
+           Number(width)>4||Number(depth)>4)
+          throw Error("Native geometry exceeds the explicit owner footprint");
+        if(goal==="shelter"){
+          if(spec.position!==undefined || spec.block!==undefined ||
+             spec.shape!==undefined || spec.height!==undefined)
+            throw Error("Owner shelter may not inject arbitrary site/material coordinates");
+          op="shelter";
+          details={goal,width,depth,durationSeconds:seconds};
+        }else {
+          const shapes=new Set(["floor","roof","walls","solid"]);
+          const materials=new Set(["cobblestone","oak_planks","spruce_planks",
+            "birch_planks","stone_bricks","dirt","netherrack"]);
+          if(!authorizedCoords(spec.position) ||
+             !Number.isInteger(spec.height) || Number(spec.height)<1 ||
+             Number(spec.height)>3 || !shapes.has(String(spec.shape)) ||
+             !materials.has(String(spec.block)) ||
+             Number(width)*Number(depth)*Number(spec.height)>64 ||
+             (["roof","floor"].includes(String(spec.shape)) &&
+                spec.height!==1))
+            throw Error("Native build_volume requires an exact bounded owner layout");
+          op="build_volume";
+          details={goal,position:spec.position,block:spec.block,
+            width,depth,height:spec.height,shape:spec.shape,
+            durationSeconds:seconds};
+        }
       }
       if(gathered.has(goal)){
         const spec=desktop as unknown as Record<string,unknown>;

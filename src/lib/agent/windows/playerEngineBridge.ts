@@ -67,25 +67,25 @@ function observation(p:Packet) {
   const isWorldPoint=(b:unknown):b is {x:number;y:number;z:number}=>{
     if(!b||typeof b!=="object"||Array.isArray(b))return false;
     const o=b as Record<string,unknown>;
-    return ["x","y","z"].every(k=>typeof o[k]==="number"&&Number.isFinite(o[k]));
+    return ["x","y","z"].every(k=>typeof o[k]==="number"&&Number.isFinite(o[k] as number));
   };
   const nearbyBlocks=(Array.isArray(s.nearbyBlocks)?s.nearbyBlocks:[])
     .filter((v:unknown)=>v&&typeof v==="object"&&
       /^[a-z_]{1,64}$/.test(String((v as Record<string,unknown>).name||""))&&
-      isWorldPoint(v)&&["x","y","z"].every(k=>Number.isInteger((v as Record<string,unknown>)[k])))
+      isWorldPoint(v)&&["x","y","z"].every(k=>Number.isInteger(Number((v as Record<string,unknown>)[k]))))
     .slice(0,12);
   const threats=(Array.isArray(s.threats)?s.threats:[])
     .filter((v:unknown)=>v&&typeof v==="object"&&
-      Number.isInteger((v as Record<string,unknown>).id)&&
+      Number.isInteger(Number((v as Record<string,unknown>).id))&&
       typeof (v as Record<string,unknown>).name==="string"&&
       /^[a-z_]{1,64}$/.test(String((v as Record<string,unknown>).name))&&
       typeof (v as Record<string,unknown>).distance==="number"&&
-      Number.isFinite((v as Record<string,unknown>).distance)&&
+      Number.isFinite(Number((v as Record<string,unknown>).distance))&&
       Number((v as Record<string,unknown>).distance)<=16)
     .slice(0,6);
   const villagers=(Array.isArray(s.villagers)?s.villagers:[])
     .filter((v:unknown)=>v&&typeof v==="object"&&
-      Number.isInteger((v as Record<string,unknown>).id)&&
+      Number.isInteger(Number((v as Record<string,unknown>).id))&&
       (v as Record<string,unknown>).name==="villager"&&
       typeof (v as Record<string,unknown>).distance==="number"&&
       Number((v as Record<string,unknown>).distance)<=10)
@@ -126,7 +126,7 @@ function physicalCount(items:Record<string,number>,item:string):number {
 function authorizedCoords(v:unknown):v is {x:number;y:number;z:number} {
   if(!v || typeof v!=="object" || Array.isArray(v))return false;
   const p=v as Record<string,unknown>;
-  return Object.keys(p).length===3 && ["x","y","z"].every(k=>Number.isInteger(p[k])&&
+  return Object.keys(p).length===3 && ["x","y","z"].every(k=>Number.isInteger(p[k] as number)&&
     Math.abs(p[k] as number)<=29999984);
 }
 function observedEquipment(packet:Packet,item:string,destination:string):boolean {

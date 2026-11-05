@@ -34,7 +34,8 @@ function validateRequest(r) {
   if (!OPERATIONS.has(r.operation)) reject("OPERATION_DENIED");
   if (typeof r.worldId !== "string" || !/^[a-zA-Z0-9_.:-]{1,128}$/.test(r.worldId)) reject("BAD_WORLD");
   if (!r.guardian || typeof r.guardian !== "object" || typeof r.guardian.receiptId !== "string" ||
-      !uuid(r.guardian.receiptId) || r.guardian.approved !== true || r.guardian.taskId !== r.taskId ||
+      !uuid(r.guardian.receiptId) || !uuid(r.guardian.coreTaskId) ||
+      r.guardian.approved !== true || r.guardian.taskId !== r.taskId ||
       r.guardian.worldId !== r.worldId || r.guardian.operation !== r.operation) reject("GUARDIAN_REQUIRED");
   if (!r.arguments || typeof r.arguments !== "object" || Array.isArray(r.arguments)) reject("BAD_ARGUMENTS");
   if (Buffer.byteLength(canonical(r.arguments),"utf8") > 16 * 1024) reject("OVERSIZE_ARGUMENTS");
@@ -61,7 +62,9 @@ function verifyReceipt(receipt, envelope, secret, now=Date.now()) {
   const b=unpack(receipt.payload);
   if (!b || typeof b!=="object" || Array.isArray(b)) reject("BAD_RECEIPT");
   if (b.version !== 1 || b.taskId !== envelope.body.taskId || b.idempotencyKey !== envelope.body.idempotencyKey ||
-      b.nonce !== envelope.body.nonce || b.worldId !== envelope.body.worldId) reject("RECEIPT_MISMATCH");
+      b.nonce !== envelope.body.nonce || b.worldId !== envelope.body.worldId ||
+      b.guardianReceiptId !== envelope.body.guardian.receiptId ||
+      b.coreTaskId !== envelope.body.guardian.coreTaskId) reject("RECEIPT_MISMATCH");
   if (!Number.isSafeInteger(b.observedAt) || Math.abs(now-b.observedAt)>MAX_AGE_MS) reject("RECEIPT_STALE");
   if (!["accepted","running","failed","cancelled","observed"].includes(b.status)) reject("RECEIPT_STATUS");
   // "observed" means telemetry returned, NOT verified completion. Core must check postconditions.

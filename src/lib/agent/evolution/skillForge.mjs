@@ -17,7 +17,7 @@ export class EvolutionError extends Error {
 }
 const ROOT=path.resolve(process.env.JARVIS_EVOLUTION_ROOT ||
   path.join(process.cwd(),"data","jarvis-evolution"));
-const MAX_SKILLS=64,MAX_STEPS=8,MAX_MANIFEST_BYTES=10000;
+const MAX_SKILLS=64,MAX_STEPS=8,MAX_MANIFEST_BYTES=2800;
 const SAFE_TOOLS=new Set([
   "create_folder","read_file","list_dir","write_file","edit_file",
   "memory_recall","world_recall","windows_discover_apps","windows_find_capability",
@@ -81,7 +81,7 @@ export function normalizeSkillDraft(raw){
        typeof step.why!=="string"||step.why.length<3||step.why.length>160)
       throw new EvolutionError("Unknown/unbounded skill stage "+i);
     plain(step.args);
-    if(JSON.stringify(step.args).length>3000)
+    if(JSON.stringify(step.args).length>1200)
       throw new EvolutionError("Skill stage arguments too large");
     return {tool:step.tool,args:JSON.parse(JSON.stringify(step.args)),why:step.why};
   });

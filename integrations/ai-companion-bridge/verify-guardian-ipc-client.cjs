@@ -16,11 +16,15 @@ assert.throws(()=>createEnvelope({...request,arguments:{payload:"x".repeat(20000
 assert.throws(()=>createEnvelope(request,"weak"),/KEY_MISSING/);
 const body={version:1,taskId,idempotencyKey,nonce:frame.body.nonce,worldId:"owner.local",observedAt:Date.now(),status:"observed",
  observations:{inventory:[{item:"oak_log",count:1}]}};
-const mac=crypto.createHmac("sha256",secret).update(JSON.stringify(body)).digest("hex");
-assert.equal(verifyReceipt({body,mac},frame,secret).status,"observed");
-assert.throws(()=>verifyReceipt({body:{...body,nonce:"wrong"},mac},frame,secret),/RECEIPT_AUTH|RECEIPT_MISMATCH/);
-assert.throws(()=>verifyReceipt({body,mac:"0".repeat(64)},frame,secret),/RECEIPT_AUTH/);
-assert.throws(()=>verifyReceipt({body:{...body,observedAt:0},mac:crypto.createHmac("sha256",secret).update(JSON.stringify({...body,observedAt:0})).digest("hex")},frame,secret),/RECEIPT_STALE/);
+const fixture=(b)=>{
+ const payload=Buffer.from(JSON.stringify(b),"utf8").toString("base64url");
+ return {payload,mac:crypto.createHmac("sha256",secret).update(payload,"ascii").digest("hex")};
+};
+assert.equal(verifyReceipt(fixture(body),frame,secret).status,"observed");
+assert.throws(()=>verifyReceipt({...fixture(body),mac:"0".repeat(64)},frame,secret),/RECEIPT_AUTH/);
+assert.throws(()=>verifyReceipt(fixture({...body,nonce:"wrong"}),frame,secret),/RECEIPT_MISMATCH/);
+assert.throws(()=>verifyReceipt(fixture({...body,observedAt:0}),frame,secret),/RECEIPT_STALE/);
+assert.throws(()=>verifyReceipt({...fixture(body),payload:"@invalid"},frame,secret),/RECEIPT_AUTH|BAD_PAYLOAD/);
 sendAuthorizedObjective(request,{socketPath:"",secret}).then(()=>{throw Error("unexpected success")},e=>{
  assert.match(e.message,/SOCKET_PATH/);
  console.log("guardian IPC offline contract checks PASS");

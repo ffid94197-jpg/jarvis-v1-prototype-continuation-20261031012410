@@ -19,6 +19,8 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.mob.HostileEntity;
+import net.minecraft.entity.passive.VillagerEntity;
+import net.minecraft.util.math.Box;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.block.Block;
@@ -522,6 +524,65 @@ public final class JarvisBridgeServer {
         out.add("armorSlots",armorSlots);
         ItemStack held=companion.getLivingInventory().getMainHandStack();
         out.addProperty("mainHand",held.isEmpty()?"":Registries.ITEM.getId(held.getItem()).getPath());
+        // Observe only already loaded nearby chunks. Never load or generate terrain
+        // for model perception; observations are a bounded telemetry snapshot.
+        JsonArray nearbyBlocks=new JsonArray();
+        BlockPos center=companion.getBlockPos();
+        ServerWorld level=(ServerWorld)companion.getWorld();
+        for (int radius=0;radius<=4 && nearbyBlocks.size()<12;radius++) {
+            for (int dx=-radius;dx<=radius && nearbyBlocks.size()<12;dx++) {
+                for (int dz=-radius;dz<=radius && nearbyBlocks.size()<12;dz++) {
+                    if (Math.max(Math.abs(dx),Math.abs(dz))!=radius)continue;
+                    for (int dy=-2;dy<=2 && nearbyBlocks.size()<12;dy++) {
+                        BlockPos pos=center.add(dx,dy,dz);
+                        if (!loaded(level,pos)) continue;
+                        String name=Registries.BLOCK.getId(
+                            level.getBlockState(pos).getBlock()).getPath();
+                        if (!(name.endsWith("_log") || name.endsWith("_ore") ||
+                              name.equals("stone") || name.equals("cobblestone") ||
+                              name.equals("deepslate") || name.equals("crafting_table") ||
+                              name.equals("furnace") || name.equals("chest") ||
+                              name.equals("barrel") || name.equals("obsidian")))
+                            continue;
+                        JsonObject row=new JsonObject();
+                        row.addProperty("name",name);
+                        row.addProperty("x",pos.getX());
+                        row.addProperty("y",pos.getY());
+                        row.addProperty("z",pos.getZ());
+                        nearbyBlocks.add(row);
+                    }
+                }
+            }
+        }
+        out.add("nearbyBlocks",nearbyBlocks);
+        JsonArray threats=new JsonArray(),villagers=new JsonArray();
+        Box local=companion.getBoundingBox().expand(16);
+        for (Entity e : level.getOtherEntities(companion,local)) {
+            if (!e.isAlive()) continue;
+            double distance=Math.sqrt(companion.squaredDistanceTo(e));
+            if (e instanceof HostileEntity && threats.size()<6) {
+                String hostile=Registries.ENTITY_TYPE.getId(e.getType()).getPath();
+                JsonObject row=new JsonObject();
+                row.addProperty("id",e.getId());
+                row.addProperty("name",hostile);
+                row.addProperty("distance",distance);
+                JsonObject position=new JsonObject();
+                position.addProperty("x",e.getX());
+                position.addProperty("y",e.getY());
+                position.addProperty("z",e.getZ());
+                row.add("position",position);
+                threats.add(row);
+            }
+            if (e instanceof VillagerEntity && distance<=10 && villagers.size()<3) {
+                JsonObject row=new JsonObject();
+                row.addProperty("id",e.getId());
+                row.addProperty("name","villager");
+                row.addProperty("distance",distance);
+                villagers.add(row);
+            }
+        }
+        out.add("threats",threats);
+        out.add("villagers",villagers);
         return out;
     }
     private static int countItem(CompanionEntity companion, String item) {

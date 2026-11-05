@@ -1,6 +1,6 @@
 "use client";
 
-import {useCallback,useState} from "react";
+import {useCallback,useState,type CSSProperties} from "react";
 
 /** Read-only OWNER view of an existing, original JARVIS Core Minecraft task.
  * Never spawns, retries, resumes, stops, mutates or grants any game authority.
@@ -33,7 +33,7 @@ export default function NativeMinecraftMissionStatusPanel(){
     }catch(e){setError(e instanceof Error?e.message:"Status request unavailable");}
     finally{setLoading(false);}
   },[taskId]);
-  const button:React.CSSProperties={
+  const button:CSSProperties={
     background:"#123344",color:"#e3f6ff",border:"1px solid #5d99b1",
     borderRadius:6,padding:"7px 12px",cursor:"pointer"
   };

@@ -5,7 +5,7 @@
 const net = require("node:net");
 const crypto = require("node:crypto");
 
-const OPERATIONS = new Set(["gather","mine","craft","equip","build","travel","combat","inspect","endgame","farm","sequence","smelt","transfer","interact","stop","resume","cancel","status"]);
+const OPERATIONS = new Set(["gather","mine","craft","equip","build","travel","combat","inspect","endgame","farm","sequence","smelt","transfer","interact","villager_offers","stop","resume","cancel","status"]);
 const MAX_BYTES = 64 * 1024;
 const MAX_AGE_MS = 30_000;
 const MAX_TIMEOUT_MS = 30_000;

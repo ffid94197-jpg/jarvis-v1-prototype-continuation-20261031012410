@@ -63,6 +63,11 @@ export async function learnFromCompletedTask(owner,db,sourceTaskId=undefined){
     throw new EvolutionError("Owned source task not found",404);
   if(task.status!=="completed")
     throw new EvolutionError("Only a Core-completed task may be learned",409);
+  const rejected=await db.agentStep.count({
+    where:{taskId:task.id,kind:{in:["guardian_deny","error"]}}
+  });
+  if(rejected>0)
+    throw new EvolutionError("Task had denied/failed steps; learning incomplete sequences is forbidden",409);
   const rows=await db.agentStep.findMany({
     where:{taskId:task.id,kind:{in:["tool_call","tool_result"]}},
     orderBy:[{seq:"asc"},{createdAt:"asc"}],take:48,
@@ -104,13 +109,20 @@ export async function learnFromCompletedTask(owner,db,sourceTaskId=undefined){
   if(steps.some(x=>x.tool==="create_folder")){
     const effects=await db.effectRecord.findMany({
       where:{taskId:task.id,tool:"create_folder"},
-      select:{status:true,receiptJson:true}
+      select:{status:true,argsJson:true,receiptJson:true}
     });
-    if(effects.length<1||effects.some(x=>{
-      if(x.status!=="SETTLED")return true;
-      try{const receipt=JSON.parse(x.receiptJson||"{}");return receipt.ok!==true;}
-      catch{return true;}
-    }))throw new EvolutionError("Durable folder effect not settled",409);
+    const createdPaths=steps.filter(x=>x.tool==="create_folder").map(x=>x.args.path);
+    if(effects.length!==createdPaths.length ||
+       effects.some(effect=>{
+         if(effect.status!=="SETTLED")return true;
+         try{
+           const args=parseJson(effect.argsJson,"Durable effect arguments");
+           const receipt=parseJson(effect.receiptJson,"Durable effect receipt");
+           return !createdPaths.includes(args.path) || receipt.ok!==true ||
+             receipt.tool!=="create_folder" || !obj(receipt.detail) ||
+             receipt.detail.isDirectory!==true;
+         }catch{return true;}
+       }))throw new EvolutionError("Durable exact folder effects not fully settled",409);
   }
   // A recipe is still a candidate, not independent proof that a future run
   // will recreate the original objective or be allowed on another device.

@@ -11,7 +11,7 @@ const VICTORY=['dragonSeen','dragonKilled','exitPortalObserved','endReturned',
 // in the compact receipt: JARVIS Core checks the smelting count against
 // the exact original owner request, and bow/bridge counts explain bounded
 // End attempt exhaustion without claiming hit or island arrival.
-const REQUIRED_COUNTERS=['harvestedCropCount','transferDone','smeltedOutput','dragonRangedShots',
+const REQUIRED_COUNTERS=['wheatHarvested','harvestedCropCount','transferDone','smeltedOutput','dragonRangedShots',
  'dragonStanceTrips','endBridgeTiles'];
 const boundedString=(x,n)=>typeof x==='string'?x.slice(0,n):null;
 const boundedNum=x=>Number.isFinite(x)?x:null;

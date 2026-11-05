@@ -40,7 +40,7 @@ function observeWheat(bot,s,Vec3){
    return {position,state};
  });
 }
-function wheatPlan(world,progress){
+function wheatPlan(world,progress,harvestedCount=0){
  if(!validFarmSpec(progress))return {kind:'blocked',why:'Invalid authorized wheat field'};
  const cells=world?.wheatCells;
  const expected=farmPositions(progress);
@@ -60,7 +60,14 @@ function wheatPlan(world,progress){
    if(empty)return {kind:'plant_wheat',position:empty.position,
      why:'Replant authorized farmland; verify new crop and seed consumption'};
  }
- if(wheat>=progress.targetCount)return {kind:'complete',why:'Verified '+wheat+' wheat in real inventory'};
+ // Holding preexisting wheat is NOT evidence that the current field
+ // produced the owner's requested new crop quantity.
+ if(Number.isSafeInteger(harvestedCount)&&harvestedCount>=progress.targetCount &&
+    wheat>=progress.targetCount)
+   return {kind:'complete',why:'This mission physically harvested '+harvestedCount+
+     ' new wheat; final real inventory holds '+wheat};
+ if(harvestedCount>=progress.targetCount&&wheat<progress.targetCount)
+   return {kind:'blocked',why:'Newly harvested wheat was spent or lost before completion readback'};
  const mature=cells.find(c=>c.state==='mature');
  if(mature)return {kind:'harvest_wheat',position:mature.position,
    why:'Harvest fully mature live wheat and verify inventory pickup'};

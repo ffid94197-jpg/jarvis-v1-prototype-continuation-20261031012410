@@ -30,6 +30,8 @@ export default function EvolutionPanel(){
   const [error,setError]=useState(""),[notice,setNotice]=useState("");
   const [details,setDetails]=useState<Detail|null>(null);
   const [skillDraft,setSkillDraft]=useState("");
+  const [skillInputs,setSkillInputs]=useState("{}");
+  const [repairDraft,setRepairDraft]=useState("");
   const [open,setOpen]=useState(false);
   const reload=useCallback(async()=>{
     const response=await fetch("/api/jarvis/evolution",{cache:"no-store",credentials:"same-origin"});
@@ -42,14 +44,14 @@ export default function EvolutionPanel(){
   useEffect(()=>{let mounted=true;reload().catch(e=>{if(mounted)setError(String(e));})
     .finally(()=>{if(mounted)setLoading(false);});
     return()=>{mounted=false;};},[reload]);
-  async function action(name:string,fields:Record<string,unknown>={}){
+  async function action(name:string,fields:Record<string,unknown>={}):Promise<boolean>{
     setBusy(true);setError("");setNotice("");
     try{
       if(["apply_repair","rollback_repair"].includes(name)&&
          !window.confirm(name==="apply_repair"?
            "Apply this reviewed patch to a JARVIS workspace file? Its original will be retained for rollback.":
            "Rollback the selected exact-match JARVIS workspace repair?"))
-         return;
+         return false;
       const result=await callApi({action:name,...fields});
       if(name==="repair_details"||name==="skill_details"||name==="expand_skill")setDetails(result);
       else{
@@ -60,7 +62,8 @@ export default function EvolutionPanel(){
             name==="apply_repair"?"Patch readback reported; final acceptance remains separate.":""));
       }
       await reload();
-    }catch(e){setError(e instanceof Error?e.message:"Action failed");}
+      return true;
+    }catch(e){setError(e instanceof Error?e.message:"Action failed");return false;}
     finally{setBusy(false);}
   }
   return <section aria-label="JARVIS native evolution control plane" style={panel}>
@@ -88,6 +91,11 @@ export default function EvolutionPanel(){
         <h4 style={{margin:0}}>Skill Forge</h4>
         <p style={small}>A model may stage a declarative skill. Review each proposed tool and
           its arguments before approving. Expansion does not execute anything.</p>
+        <label style={{fontSize:12}}>Inputs for approved skill preview (JSON object)
+          <input value={skillInputs} onChange={e=>setSkillInputs(e.target.value)}
+            style={{display:"block",width:"100%",background:"#071923",border:"1px solid #4b8296",
+              color:"#e7f2fb",padding:8,borderRadius:6,boxSizing:"border-box"}}/>
+        </label>
         {data.skills.length===0&&<p style={small}>No owner skills staged.</p>}
         {data.skills.map(skill=><div key={skill.id} style={{padding:10,
           border:"1px solid rgba(130,175,190,.25)",borderRadius:8}}>
@@ -100,7 +108,10 @@ export default function EvolutionPanel(){
               style={button} onClick={()=>action("approve_skill",{id:skill.id})}>APPROVE</button>}
             {skill.status==="approved"&&<>
               <button type="button" disabled={busy} style={button}
-                onClick={()=>action("expand_skill",{id:skill.id,inputs:{}})}>PREVIEW PLAN</button>
+                onClick={()=>{
+                  try {void action("expand_skill",{id:skill.id,inputs:JSON.parse(skillInputs)});}
+                  catch{setError("Skill inputs must be JSON");}
+                }}>PREVIEW PLAN</button>
               <button type="button" disabled={busy} style={danger}
                 onClick={()=>action("disable_skill",{id:skill.id})}>DISABLE</button>
             </>}
@@ -114,7 +125,7 @@ export default function EvolutionPanel(){
         </label>
         <button type="button" style={button} disabled={busy||!skillDraft.trim()}
           onClick={()=>{
-            try{const manifest=JSON.parse(skillDraft);void action("stage_skill",{manifest}).then(()=>setSkillDraft(""));}
+            try{const manifest=JSON.parse(skillDraft);void action("stage_skill",{manifest}).then(ok=>{if(ok)setSkillDraft("");});}
             catch{setError("Skill manifest must be valid JSON");}
           }}>STAGE FOR APPROVAL</button>
       </div>
@@ -123,6 +134,18 @@ export default function EvolutionPanel(){
         <p style={small}>JARVIS proposes exact SHA-pinned workspace edits. A separate
           owner approval and explicit apply action are required. No automatic repair of the JARVIS
           security core is allowed.</p>
+        <label style={{fontSize:12}}>Stage owner-reviewed repair JSON (workspace-relative and exact SHA)
+          <textarea rows={4} value={repairDraft} onChange={e=>setRepairDraft(e.target.value)}
+            spellCheck={false} style={{display:"block",width:"100%",boxSizing:"border-box",
+              background:"#071923",border:"1px solid #4b8296",color:"#e7f2fb",padding:8,borderRadius:6}}
+            placeholder='{"path":"report.txt","expectedSha256":"<real observed 64-hex hash>","oldText":"old text","newText":"new text","diagnosis":"Describe the observed error"}'/>
+        </label>
+        <button type="button" style={button} disabled={busy||!repairDraft.trim()}
+          onClick={()=>{
+            try {const candidate=JSON.parse(repairDraft);
+              void action("stage_repair",{candidate}).then(ok=>{if(ok)setRepairDraft("");});}
+            catch{setError("Repair candidate must be valid JSON");}
+          }}>STAGE REPAIR FOR OWNER REVIEW</button>
         {data.repairs.length===0&&<p style={small}>No staged repairs.</p>}
         {data.repairs.map(repair=><div key={repair.id} style={{padding:10,
           border:"1px solid rgba(130,175,190,.25)",borderRadius:8}}>

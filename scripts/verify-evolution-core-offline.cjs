@@ -41,6 +41,8 @@ const cmd="Run my approved JARVIS skill "+id+' with inputs {"folder":"reports"}'
 assert.equal(intent.directApprovedSkillIntent(cmd).args.id,id);
 assert.equal(intent.directApprovedSkillIntent(cmd).args.inputs.folder,"reports");
 assert.equal(intent.directApprovedSkillIntent("Show my skill "+id),null);
+assert.equal(intent.isPreviewOnlySkillRequest("Show me what my saved skill would do"),true);
+assert.equal(intent.isPreviewOnlySkillRequest("Please run my approved skill"),false);
 assert.equal(intent.directApprovedSkillIntent(
   "Run my approved JARVIS skill "+id+' with inputs {"folder":{}}'),null);
 assert.equal(intent.directApprovedSkillIntent(

@@ -3,6 +3,12 @@ package com.neovetta.aicompanion.jarvis;
 import adris.altoclef.AltoClefController;
 import adris.altoclef.TaskCatalogue;
 import adris.altoclef.tasks.movement.GetToBlockTask;
+import adris.altoclef.tasks.misc.EquipArmorTask;
+import adris.altoclef.tasks.misc.HoldItemTask;
+import adris.altoclef.tasks.construction.DestroyBlockTask;
+import adris.altoclef.tasks.construction.PlaceBlockTask;
+import adris.altoclef.tasks.entity.KillEntityTask;
+import adris.altoclef.util.ItemTarget;
 import adris.altoclef.tasksystem.Task;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -12,6 +18,12 @@ import com.neovetta.aicompanion.entity.CompanionEntity;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.mob.HostileEntity;
+import net.minecraft.item.Item;
+import net.minecraft.item.Items;
+import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
+import net.minecraft.util.Identifier;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.MinecraftServer;
@@ -64,6 +76,12 @@ public final class JarvisBridgeServer {
         int initialCount;
         int addedCount;
         BlockPos arrival;
+        BlockPos blockPos;
+        String blockId;
+        boolean expectAir;
+        String equipDestination;
+        String equipItem;
+        Entity combatTarget;
         volatile long settledAt;
         volatile String state = "running";
         volatile String note = "task-dispatched-not-verified";
@@ -270,7 +288,7 @@ public final class JarvisBridgeServer {
                 previous.note = "cancel-sent-observe-before-retry";
                 status = "cancelled"; note = previous.note;
             }
-            case "gather", "mine", "craft", "travel" -> {
+            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat" -> {
                 if (tasks.containsKey(taskId)) throw new IllegalArgumentException("duplicate-task");
                 if (tasks.size() >= 2048) throw new IllegalArgumentException("task-capacity");
                 for (Run existing : tasks.values()) {
@@ -280,37 +298,102 @@ public final class JarvisBridgeServer {
                 Run run = new Run(companionId, ctrl, companion, budget);
                 Task task;
                 if ("travel".equals(op)) {
-                    int x = args.get("x").getAsInt(), y = args.get("y").getAsInt(), z = args.get("z").getAsInt();
-                    if (y < -64 || y > 320 || Math.abs(x) > 29999984 || Math.abs(z) > 29999984)
-                        throw new IllegalArgumentException("invalid-coordinate");
-                    task = new GetToBlockTask(new BlockPos(x,y,z));
-                } else {
+                    BlockPos pos = position(args);
+                    if (companion.getBlockPos().getSquaredDistance(pos) > 160.0 * 160.0)
+                        throw new IllegalArgumentException("travel-range");
+                    run.arrival = pos;
+                    task = new GetToBlockTask(pos);
+                } else if ("gather".equals(op) || "mine".equals(op) || "craft".equals(op)) {
                     String item = field(args,"item");
                     int count = args.get("count").getAsInt();
                     if (!item.matches("[a-z0-9_]{1,64}") || count < 1 || count > 64
-                            || !TaskCatalogue.taskExists(item)) throw new IllegalArgumentException("task-target-denied");
+                            || !TaskCatalogue.taskExists(item))
+                        throw new IllegalArgumentException("task-target-denied");
                     int current = countItem(companion, item);
-                    if (current > 192 || current + count > 256) throw new IllegalArgumentException("target-over-budget");
-                    run.item = item; run.initialCount = current; run.addedCount = count;
+                    if (current > 192 || current + count > 256)
+                        throw new IllegalArgumentException("target-over-budget");
+                    run.item = item;
+                    run.initialCount = current;
+                    run.addedCount = count;
                     task = TaskCatalogue.getItemTask(item, current + count);
+                } else if ("equip".equals(op)) {
+                    String itemName=field(args,"item"), destination=field(args,"destination");
+                    if (!itemName.matches("[a-z0-9_]{1,64}") ||
+                            !(destination.equals("hand") || destination.equals("head") ||
+                            destination.equals("torso") || destination.equals("legs") ||
+                            destination.equals("feet")))
+                        throw new IllegalArgumentException("equipment-denied");
+                    Item item=Registries.ITEM.get(new Identifier("minecraft",itemName));
+                    if (item==Items.AIR) throw new IllegalArgumentException("unknown-equipment");
+                    boolean armor=!"hand".equals(destination);
+                    if (armor && !(item instanceof net.minecraft.item.ArmorItem))
+                        throw new IllegalArgumentException("not-armor");
+                    if (!armor && !(itemName.endsWith("_sword") || itemName.endsWith("_pickaxe") ||
+                            itemName.endsWith("_axe") || itemName.equals("bow") || itemName.equals("crossbow")))
+                        throw new IllegalArgumentException("not-weapon-or-tool");
+                    run.equipDestination=destination;
+                    run.equipItem=itemName;
+                    task=armor ? new EquipArmorTask(item) : new HoldItemTask(new ItemTarget(item));
+                } else if ("build".equals(op)) {
+                    BlockPos pos=position(args);
+                    String blockName=field(args,"block");
+                    if (!BUILD_BLOCKS.contains(blockName) || !withinReach(companion,pos) ||
+                            !loaded((ServerWorld)companion.getWorld(),pos))
+                        throw new IllegalArgumentException("build-location-or-material-denied");
+                    Block block=Registries.BLOCK.get(new Identifier("minecraft",blockName));
+                    if (block==Blocks.AIR || !companion.getWorld().getBlockState(pos).isAir() ||
+                            countItem(companion,blockName)<1)
+                        throw new IllegalArgumentException("build-precondition");
+                    run.blockPos=pos;
+                    run.blockId=blockName;
+                    task=new PlaceBlockTask(pos,block);
+                } else if ("dig".equals(op)) {
+                    BlockPos pos=position(args);
+                    if (!withinReach(companion,pos) || !loaded((ServerWorld)companion.getWorld(),pos))
+                        throw new IllegalArgumentException("dig-location");
+                    String before=Registries.BLOCK.getId(companion.getWorld().getBlockState(pos).getBlock()).getPath();
+                    if (!MINE_BLOCKS.contains(before))
+                        throw new IllegalArgumentException("dig-block-denied");
+                    run.blockPos=pos;
+                    run.expectAir=true;
+                    run.blockId=before;
+                    task=new DestroyBlockTask(pos);
+                } else { // "combat" is a loaded, explicitly hostile, nearby mob only
+                    int targetId=args.get("entityId").getAsInt();
+                    Entity target=null;
+                    for (Entity entity : ((ServerWorld)companion.getWorld()).iterateEntities()) {
+                        if (entity.getId()==targetId) {target=entity;break;}
+                    }
+                    if (!(target instanceof HostileEntity) || !target.isAlive() ||
+                            target.getPos().squaredDistanceTo(companion.getPos()) > 12*12 ||
+                            !COMBAT_MOBS.contains(Registries.ENTITY_TYPE.getId(target.getType()).getPath()))
+                        throw new IllegalArgumentException("combat-target-denied");
+                    run.combatTarget=target;
+                    task=new KillEntityTask(target);
                 }
                 if (task == null) throw new IllegalArgumentException("missing-task");
-                if ("travel".equals(op)) run.arrival = new BlockPos(
-                    args.get("x").getAsInt(), args.get("y").getAsInt(), args.get("z").getAsInt());
                 tasks.put(taskId, run);
                 ctrl.runUserTask(task, () -> {
-                    if ("running".equals(run.state)) {
-                        boolean present = run.item != null &&
-                            countItem(run.entity, run.item) >= run.initialCount + run.addedCount;
-                        boolean arrived = run.arrival != null &&
-                            run.entity.getBlockPos().isWithinDistance(run.arrival, 2.5);
-                        run.state = present || arrived ? "observed" : "failed";
-                        run.settledAt=System.currentTimeMillis();
-                        run.note=present ? "new-server-inventory-confirmed" :
-                            arrived ? "server-position-arrival-confirmed" : "engine-done-no-postcondition";
-                    }
+                    if (!"running".equals(run.state)) return;
+                    boolean added = run.item != null &&
+                            countItem(run.entity,run.item)>=run.initialCount+run.addedCount;
+                    boolean arrived = run.arrival != null &&
+                            run.entity.getBlockPos().isWithinDistance(run.arrival,2.5);
+                    boolean equipped = run.equipItem != null && isEquipped(run.entity,
+                            run.equipItem, run.equipDestination);
+                    boolean changedBlock = run.blockPos != null &&
+                            loaded((ServerWorld)run.entity.getWorld(),run.blockPos) &&
+                            (run.expectAir ? run.entity.getWorld().getBlockState(run.blockPos).isAir() :
+                            run.blockId.equals(Registries.BLOCK.getId(run.entity.getWorld()
+                               .getBlockState(run.blockPos).getBlock()).getPath()));
+                    boolean killed = run.combatTarget != null && !run.combatTarget.isAlive();
+                    boolean proved = added||arrived||equipped||changedBlock||killed;
+                    run.state=proved?"observed":"failed";
+                    run.settledAt=System.currentTimeMillis();
+                    run.note=proved?"engine-completed-with-server-postcondition":"engine-done-no-postcondition";
                 });
-                status = "accepted"; note = "dispatched-not-verified";
+                status = "accepted";
+                note = "dispatched-not-verified";
             }
             default -> { status = "failed"; note = "unsupported-operation-fail-closed"; }
         }
@@ -343,6 +426,43 @@ public final class JarvisBridgeServer {
             if (!"running".equals(run.state) && run.settledAt > 0 && now-run.settledAt > 1800000)
                 it.remove();
         }
+    }
+
+
+    private static final java.util.Set<String> BUILD_BLOCKS=java.util.Set.of(
+        "cobblestone","cobbled_deepslate","oak_planks","spruce_planks",
+        "stone","dirt","oak_log","glass","sandstone","netherrack");
+    private static final java.util.Set<String> MINE_BLOCKS=java.util.Set.of(
+        "stone","cobblestone","deepslate","cobbled_deepslate","coal_ore",
+        "iron_ore","diamond_ore","deepslate_iron_ore","deepslate_diamond_ore",
+        "oak_log","spruce_log","dirt","gravel","netherrack");
+    private static final java.util.Set<String> COMBAT_MOBS=java.util.Set.of(
+        "zombie","skeleton","spider","husk","drowned","stray","slime");
+    private static BlockPos position(JsonObject args) {
+        int x=args.get("x").getAsInt(), y=args.get("y").getAsInt(),
+            z=args.get("z").getAsInt();
+        if (y < -64 || y > 320 || Math.abs(x)>29999984 || Math.abs(z)>29999984)
+            throw new IllegalArgumentException("position-outside-world");
+        return new BlockPos(x,y,z);
+    }
+    private static boolean withinReach(CompanionEntity c, BlockPos pos) {
+        return c.getBlockPos().getSquaredDistance(pos) <= 12*12;
+    }
+    private static boolean loaded(ServerWorld w, BlockPos pos) {
+        return w.getChunkManager().isChunkLoaded(pos.getX()>>4,pos.getZ()>>4);
+    }
+    private static boolean isEquipped(CompanionEntity entity, String item, String destination) {
+        if ("hand".equals(destination))
+            return !entity.getLivingInventory().getMainHandStack().isEmpty() &&
+                Registries.ITEM.getId(entity.getLivingInventory().getMainHandStack().getItem())
+                    .getPath().equals(item);
+        int slot=switch(destination) {
+            case "feet" -> 0; case "legs" -> 1; case "torso" -> 2;
+            case "head" -> 3; default -> -1;
+        };
+        if (slot<0) return false;
+        ItemStack equipped=entity.getLivingInventory().armor.get(slot);
+        return !equipped.isEmpty() && Registries.ITEM.getId(equipped.getItem()).getPath().equals(item);
     }
 
     private static JsonObject snapshot(CompanionEntity companion) {

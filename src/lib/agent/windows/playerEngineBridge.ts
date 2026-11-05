@@ -294,6 +294,8 @@ export async function runGuardianApprovedPlayerEngine(
       op="craft";item=desktop.item;requestedCount=desktop.count;extra={item,count:requestedCount};
     }else if(cmd==="navigate"&&authorizedCoords(desktop.position)){
       op="travel";target=desktop.position;extra={...target};
+    }else if(cmd==="interact_block"&&authorizedCoords(desktop.position)){
+      op="interact";target=desktop.position;extra={...target};
     }else if(cmd==="dig_block"&&authorizedCoords(desktop.position)){
       op="dig";target=desktop.position;extra={...target};
     }else if(cmd==="place_block"&&typeof desktop.item==="string"&&
@@ -345,12 +347,14 @@ export async function runGuardianApprovedPlayerEngine(
       const observedBlock=targetBlock && typeof targetBlock==="object" ?
         (targetBlock as Record<string,unknown>).block:null;
       const blockedResult=op==="dig"?observedBlock==="air":
-        op==="build"?observedBlock===blockName:false;
+        op==="build"?observedBlock===blockName:
+        op==="interact" && targetBlock && typeof targetBlock==="object" ?
+          (targetBlock as Record<string,unknown>).interactionChanged===true:false;
       const equipped=op==="equip" && item && equipDestination ?
         observedEquipment(polled,item,equipDestination) : false;
       const defeated=op==="combat" && polled.observations?.targetAlive===false;
       const physicalProof=op==="travel"?arrived:
-        op==="dig"||op==="build"?blockedResult:
+        op==="dig"||op==="build"||op==="interact"?blockedResult:
         op==="equip"?equipped:
         op==="combat"?defeated:
         Boolean(item && physicallyAdded>=Number(before)+requestedCount);

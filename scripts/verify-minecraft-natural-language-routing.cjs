@@ -88,14 +88,33 @@ const observeResource=world=>resourceGate.record('minecraft_companion_command',{
 observeResource(resourceScene);
 no(resourceGate.proof('Mine six diamonds in Minecraft').verified,'five diamonds cannot satisfy six');
 observeResource({...resourceScene,inventory:{...resourceScene.inventory,raw:{diamond:6}}});
-ok(resourceGate.proof('Mine six diamonds in Minecraft').verified,'six actual inventory diamonds satisfy six');
+no(resourceGate.proof('Mine six diamonds in Minecraft').verified,'inventory already held or changed without a task-bound mining receipt is not acquired proof');
 no(resourceGate.proof('Collect 3 diamonds and make a sword in Minecraft').verified,
  'Compound objective cannot be proven from just an item count');
 const logGate=new MinecraftAiGate('Collect 2 logs in Minecraft');
 logGate.record('minecraft_companion_command',{command:'observe'},{ok:true,detail:{
  botAcknowledged:true,command:'observe',status:JSON.stringify({...resourceScene,
  inventory:{logs:2,raw:{}}})}});
-ok(logGate.proof('Collect 2 logs in Minecraft').verified,'aggregate server log count is valid even if raw inventory trimmed');
+no(logGate.proof('Collect 2 logs in Minecraft').verified,
+ 'preexisting logs without witnessed wood collection cannot satisfy new acquisition');
+logGate.record('minecraft_companion_command',{command:'collect_wood'},
+ {ok:true,detail:{botAcknowledged:true}});
+logGate.record('minecraft_companion_command',{command:'observe'},{ok:true,detail:{
+ botAcknowledged:true,command:'observe',status:JSON.stringify({...resourceScene,
+ inventory:{logs:4,raw:{oak_log:4}}})}});
+ok(logGate.proof('Collect 2 logs in Minecraft').verified,
+ 'two NEW wood logs after a witnessed collect_wood receipt satisfy the task');
+const oneDiamond=new MinecraftAiGate('Mine one diamond in Minecraft');
+oneDiamond.record('minecraft_companion_command',{command:'observe'},{ok:true,detail:{
+ botAcknowledged:true,command:'observe',status:JSON.stringify({...resourceScene,
+ inventory:{logs:0,raw:{diamond:5}}})}});
+oneDiamond.record('minecraft_companion_command',{command:'dig_block'},
+ {ok:true,detail:{botAcknowledged:true,verifiedGameReadback:true}});
+oneDiamond.record('minecraft_companion_command',{command:'observe'},{ok:true,detail:{
+ botAcknowledged:true,command:'observe',status:JSON.stringify({...resourceScene,
+ inventory:{logs:0,raw:{diamond:6}}})}});
+ok(oneDiamond.proof('Mine one diamond in Minecraft').verified,
+ 'newly mined diamond requires a witnessed dig and fresh inventory increase');
 
 const gate=new MinecraftAiGate('Follow me and protect me in Minecraft');
 ok(gate.check('minecraft_companion_command',{command:'auto_stop'}).ok,'safety stop without observation');

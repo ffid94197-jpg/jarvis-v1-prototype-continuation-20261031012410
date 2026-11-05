@@ -353,6 +353,15 @@ public final class JarvisBridgeServer {
         out.addProperty("z", companion.getZ());
         out.addProperty("health", companion.getHealth());
         out.addProperty("hunger", companion.getHungerManager().getFoodLevel());
+        for (Map.Entry<UUID, Run> entry : tasks.entrySet()) {
+            Run runningTask=entry.getValue();
+            if (companion.getUuid().equals(runningTask.companion)
+                    && "running".equals(runningTask.state)) {
+                out.addProperty("activeTaskId", entry.getKey().toString());
+                out.addProperty("activeTaskStatus", "running");
+                break;
+            }
+        }
         JsonArray inventory = new JsonArray();
         for (ItemStack stack : companion.getLivingInventory().main) addStack(inventory,stack);
         out.add("inventory", inventory);

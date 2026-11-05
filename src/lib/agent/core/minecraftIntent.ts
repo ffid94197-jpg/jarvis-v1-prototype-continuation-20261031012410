@@ -46,7 +46,7 @@ export function parseMinecraftCount(raw:string):number|null {
        Object.hasOwn(COUNT_SMALL,u) && COUNT_SMALL[u]<10)
       n=COUNT_TENS[t]+COUNT_SMALL[u];
   }
-  return Number.isSafeInteger(n) && n!>=1 && n!<=64 ? n! : null;
+  return n!==undefined && Number.isSafeInteger(n) && n>=1 && n<=64 ? n : null;
 }
 
 /**
@@ -61,7 +61,7 @@ export function directResourceGatherFromObjective(objective:string):
   let s=objective.trim().toLowerCase()
     .replace(/[.!?]+$/,"").replace(/\s+/g," ")
     .replace(/^(?:hey\s+)?jarvis(?:buddy)?[,!:\s]+/,"");
-  const courtesy=/^(?:(?:can|could|would|will) you(?: please)?|please)\s+/;
+  const courtesy=/^(?:(?:can|could|would|will) you(?: please)?|please|i (?:want|need) you to)\s+/;
   s=s.replace(courtesy,"");
   let scoped=false;
   const prefix=/^(?:(?:in|inside)\s+)?minecraft[,:\s]+/;

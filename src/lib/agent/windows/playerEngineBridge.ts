@@ -73,7 +73,7 @@ async function restoreNativeMissionFromCore(
          proof.worldId!==cfg.worldId || proof.ownerUuid!==cfg.ownerUuid ||
          proof.companionUuid!==cfg.companionUuid ||
          typeof proof.nativeOperation!=="string" ||
-         !["endgame","farm","smelt","sequence","transfer"].includes(proof.nativeOperation) ||
+         !["endgame","farm","smelt","sequence","transfer","gather"].includes(proof.nativeOperation) ||
          typeof proof.nativeSince!=="number" ||
          !Number.isSafeInteger(proof.nativeSince) ||
          proof.nativeSince>Date.now()+30000 ||
@@ -479,10 +479,11 @@ export async function runGuardianApprovedPlayerEngine(
       const smelts=new Set(["smelt"]);
       const sequenced=new Set(["sequence"]);
       const transfers=new Set(["transfer"]);
+      const gathered=new Set(["gather"]);
       const goal=String(desktop.goal||"");
       const seconds=desktop.durationSeconds===undefined?
         (endgames.has(goal)?21600:3600):desktop.durationSeconds;
-      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal)&&!transfers.has(goal))||!Number.isInteger(seconds) ||
+      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal)&&!transfers.has(goal)&&!gathered.has(goal))||!Number.isInteger(seconds) ||
          (seconds as number)<10||(seconds as number)>43200)
         throw Error("Unsupported or unbounded owner mission");
       if(current)throw Error("Active native mission unresolved; inspect before any new mission");
@@ -504,6 +505,19 @@ export async function runGuardianApprovedPlayerEngine(
           throw Error("Unsupported native sequence stage or invalid owner-declared plan");
         op="sequence";
         details={goal,steps:spec.steps,durationSeconds:seconds};
+      }
+      if(gathered.has(goal)){
+        const spec=desktop as unknown as Record<string,unknown>;
+        const allow=new Set(["logs","planks","sticks","cobblestone",
+          "raw_iron","iron_ingot","diamond","obsidian","flint","netherrack"]);
+        if(typeof spec.resource!=="string" || !allow.has(spec.resource) ||
+           typeof spec.targetCount!=="number" ||
+           !Number.isInteger(spec.targetCount) || spec.targetCount<1 ||
+           spec.targetCount>64)
+          throw Error("Native resource mission must be an exact allowed resource and 1–64 new items");
+        op="gather";
+        details={goal,resource:spec.resource,targetCount:spec.targetCount,
+          durationSeconds:seconds};
       }
       if(smelts.has(goal)) {
         const spec=desktop as unknown as Record<string,unknown>;

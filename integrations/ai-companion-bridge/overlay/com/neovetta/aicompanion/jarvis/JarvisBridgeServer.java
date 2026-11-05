@@ -274,8 +274,13 @@ public final class JarvisBridgeServer {
         if (ledger==null) throw new IllegalStateException("native-ledger-not-initialized");
         if (server.getPlayerManager().getPlayer(ownerId) == null) throw new IllegalArgumentException("owner-offline");
         CompanionEntity companion = null;
+        // worldId is the authorized LOCAL server-realm identity, not a
+        // promise that a companion stays in the Overworld. Never lose E-stop
+        // or readback when the same owner-bound companion enters Nether/End.
         for (ServerWorld world : server.getWorlds()) {
-            if (!world.getRegistryKey().getValue().toString().equals(worldId)) continue;
+            String dimension=world.getRegistryKey().getValue().toString();
+            if (!java.util.Set.of("minecraft:overworld","minecraft:the_nether",
+                    "minecraft:the_end").contains(dimension)) continue;
             for (Entity entity : world.iterateEntities()) {
                 if (entity instanceof CompanionEntity c && c.getUuid().equals(companionId)
                         && ownerId.equals(c.getOwnerUuid()) && c.isAlive()) {
@@ -721,6 +726,8 @@ public final class JarvisBridgeServer {
     private static JsonObject snapshot(CompanionEntity companion) {
         JsonObject out = new JsonObject();
         out.addProperty("companionUuid", companion.getUuid().toString());
+        out.addProperty("dimension",
+            companion.getWorld().getRegistryKey().getValue().toString());
         out.addProperty("x", companion.getX());
         out.addProperty("y", companion.getY());
         out.addProperty("z", companion.getZ());

@@ -92,6 +92,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "windows_minecraft_input",
   "minecraft_companion_command",
   "minecraft_companion_join",
+  "minecraft_companion_spawn",
   "minecraft_companion_stop",
   "adoption_stage_github", "adoption_list", "adoption_skill", "adoption_mcp_list", "adoption_mcp_call",
   "evolution_skill_stage", "evolution_skill_list", "evolution_skill_expand", "evolution_skill_run",

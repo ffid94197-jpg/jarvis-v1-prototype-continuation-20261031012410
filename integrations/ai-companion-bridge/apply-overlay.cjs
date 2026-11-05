@@ -14,9 +14,25 @@ if(run("git",["rev-parse","HEAD"])!==PIN)fatal("upstream commit does not match p
 const mainRel="aicompanion/src/main/java/com/neovetta/aicompanion/AiCompanion.java";
 const engRel="engine/src/autoclef/java/adris/altoclef/AltoClefController.java";
 const serviceRel="engine/src/autoclef/java/adris/altoclef/player2api/Player2APIService.java";
+const commandRel="aicompanion/src/main/java/com/neovetta/aicompanion/CompanionCommands.java";
 const overlayNames=["JarvisBridgeServer.java","JarvisEndgameTask.java","JarvisNativeJournal.java"];
 const overlayRoot="aicompanion/src/main/java/com/neovetta/aicompanion/jarvis";
-const originalMain=read(mainRel),originalEngine=read(engRel),originalService=read(serviceRel);
+const originalMain=read(mainRel),originalEngine=read(engRel),
+      originalService=read(serviceRel),originalCommands=read(commandRel);
+const guardedCommands=["goTo","skill","remember"];
+function guardOwnerBrainCommand(source,name){
+ const marker="    private static int "+name+"(";
+ const idx=source.indexOf(marker);
+ if(idx<0)fatal("upstream command seam missing: "+name);
+ const open=source.indexOf("{",idx);
+ if(open<0||open-idx>220)fatal("unrecognizable command signature: "+name);
+ const guard='\n        if (com.neovetta.aicompanion.jarvis.JarvisBridgeServer.enabled()) {'+
+     '\n            source.sendError(Text.literal("This companion is controlled by JARVIS Core; use JARVIS instead."));'+
+     '\n            return 0;'+
+     '\n        }';
+ if(source.slice(open+1,open+1+guard.length)===guard)return source;
+ return source.slice(0,open+1)+guard+source.slice(open+1);
+}
 const mainCall="        ConversationManager.init();";
 const brainCall='        registerBrainReceivers();';
 const brainPatch='        if (!com.neovetta.aicompanion.jarvis.JarvisBridgeServer.enabled()) registerBrainReceivers();';
@@ -38,13 +54,18 @@ const overlayFiles=overlayNames.map(name=>({
  target:path.join(upstream,overlayRoot,name),
  content:fs.readFileSync(path.join(bridge,"overlay/com/neovetta/aicompanion/jarvis",name),"utf8")
 }));
-if(originalMain.includes(mainPatch)&&originalMain.includes(brainPatch)&&originalEngine.includes(enginePatch)&&originalEngine.includes(idlePatch)&&originalService.includes(servicePatch)) {
+if(originalMain.includes(mainPatch)&&originalMain.includes(brainPatch)&&originalEngine.includes(enginePatch)&&originalEngine.includes(idlePatch)&&originalService.includes(servicePatch)&&guardedCommands.every(name=>{
+ const marker="    private static int "+name+"(";
+ const i=originalCommands.indexOf(marker), start=originalCommands.indexOf("{",i);
+ return i>=0&&originalCommands.slice(start+1,start+220).includes("This companion is controlled by JARVIS Core;");
+})) {
  if(overlayFiles.some(file=>!fs.existsSync(file.target)||
     fs.readFileSync(file.target,"utf8")!==file.content))
      fatal("existing overlay differs; refusing overwrite");
  console.log("JARVIS AI Companion overlay already applied");
  process.exit(0);
 }
+const nextCommands=guardedCommands.reduce(guardOwnerBrainCommand,originalCommands);
 const nextMain=editOnce(editOnce(originalMain,mainCall,mainPatch),brainCall,brainPatch),
       nextEngine=editOnce(editOnce(originalEngine,engineCall,enginePatch),idleCall,idlePatch),
       nextService=editOnce(originalService,serviceCall,servicePatch);
@@ -58,6 +79,7 @@ if(!fs.existsSync(path.join(upstream,overlayRoot)))
 fs.writeFileSync(path.join(upstream,engRel),nextEngine,"utf8");
 fs.writeFileSync(path.join(upstream,serviceRel),nextService,"utf8");
 fs.writeFileSync(path.join(upstream,mainRel),nextMain,"utf8");
+fs.writeFileSync(path.join(upstream,commandRel),nextCommands,"utf8");
 for(const file of overlayFiles)fs.writeFileSync(file.target,file.content,"utf8");
 console.log("Overlay applied to pinned 1.20.1 source; build with JDK 17.");
 console.log("No tests or game sessions were run. Do not mark gameplay accepted.");

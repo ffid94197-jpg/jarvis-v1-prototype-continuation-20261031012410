@@ -9,7 +9,7 @@ import type {DesktopPrepared} from "./policy";
 type Packet = {version:number;taskId:string;idempotencyKey:string;nonce:string;worldId:string;
   observedAt:number;status:string;observations?:Record<string,unknown>};
 type SendRequest={taskId:string;idempotencyKey:string;operation:string;worldId:string;
-  arguments:Record<string,unknown>;budgetMs:number;guardian:{receiptId:string;approved:true;taskId:string;worldId:string;operation:string}};
+  arguments:Record<string,unknown>;budgetMs:number;guardian:{receiptId:string;coreTaskId:string;approved:true;taskId:string;worldId:string;operation:string}};
 const client = require("../../../../integrations/ai-companion-bridge/guardian-ipc-client.cjs") as
   {sendAuthorizedObjective(request:SendRequest,options:{port:number;host:"127.0.0.1";secret:string;timeoutMs:number}):Promise<Packet>};
 export type PlayerEngineResult={ok:boolean;evidence?:Record<string,unknown>;error?:string};
@@ -73,15 +73,18 @@ function observation(p:Packet) {
     lastAction:"PlayerEngine game-server observation; no inferred scenery or victory"
   };
 }
-function operationPacket(op:string, runId:string, c:Settings, extra:Record<string,unknown>={}, budgetMs=30000):SendRequest {
+function operationPacket(op:string, runId:string, c:Settings,
+  auth:{auditId:string;coreTaskId:string},extra:Record<string,unknown>={},budgetMs=30000):SendRequest {
   return {taskId:runId,idempotencyKey:randomUUID(),operation:op,worldId:c.worldId,
     arguments:{ownerUuid:c.ownerUuid,companionUuid:c.companionUuid,...extra},budgetMs,
     // This object is constructed ONLY inside the audited allow branch. The
     // shared key authenticates JARVIS as the source; the server checks the live owner.
-    guardian:{approved:true,receiptId:randomUUID(),taskId:runId,worldId:c.worldId,operation:op}};
+    guardian:{approved:true,receiptId:auth.auditId,coreTaskId:auth.coreTaskId,
+      taskId:runId,worldId:c.worldId,operation:op}};
 }
-async function send(op:string, id:string, c:Settings, extra:Record<string,unknown>={}, budgetMs=30000) {
-  const response=await client.sendAuthorizedObjective(operationPacket(op,id,c,extra,budgetMs),{
+async function send(op:string, id:string, c:Settings,
+  auth:{auditId:string;coreTaskId:string},extra:Record<string,unknown>={},budgetMs=30000) {
+  const response=await client.sendAuthorizedObjective(operationPacket(op,id,c,auth,extra,budgetMs),{
     port:c.port,host:"127.0.0.1",secret:c.secret,timeoutMs:Math.min(30000,Math.max(2000,budgetMs))
   });
   // The client separately authenticates the reply, task ID, nonce and world.
@@ -114,8 +117,11 @@ export async function runGuardianApprovedPlayerEngine(
   isCancelled:()=>boolean=()=>false
 ):Promise<PlayerEngineResult> {
   try {
-    if(!coreTaskId||decision.verdict!=="allow"||decision.prepared?.desktop!==desktop)
-      throw Error("Guarded Core execution required");
+    if(!UUID.test(coreTaskId)||decision.verdict!=="allow"||
+      decision.prepared?.desktop!==desktop||!UUID.test(decision.auditId)||
+      decision.auditedTaskId!==coreTaskId)
+      throw Error("Real audited Core/Guardian authorization required");
+    const auth={auditId:decision.auditId,coreTaskId};
     const cfg=settings(ownerId);
     const cmd=desktop.operation==="minecraft_command"?desktop.command:
       desktop.operation==="minecraft_join"?"join":desktop.operation==="minecraft_stop"?"auto_stop":null;
@@ -123,7 +129,7 @@ export async function runGuardianApprovedPlayerEngine(
     if(isCancelled() && !["auto_stop","stop","stay"].includes(cmd))throw Error("Operator cancellation before admission");
     const current=active.get(coreTaskId);
     if(["join","observe","status","inventory"].includes(cmd)){
-      const packet=await send(current?"status":"inspect",current?.runId||randomUUID(),cfg,{},2500);
+      const packet=await send(current?"status":"inspect",current?.runId||randomUUID(),cfg,auth,{},2500);
       if(packet.status==="failed" && current)throw Error("Native task status failed");
       const world=observation(packet);
       if(current && !world.busy)active.delete(coreTaskId);
@@ -135,7 +141,7 @@ export async function runGuardianApprovedPlayerEngine(
     if(cmd==="auto_stop"||cmd==="stop"||cmd==="stay") {
       // Emergency stop addresses the verified owner/companion, NOT the original
       // JS process's task map. It remains effective after a Node restart.
-      const stopped=await send("stop",randomUUID(),cfg,{},2500);
+      const stopped=await send("stop",randomUUID(),cfg,auth,{},2500);
       if(stopped.status==="cancelled")active.delete(coreTaskId);
       return {ok:stopped.status==="cancelled",evidence:{backend:"playerengine",
         status:stopped.status,cancellationObserved:stopped.status==="cancelled"}};
@@ -170,7 +176,7 @@ export async function runGuardianApprovedPlayerEngine(
       (desktop.entityId as number)>=0&&(desktop.entityId as number)<=200000){
       op="combat";extra={entityId:desktop.entityId};
     }else throw Error("PlayerEngine operation unsupported; no mixed Mineflayer fallback in this backend");
-    const baseline=await send("inspect",randomUUID(),cfg,{},2500);
+    const baseline=await send("inspect",randomUUID(),cfg,auth,{},2500);
     if (typeof baseline.observations?.activeTaskId==="string")
       throw Error("Another native task is running on this companion; reconcile or emergency-stop it before another effect");
     const before=item?physicalCount(extract(baseline).items,item):undefined;
@@ -180,17 +186,17 @@ export async function runGuardianApprovedPlayerEngine(
     // ambiguous external mutation and must never enable a blind retry.
     active.set(coreTaskId,{runId,operation:op,item,before,destination:target,
       equipDestination,blockName});
-    const started=await send(op,runId,cfg,extra,30000);
+    const started=await send(op,runId,cfg,auth,extra,30000);
     if(!["accepted","running","observed"].includes(started.status))
       throw Error("Native task admission failed; inspect status before any retry");
     const until=Date.now()+29500;
     while(Date.now()<until) {
       if(isCancelled()) {
-        try {await send("cancel",runId,cfg,{},2500);}catch{}
+        try {await send("cancel",runId,cfg,auth,{},2500);}catch{}
         return {ok:false,error:"Cancelled; final game effects may need reconciliation"};
       }
       await new Promise(resolve=>setTimeout(resolve,500));
-      const polled=await send("status",runId,cfg,{},2500);
+      const polled=await send("status",runId,cfg,auth,{},2500);
       if(polled.status==="running"||polled.status==="accepted")continue;
       active.delete(coreTaskId);
       const after=extract(polled);

@@ -247,9 +247,23 @@ public final class JarvisBridgeServer {
                     status = "failed"; note = "no-active-task";
                 } else { status = previous.state; note = previous.note; }
             }
-            case "stop", "cancel" -> {
+            case "stop" -> {
+                // Owner-bound emergency stop works even if the JARVIS Node process
+                // restarted and lost its in-memory task map. Do not require old taskId.
+                ctrl.stop();
+                for (Run run : tasks.values()) {
+                    if (companionId.equals(run.companion) && "running".equals(run.state)) {
+                        run.state="cancelled";
+                        run.settledAt=now;
+                        run.note="owner-emergency-stop-observed";
+                    }
+                }
+                status="cancelled"; note="owner-companion-emergency-stop-issued";
+            }
+            case "cancel" -> {
                 Run previous = tasks.get(taskId);
-                if (previous == null || !previous.companion.equals(companionId)) throw new IllegalArgumentException("task-mismatch");
+                if (previous == null || !previous.companion.equals(companionId))
+                    throw new IllegalArgumentException("task-mismatch");
                 ctrl.cancelUserTask();
                 previous.state = "cancelled";
                 previous.settledAt = now;

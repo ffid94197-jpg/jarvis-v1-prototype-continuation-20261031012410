@@ -71,8 +71,16 @@ function generalPlan(world,progress={},delegate){
  // Real inventory proves completion even when the recipe catalog is
  // temporarily unavailable (e.g. client reconnect). Never claim an item
  // from a dispatched craft or missing registry data.
- if(count(inv,progress.item)>=progress.targetCount)
-  return act('complete','Server inventory confirms requested crafted item quantity');
+ const produced=Number.isSafeInteger(progress?.milestones?.craftedOutput)?
+   progress.milestones.craftedOutput:0;
+ const current=count(inv,progress.item);
+ // Existing owned items are not proof of *new* crafting during this
+ // owner's current task. Only server-observed craft output deltas count.
+ if(produced>=progress.targetCount&&current>=progress.targetCount)
+   return act('complete','This task physically crafted '+produced+
+     ' new '+progress.item+'; final inventory contains '+current);
+ if(produced>=progress.targetCount&&current<progress.targetCount)
+   return act('blocked','Crafted items were spent or lost before final inventory verification');
  // Prefer the actual installed Minecraft version's recipes (including
  // alternatives such as spruce planks for a chest) over the eight historic
  // single-ingredient recipes. Fall back to the old list ONLY if the exact
@@ -82,7 +90,8 @@ function generalPlan(world,progress={},delegate){
    Array.isArray(catalog?.nodes?.[progress.item]) &&
    catalog.nodes[progress.item].length>0;
  if(hasVersionedRecipe || !Object.hasOwn(RECIPES,progress.item)){
-  const versioned=planRecipeStep(catalog,inv.raw,progress.item,progress.targetCount,{
+  const versioned=planRecipeStep(catalog,inv.raw,progress.item,
+   current+Math.max(1,progress.targetCount-produced),{
    workbenchNearby:world?.workbenchNearby===true,logs:inv.logs||0,planks:inv.planks||0,
    delegate
   });

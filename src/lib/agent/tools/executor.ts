@@ -22,6 +22,7 @@ import {
 } from "../guardian/policy";
 import type { GuardianDecision } from "../guardian/guardian";
 import { companionAction } from "../windows/bridge";
+import {runGuardianApprovedPlayerEngine} from "../windows/playerEngineBridge";
 import type { DesktopPrepared } from "../windows/policy";
 import { executeLocalProjectBuild, type LocalProjectBuildPrepared } from "./localProjectBuild";
 
@@ -255,6 +256,7 @@ export async function executeTool(
   tool: string,
   decision: GuardianDecision,
   isCancelled: () => boolean = () => false,
+  ownerId?: string,
 ): Promise<ToolResult> {
   const prepared = (decision.prepared ?? {}) as {
     path?: string;
@@ -446,6 +448,16 @@ export async function executeTool(
     case "minecraft_companion_join":
     case "minecraft_companion_stop": {
       if (!prepared.desktop) return {ok:false,tool,evidence:"",error:"Guardian desktop arguments missing"};
+      if (process.env.JARVIS_MC_BACKEND === "playerengine" &&
+          (tool === "minecraft_companion_command" || tool === "minecraft_companion_join" ||
+           tool === "minecraft_companion_stop")) {
+        if (!ownerId) return {ok:false,tool,evidence:"",error:"Server-derived owner missing"};
+        const native = await runGuardianApprovedPlayerEngine(taskId, ownerId, prepared.desktop, decision, isCancelled);
+        return {ok:native.ok,tool,
+          evidence:native.ok?"PlayerEngine: signed game observation / independently checked postcondition":"PlayerEngine outcome unverified",
+          detail:native.evidence,
+          error:native.error};
+      }
       const receipt = await companionAction(prepared.desktop, isCancelled, taskId);
       const verified = receipt.ok && (tool !== "minecraft_companion_join" ||
         (receipt.evidence as {joinedVerified?: boolean} | undefined)?.joinedVerified === true);

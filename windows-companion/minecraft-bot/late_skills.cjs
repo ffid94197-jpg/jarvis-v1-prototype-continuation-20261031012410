@@ -796,6 +796,11 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       return observed(false,'Crystal disappeared before ranged attack; destruction unproven');
     if(bot.entity.position.distanceTo(current.position)<9)
       return observed(false,'Crystal still too close to safely attack');
+    // The safety retreat may have moved the player behind an obsidian
+    // tower or iron-bar cage. Re-evaluate from the NEW physical eye
+    // position before consuming any arrow.
+    if(cageState(current)==='unloaded'||!clearShot(current))
+      return observed(false,'Crystal shot became obstructed after measured standoff repositioning');
     const shot=await shootVisibleEntity(current,epoch);
     if(!shot.ok)return shot;
     // A shot can require several server ticks and an actual arrow flight

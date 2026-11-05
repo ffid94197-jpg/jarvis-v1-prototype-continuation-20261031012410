@@ -65,7 +65,7 @@ no({initial:4,current:7,newItems:3,receiptCount:2},'Wrong owner requested count'
 no({initial:4,current:7,newItems:3,observeGoal:'smelt'},'Wrong observed world mission');
 no({initial:4,current:7,newItems:3,omitStatus:true},'Inventory without native signed status');
 no({initial:4,current:7,newItems:3,omitAdmission:true},'Inventory without authorized start');
-no({initial:4,current:7,newItems:3,current:8},'Mismatch between signed current count and world');
+no({initial:4,current:8,newItems:4},'Mismatch between signed current count and world');
 yes({objective:'In Minecraft collect twenty-one diamonds',
   resource:'diamond',count:21,raw:{diamond:25},
   initial:4,current:25,newItems:21},'Large word quantity proof');

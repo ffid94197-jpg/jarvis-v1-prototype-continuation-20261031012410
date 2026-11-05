@@ -6,7 +6,33 @@
 export type MinecraftMissionGoal =
   | "companion" | "dragon_run" | "netherite_dragon_run"
   | "dragon_then_netherite_run" | "netherite_armor_run"
-  | "netherite_gear_run";
+  | "netherite_gear_run" | "gather";
+
+/**
+ * Single owner-specified countable resource mission. Never invent quantities.
+ * No compound goals, arbitrary coordinates, scripts, commands, or bosses.
+ */
+export function directResourceGatherFromObjective(objective:string):
+  {resource:string;targetCount:number}|null{
+  if(typeof objective!=="string"||objective.length>180)return null;
+  const s=objective.trim().toLowerCase()
+    .replace(/[.!]+$/,"").replace(/\s+/g," ")
+    .replace(/^(?:hey\s+)?jarvis(?:buddy)?[,!:\s]+/,"")
+    .replace(/^(?:please\s+|can you please\s+|could you please\s+)/,"");
+  const match=/^(?:gather|collect|mine|obtain)\s+(\d{1,2})\s+(?:(?:blocks?|pieces?|units?|of)\s+)?(logs?|wood|planks?|sticks?|cobblestone|raw iron|iron ingots?|diamonds?|obsidian|flint|netherrack)\s+(?:in|inside)\s+minecraft$/.exec(s);
+  if(!match)return null;
+  const quantity=Number(match[1]);
+  if(!Number.isInteger(quantity)||quantity<1||quantity>64)return null;
+  const named:Record<string,string>={
+    log:"logs",logs:"logs",wood:"logs",plank:"planks",planks:"planks",
+    stick:"sticks",sticks:"sticks",cobblestone:"cobblestone",
+    "raw iron":"raw_iron","iron ingot":"iron_ingot","iron ingots":"iron_ingot",
+    diamond:"diamond",diamonds:"diamond",obsidian:"obsidian",
+    flint:"flint",netherrack:"netherrack"
+  };
+  const resource=named[match[2]];
+  return resource?{resource,targetCount:quantity}:null;
+}
 
 export function minecraftMissionFromObjective(objective: string): MinecraftMissionGoal | null {
   if (typeof objective!=="string" || objective.length>450) return null;
@@ -19,6 +45,8 @@ export function minecraftMissionFromObjective(objective: string): MinecraftMissi
   if (/^(?:how|why|what|when|where|who|explain|describe|tell me|show me|status|stop|cancel|pause)\b/.test(s))
     return null;
   const scoped=/\b(?:minecraft|ender dragon|netherite|jarvisbuddy)\b/.test(s);
+  const directGather=directResourceGatherFromObjective(objective);
+  if(directGather)return "gather";
   if(!scoped)return null;
   const active=/\b(?:play|join|survive|start|finish|complete|beat|defeat|kill|slay|win|get|obtain|equip|wear|craft|make)\b/.test(s);
   if(!active)return null;
@@ -64,8 +92,10 @@ export function directMinecraftMission(objective:string, step:number) {
   if (step===0) return {action:"tool" as const,tool:"minecraft_companion_join",args:{}};
   // Then start ONE owner-scoped native goal, requiring a fresh outcome status
   // later. Dispatch acknowledgement never means Minecraft was completed.
+  const gather=goal==="gather"?directResourceGatherFromObjective(objective):null;
+  if(goal==="gather" && !gather)return null;
   return {action:"tool" as const,tool:"minecraft_companion_command",
-    args:{command:"auto_goal",goal,durationSeconds:21600}};
+    args:{command:"auto_goal",goal,durationSeconds:21600,...(gather||{})}};
 }
 
 /**

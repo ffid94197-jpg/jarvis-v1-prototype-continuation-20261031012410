@@ -144,6 +144,44 @@ item grant, and no independent LLM is invoked by the Fabric companion.
 **Source-only; the native Fabric artifact and live-game outcome have not yet
 been independently accepted.** Do not advertise guaranteed game success.
 
+## One-instruction native resource-gathering mission
+
+A bounded JARVIS-survival goal can now use the upstream AltoClef resource
+catalogue as **one long-running, individually authorized gameplay mission**.
+For example, **"Jarvis, gather 16 cobblestone in Minecraft"** is parsed
+deterministically with the specified number and resource. There is no
+separate script, second agent, unrestricted shell tool or invented coordinate.
+
+- Allowed exact resources: logs, planks, sticks, cobblestone, raw iron, iron
+  ingots, diamonds, obsidian, flint and netherrack, quantity **1–64 new items**.
+  Unsupported resources and quantities are rejected; catalogue entries
+  must actually exist in pinned PlayerEngine.
+- For the deterministic route, JARVIS Core emits one Guardian-audited JOIN,
+  then a Guardian-audited \`auto_goal gather\` with the exact owner-requested
+  resource/count. No separate cloud-model call is required for this exact
+  phrasing. Other open-ended goals retain the existing model planner.
+- The native server first records the companion's actual baseline resource
+  count, then starts **one** pinned \`TaskCatalogue.getItemTask\` with the
+  absolute target (baseline + requested new items). The bounded mission uses
+  the existing world inventory, physical gathering/crafting/mining as chosen
+  by AltoClef, health and movement restrictions, and the server's durable
+  ADMITTED journal.
+- Only when the underlying resource task settles with **new** actual items
+  beyond the saved baseline may Fabric mark the mission OBSERVED.
+  Subsequent signed \`missionStatus\` includes source, count requested,
+  baseline, current count, newly acquired count and whether gatherDone.
+- The owner can inspect the signed mission status after the finite Core
+  chat task has settled using the new read-only monitor. A STARTED receipt
+  is **not** proof of the requested new items.
+- Following a Node restart, read-only status can reconstruct the run from
+  an exact settled Core receipt. Neither unknown outcomes nor game-server
+  restarts cause automatic mutation replay.
+
+This still does not certify that the pinned bot can gather **every**
+Minecraft material, solve every world, complete Netherite/Dragon on its
+own, or satisfy the 200k independently tested internet prompts. The
+Fabric Java source and the actual game playthrough remain unaccepted.
+
 ## Owner live mission monitor after Core task settlement
 
 A multi-hour Minecraft survival goal may continue after the parent JARVIS

@@ -293,9 +293,10 @@ export async function executeTool(
         if(request.action==="list_skills"){
           const {listSkills}=await import("../evolution/skillForge.mjs");
           const records=await listSkills(ownerId,{includeDrafts:false});
-          return {ok:true,tool,evidence:`Listed ${Math.min(records.length,10)} of ${records.length} approved reusable skill plans`,
-            detail:{skills:records.slice(0,10),total:records.length,
-              truncated:records.length>10,executed:false}};
+          return {ok:true,tool,evidence:`Listed ${Math.min(records.length,12)} of ${records.length} approved reusable skill plans`,
+            detail:{skills:records.slice(0,12).map(s=>({id:s.id,name:s.name,
+              description:s.description,stageCount:s.stageCount,status:s.status})),
+              total:records.length,truncated:records.length>12,executed:false}};
         }
         if(request.action==="expand_skill"){
           const {expandSkill}=await import("../evolution/skillForge.mjs");

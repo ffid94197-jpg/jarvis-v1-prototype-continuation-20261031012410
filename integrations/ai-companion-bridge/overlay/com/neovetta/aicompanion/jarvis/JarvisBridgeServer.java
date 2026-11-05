@@ -619,6 +619,26 @@ public final class JarvisBridgeServer {
         return receipt;
     }
 
+    private static void sampleFarmCells(Run run) {
+        if (run.cropCells.isEmpty() || run.cropBlock==null ||
+                !"running".equals(run.state)) return;
+        ServerWorld world=(ServerWorld)run.entity.getWorld();
+        for(BlockPos pos:run.cropCells) {
+            if(!loaded(world,pos)) continue;
+            net.minecraft.block.BlockState state=world.getBlockState(pos);
+            int age=-1;
+            if (state.isOf(run.cropBlock) && run.cropBlock instanceof CropBlock crop)
+                age=crop.getAge(state);
+            else if (!state.isAir()) age=-2;
+            Integer previous=run.lastCropAge.put(pos,age);
+            // A mature owner's crop became harvested / replanted. Count only
+            // transitions in the exact owner-approved, loaded farmland cells.
+            if(previous!=null && previous==7 && age>=-1 && age<7 &&
+                    run.harvestedCells<256)
+                run.harvestedCells++;
+        }
+    }
+
     private static void enforceDeadlines(MinecraftServer server) {
         if (running != server) return;
         long now = System.currentTimeMillis();
@@ -626,6 +646,7 @@ public final class JarvisBridgeServer {
         while (it.hasNext()) {
             Map.Entry<UUID,Run> entry=it.next();
             Run run = entry.getValue();
+            if ("running".equals(run.state)) sampleFarmCells(run);
             if ("running".equals(run.state) && now >= run.deadline) {
                 try { run.ctrl.cancelUserTask(); } catch (Exception ignored) {}
                 try {

@@ -209,6 +209,19 @@ export async function runGuardianApprovedPlayerEngine(
           oldTaskRestarted:false,physicalReceipt:restored.observations},
         error:restored.status==="observed"?undefined:"Safety latch was not cleared"};
     }
+    if(cmd==="inspect_block" && authorizedCoords(desktop.position)) {
+      const block=await send("inspect_block",randomUUID(),cfg,auth,{...desktop.position},2500);
+      const scene=block.observations?.inspectedBlock;
+      if(block.status!=="observed" || !scene || typeof scene!=="object" ||
+          Array.isArray(scene))throw Error("No verified native block observation");
+      const value=scene as Record<string,unknown>;
+      if(value.x!==desktop.position.x||value.y!==desktop.position.y||
+         value.z!==desktop.position.z||typeof value.name!=="string")
+        throw Error("Block observation target differs from Guardian-approved coordinate");
+      return {ok:true,evidence:{botAcknowledged:true,backend:"playerengine",
+        command:"inspect_block",status:JSON.stringify(value),
+        blockObserved:true}};
+    }
     if(cmd==="inspect_villager") {
       if(typeof desktop.entityId!=="number"||!Number.isInteger(desktop.entityId) ||
          desktop.entityId<0||desktop.entityId>200000)

@@ -77,20 +77,28 @@ function compileRecipeCatalog(bot,root){
  visit(root,0,[]);
  return {root,nodes};
 }
-function planRecipeStep(catalog,raw,goalName,targetCount,{workbenchNearby=false,logs=0,planks=0,delegate=null}={}){
+function planRecipeStep(catalog,raw,goalName,targetCount,{workbenchNearby=false,logs=0,planks=0,delegate=null,freshOutput=false}={}){
  if(!catalog||catalog.root!==goalName||!catalog.nodes||
    !ITEM.test(String(goalName))||!int(targetCount,1,16))
   return {kind:'blocked',why:'No supported, server-version recipe catalog for requested item'};
  const inventory=raw&&typeof raw==='object'?raw:{};
  const have=name=>Number.isFinite(inventory[name])&&inventory[name]>=0?
    Math.floor(inventory[name]):0;
- if(have(goalName)>=targetCount)
+ // Existing held items are NOT proof of freshly crafted outputs for this
+ // owner mission. The new flag only changes root recipe planning, not the
+ // owner count ceiling or any tool authorization.
+ if(!freshOutput&&have(goalName)>=targetCount)
   return {kind:'complete',why:'Server inventory proves requested item count'};
  const rootRecipes=catalog.nodes[goalName];
  if(!Array.isArray(rootRecipes)||!rootRecipes.length)
   return {kind:'blocked',why:'Requested item has no safe registered crafting recipe'};
  function step(name,need,depth,visited){
-  if(have(name)>=need)return null;
+  // The root must yield NEW output even if the backpack already contains
+  // the target. Prerequisite inventory still reads actual owned materials,
+  // including an existing copy of the target used as a recipe ingredient.
+  const owned=name===goalName&&depth===0&&freshOutput===true?
+    0:have(name);
+  if(owned>=need)return null;
   if(depth>MAX_DEPTH||visited.includes(name))
    return {kind:'blocked',why:'Recipe dependencies exceed safe depth or contain a cycle'};
   // Mindcraft-inspired prerequisite traversal, but every material source is
@@ -116,7 +124,7 @@ function planRecipeStep(catalog,raw,goalName,targetCount,{workbenchNearby=false,
       int(rec.ingredients[n],1,64)));
   if(!available.length)return {kind:'blocked',why:'Recipe catalog contains no safe recipe'};
   const options=available.map(rec=>{
-   const ops=Math.ceil((need-have(name))/rec.output);
+   const ops=Math.ceil((need-owned)/rec.output);
    const deficit=Object.entries(rec.ingredients).reduce((n,[key,num])=>
      n+Math.max(0,ops*num-have(key)),0);
    return {rec,ops,deficit};

@@ -58,13 +58,14 @@ function verifyReceipt(receipt, envelope, secret, now=Date.now()) {
   return b;
 }
 async function sendAuthorizedObjective(request, options={}) {
-  const {socketPath, secret, timeoutMs=request?.budgetMs} = options;
-  if (typeof socketPath !== "string" || !socketPath || socketPath.length>256) reject("SOCKET_PATH");
+  const {socketPath, port, host="127.0.0.1", secret, timeoutMs=request?.budgetMs} = options;
+  if (socketPath != null && (typeof socketPath !== "string" || !socketPath || socketPath.length>256)) reject("SOCKET_PATH");
+  if (socketPath == null && (!Number.isInteger(port) || port<1 || port>65535 || host!=="127.0.0.1")) reject("LOOPBACK_ONLY");
   if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs>MAX_TIMEOUT_MS) reject("TIMEOUT");
   const frame=createEnvelope(request,secret);
   return new Promise((resolve,rejectPromise)=>{
     let done=false, buffer=Buffer.alloc(0);
-    const socket=net.createConnection({path:socketPath});
+    const socket=socketPath != null ? net.createConnection({path:socketPath}) : net.createConnection({port,host});
     function finish(err,result) {if(done)return;done=true;socket.destroy();if(err)rejectPromise(err);else resolve(result);}
     socket.setTimeout(timeoutMs,()=>finish(new Error("AI_COMPANION_IPC_TIMEOUT")));
     socket.on("error",err=>finish(new Error("AI_COMPANION_IPC_TRANSPORT_"+err.code)));

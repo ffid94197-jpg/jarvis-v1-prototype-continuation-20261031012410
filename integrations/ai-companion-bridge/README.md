@@ -31,6 +31,48 @@ Additional prototype source now includes:
 
 **Remaining build-only limitations:** unimplemented native villager purchase transactions, enchanting, multi-operation advanced container and world interactions, broad generic construction beyond bounded primitives, hardening of all long-horizon edge cases, and remaining general-purpose Windows/AI autonomy coverage. Also, this code has NOT been compiled or field-accepted. GitHub Actions have not been used in this pass.
 
+## One-instruction explicit owner companion spawn and pairing
+
+The opt-in PlayerEngine integration supports an original
+\`minecraft_companion_spawn\` **Core-owned** tool for explicit natural-language
+requests such as **"Spawn my Minecraft companion"** or **"Summon JarvisBuddy in
+Minecraft"**. Ordinary "play Minecraft" still **joins only** and NEVER spawns
+another entity. This is not a new autonomous agent or a Creative-mode summon.
+
+Deployment requires the existing strict JARVIS_MC_BRIDGE_* secret, owner
+principal, owner UUID, companion UUID and world allowlist settings **plus**
+\`JARVIS_MC_BRIDGE_SPAWN_ENABLED=1\` on **both** the Node JARVIS process and
+the pinned Fabric game-server process.
+
+- Core's exact imperative owner-intent parser produces the standalone spawn
+  action. Model-selected spawn calls are rejected by Guardian unless Core has
+  supplied its trusted intent flag. No tool argument can override the owner,
+  entity identity, spawn position, or entity type.
+- The server requires that the original owner is online and alive in the
+  Overworld, that the exact preconfigured companion UUID is unused, that the
+  owner has no other loaded companion, and that a **safe, already-loaded
+  adjacent block** has a solid floor. It never generates terrain for a spawn.
+- The server's persistent native journal is checked for **any prior spawn
+  history** of the configured companion UUID. This prevents duplicate entities
+  when an older companion is saved in an unloaded chunk after a restart.
+- Journal admission is durable **BEFORE** the world mutation. The companion
+  is instantiated from the pinned upstream \`AiCompanion.COMPANION\` type,
+  assigned the already configured UUID **before** spawning, receives the
+  mod's normal default roster entry and its actual owner-bound
+  \`AltoClefController\` (without an independent LLM in JARVIS mode).
+- The returned signed server observation contains the original owner UUID,
+  companion UUID, owner-paired controller status, Overworld dimension and
+  real inventory/health. Core accepts spawn completion **only** if those
+  fields match the original Guardian-authorized, exact configured identities.
+- A lost reply, uncertain journal, duplicate UUID, unloaded old companion,
+  absent owner or missing opt-in **never authorizes an automatic retry**.
+  Existing owned companions can be attached through ordinary read-only JOIN
+  after the real game state has been reconciled.
+
+Limits: this does not automatically recover an unloaded prior companion,
+despawn one, reset the server's owner roster, defeat the Dragon or guarantee
+general-purpose gameplay. No real Windows/Fabric acceptance has yet run.
+
 ## Owner-authorized native villager trading
 
 The opt-in PlayerEngine backend implements a bounded **real trade** transaction

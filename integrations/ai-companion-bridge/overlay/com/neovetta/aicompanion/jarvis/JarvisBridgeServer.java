@@ -609,7 +609,7 @@ public final class JarvisBridgeServer {
                 // SmeltInFurnaceTask is the sole native task used for this run.
                 // Its callback + newly held output are required; a callback
                 // alone never claims physical smelting success.
-                milestones.addProperty("smeltedOutputCount",
+                milestones.addProperty("smeltedOutput",
                     candidate.state.equals("observed")?
                         Math.min(candidate.smeltTarget,fresh):0);
                 summary.add("milestones",milestones);

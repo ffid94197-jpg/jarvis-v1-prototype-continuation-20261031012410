@@ -62,7 +62,7 @@ import { parseInventorySource, validateInventoryDraft } from "./inventoryIntegri
 import { AutonomyGate, REPEATABLE_INPUT_TOOLS, DESKTOP_GUI_EFFECTS, hasDirectProof, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
 import {acceptedSkillQueue, type ActiveSkillQueue} from "./approvedSkillQueue";
-import {directApprovedSkillIntent} from "./skillIntent";
+import {directApprovedSkillIntent,isPreviewOnlySkillRequest} from "./skillIntent";
 import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan, type GoalWatchdogLimits } from "./goalPlanner";
 import { AUTONOMY_PROFILES, deriveStepBudget, type AutonomyProfile } from "./autonomyPolicy";
 
@@ -1028,6 +1028,26 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     const args = decision.args ?? {};
     const argsJson = JSON.stringify(args).slice(0, 2000);
     seq++;
+
+    // Prevent a model's mistaken tool selection from turning an informational
+    // skill preview into a real effectful workflow. The UI's explicit RUN
+    // command is unaffected.
+    if(tool==="evolution_skill_run" && isPreviewOnlySkillRequest(objective)){
+      await persistStep(taskId,seq,"guardian_deny",{
+        tool,argsJson,note:"Preview-only owner intent blocks skill execution"
+      });
+      messages.push({role:"assistant",content:raw});
+      messages.push({role:"user",content:
+        "CORE INTENT POLICY: The owner requested a PREVIEW, not execution. Use evolution_skill_expand for read-only preview; do not run a skill."});
+      denials++;
+      if(denials>=MAX_DENIALS){
+        await settleAndReport(taskId,"denied",stepsUsed,
+          "Skill execution rejected because the owner requested preview only.",
+          emit,{effectsHappened});
+        return;
+      }
+      continue;
+    }
 
     // Data-fidelity rejection BEFORE Guardian admission and filesystem write.
     // This is NOT an authorization grant, and does not weaken Guardian:

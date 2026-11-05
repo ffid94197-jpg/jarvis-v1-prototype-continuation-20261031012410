@@ -234,7 +234,8 @@ public final class JarvisBridgeServer {
                 !taskId.equals(id(guardian,"taskId")) ||
                 !worldId.equals(field(guardian,"worldId")) ||
                 !op.equals(field(guardian,"operation"))) throw new IllegalArgumentException("guardian-denied");
-        id(guardian,"receiptId");
+        UUID guardianReceipt = id(guardian,"receiptId");
+        UUID authorizedCoreTask = id(guardian,"coreTaskId");
         int budget = b.get("budgetMs").getAsInt();
         if (budget < 100 || budget > 30000) throw new IllegalArgumentException("budget");
         JsonObject args = b.getAsJsonObject("arguments");
@@ -430,6 +431,8 @@ public final class JarvisBridgeServer {
         receipt.addProperty("nonce",nonce);
         receipt.addProperty("worldId",worldId);
         receipt.addProperty("observedAt",now);
+        receipt.addProperty("guardianReceiptId",guardianReceipt.toString());
+        receipt.addProperty("coreTaskId",authorizedCoreTask.toString());
         receipt.addProperty("status",status);
         receipt.add("observations",snapshot);
         return receipt;

@@ -5,6 +5,7 @@ import adris.altoclef.tasks.container.SmeltInFurnaceTask;
 import adris.altoclef.tasks.misc.EquipArmorTask;
 import adris.altoclef.tasks.misc.HoldItemTask;
 import adris.altoclef.tasks.movement.GetToBlockTask;
+import adris.altoclef.tasks.construction.PlaceBlockTask;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.SmeltTarget;
@@ -12,6 +13,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.neovetta.aicompanion.entity.CompanionEntity;
+import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -53,6 +57,9 @@ public final class JarvisNativeSequenceTask extends Task {
     private int arrivalRange;
     private int equipmentProgress;
     private String[] equipmentTargets;
+    private BlockPos[] construction;
+    private String constructionMaterial;
+    private int constructionIndex;
     private final long since=System.currentTimeMillis();
 
     public JarvisNativeSequenceTask(CompanionEntity entity,JsonArray input){
@@ -65,7 +72,7 @@ public final class JarvisNativeSequenceTask extends Task {
             if(row.size()<1||row.size()>7)
                 throw new IllegalArgumentException("stage-width");
             String goal=row.get("goal").getAsString();
-            if(!Set.of("gather","craft","smelt","equip","travel","tools","stone_age","iron_age").contains(goal))
+            if(!Set.of("gather","craft","smelt","equip","travel","tools","stone_age","iron_age","build").contains(goal))
                 throw new IllegalArgumentException("unsupported-native-stage");
             // Validate the ENTIRE owner's declared sequence before admitting
             // the first effect; no partially executed surprise operations.
@@ -85,6 +92,20 @@ public final class JarvisNativeSequenceTask extends Task {
                 throw new IllegalArgumentException("stage-resource");
         } else if(Set.of("tools","stone_age","iron_age").contains(goal)) {
             if(row.size()!=1)throw new IllegalArgumentException("preset-has-unexpected-arguments");
+        } else if(goal.equals("build")) {
+            if(row.size()!=5)throw new IllegalArgumentException("build-stage-fields");
+            JsonObject point=row.getAsJsonObject("position");
+            if(point==null || point.size()!=3)throw new IllegalArgumentException("build-stage-position");
+            for(String k:List.of("x","y","z"))
+                if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999980)
+                    throw new IllegalArgumentException("build-stage-coordinate");
+            String material=row.get("block").getAsString();
+            if(!Set.of("cobblestone","oak_planks","stone","dirt","spruce_planks").contains(material))
+                throw new IllegalArgumentException("build-stage-material");
+            String axis=row.get("axis").getAsString();
+            int length=row.get("length").getAsInt();
+            if(!Set.of("x","z").contains(axis)||length<1||length>8)
+                throw new IllegalArgumentException("build-stage-size");
         } else if(goal.equals("equip")){
             String item=row.get("item").getAsString();
             String slot=row.get("destination").getAsString();
@@ -137,6 +158,7 @@ public final class JarvisNativeSequenceTask extends Task {
         currentItem=null;currentBefore=0;currentQuantity=0;
         equipmentSlot=null;destination=null;
         equipmentTargets=null;equipmentProgress=0;
+        construction=null;constructionMaterial=null;constructionIndex=0;
         stage=goal+"["+index+"]";
         if(Set.of("gather","craft","smelt").contains(goal)){
             currentItem=goal.equals("gather")?row.get("resource").getAsString():row.get("item").getAsString();
@@ -162,6 +184,26 @@ public final class JarvisNativeSequenceTask extends Task {
                 new String[]{"stone_pickaxe","stone_sword"};
             return nextEquipmentTarget();
         }
+        if(goal.equals("build")) {
+            JsonObject p=row.getAsJsonObject("position");
+            BlockPos origin=new BlockPos(p.get("x").getAsInt(),p.get("y").getAsInt(),p.get("z").getAsInt());
+            int length=row.get("length").getAsInt();
+            String axis=row.get("axis").getAsString();
+            constructionMaterial=row.get("block").getAsString();
+            construction=new BlockPos[length];
+            ServerWorld world=(ServerWorld)entity.getWorld();
+            if(count(constructionMaterial)<length)
+                throw new IllegalArgumentException("not-enough-owner-building-material");
+            for(int i=0;i<length;i++){
+                BlockPos pos=origin.add(axis.equals("x")?i:0,0,axis.equals("z")?i:0);
+                if(entity.getBlockPos().getSquaredDistance(pos)>12*12 ||
+                   !world.getChunkManager().isChunkLoaded(pos.getX()>>4,pos.getZ()>>4) ||
+                   !world.getBlockState(pos).isAir())
+                    throw new IllegalArgumentException("build-cell-not-safe-or-empty");
+                construction[i]=pos;
+            }
+            return nextConstruction();
+        }
         if(goal.equals("equip")){
             currentItem=row.get("item").getAsString();
             equipmentSlot=row.get("destination").getAsString();
@@ -179,6 +221,13 @@ public final class JarvisNativeSequenceTask extends Task {
         return new GetToBlockTask(destination);
     }
 
+    private Task nextConstruction() {
+        if(construction==null || constructionIndex>=construction.length)
+            throw new IllegalStateException("construction-stage-complete");
+        Block material=Registries.BLOCK.get(new Identifier("minecraft",constructionMaterial));
+        if(material==Blocks.AIR)throw new IllegalArgumentException("unknown-material");
+        return new PlaceBlockTask(construction[constructionIndex],material);
+    }
     private Task nextEquipmentTarget() {
         if(equipmentTargets==null || equipmentProgress>=equipmentTargets.length)
             throw new IllegalStateException("equipment-stage-finished");
@@ -189,6 +238,13 @@ public final class JarvisNativeSequenceTask extends Task {
         return TaskCatalogue.getItemTask(currentItem,Math.max(1,currentBefore));
     }
     private boolean physicallyDone(){
+        if(construction!=null){
+            BlockPos pos=construction[constructionIndex];
+            ServerWorld world=(ServerWorld)entity.getWorld();
+            if(!world.getChunkManager().isChunkLoaded(pos.getX()>>4,pos.getZ()>>4))return false;
+            return Registries.BLOCK.getId(world.getBlockState(pos).getBlock())
+                .getPath().equals(constructionMaterial);
+        }
         if(currentItem!=null && equipmentSlot!=null)
             return wearing(currentItem,equipmentSlot);
         if(currentItem!=null)
@@ -211,6 +267,12 @@ public final class JarvisNativeSequenceTask extends Task {
                 equipmentProgress++;
                 current=nextEquipmentTarget();
                 stage="equipment["+index+":"+equipmentProgress+"]";
+                return current;
+            }
+            if(construction!=null && constructionIndex+1<construction.length){
+                constructionIndex++;
+                current=nextConstruction();
+                stage="construct["+index+":"+constructionIndex+"]";
                 return current;
             }
             index++;

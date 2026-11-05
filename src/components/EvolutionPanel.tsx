@@ -1,19 +1,19 @@
 "use client";
 
-import {useCallback,useEffect,useState} from "react";
+import {useCallback,useEffect,useState,type CSSProperties} from "react";
 
 type Skill={id:string;name:string;description:string;status:string;digest:string;stageCount:number;createdAt:string};
 type Repair={id:string;path:string;state:string;diagnosis:string;beforeSha256:string;afterSha256:string;createdAt:string};
 type EvolutionState={skills:Skill[];repairs:Repair[];ownerApprovalRequired:boolean};
 type Detail=Record<string,unknown>;
 
-const panel:React.CSSProperties={display:"grid",gap:12,marginTop:18,padding:16,
+const panel:CSSProperties={display:"grid",gap:12,marginTop:18,padding:16,
   border:"1px solid rgba(100,175,210,.35)",borderRadius:12,
   background:"rgba(9,24,36,.72)",color:"#dbeef5"};
-const button:React.CSSProperties={border:"1px solid #5d99b1",borderRadius:6,
+const button:CSSProperties={border:"1px solid #5d99b1",borderRadius:6,
   background:"#123344",color:"#e3f6ff",padding:"6px 10px",cursor:"pointer"};
-const danger:React.CSSProperties={...button,borderColor:"#c68c51",background:"#402919"};
-const small:React.CSSProperties={fontSize:12,opacity:.86,margin:0};
+const danger:CSSProperties={...button,borderColor:"#c68c51",background:"#402919"};
+const small:CSSProperties={fontSize:12,opacity:.86,margin:0};
 async function callApi(body:Record<string,unknown>):Promise<Detail>{
   const response=await fetch("/api/jarvis/evolution",{
     method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",

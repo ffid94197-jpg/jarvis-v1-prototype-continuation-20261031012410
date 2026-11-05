@@ -94,7 +94,7 @@ function canonicalIntent(raw){
  if(q.goal==='gather')q.resource=normalizeResource(q.resource);
  if(['craft','smelt'].includes(q.goal)&&q.targetCount===undefined)q.targetCount=1;
  if(q.goal==='travel'&&q.arrivalRange===undefined)q.arrivalRange=2;
- const long=['gather','smelt','farm_crop','sequence','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','build_volume'];
+ const long=['gather','smelt','farm_wheat','farm_crop','sequence','companion','dragon_run','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','build_volume'];
  q.durationSeconds=raw.durationSeconds===undefined?
   (['build_volume','craft','equip'].includes(q.goal)?3600:
    (long.includes(q.goal)?21600:300)):raw.durationSeconds;

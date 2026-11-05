@@ -31,6 +31,36 @@ Additional prototype source now includes:
 
 **Remaining build-only limitations:** unimplemented native villager purchase transactions, enchanting, multi-operation advanced container and world interactions, broad generic construction beyond bounded primitives, hardening of all long-horizon edge cases, and remaining general-purpose Windows/AI autonomy coverage. Also, this code has NOT been compiled or field-accepted. GitHub Actions have not been used in this pass.
 
+## Owner-authorized native villager trading
+
+The opt-in PlayerEngine backend implements a bounded **real trade** transaction
+for a freshly observed villager (at most eight inspectable offers, one to four
+purchases, at most 4.5 blocks from the companion). A model cannot choose a
+trade: the **owner must explicitly request the offer number and villager**,
+and the Minecraft AI gate and Guardian independently reject invented IDs.
+
+1. The JARVIS client asks the game server for the live villager's **adjusted**
+   first price, secondary price, output item/count, uses, max uses and disabled
+   state; that signed observation is the source of expected values.
+2. The server rechecks the EXACT inspected offer and adjusted price on the
+   server thread, rejecting restocks or price changes. It preflights the
+   companion's entire finite inventory and product capacity for all purchases,
+   preserving enchanted/NBT output item stacks.
+3. The native journal records ADMITTED before any currency is spent. The
+   helper spends actual inventory, delivers the villager's actual offer output
+   and invokes \`VillagerEntity.trade(offer)\` for each real merchant transaction.
+4. The server checks full slot readback, exact input/output counts and
+   villager offer use-counter increments. Only after a durable OBSERVED journal
+   write is the signed trade receipt marked complete.
+5. The JARVIS Core separately checks the signed returned trade/offer IDs,
+   uses delta, output and inventory delta. Uncertain outcomes keep an active
+   run quarantine: no duplicate purchase retry or fabricated success.
+
+This is an original adapter to vanilla trade mechanics, not a creative-mode
+item grant, and no independent LLM is invoked by the Fabric companion.
+**Source-only; the native Fabric artifact and live-game outcome have not yet
+been independently accepted.** Do not advertise guaranteed game success.
+
 ## Native Node-process restart recovery
 
 An owner-authorized native `auto_goal` stores its randomly generated native

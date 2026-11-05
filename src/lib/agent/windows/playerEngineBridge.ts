@@ -292,6 +292,89 @@ export async function runGuardianApprovedPlayerEngine(
         entityId:desktop.entityId,offers,backend:"playerengine",
         tradeExecuted:false,status:JSON.stringify({entityId:desktop.entityId,offers})}};
     }
+    if(cmd==="trade_villager") {
+      if(current)throw Error("Existing native effect must settle before a villager transaction");
+      const entityId=desktop.entityId,tradeIndex=desktop.tradeIndex,times=desktop.times;
+      if(!Number.isInteger(entityId) || typeof entityId!=="number" ||
+         entityId<0||entityId>200000 || !Number.isInteger(tradeIndex) ||
+         typeof tradeIndex!=="number"||tradeIndex<0||tradeIndex>7 ||
+         !Number.isInteger(times)||typeof times!=="number"||times<1||times>4)
+        throw Error("Trade requires a bounded observed villager, offer index and quantity");
+      const observed=await send("villager_offers",randomUUID(),cfg,auth,{entityId},2500);
+      if(observed.status!=="observed" ||
+         observed.observations?.inspectedVillagerId!==entityId ||
+         !Array.isArray(observed.observations?.villagerOffers))
+        throw Error("Live villager offers could not be inspected");
+      const offers=observed.observations.villagerOffers as Array<Record<string,unknown>>;
+      const selected=offers.find(o=>o && o.index===tradeIndex);
+      if(!selected || selected.disabled!==false ||
+         !Number.isInteger(selected.uses) || !Number.isInteger(selected.maxUses) ||
+         Number(selected.uses)+times>Number(selected.maxUses))
+        throw Error("Requested villager offer is missing, exhausted or ungrounded");
+      for(const key of ["firstItem","secondItem","outputItem"])
+        if(typeof selected[key]!=="string" ||
+           !/^(?:minecraft:[a-z0-9_]{1,64})?$/.test(String(selected[key])))
+          throw Error("Villager offer item identity malformed");
+      for(const key of ["firstCount","secondCount","outputCount"])
+        if(typeof selected[key]!=="number"|| !Number.isInteger(selected[key])||
+           Number(selected[key])<0||Number(selected[key])>64)
+          throw Error("Villager offer count malformed");
+      if(Number(selected.firstCount)<1||Number(selected.outputCount)<1||
+         !selected.firstItem||!selected.outputItem)
+        throw Error("Villager offer lacks valid currency or output");
+      const initial=extract(observed);
+      if(observed.observations?.recoveryRequired===true ||
+         observed.observations?.safetyStopped===true ||
+         typeof observed.observations?.activeTaskId==="string")
+        throw Error("Native companion is running, stopped or needs reconciliation");
+      if(isCancelled())throw Error("Owner cancelled villager trade before admission");
+      const runId=randomUUID();
+      active.set(coreTaskId,{runId,operation:"trade",missionGoal:"trade",
+        missionSince:Date.now()}); // admit locally BEFORE remote mutation
+      const receipt=await send("trade",runId,cfg,auth,{
+        entityId,offerIndex:tradeIndex,times,
+        expectedFirstItem:selected.firstItem,expectedFirstCount:selected.firstCount,
+        expectedSecondItem:selected.secondItem,expectedSecondCount:selected.secondCount,
+        expectedOutputItem:selected.outputItem,expectedOutputCount:selected.outputCount,
+        expectedUses:selected.uses
+      },10000);
+      if(receipt.status!=="observed")
+        return {ok:false,error:"Native trade not durably confirmed; effect may be unknown"};
+      const trade=receipt.observations?.missionStatus as Record<string,unknown>|undefined;
+      const steps=trade?.milestones as Record<string,unknown>|undefined;
+      const currentInventory=extract(receipt).items;
+      const countAt=(items:Record<string,number>,name:string)=>
+        name?items[name.replace(/^minecraft:/,"")]||0:0;
+      const first=String(selected.firstItem),second=String(selected.secondItem),
+        output=String(selected.outputItem);
+      const expectedDelta=(name:string)=>{
+        let delta=0;
+        if(first===name)delta-=Number(selected.firstCount)*times;
+        if(second===name)delta-=Number(selected.secondCount)*times;
+        if(output===name)delta+=Number(selected.outputCount)*times;
+        return delta;
+      };
+      const inventoryMatches=[first,second,output].every(name=>
+        !name || countAt(currentInventory,name)===countAt(initial.items,name)+expectedDelta(name));
+      const verified=trade?.goal==="trade" && trade.status==="complete" &&
+        trade.entityId===entityId&&trade.tradeIndex===tradeIndex&&trade.times===times &&
+        trade.outputItem===output&&
+        trade.outputCount===Number(selected.outputCount)*times &&
+        steps?.tradeDone===true &&
+        Number(steps.usesBefore)===Number(selected.uses) &&
+        Number(steps.usesAfter)===Number(selected.uses)+times &&
+        inventoryMatches;
+      if(verified){
+        active.delete(coreTaskId);
+        return {ok:true,evidence:{backend:"playerengine",command:"trade_villager",
+          villagerId:entityId,tradeIndex,times,outputItem:output,
+          outputCount:Number(selected.outputCount)*times,
+          tradeVerified:true,offerUsesVerified:true,
+          physicalInventoryVerified:true,durablySettled:true,
+          status:JSON.stringify(trade)}};
+      }
+      return {ok:false,error:"Native villager trade receipt/inventory mismatch; reconcile before retry"};
+    }
     if(cmd==="auto_goal") {
       const endgames=new Set(["dragon_run","netherite_armor_run","netherite_gear_run",
         "netherite_dragon_run","dragon_then_netherite_run"]);

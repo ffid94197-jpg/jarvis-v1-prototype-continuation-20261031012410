@@ -89,6 +89,7 @@ public final class JarvisBridgeServer {
         final long since = System.currentTimeMillis();
         JarvisEndgameTask endgame;
         JarvisNativeSequenceTask sequence;
+        JarvisNativeVillagerTrade.Result trade;
         String transferItem;
         String transferDirection;
         int transferCount;
@@ -351,7 +352,7 @@ public final class JarvisBridgeServer {
                     net.minecraft.village.TradeOffer offer=offers.get(i);
                     JsonObject details=new JsonObject();
                     details.addProperty("index",i);
-                    ItemStack first=offer.getOriginalFirstBuyItem();
+                    ItemStack first=offer.getAdjustedFirstBuyItem();
                     ItemStack second=offer.getSecondBuyItem();
                     ItemStack output=offer.getSellItem();
                     details.addProperty("firstItem",Registries.ITEM.getId(first.getItem()).toString());
@@ -361,6 +362,8 @@ public final class JarvisBridgeServer {
                     details.addProperty("outputItem",Registries.ITEM.getId(output.getItem()).toString());
                     details.addProperty("outputCount",output.getCount());
                     details.addProperty("disabled",offer.isDisabled());
+                    details.addProperty("uses",offer.getUses());
+                    details.addProperty("maxUses",offer.getMaxUses());
                     liveOffers.add(details);
                 }
                 viewedOffers=liveOffers;
@@ -440,6 +443,45 @@ public final class JarvisBridgeServer {
                 previous.settledAt=now;
                 status=previous.state;
                 note=previous.note;
+            }
+            case "trade" -> {
+                if(safetyStopped.contains(companionId)||journal.hasUnresolved(companionId))
+                    throw new IllegalArgumentException("native-trade-recovery-required");
+                if(tasks.containsKey(taskId)||tasks.size()>=2048)
+                    throw new IllegalArgumentException("native-trade-replay-or-capacity");
+                for(Run live:tasks.values()){
+                    if(live.companion.equals(companionId) && "running".equals(live.state))
+                        throw new IllegalArgumentException("companion-busy");
+                }
+                // The Java helper re-reads the exact adjusted, live villager
+                // offer inside this server tick; a changed price is denied.
+                int targetId=args.get("entityId").getAsInt();
+                int index=args.get("offerIndex").getAsInt();
+                int times=args.get("times").getAsInt();
+                if(targetId<0||targetId>200000||index<0||index>7||times<1||times>4)
+                    throw new IllegalArgumentException("native-trade-bounds");
+                Run record=new Run(companionId,authorizedCoreTask,ctrl,companion,budget);
+                // Commit intent BEFORE spending a single currency item.
+                journal.admit(taskId,authorizedCoreTask,companionId,worldId,op);
+                tasks.put(taskId,record);
+                try {
+                    JarvisNativeVillagerTrade.Result result=
+                        JarvisNativeVillagerTrade.execute(companion,args);
+                    record.trade=result;
+                    if(!result.verified)
+                        throw new IllegalStateException("native-trade-postcondition-mismatch");
+                    journal.settle(taskId,"OBSERVED");
+                    record.state="observed";
+                    record.note="villager-uses-and-inventory-verified";
+                } catch(Exception ex) {
+                    try{journal.settle(taskId,"EFFECT_UNKNOWN");}
+                    catch(Exception ignored){/* preserve ADMITTED quarantine */}
+                    record.state="failed";
+                    record.note="native-trade-effect-unknown-reconciliation-required";
+                }
+                record.settledAt=System.currentTimeMillis();
+                status=record.state;
+                note=record.note;
             }
             case "transfer" -> {
                 if (safetyStopped.contains(companionId) || journal.hasUnresolved(companionId))
@@ -741,7 +783,37 @@ public final class JarvisBridgeServer {
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
                     (candidate.endgame == null && candidate.cropGoal == null &&
                      candidate.smeltGoal == null && candidate.sequence == null &&
-                     candidate.transferItem == null)) continue;
+                     candidate.transferItem == null && candidate.trade == null)) continue;
+            if(candidate.trade!=null) {
+                JarvisNativeVillagerTrade.Result result=candidate.trade;
+                snapshot.addProperty("nativeGoal","trade");
+                JsonObject summary=new JsonObject();
+                summary.addProperty("goal","trade");
+                summary.addProperty("status",candidate.state.equals("observed") &&
+                    result.verified?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("entityId",result.villagerId);
+                summary.addProperty("tradeIndex",result.offerIndex);
+                summary.addProperty("times",result.times);
+                summary.addProperty("outputItem",result.outputItem);
+                summary.addProperty("outputCount",result.outputCount*result.times);
+                JsonObject milestones=new JsonObject();
+                milestones.addProperty("tradeDone",candidate.state.equals("observed") &&
+                    result.verified);
+                milestones.addProperty("usesBefore",result.usesBefore);
+                milestones.addProperty("usesAfter",result.usesAfter);
+                milestones.addProperty("firstItem",result.firstItem);
+                milestones.addProperty("firstBefore",result.firstBefore);
+                milestones.addProperty("firstAfter",result.firstAfter);
+                milestones.addProperty("secondItem",result.secondItem);
+                milestones.addProperty("secondBefore",result.secondBefore);
+                milestones.addProperty("secondAfter",result.secondAfter);
+                milestones.addProperty("outputBefore",result.outputBefore);
+                milestones.addProperty("outputAfter",result.outputAfter);
+                summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
             if (candidate.transferItem != null) {
                 snapshot.addProperty("nativeGoal","transfer");
                 JsonObject summary=new JsonObject();

@@ -761,7 +761,7 @@ export class MinecraftAiGate {
         return {ok:true,reason:'Show actual villager offers; no transaction authorized'};
       }
       if(Object.keys(args).some(k=>!['command','entityId','tradeIndex','times'].includes(k)) ||
-         typeof args.tradeIndex!=='number'||!Number.isInteger(args.tradeIndex)||args.tradeIndex<0||args.tradeIndex>31 ||
+         typeof args.tradeIndex!=='number'||!Number.isInteger(args.tradeIndex)||args.tradeIndex<0||args.tradeIndex>7 ||
          typeof args.times!=='number'||!Number.isInteger(args.times)||args.times<1||args.times>4 ||
          !/\b(?:trade|buy|purchase|exchange)\b/i.test(this.objective))
         return {ok:false,reason:'Trade parameters or explicit owner approval missing'};

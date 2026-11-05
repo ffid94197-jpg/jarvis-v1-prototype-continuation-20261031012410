@@ -99,7 +99,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "minecraft_companion_stop",
   "adoption_stage_github", "adoption_list", "adoption_skill", "adoption_mcp_list", "adoption_mcp_call",
   "evolution_skill_stage", "evolution_skill_list", "evolution_skill_expand",
-  "evolution_repair_stage", "evolution_repair_list",
+  "evolution_repair_stage", "evolution_repair_list", "evolution_owner_control",
 ] as const;
 
 export type GuardianTool = (typeof GUARDIAN_KNOWN_TOOLS)[number];
@@ -144,7 +144,7 @@ async function writeAudit(
 
 /** THE GATE. Authorize (and audit) one tool call. Fail-closed everywhere. */
 export async function authorizeToolCall(
-  ctx: { taskId: string | null; ownerId?:string },
+  ctx: { taskId: string | null; ownerId?:string; ownerControlPlane?:boolean },
   tool: string,
   rawArgs: Record<string, unknown>,
 ): Promise<GuardianDecision> {
@@ -152,6 +152,31 @@ export async function authorizeToolCall(
 
   if ((GUARDIAN_KNOWN_TOOLS as readonly string[]).includes(tool)) {
     switch (tool as GuardianTool) {
+      case "evolution_owner_control": {
+        // A model/agent can NEVER assert this flag. Only the trusted API,
+        // AFTER verified session, OWNER role and origin checks, sets it.
+        if(ctx.ownerControlPlane!==true || ctx.taskId!==null || !ctx.ownerId) {
+          decision=deny("Owner-only trusted control plane authorization required");break;
+        }
+        const permitted=new Set(["stage_skill","approve_skill","disable_skill",
+          "stage_repair","approve_repair","apply_repair","rollback_repair"]);
+        const action=rawArgs.action;
+        if(typeof action!=="string"||!permitted.has(action) ||
+           Object.keys(rawArgs).some(k=>!["action","id"].includes(k))) {
+          decision=deny("Unsupported owner evolution mutation");break;
+        }
+        if(!action.startsWith("stage_") &&
+           (typeof rawArgs.id!=="string" ||
+            !/^(?:sk|rp)_[0-9a-f]{32}$/.test(rawArgs.id) ||
+            (action.endsWith("skill")&&!rawArgs.id.startsWith("sk_")) ||
+            (action.endsWith("repair")&&!rawArgs.id.startsWith("rp_")))){
+          decision=deny("Exact type-matching candidate ID required");break;
+        }
+        decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
+          action:action as "stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs",
+          id:typeof rawArgs.id==="string"?rawArgs.id:undefined}}};
+        break;
+      }
       case "evolution_skill_stage": {
         if(!ctx.ownerId){decision=deny("Authenticated owner required");break;}
         if(Object.keys(rawArgs).some(k=>k!=="manifest")){decision=deny("Only manifest is permitted");break;}

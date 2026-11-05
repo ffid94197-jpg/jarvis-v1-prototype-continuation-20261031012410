@@ -14,7 +14,7 @@ if(run("git",["rev-parse","HEAD"])!==PIN)fatal("upstream commit does not match p
 const mainRel="aicompanion/src/main/java/com/neovetta/aicompanion/AiCompanion.java";
 const engRel="engine/src/autoclef/java/adris/altoclef/AltoClefController.java";
 const serviceRel="engine/src/autoclef/java/adris/altoclef/player2api/Player2APIService.java";
-const overlayNames=["JarvisBridgeServer.java","JarvisEndgameTask.java"];
+const overlayNames=["JarvisBridgeServer.java","JarvisEndgameTask.java","JarvisNativeJournal.java"];
 const overlayRoot="aicompanion/src/main/java/com/neovetta/aicompanion/jarvis";
 const originalMain=read(mainRel),originalEngine=read(engRel),originalService=read(serviceRel);
 const mainCall="        ConversationManager.init();";

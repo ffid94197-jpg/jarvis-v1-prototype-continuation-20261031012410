@@ -564,7 +564,25 @@ public final class JarvisBridgeServer {
         for (Run candidate : tasks.values()) {
             if (!candidate.companion.equals(companionId) ||
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
-                    candidate.endgame == null) continue;
+                    (candidate.endgame == null && candidate.cropGoal == null)) continue;
+            if (candidate.cropGoal != null) {
+                snapshot.addProperty("nativeGoal",candidate.cropGoal);
+                JsonObject summary=new JsonObject();
+                summary.addProperty("goal",candidate.cropGoal);
+                summary.addProperty("status",candidate.state.equals("observed")?
+                    "complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("crop",candidate.cropKind);
+                summary.addProperty("targetCount",candidate.cropTargetCount);
+                JsonObject milestone=new JsonObject();
+                milestone.addProperty("harvestedCropCount",candidate.harvestedCells);
+                milestone.addProperty("wheatHarvested",candidate.harvestedCells);
+                milestone.addProperty("physicalOutputCount",
+                    countItem(companion,candidate.cropItem));
+                summary.add("milestones",milestone);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
             JarvisEndgameTask mission=candidate.endgame;
             snapshot.addProperty("nativeGoal",mission.goal());
             snapshot.addProperty("dragonDeadObserved",mission.dragonKilled());

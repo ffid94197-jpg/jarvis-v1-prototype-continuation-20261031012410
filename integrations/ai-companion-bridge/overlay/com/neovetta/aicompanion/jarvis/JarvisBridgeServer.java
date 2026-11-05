@@ -1386,7 +1386,8 @@ public final class JarvisBridgeServer {
         for (ItemStack stack : companion.getLivingInventory().main) {
             if (!stack.isEmpty()) {
                 String name=Registries.ITEM.getId(stack.getItem()).getPath();
-                if (name.equals(item) || ("log".equals(item) && name.endsWith("_log")))
+                if (name.equals(item) || ("log".equals(item) && name.endsWith("_log")) ||
+                    ("planks".equals(item) && name.endsWith("_planks")))
                     total += stack.getCount();
             }
         }

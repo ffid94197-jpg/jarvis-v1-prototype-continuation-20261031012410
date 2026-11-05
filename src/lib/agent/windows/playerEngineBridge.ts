@@ -62,7 +62,7 @@ function extract(o:Packet):{health:number;hunger:number;position:{x:number;y:num
 }
 function observation(p:Packet) {
   const state=extract(p), inv=state.items;
-  const netherite=["netherite_helmet","netherite_chestplate","netherite_leggings","netherite_boots"];
+  const netheriteBySlot=["netherite_boots","netherite_leggings","netherite_chestplate","netherite_helmet"];
   const s=p.observations||{};
   const isWorldPoint=(b:unknown):b is {x:number;y:number;z:number}=>{
     if(!b||typeof b!=="object"||Array.isArray(b))return false;
@@ -95,7 +95,7 @@ function observation(p:Packet) {
       woodenPickaxe:inv.wooden_pickaxe||0},health:state.health,hunger:state.hunger,
     joined:true,busy:p.status==="running"||p.status==="accepted"||
       (typeof p.observations?.activeTaskId==="string" && UUID.test(p.observations.activeTaskId)),
-    dimension:p.worldId,nativeGoal:null,wornNetherite:netherite.every(k=>state.armor.has(k)),
+    dimension:p.worldId,nativeGoal:null,wornNetherite:netheriteBySlot.every((item,index)=>state.armorSlots[index]===item),
     dragonDeadObserved:false,exitPortalPresent:false,nearbyBlocks,villagers,threats,
     lastAction:"PlayerEngine game-server observation; no inferred scenery or victory"
   };

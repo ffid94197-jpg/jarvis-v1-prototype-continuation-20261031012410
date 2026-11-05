@@ -85,6 +85,7 @@ public final class JarvisBridgeServer {
         final long deadline;
         final long since = System.currentTimeMillis();
         JarvisEndgameTask endgame;
+        JarvisNativeSequenceTask sequence;
         String smeltGoal;
         String smeltOutput;
         int smeltTarget;
@@ -373,7 +374,7 @@ public final class JarvisBridgeServer {
                 status=previous.state;
                 note=previous.note;
             }
-            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "endgame", "farm", "smelt" -> {
+            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "endgame", "farm", "smelt", "sequence" -> {
                 if (safetyStopped.contains(companionId)) throw new IllegalArgumentException("owner-safety-stop-latched");
                 if (tasks.containsKey(taskId)) throw new IllegalArgumentException("duplicate-task");
                 if (tasks.size() >= 2048) throw new IllegalArgumentException("task-capacity");
@@ -382,7 +383,7 @@ public final class JarvisBridgeServer {
                         throw new IllegalArgumentException("companion-busy");
                 }
                 long runtimeBudget = budget;
-                if ("endgame".equals(op) || "farm".equals(op) || "smelt".equals(op)) {
+                if ("endgame".equals(op) || "farm".equals(op) || "smelt".equals(op) || "sequence".equals(op)) {
                     int duration = args.get("durationSeconds").getAsInt();
                     if (duration < 10 || duration > 43200)
                         throw new IllegalArgumentException("mission-duration-out-of-range");
@@ -395,6 +396,14 @@ public final class JarvisBridgeServer {
                     JarvisEndgameTask mission=new JarvisEndgameTask(companion,goal);
                     run.endgame=mission;
                     task=mission;
+                } else if ("sequence".equals(op)) {
+                    String goal=field(args,"goal");
+                    if(!"sequence".equals(goal))
+                        throw new IllegalArgumentException("not-owner-sequence");
+                    JarvisNativeSequenceTask sequenceTask=new JarvisNativeSequenceTask(
+                        companion,args.getAsJsonArray("steps"));
+                    run.sequence=sequenceTask;
+                    task=sequenceTask;
                 } else if ("smelt".equals(op)) {
                     String goal=field(args,"goal");
                     String output=field(args,"item");
@@ -560,7 +569,8 @@ public final class JarvisBridgeServer {
                             run.harvestedCells>=run.cropTargetCount &&
                             countItem(run.entity,run.cropItem)>=run.cropInitialCount+run.cropTargetCount;
                     boolean proved = added||arrived||equipped||changedBlock||killed ||farmProved||
-                            (run.endgame != null && run.endgame.completed());
+                            (run.endgame != null && run.endgame.completed()) ||
+                            (run.sequence != null && run.sequence.isFinished());
                     try {
                         // Postcondition failure is EFFECT_UNKNOWN, not a
                         // claim of zero side effects or clean completion.
@@ -593,7 +603,24 @@ public final class JarvisBridgeServer {
             if (!candidate.companion.equals(companionId) ||
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
                     (candidate.endgame == null && candidate.cropGoal == null &&
-                     candidate.smeltGoal == null)) continue;
+                     candidate.smeltGoal == null && candidate.sequence == null)) continue;
+            if (candidate.sequence != null) {
+                JarvisNativeSequenceTask sequence=candidate.sequence;
+                snapshot.addProperty("nativeGoal","sequence");
+                JsonObject summary=new JsonObject();
+                summary.addProperty("goal","sequence");
+                summary.addProperty("status",candidate.state.equals("observed") &&
+                    sequence.isFinished()?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("sequenceIndex",sequence.index());
+                JsonObject milestones=new JsonObject();
+                milestones.addProperty("stagesCompleted",sequence.index());
+                milestones.addProperty("stageCount",sequence.total());
+                milestones.addProperty("currentStage",sequence.stage());
+                summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
             if (candidate.smeltGoal != null) {
                 snapshot.addProperty("nativeGoal","smelt");
                 JsonObject summary=new JsonObject();

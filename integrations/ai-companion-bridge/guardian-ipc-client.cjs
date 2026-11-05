@@ -10,7 +10,15 @@ const MAX_BYTES = 64 * 1024;
 const MAX_AGE_MS = 30_000;
 const MAX_TIMEOUT_MS = 30_000;
 function canonical(x) { return JSON.stringify(x); }
-function signature(secret, value) { return crypto.createHmac("sha256", secret).update(canonical(value)).digest("hex"); }
+function signature(secret, value) { return crypto.createHmac("sha256", secret).update(value, "ascii").digest("hex"); }
+function pack(body) { return Buffer.from(canonical(body), "utf8").toString("base64url"); }
+function unpack(payload) {
+  if (typeof payload !== "string" || !/^[A-Za-z0-9_-]{1,87000}$/.test(payload)) reject("BAD_PAYLOAD");
+  let bytes;
+  try { bytes=Buffer.from(payload,"base64url"); } catch { reject("BAD_PAYLOAD"); }
+  if(bytes.length>MAX_BYTES || bytes.toString("base64url")!==payload) reject("BAD_PAYLOAD");
+  try {return JSON.parse(bytes.toString("utf8"));} catch {reject("MALFORMED_PAYLOAD");}
+}
 function reject(message) { throw new Error("AI_COMPANION_IPC_" + message); }
 function uuid(s) { return typeof s === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s); }
 function parseLine(buffer) {
@@ -39,17 +47,19 @@ function createEnvelope(request, secret, now = Date.now()) {
     operation:request.operation, worldId:request.worldId, arguments:request.arguments,
     guardian:request.guardian, budgetMs:request.budgetMs,
     issuedAt:now, nonce:crypto.randomBytes(16).toString("hex")};
-  const frame = {body, mac:signature(secret,body)};
-  if (Buffer.byteLength(canonical(frame),"utf8") + 1 > MAX_BYTES) reject("OVERSIZE_REQUEST");
+  const payload=pack(body);
+  const frame = {body, payload, mac:signature(secret,payload)};
+  if (Buffer.byteLength(canonical({payload:frame.payload,mac:frame.mac}),"utf8") + 1 > MAX_BYTES) reject("OVERSIZE_REQUEST");
   return frame;
 }
 function verifyReceipt(receipt, envelope, secret, now=Date.now()) {
   if (!receipt || typeof receipt !== "object" || Array.isArray(receipt) || typeof receipt.mac !== "string" ||
-      !receipt.body || typeof receipt.body !== "object" || Array.isArray(receipt.body)) reject("BAD_RECEIPT");
-  const expected = signature(secret,receipt.body);
+      typeof receipt.payload !== "string") reject("BAD_RECEIPT");
+  const expected = signature(secret,receipt.payload);
   if (!/^[0-9a-f]{64}$/.test(receipt.mac) ||
       !crypto.timingSafeEqual(Buffer.from(expected,"hex"),Buffer.from(receipt.mac,"hex"))) reject("RECEIPT_AUTH");
-  const b=receipt.body;
+  const b=unpack(receipt.payload);
+  if (!b || typeof b!=="object" || Array.isArray(b)) reject("BAD_RECEIPT");
   if (b.version !== 1 || b.taskId !== envelope.body.taskId || b.idempotencyKey !== envelope.body.idempotencyKey ||
       b.nonce !== envelope.body.nonce || b.worldId !== envelope.body.worldId) reject("RECEIPT_MISMATCH");
   if (!Number.isSafeInteger(b.observedAt) || Math.abs(now-b.observedAt)>MAX_AGE_MS) reject("RECEIPT_STALE");
@@ -69,7 +79,7 @@ async function sendAuthorizedObjective(request, options={}) {
     function finish(err,result) {if(done)return;done=true;socket.destroy();if(err)rejectPromise(err);else resolve(result);}
     socket.setTimeout(timeoutMs,()=>finish(new Error("AI_COMPANION_IPC_TIMEOUT")));
     socket.on("error",err=>finish(new Error("AI_COMPANION_IPC_TRANSPORT_"+err.code)));
-    socket.on("connect",()=>socket.write(canonical(frame)+"\n"));
+    socket.on("connect",()=>socket.write(canonical({payload:frame.payload,mac:frame.mac})+"\n"));
     socket.on("data",chunk=>{
       buffer=Buffer.concat([buffer,chunk]);
       if(buffer.length>MAX_BYTES)return finish(new Error("AI_COMPANION_IPC_OVERSIZE_RESPONSE"));

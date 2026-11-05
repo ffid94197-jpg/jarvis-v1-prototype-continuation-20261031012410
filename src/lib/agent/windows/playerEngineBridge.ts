@@ -302,6 +302,15 @@ export async function runGuardianApprovedPlayerEngine(
     let target:{x:number;y:number;z:number}|undefined;
     if(cmd==="collect_wood"){
       op="gather";item="log";requestedCount=1;extra={item,count:1};
+    }else if(cmd==="transfer_container"&&authorizedCoords(desktop.position)&&
+      typeof desktop.item==="string" && /^[a-z0-9_]{1,64}$/.test(desktop.item) &&
+      typeof desktop.count==="number" && Number.isInteger(desktop.count) &&
+      desktop.count>=1 && desktop.count<=64 &&
+      ["deposit","withdraw"].includes(String((desktop as unknown as Record<string,unknown>).operationDirection))){
+      op="transfer";item=desktop.item;requestedCount=desktop.count;
+      target=desktop.position;
+      extra={goal:"transfer",item,targetCount:requestedCount,
+        direction:(desktop as unknown as Record<string,unknown>).operationDirection,...target};
     }else if(cmd==="craft_item"&&typeof desktop.item==="string"&&
       typeof desktop.count==="number"&&Number.isInteger(desktop.count)&&
       desktop.count>=1&&desktop.count<=16){
@@ -367,7 +376,18 @@ export async function runGuardianApprovedPlayerEngine(
       const equipped=op==="equip" && item && equipDestination ?
         observedEquipment(polled,item,equipDestination) : false;
       const defeated=op==="combat" && polled.observations?.targetAlive===false;
+      const nativeTransfer=polled.observations?.missionStatus as Record<string,unknown>|undefined;
+      const transferProof=op==="transfer" && nativeTransfer &&
+        nativeTransfer.goal==="transfer" && nativeTransfer.status==="complete" &&
+        nativeTransfer.item===item &&
+        nativeTransfer.targetCount===requestedCount &&
+        nativeTransfer.operation===(desktop as unknown as Record<string,unknown>).operationDirection &&
+        (nativeTransfer.milestones as Record<string,unknown>|undefined)?.transferDone===true &&
+        (String((desktop as unknown as Record<string,unknown>).operationDirection)==="deposit"?
+          physicallyAdded===Number(before)-requestedCount:
+          physicallyAdded===Number(before)+requestedCount);
       const physicalProof=op==="travel"?arrived:
+        op==="transfer"?transferProof:
         op==="dig"||op==="build"||op==="interact"?blockedResult:
         op==="equip"?equipped:
         op==="combat"?defeated:

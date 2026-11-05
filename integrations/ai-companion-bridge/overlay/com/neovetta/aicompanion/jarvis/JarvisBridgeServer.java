@@ -331,6 +331,9 @@ public final class JarvisBridgeServer {
             // JOIN/observe route never reaches this branch. It cannot create
             // a second bot, adopt an unowned one or choose a UUID on the fly.
             if(companion!=null)throw new IllegalArgumentException("companion-already-spawned");
+            if(!owner.isAlive())throw new IllegalArgumentException("owner-not-in-live-world");
+            if(journal.hasSpawnHistory(companionId))
+                throw new IllegalArgumentException("prior-spawn-history-must-reconcile-existing-world");
             if(safetyStopped.contains(companionId)||
                journal.hasUnresolved(companionId) || tasks.size()>=2048)
                 throw new IllegalArgumentException("native-spawn-reconciliation-required");

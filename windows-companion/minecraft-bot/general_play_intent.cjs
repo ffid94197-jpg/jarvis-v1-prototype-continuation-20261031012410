@@ -425,7 +425,20 @@ function modelGoalGrounded(q,ownerText,context=''){
   }
   case 'build':return has(/\b(?:build|construct|place)\b/)&&
     itemMention(q.block)&&has(/\b(?:wall|line|row)\b/);
-  case 'farm_wheat':return has(/\b(?:farm|grow|plant|harvest)\b/)&&has(/\bwheat\b/);
+  case 'farm_wheat':{
+   if(!has(/\b(?:farm|grow|harvest)\b/)||!has(/\bwheat\b/)||
+      !Number.isInteger(q.targetCount)||q.targetCount<1||q.targetCount>16||
+      !Number.isInteger(q.width)||q.width<1||q.width>4||
+      !Number.isInteger(q.depth)||q.depth<1||q.depth>4)return false;
+   const dims=s.match(/\b([1-4])\s*(?:by|x|×)\s*([1-4])\b/);
+   if(!dims||Number(dims[1])!==q.width||Number(dims[2])!==q.depth)return false;
+   const coords=s.match(/-?\d{1,8}[\s,]+-?\d{1,8}[\s,]+-?\d{1,8}/g)||[];
+   if(coords.length!==1||coords[0].match(/-?\d+/g)?.map(Number).some((v,i)=>
+     v!==[q.position?.x,q.position?.y,q.position?.z][i]))return false;
+   const pre=s.slice(0,s.indexOf(dims[0]));
+   const quantities=pre.match(/\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)\b/g)||[];
+   return quantities.length===1&&amount(quantities[0])===q.targetCount;
+  }
   case 'sequence':{
    const armor=armorEquipSteps(s);
    if(armor){

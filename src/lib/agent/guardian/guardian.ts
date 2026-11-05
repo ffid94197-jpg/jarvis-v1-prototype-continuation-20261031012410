@@ -45,6 +45,10 @@ export interface GuardianDecision {
   verdict: GuardianVerdict;
   reason?: string;
   prepared?: PreparedArgs;
+  /** Real, durable auditLog.id created by this authorization gate. */
+  auditId?: string;
+  /** Task associated with that audit; never obtained from model args. */
+  auditedTaskId?: string | null;
 }
 
 /** Tools the Guardian knows about. Anything else is denied as unknown. */
@@ -106,15 +110,15 @@ async function writeAudit(
   args: Record<string, unknown>,
   verdict: GuardianVerdict,
   reason: string,
-): Promise<boolean> {
+): Promise<string | null> {
   // TEST-ONLY fault injection (documented in core/faults.ts): a simulated
   // audit-trail failure must flip the decision to DENY (fail-closed,
   // DUR-07). Inert unless JARVIS_TEST_FAULT=audit is explicitly set.
   if (process.env.JARVIS_TEST_FAULT === "audit") {
-    return false;
+    return null;
   }
   try {
-    await db.auditLog.create({
+    const row = await db.auditLog.create({
       data: {
         taskId: taskId ?? null,
         tool,
@@ -128,9 +132,9 @@ async function writeAudit(
         reason: reason.slice(0, 1000),
       },
     });
-    return true;
+    return row.id;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -355,7 +359,7 @@ export async function authorizeToolCall(
   if (!audited) {
     return deny("guardian audit trail unavailable — action blocked (fail-closed)");
   }
-  return decision;
+  return {...decision,auditId:audited,auditedTaskId:ctx.taskId};
 }
 
 export { WORKSPACE_ROOT };

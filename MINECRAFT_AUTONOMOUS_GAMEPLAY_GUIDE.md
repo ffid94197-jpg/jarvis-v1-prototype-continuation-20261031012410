@@ -1,8 +1,25 @@
-# JARVIS V1 — Minecraft Java LAN Autonomous Gameplay Candidate
+# JARVIS Prototype — Minecraft Java autonomous gameplay backends
 
-## Actual scope
+## Preferred PlayerEngine integration
 
-This edition integrates an independent Mineflayer bot (`JarvisBuddy`) with a bounded, local observe → decide → act → verify loop. It is an **experimental autonomous-survival foundation**, **not** a fully autonomous, general-purpose Minecraft player. The existing LAYA/Guardian/Core and companion remain in place. The bot runs alongside your character as another LAN player, not through your character's input.
+The prototype now includes a pinned source integration for **AI Companion / PlayerEngine** (Fabric 1.21.11). In this mode, the AI Companion entity is JARVIS's single in-world body. JARVIS Core remains the only natural-language planner and Guardian authority; the upstream PlayerEngine / AltoClef / Automatone task runtime performs navigation, mining, gathering, crafting, combat, farming and building.
+
+The upstream `gamer` task is mapped only from an explicit owner-authorized Dragon goal. JARVIS then asks PlayerEngine's native item/smithing catalogue for the Netherite armor, sword and pickaxe. Every result still requires JARVIS's independent server-observed inventory, equipment and End-fight evidence. A task receipt or a completed command chain is not acceptance proof.
+
+The AI Companion source is pinned in `integrations/ai-companion`; its memory dependency is pinned in `integrations/ai-companion-memory`. Build the JARVIS overlay with `integrations/build-ai-companion.ps1`. Install the resulting mod into a trusted Fabric 1.21.11 instance with the dependencies listed in `integrations/AI_COMPANION_PIN.md`. The first server start creates `config/jarvis-bridge.json`; set `JARVIS_MINECRAFT_AI_COMPANION_CONFIG` in the JARVIS environment to that exact file.
+
+Configure:
+1. `JARVIS_MINECRAFT_ENGINE="ai-companion"`
+2. `JARVIS_MINECRAFT_LAN_ENABLED="1"`
+3. `JARVIS_MINECRAFT_PLAYER="YourHumanJavaName"` (the actual owner, not JarvisBuddy)
+4. `JARVIS_MINECRAFT_AI_COMPANION_CONFIG="C:\\Path\\To\\Instance\\config\\jarvis-bridge.json"`
+5. If the owner has multiple companion entities, set `JARVIS_MINECRAFT_AI_COMPANION_NAME` to select exactly one.
+
+No Mineflayer player is launched in this mode. The Java bridge binds only to 127.0.0.1, requires the generated bearer token, auto-spawns through the upstream owner-scoped `/companion spawn` command when possible, and disables the mod's independent chat-brain loop while JARVIS bridge mode is enabled. The bridge accepts only typed allowlisted tasks; unsupported direct actions are rejected rather than simulated.
+
+## Existing Mineflayer backend
+
+The original Mineflayer implementation remains available as the default/legacy backend. It connects as an independent LAN player (`JarvisBuddy`) and uses its existing bounded observe → decide → act → verify loop. It is an experimental autonomous-survival foundation, not a claim of full general-purpose gameplay.
 
 ### Supported autonomous goals
 

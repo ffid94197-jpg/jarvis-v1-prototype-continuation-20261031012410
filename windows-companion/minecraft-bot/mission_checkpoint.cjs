@@ -23,7 +23,7 @@ function extractGoal(state){
  const goal=state.goal;
  // Entity IDs are session-local and can be recycled after disconnect. Never
  // persist an old hostile identity across a fresh Minecraft process.
- if(goal==='defeat_hostile'||goal==='transfer')return null;
+ if(['defeat_hostile','transfer','farm_crop'].includes(goal))return null;
  const spec={goal};
  if(goal==='gather'){
    spec.resource=state.resource;spec.targetCount=state.targetCount;

@@ -11,10 +11,11 @@ const {validBuildSpec,buildPlan,validVolumeSpec,volumePlan}=require('./structure
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
 const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
 const {validSmeltSpec,smeltPlan}=require('./smelt_goal.cjs');
+const {validTransferSpec,transferPlan}=require('./container_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip','smelt']);
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip','smelt','transfer']);
 // Perception must include EVERY already-authorized hostile; otherwise the
 // planner never sees cave spiders, slimes or phantoms that the native combat
 // controller can safely handle. Add explicitly disallowed hazards for
@@ -225,6 +226,7 @@ function decide(goal, world, failures={}, progress={}) {
     return {kind:'fight_bound_hostile',targetId:progress.entityId,mob:progress.mob,
       why:'Continue target-bound guarded melee only while same hostile is observed'};
   }
+  if(goal==='transfer')return transferPlan(world,{...progress,goal});
   if(goal==='smelt')return smeltPlan(world,{...progress,goal},
     (needed,extra)=>decide(needed,world,failures,{...progress,...extra,goal:needed}));
   if(goal==='craft'||goal==='equip')return generalPlan(world,{...progress,goal},
@@ -478,6 +480,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       throw Error('Unsupported general crafting recipe or target quantity');
     if(goal==='smelt' && !validSmeltSpec({goal,item:spec?.item,targetCount:spec?.targetCount}))
       throw Error('Unsupported furnace output or smelting quantity');
+    if(goal==='transfer' && !validTransferSpec({goal,
+         position:spec?.position,item:spec?.item,
+         targetCount:spec?.targetCount,operation:spec?.operation}))
+      throw Error('Container transfer requires exact position, item, 1-64 count and deposit/withdraw');
     if(goal==='equip' && !validEquipSpec({goal,item:spec?.item,destination:spec?.destination}))
       throw Error('Unsupported equipment item or slot');
     if(goal==='sequence' && !validSequence(spec?.steps))
@@ -495,6 +501,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       ...(goal==='defeat_hostile'?{mob:spec.mob,entityId:spec.entityId}:{}),
       ...(goal==='shelter'?{width:spec.width??3,depth:spec.depth??3}:{}),
       ...(goal==='craft'||goal==='smelt'?{item:spec.item,targetCount:spec.targetCount}:{}),
+      ...(goal==='transfer'?{position:{...spec.position},item:spec.item,
+        targetCount:spec.targetCount,operation:spec.operation}:{}),
       ...(goal==='equip'?{item:spec.item,destination:spec.destination}:{}),
       ...(goal==='build'?{position:{...spec.position},block:spec.block,axis:spec.axis,length:spec.length}:{}),
       ...(goal==='build_volume'?{position:{...spec.position},block:spec.block,
@@ -711,6 +719,14 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         outcome.proof==='safe_scout_move') &&
       (decision.kind!=='recover_health' ||
         outcome.proof==='health_regenerated') &&
+      (decision.kind!=='approach_container' ||
+        outcome.proof==='container_approach') &&
+      (decision.kind!=='transfer_inventory' ||
+        (outcome.proof==='container_transfer' &&
+          outcome.item===state.item &&
+          outcome.count===state.targetCount &&
+          outcome.operation===state.operation &&
+          ['x','y','z'].every(k=>outcome.position?.[k]===state.position?.[k]))) &&
       (decision.kind!=='survey_resource' ||
         (Object.hasOwn(ORE_RESOURCE_RULES,decision.resource)&&
           outcome.proof==='safe_scout_move')) &&
@@ -736,6 +752,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       state.failures[decision.kind]=0;
       state.successes++;
       // A verified receipt from the wrong action cannot grant a victory milestone.
+      if(decision.kind==='transfer_inventory'&&outcome.proof==='container_transfer')
+        state.milestones.transferDone=true;
       if(decision.kind==='smelt_resource'&&outcome.proof==='smelt_output'){
         const pending=state.goal==='smelt'?state.item:
           state.goal==='sequence'&&state.sequence?.[state.sequenceIndex]?.goal==='smelt'?
@@ -839,7 +857,16 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           state.milestones.dragonStanceTrips=Math.min(6,
             (state.milestones.dragonStanceTrips||0)+1);
       }}
-    else state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;
+    else{
+      state.failures[decision.kind]=(state.failures[decision.kind]||0)+1;
+      if(decision.kind==='transfer_inventory'){
+        // A dispatched deposit/withdraw may have modified the remote chest
+        // despite a missing dual-inventory ACK. NEVER retry this ambiguous
+        // financial-style mutation automatically or after a restart.
+        state.status='blocked';
+        state.why='Container mutation unsettled; physically reconcile both inventories before new owner instruction';
+      }
+    }
     state.lastResult={kind:decision.kind,verified:ok,detail:String(outcome?.detail||'unverified').slice(0,140)};
     if(!ok && !['mine_iron','mine_diamond','mine_obsidian','mine_ancient_debris','hunt_blazes','hunt_endermen','track_stronghold','search_dragon','collect_flint','collect_gold','loot_bastion_template','prepare_archery','obtain_food','mine_netherrack','survey_ore','destroy_end_crystal','fight_dragon','advance_dragon'].includes(decision.kind) && (state.failures[decision.kind]||0)>=3){
       state.status='blocked';state.why='Repeated unverified or failing action: '+decision.kind;

@@ -168,7 +168,8 @@ export async function runGuardianApprovedPlayerEngine(
     if(cmd==="auto_stop"||cmd==="stop"||cmd==="stay") {
       // Emergency stop addresses the verified owner/companion, NOT the original
       // JS process's task map. It remains effective after a Node restart.
-      const stopped=await send("stop",randomUUID(),cfg,auth,{},2500);
+      const scope=desktop.operation==="minecraft_stop"?"task":"companion";
+      const stopped=await send("stop",randomUUID(),cfg,auth,{scope},2500);
       if(stopped.status==="cancelled")active.delete(coreTaskId);
       return {ok:stopped.status==="cancelled",evidence:{backend:"playerengine",
         status:stopped.status,cancellationObserved:stopped.status==="cancelled"}};

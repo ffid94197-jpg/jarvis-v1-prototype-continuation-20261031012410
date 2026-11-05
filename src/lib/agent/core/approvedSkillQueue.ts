@@ -30,7 +30,7 @@ const GUID=/^sk_[0-9a-f]{32}$/;
 const unsafeKeys=new Set(["__proto__","constructor","prototype"]);
 const known=new Set<string>(GUARDIAN_KNOWN_TOOLS as readonly string[]);
 const excluded=new Set([
-  "evolution_skill_stage","evolution_skill_list","evolution_skill_expand",
+  "evolution_skill_stage","evolution_skill_list","evolution_skill_expand","evolution_skill_run",
   "evolution_repair_stage","evolution_repair_list","evolution_owner_control",
   "adoption_stage_github","adoption_mcp_call","adoption_skill"
 ]);

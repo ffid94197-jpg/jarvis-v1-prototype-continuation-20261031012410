@@ -236,7 +236,8 @@ function decide(goal, world, failures={}, progress={}) {
   if(goal==='farm_crop')return cropPlan(world,{...progress,goal});
   if(goal==='farm_wheat')return wheatPlan(world,{
     goal,position:progress.position,width:progress.width,
-    depth:progress.depth,targetCount:progress.targetCount});
+    depth:progress.depth,targetCount:progress.targetCount},
+    progress.milestones?.wheatHarvested||0);
   if(goal==='build'){
     const spec={goal:'build',position:progress.position,block:progress.block,
       axis:progress.axis,length:progress.length};
@@ -606,6 +607,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         // Each ordered furnace stage must earn its own actual verified
         // outputs; earlier stage receipts never satisfy a later request.
         state.milestones.smeltedOutput=0;
+        state.milestones.wheatHarvested=0;
         state.failures={};
         // An arrival proof for a prior target must never prove the next one.
         state.milestones.travelArrivalVerified=false;
@@ -727,6 +729,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         outcome.proof==='safe_scout_move') &&
       (decision.kind!=='recover_health' ||
         outcome.proof==='health_regenerated') &&
+      (decision.kind!=='harvest_wheat' ||
+        (outcome.proof==='wheat_harvest'&&
+          Number.isInteger(outcome.count)&&outcome.count>=1&&outcome.count<=64)) &&
       (decision.kind!=='harvest_crop' ||
         (outcome.proof==='crop_harvest'&&outcome.crop===state.crop &&
           Number.isInteger(outcome.count)&&outcome.count>=1&&outcome.count<=64)) &&
@@ -765,6 +770,13 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       state.failures[decision.kind]=0;
       state.successes++;
       // A verified receipt from the wrong action cannot grant a victory milestone.
+      if(decision.kind==='harvest_wheat'&&outcome.proof==='wheat_harvest'){
+        const current=state.goal==='farm_wheat'||
+          (state.goal==='sequence'&&
+           state.sequence?.[state.sequenceIndex]?.goal==='farm_wheat');
+        if(current)state.milestones.wheatHarvested=Math.min(16,
+          (state.milestones.wheatHarvested||0)+outcome.count);
+      }
       if(decision.kind==='harvest_crop'&&outcome.proof==='crop_harvest' &&
          outcome.crop===state.crop)
         state.milestones.harvestedCropCount=Math.min(16,

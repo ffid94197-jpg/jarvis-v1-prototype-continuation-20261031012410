@@ -14,7 +14,9 @@ Do not enable this instead of the existing Mineflayer/MCP bot until the acceptan
 
 The Java overlay selects a loaded, alive, owner-bound \`CompanionEntity\`, and delegates gather/mine/craft to \`TaskCatalogue.getItemTask\` and travel to \`GetToBlockTask\`. Inspect/status return live main-inventory, armor, position and health observations. A dispatched task never becomes a Core-verified success merely because \`runUserTask\` returned or its callback fired.
 
-**Not implemented:** direct JARVIS Core/executor caller, independent Guardian proof signing, hardening of the IPC message's canonical JSON/HMAC cross-language representation, durable replay history across server restart, combat/build/equip/Netherite/Dragon direct task bindings, game-version portability, live Minecraft acceptance, and all-prototype final validation. Unsupported operations return a failed receipt, never a simulated success.
+**Implemented as opt-in source:** `src/lib/agent/windows/playerEngineBridge.ts` is now called from the existing Core/Guardian executor when `JARVIS_MC_BACKEND=playerengine` is explicitly set. The Core's server-derived owner principal is passed into the adapter. It supports readback, joined-companion check, bounded oak-log acquisition, craft-item acquisition (without claiming method-of-crafting proof), travel, and cancellation of its tracked native task. Unsupported operations fail closed; **there is no mixed Mineflayer fallback in this opt-in mode**.
+
+**Still not implemented:** independently verifiable Guardian audit proof IDs, durable task replay status across Node/Fabric restart, complete combat/build/equip/Netherite/Dragon task bindings, all-version portability, live game acceptance, full general-purpose natural-language coverage and all-prototype final validation. Build and live integration of these new code paths have not been independently verified.
 
 ## Enable only for isolated LAN development
 
@@ -31,9 +33,10 @@ The Java overlay selects a loaded, alive, owner-bound \`CompanionEntity\`, and d
 
    \`JARVIS_MC_BRIDGE_PORT=48251\` — bound to **127.0.0.1** only. Java and Node run on the same machine.
 
-5. Spawn a companion owned by the **actual** online owner player and obtain the real Minecraft UUIDs from an authenticated game session; never infer a user UUID from a username.
-6. The JARVIS Core must first authorize and **durably audit** the real owner task through Guardian. The client call must receive that authorization, same task and world binding, a fresh idempotency key, an explicit operation budget, and exact live companion identity. No model text may directly produce an approved Guardian object.
-7. Observe and reconcile the real world state before another effect. Never blindly retry after a timeout or unknown response. Explicit cancel/stop requires a separately Guardian-approved signed request; closing the socket is NOT task cancellation.
+5. Set `JARVIS_MC_BACKEND=playerengine` in the JARVIS Core process to opt in. Set `JARVIS_MC_BRIDGE_OWNER_PRINCIPAL` to the exact authenticated JARVIS Core principal, and `JARVIS_MC_BRIDGE_OWNER_UUID`/`JARVIS_MC_BRIDGE_COMPANION_UUID` to actual Minecraft UUIDs. Keep the existing Windows companion safety preconditions enabled.
+6. Spawn a companion owned by the **actual** online owner player and obtain the real Minecraft UUIDs from an authenticated game session; never infer a user UUID from a username.
+7. The JARVIS Core must first authorize and **durably audit** the real owner task through Guardian. The client call must receive that authorization, same task and world binding, a fresh idempotency key, an explicit operation budget, and exact live companion identity. No model text may directly produce an approved Guardian object.
+8. Observe and reconcile the real world state before another effect. Never blindly retry after a timeout or unknown response. Explicit cancel/stop requires a separately Guardian-approved signed request; closing the socket is NOT task cancellation.
 
 ## Request contract
 

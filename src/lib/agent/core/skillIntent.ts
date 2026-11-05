@@ -29,3 +29,13 @@ export function directApprovedSkillIntent(objective:string):{
         inputs:inputs as Record<string,string|number|boolean>}};
   }catch{return null;}
 }
+
+/** Preview/review questions may never be silently promoted to execution by
+ * an over-eager planner. Explicit imperative "run it" requests remain allowed.
+ */
+export function isPreviewOnlySkillRequest(objective:string):boolean{
+  if(typeof objective!=="string")return false;
+  const s=objective.trim().replace(/^(?:(?:hey\\s+)?jarvis[,!: ]+|please\\s+)+/i,"");
+  return /\\b(?:skill|recipe|workflow|automation)\\b/i.test(s) &&
+    /^(?:show|preview|list|explain|describe|review|inspect|summarize|tell\\s+me\\s+about|what\\s+(?:does|would|will)|how\\s+(?:does|would|will))\\b/i.test(s);
+}

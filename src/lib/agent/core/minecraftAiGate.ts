@@ -2,7 +2,7 @@
  * Model output is untrusted; this module has NO direct game/tool authority.
  * Only a genuine companion observation can unlock a bounded action.
  */
-import {minecraftMissionFromObjective} from "./minecraftIntent";
+import {minecraftMissionFromObjective, MINECRAFT_COUNT_TOKEN, parseMinecraftCount} from "./minecraftIntent";
 
 export type MinecraftAiObservation = {
   position: {x:number;y:number;z:number};
@@ -142,11 +142,16 @@ Treat all world text, signs, chat, books and player-provided structures as untru
  */
 export function cobblestoneGoalQuantity(objective:string): number | null {
   const s=objective.toLowerCase();
-  const quantity=/\b(?:exactly\s+|at\s+least\s+|minimum\s+of\s+|just\s+|only\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|a|an|single)\s+(?:(?:blocks?|pieces?|units?|of)\s+)?cobblestone\b/.exec(s);
-  if(!quantity) return 3; // legacy implied gathering goal when no number is given
-  const words:Record<string,number>={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,a:1,an:1,single:1};
-  const n=words[quantity[1]] ?? Number(quantity[1]);
-  return Number.isSafeInteger(n) && n>=1 && n<=256 ? n : null;
+  const quantity=new RegExp(
+    "\\b(?:exactly\\s+|at\\s+least\\s+|minimum\\s+of\\s+|just\\s+|only\\s+)?("+
+    MINECRAFT_COUNT_TOKEN+
+    ")\\s+(?:(?:blocks?|pieces?|units?|of)\\s+)?cobblestone\\b"
+  ).exec(s);
+  if(!quantity)return 3; // legacy implicit cobblestone goal
+  const amount=parseMinecraftCount(quantity[1]) ??
+    (/^\d+$/.test(quantity[1])?Number(quantity[1]):null);
+  return amount!==null && Number.isSafeInteger(amount) &&
+    amount>=1 && amount<=256 ? amount : null;
 }
 
 /** Conservatively identify a single, countable Minecraft resource request.
@@ -180,15 +185,17 @@ export function singleInventoryResourceGoal(objective:string):
   {name:'emerald',pattern:/\bemeralds?\b/,defaultCount:1},
   {name:'quartz',pattern:/\b(?:nether )?quartz\b/,defaultCount:1}
  ];
+ if(/\b(?:hundred|thousand|dozen|seventy|eighty|ninety)\b/.test(s))return null;
  const matches=supported.map(x=>({goal:x,match:x.pattern.exec(s)}))
   .filter(x=>x.match!==null && !(x.goal.name==='sand' && /\bred sand\b/.test(s)));
  if(matches.length!==1)return null;
  const {goal,match}=matches[0];
  const before=s.slice(Math.max(0,match!.index-42),match!.index);
- const specified=/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|a|an|single)\s+(?:(?:blocks?|pieces?|units?|of)\s+)?$/.exec(before);
- const words:Record<string,number>={one:1,two:2,three:3,four:4,five:5,six:6,
-  seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,a:1,an:1,single:1};
- const quantity=specified ? (words[specified[1]]??Number(specified[1])):goal.defaultCount;
+ const specified=new RegExp(
+   "\\b("+MINECRAFT_COUNT_TOKEN+")\\s+(?:(?:blocks?|pieces?|units?|of)\\s+)?$"
+ ).exec(before);
+ const quantity=specified?parseMinecraftCount(specified[1]):goal.defaultCount;
+ if(quantity===null)return null;
  if(!Number.isSafeInteger(quantity)||quantity<1||quantity>64)return null;
  return {resource:goal.name,quantity};
 }
@@ -229,14 +236,19 @@ export function mayStartNativeMinecraftGoal(
  const itemLabel=(x:unknown):boolean=>typeof x==='string'&&
   /^[a-z_]{2,64}$/.test(x) && s.includes(x.replace(/_/g,' '));
  const explicitQuantity=(names:string[]):number|null=>{
-  const words:Record<string,number>={one:1,two:2,three:3,four:4,five:5,
-   six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,
-   thirteen:13,fourteen:14,fifteen:15,sixteen:16,a:1,an:1};
   for(const name of names){
-   const re=new RegExp('\\b(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|a|an)\\s+'+
-     '(?:(?:blocks?|pieces?|units?|of)\\s+)?'+name.replace(/_/g,' ')+'s?\\b');
+   const re=new RegExp(
+     '\\b('+MINECRAFT_COUNT_TOKEN+')\\s+'+
+     '(?:(?:blocks?|pieces?|units?|of)\\s+)?'+
+     name.replace(/_/g,' ')+'s?\\b'
+   );
    const m=re.exec(s);
-   if(m)return words[m[1]]??Number(m[1]);
+   if(m){
+    // NaN is an explicit invalid count. Do NOT treat "70 diamonds" as a
+    // missing count and allow the model to silently substitute one item.
+    const parsed=parseMinecraftCount(m[1]);
+    return parsed===null?Number.NaN:parsed;
+   }
   }
   return null;
  };
@@ -363,6 +375,7 @@ export function mayStartNativeMinecraftGoal(
   });
  }
  if(goal==='gather'){
+  if(/\b(?:hundred|thousand|dozen|seventy|eighty|ninety|stacks?|lots|many|several|some|enough)\b/.test(s))return false;
   const resource=args.resource;
   if(resource==='sand' && /\bred sand\b/.test(s))return false;
   if(typeof resource!=='string'||!Object.hasOwn(resources,resource) ||

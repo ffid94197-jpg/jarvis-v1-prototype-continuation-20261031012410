@@ -75,6 +75,8 @@ public final class JarvisBridgeServer {
         final UUID coreTaskId;
         final AltoClefController ctrl;
         final long deadline;
+        final long since = System.currentTimeMillis();
+        JarvisEndgameTask endgame;
         final CompanionEntity entity;
         String item;
         int initialCount;
@@ -315,7 +317,7 @@ public final class JarvisBridgeServer {
                 previous.note = "cancel-sent-observe-before-retry";
                 status = "cancelled"; note = previous.note;
             }
-            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat" -> {
+            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "endgame" -> {
                 if (safetyStopped.contains(companionId)) throw new IllegalArgumentException("owner-safety-stop-latched");
                 if (tasks.containsKey(taskId)) throw new IllegalArgumentException("duplicate-task");
                 if (tasks.size() >= 2048) throw new IllegalArgumentException("task-capacity");
@@ -323,9 +325,21 @@ public final class JarvisBridgeServer {
                     if (existing.companion.equals(companionId) && "running".equals(existing.state))
                         throw new IllegalArgumentException("companion-busy");
                 }
-                Run run = new Run(companionId, authorizedCoreTask, ctrl, companion, budget);
+                long runtimeBudget = budget;
+                if ("endgame".equals(op)) {
+                    int duration = args.get("durationSeconds").getAsInt();
+                    if (duration < 10 || duration > 43200)
+                        throw new IllegalArgumentException("mission-duration-out-of-range");
+                    runtimeBudget = duration * 1000L;
+                }
+                Run run = new Run(companionId, authorizedCoreTask, ctrl, companion, runtimeBudget);
                 Task task;
-                if ("travel".equals(op)) {
+                if ("endgame".equals(op)) {
+                    String goal=field(args,"goal");
+                    JarvisEndgameTask mission=new JarvisEndgameTask(companion,goal);
+                    run.endgame=mission;
+                    task=mission;
+                } else if ("travel".equals(op)) {
                     BlockPos pos = position(args);
                     if (companion.getBlockPos().getSquaredDistance(pos) > 160.0 * 160.0)
                         throw new IllegalArgumentException("travel-range");
@@ -419,7 +433,8 @@ public final class JarvisBridgeServer {
                             run.blockId.equals(Registries.BLOCK.getId(run.entity.getWorld()
                                .getBlockState(run.blockPos).getBlock()).getPath()));
                     boolean killed = run.combatTarget != null && !run.combatTarget.isAlive();
-                    boolean proved = added||arrived||equipped||changedBlock||killed;
+                    boolean proved = added||arrived||equipped||changedBlock||killed ||
+                            (run.endgame != null && run.endgame.completed());
                     run.state=proved?"observed":"failed";
                     run.settledAt=System.currentTimeMillis();
                     run.note=proved?"engine-completed-with-server-postcondition":"engine-done-no-postcondition";
@@ -431,6 +446,25 @@ public final class JarvisBridgeServer {
         }
         JsonObject snapshot = snapshot(companion);
         snapshot.addProperty("safetyStopped",safetyStopped.contains(companionId));
+        for (Run candidate : tasks.values()) {
+            if (!candidate.companion.equals(companionId) ||
+                    !candidate.coreTaskId.equals(authorizedCoreTask) ||
+                    candidate.endgame == null) continue;
+            JarvisEndgameTask mission=candidate.endgame;
+            snapshot.addProperty("nativeGoal",mission.goal());
+            snapshot.addProperty("dragonDeadObserved",mission.dragonKilled());
+            snapshot.addProperty("exitPortalPresent",mission.exitPortalObserved());
+            snapshot.addProperty("heldNetheriteSword",
+                    "netherite_sword".equals(snapshot.get("mainHand").getAsString()));
+            JsonObject summary=new JsonObject();
+            summary.addProperty("goal",mission.goal());
+            summary.addProperty("status",candidate.state.equals("observed") &&
+                    mission.completed()?"complete":candidate.state);
+            summary.addProperty("since",candidate.since);
+            summary.add("milestones",mission.milestones());
+            snapshot.add("missionStatus",summary);
+            break;
+        }
         Run receiptTask = tasks.get(taskId);
         if (receiptTask != null && receiptTask.companion.equals(companionId)) {
             if (receiptTask.blockPos != null) {

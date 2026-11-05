@@ -59,7 +59,8 @@ function observation(p:Packet) {
   return {
     position:state.position,inventory:{raw:inv,logs:Object.keys(inv).filter(k=>/_log$/.test(k)).reduce((n,k)=>n+inv[k],0),
       woodenPickaxe:inv.wooden_pickaxe||0},health:state.health,hunger:state.hunger,
-    joined:true,busy:p.status==="running"||p.status==="accepted",
+    joined:true,busy:p.status==="running"||p.status==="accepted"||
+      (typeof p.observations?.activeTaskId==="string" && UUID.test(p.observations.activeTaskId)),
     dimension:p.worldId,nativeGoal:null,wornNetherite:netherite.every(k=>state.armor.has(k)),
     dragonDeadObserved:false,exitPortalPresent:false,nearbyBlocks:[],villagers:[],threats:[],
     lastAction:"PlayerEngine game-server observation; no inferred scenery or victory"
@@ -127,6 +128,8 @@ export async function runGuardianApprovedPlayerEngine(
       op="travel";extra={...desktop.position};
     } else throw Error("PlayerEngine operation not supported; no Mineflayer fallback mixed into this backend");
     const baseline=await send("inspect",randomUUID(),cfg,{},2500);
+    if (typeof baseline.observations?.activeTaskId==="string")
+      throw Error("Another native task is running on this companion; reconcile or emergency-stop it before another effect");
     const before=item?(extract(baseline).items[item]||0):undefined;
     if(isCancelled())throw Error("Cancelled before native task dispatch");
     const runId=randomUUID();

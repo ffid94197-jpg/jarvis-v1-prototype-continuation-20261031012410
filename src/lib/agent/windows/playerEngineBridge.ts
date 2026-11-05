@@ -73,7 +73,7 @@ async function restoreNativeMissionFromCore(
          proof.worldId!==cfg.worldId || proof.ownerUuid!==cfg.ownerUuid ||
          proof.companionUuid!==cfg.companionUuid ||
          typeof proof.nativeOperation!=="string" ||
-         !["endgame","farm","smelt","sequence","transfer","gather"].includes(proof.nativeOperation) ||
+         !["endgame","farm","smelt","sequence","transfer","gather","shelter","build_volume"].includes(proof.nativeOperation) ||
          typeof proof.nativeSince!=="number" ||
          !Number.isSafeInteger(proof.nativeSince) ||
          proof.nativeSince>Date.now()+30000 ||

@@ -27,6 +27,50 @@ foreach ($name in @('JarvisBridgeServer.java', 'JarvisEndgameTask.java', 'Jarvis
 }
 $engine = Join-Path $upstream 'engine'
 $consumer = Join-Path $upstream 'aicompanion'
+
+# The pinned upstream Fabric consumer references a separate version-neutral
+# memory jar. It is NOT committed into the AI Companion submodule.
+# Pin source so a clean Windows build can reproduce that required dependency.
+$memoryCommit = 'f0ec8d17e1f1c8527f6a15c34d65b6a670dbf044'
+$memoryRoot = Join-Path (Split-Path $bridge -Parent) 'ai-companion-memory'
+$memoryOutput = Join-Path $consumer 'libs\aicompanion-memory-0.4.0.jar'
+$memoryMarker = $memoryOutput + '.jarvis-source'
+if (Test-Path $memoryOutput) {
+  if (-not (Test-Path $memoryMarker)) {
+    throw 'Existing memory dependency has unknown provenance. Preserve it and reconcile source before building.'
+  }
+  $markerText = Get-Content -LiteralPath $memoryMarker -Raw
+  $currentHash = (Get-FileHash -LiteralPath $memoryOutput -Algorithm SHA256).Hash
+  if ($markerText.Trim() -ne ($memoryCommit + ':' + $currentHash)) {
+    throw 'Memory dependency hash or source pin mismatch. No opaque jar will be silently reused.'
+  }
+} else {
+  if (-not (Test-Path $memoryRoot)) {
+    & git clone --no-checkout 'https://github.com/adevivo/ai-companion-memory.git' $memoryRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to retrieve pinned public AI Companion memory source.' }
+    & git -C $memoryRoot checkout --detach $memoryCommit
+    if ($LASTEXITCODE -ne 0) { throw 'Pinned memory source checkout failed.' }
+  }
+  $actualMemoryCommit = (& git -C $memoryRoot rev-parse HEAD).Trim()
+  if ($LASTEXITCODE -ne 0 -or $actualMemoryCommit -ne $memoryCommit) {
+    throw 'Memory source checkout differs from the pinned dependency. Existing files left untouched.'
+  }
+  if ((& git -C $memoryRoot status --porcelain | Out-String).Trim()) {
+    throw 'Memory source checkout contains edits. Refusing to overwrite or rebuild it.'
+  }
+  $memoryEngine = Join-Path $memoryRoot 'engine'
+  Push-Location $memoryEngine
+  try {
+    & (Join-Path $memoryEngine 'gradlew.bat') jar
+    if ($LASTEXITCODE -ne 0) { throw 'Pinned memory jar build failed.' }
+  } finally { Pop-Location }
+  $memoryBuilt = Join-Path $memoryEngine 'build\libs\aicompanion-memory-0.4.0.jar'
+  if (-not (Test-Path $memoryBuilt)) { throw 'Expected pinned memory artifact missing.' }
+  New-Item -ItemType Directory -Path (Split-Path $memoryOutput) -Force | Out-Null
+  Copy-Item -LiteralPath $memoryBuilt -Destination $memoryOutput
+  $hash = (Get-FileHash -LiteralPath $memoryOutput -Algorithm SHA256).Hash
+  Set-Content -LiteralPath $memoryMarker -Value ($memoryCommit + ':' + $hash) -Encoding Ascii
+}
 $engineGradle = Join-Path $engine 'gradlew.bat'
 $modGradle = Join-Path $consumer 'gradlew.bat'
 if (-not (Test-Path $engineGradle) -or -not (Test-Path $modGradle)) { throw 'Upstream Gradle wrappers missing.' }

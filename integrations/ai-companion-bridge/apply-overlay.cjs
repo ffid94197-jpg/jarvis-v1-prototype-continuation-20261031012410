@@ -32,7 +32,7 @@ const clean=run("git",["status","--porcelain","--untracked-files=all"]);
 if(clean && !(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalService.includes(servicePatch)))fatal("submodule contains existing edits; preserve them before overlay");
 const target=path.join(upstream,overlayRel);
 const content=fs.readFileSync(path.join(bridge,"overlay/com/neovetta/aicompanion/jarvis/JarvisBridgeServer.java"),"utf8");
-if(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalService.includes(servicePatch)) {
+if(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalEngine.includes(idlePatch)&&originalService.includes(servicePatch)) {
  if(!fs.existsSync(target)||fs.readFileSync(target,"utf8")!==content)fatal("existing overlay differs; refusing overwrite");
  console.log("JARVIS AI Companion overlay already applied");
  process.exit(0);

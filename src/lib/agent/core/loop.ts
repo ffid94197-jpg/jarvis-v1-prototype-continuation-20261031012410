@@ -700,8 +700,15 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         skillQueue.next++;
         queuedSkillStep=true;
       }
-      const approvedSkillIntent=stepsUsed===0 && !opts.replay
+      const approvedSkillIntent=stepsUsed===0 && !opts.replay && !deterministicSkillStarted
         ? deterministicSkillIntent:null;
+      if(approvedSkillIntent) {
+        deterministicSkillStarted=true;
+        // Fail closed if Guardian refuses the first action or the process
+        // never receives a skill expansion; this flag clears only when all
+        // bounded skill stages return acceptable receipts.
+        skillExecutionIncomplete=true;
+      }
       const minecraftIntent = !minecraftAiTask && process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" &&
         !opts.replay && stepsUsed <= 1 ? directMinecraftMission(objective,stepsUsed) : null;
       const localIntent = process.env.JARVIS_WINDOWS_AGENT_ENABLED === "1" &&
@@ -720,11 +727,11 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       if(firstMinecraftObserve)minecraftFirstObservePending=false;
       raw = nextApprovedSkillStep
         ? JSON.stringify({action:"tool",tool:nextApprovedSkillStep.tool,args:nextApprovedSkillStep.args})
+        : approvedSkillIntent ? JSON.stringify(approvedSkillIntent)
         : deterministicSkillIntent && deterministicSkillStarted && !skillQueue
         ? JSON.stringify({action:"final",answer:skillExecutionIncomplete
             ? "Owner-approved skill stopped before all stages were verified; no complete-success claim is permitted."
             : "Owner-approved skill stages have returned executor receipts; the Core will independently arbitrate completion."})
-        : approvedSkillIntent ? JSON.stringify(approvedSkillIntent)
         : firstMinecraftJoin ? JSON.stringify(firstMinecraftJoin) :
         firstMinecraftObserve ? JSON.stringify(firstMinecraftObserve) :
         minecraftIntent ? JSON.stringify(minecraftIntent) : localIntent ? JSON.stringify(localIntent) : capabilityIntent ?
@@ -776,6 +783,13 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     // ——— FINAL ———
     if (decision.action === "final") {
       const answer = (decision.answer ?? "").trim();
+      if(deterministicSkillIntent && skillExecutionIncomplete &&
+         stepsUsed===opts.stepsUsedOffset){
+        await settleAndReport(taskId,"failed",stepsUsed,
+          "Owner-approved skill did not start: Guardian or execution admission prevented the first step. No skill effect was verified.",
+          emit,{effectsHappened:false});
+        return;
+      }
       if (minecraftAiGate) {
         const proof = minecraftAiGate.proof(objective);
         const gameStatus: TaskState = effectJournalDegraded ? "effect_unknown" : proof.verified ? "completed" : "partial";
@@ -1388,8 +1402,9 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
           : "GUI side effect lacks independent live proof");
       }else if(skillQueue && skillQueue.next>=skillQueue.steps.length){
         settlementLines.push(
-          `All ${skillQueue.steps.length} approved stages dispatched with tool-level receipts; full objective remains subject to independent final arbitration.`);
+          `All ${skillQueue.steps.length} approved stages returned acceptable tool-level receipts; full objective remains subject to independent final arbitration.`);
         skillQueue=null;
+        if(deterministicSkillIntent)skillExecutionIncomplete=false;
       }
     }
 

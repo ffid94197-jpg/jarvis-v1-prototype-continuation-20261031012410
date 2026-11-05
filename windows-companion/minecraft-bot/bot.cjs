@@ -76,7 +76,7 @@ function nativeObservationItem(){
   const state=autopilot.status();
   return state.goal==='farm_crop'?
     (state.crop==='carrots'?'carrot':state.crop==='potatoes'?'potato':null):
-    state.item;
+    state.goal==='farm_wheat'?'wheat':state.item;
 }
 let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
 let advancedBusy=false;
@@ -450,7 +450,15 @@ async function autoExecute(plan,epoch){
           return {ok:false,verified:false,detail:'Mature crop removal not observed'};
         const result=await collectVerifiedDrop(target,beforeCrop,
           ()=>rawCount(bot,itemType),epoch,'Verified '+cropType+' harvest');
-        if(plan.kind==='harvest_wheat')return result;
+        if(plan.kind==='harvest_wheat'){
+          const gained=rawCount(bot,itemType)-beforeCrop;
+          const ok=result?.ok===true&&result?.verified===true&&
+            Number.isSafeInteger(gained)&&gained>=1&&gained<=64;
+          return {ok,verified:ok,
+            ...(ok?{proof:'wheat_harvest',count:gained}:{}),
+            detail:ok?String(result.detail||'Physical wheat pickup'):
+              'Wheat removal did not yield new verified crop inventory'};
+        }
         const actual=rawCount(bot,itemType)-beforeCrop;
         const ok=result?.ok===true&&result?.verified===true &&
           Number.isSafeInteger(actual)&&actual>=1&&actual<=64;

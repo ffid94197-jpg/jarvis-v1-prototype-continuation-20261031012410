@@ -272,8 +272,51 @@ export async function executeTool(
     integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;arguments?:Record<string,unknown>};
     memory?: {ownerId:string;query:string;limit:number};
     world?: {ownerId:string;query:string;limit:number};
+    evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs";id?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
   };
   switch (tool) {
+    case "evolution_skill_stage":
+    case "evolution_skill_list":
+    case "evolution_skill_expand":
+    case "evolution_repair_stage":
+    case "evolution_repair_list": {
+      const request=prepared.evolution;
+      if(!request || !ownerId || request.ownerId!==ownerId || isCancelled())
+        return {ok:false,tool,evidence:"",error:"Guardian evolution owner/session unavailable"};
+      try{
+        if(request.action==="stage_skill"){
+          const {stageSkill}=await import("../evolution/skillForge.mjs");
+          const result=await stageSkill(ownerId,request.manifest);
+          return {ok:true,tool,evidence:"Skill STAGED for owner review; not approved or executed",
+            detail:{...result,executed:false,authorized:false,ownerApprovalRequired:true}};
+        }
+        if(request.action==="list_skills"){
+          const {listSkills}=await import("../evolution/skillForge.mjs");
+          const records=await listSkills(ownerId,{includeDrafts:false});
+          return {ok:true,tool,evidence:`Listed ${records.length} approved reusable skill plans`,
+            detail:{skills:records,executed:false}};
+        }
+        if(request.action==="expand_skill"){
+          const {expandSkill}=await import("../evolution/skillForge.mjs");
+          const plan=await expandSkill(ownerId,request.id,request.inputs||{});
+          return {ok:true,tool,evidence:"Expanded owner-approved skill into advisory plan only",
+            detail:{...plan,untrustedInstructions:true}};
+        }
+        if(request.action==="stage_repair"){
+          const {stageRepair}=await import("../evolution/repairVault.mjs");
+          const candidate=await stageRepair(ownerId,request.candidate);
+          return {ok:true,tool,evidence:"Repair candidate STAGED, no file modified; owner approval required",
+            detail:{...candidate,applied:false,executed:false,ownerApprovalRequired:true}};
+        }
+        if(request.action==="list_repairs"){
+          const {listRepairs}=await import("../evolution/repairVault.mjs");
+          const pending=await listRepairs(ownerId);
+          return {ok:true,tool,evidence:`Listed ${pending.length} owner-scoped repair candidates`,
+            detail:{repairs:pending,sourceContentReturned:false}};
+        }
+        return {ok:false,tool,evidence:"",error:"Unknown guarded evolution operation"};
+      }catch(e){return {ok:false,tool,evidence:"",error:e instanceof Error?e.message:"Evolution registry unavailable"};}
+    }
     case "memory_recall": {
       if(!prepared.memory || isCancelled() ||
          process.env.JARVIS_MEMORY_RECALL_TO_MODEL_ENABLED!=="1")

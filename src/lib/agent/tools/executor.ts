@@ -275,6 +275,7 @@ export async function executeTool(
   switch (tool) {
     case "evolution_skill_stage":
     case "evolution_skill_list":
+    case "evolution_skill_run":
     case "evolution_skill_expand":
     case "evolution_repair_stage":
     case "evolution_repair_list": {
@@ -300,8 +301,12 @@ export async function executeTool(
         if(request.action==="expand_skill"){
           const {expandSkill}=await import("../evolution/skillForge.mjs");
           const plan=await expandSkill(ownerId,request.id,request.inputs||{});
-          return {ok:true,tool,evidence:"Expanded owner-approved skill into advisory plan only",
-            detail:{...plan,untrustedInstructions:true}};
+          const runRequested=tool==="evolution_skill_run";
+          return {ok:true,tool,
+            evidence:runRequested
+              ? "Approved skill expanded; Core will individually authorize and journal each bounded stage"
+              : "Expanded owner-approved skill into advisory plan only",
+            detail:{...plan,untrustedInstructions:true,queueRequested:runRequested}};
         }
         if(request.action==="stage_repair"){
           const {stageRepair}=await import("../evolution/repairVault.mjs");

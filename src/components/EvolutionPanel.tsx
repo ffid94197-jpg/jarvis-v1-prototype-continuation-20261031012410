@@ -24,7 +24,7 @@ async function callApi(body:Record<string,unknown>):Promise<Detail>{
   if(!response.ok)throw Error(data.error||"Owner operation denied");
   return data as Detail;
 }
-export default function EvolutionPanel(){
+export default function EvolutionPanel({onRunSkill,busyTask=false}:{onRunSkill?:(instruction:string)=>void;busyTask?:boolean}){
   const [data,setData]=useState<EvolutionState>({skills:[],repairs:[],recovery:[],ownerApprovalRequired:true});
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState(""),[notice,setNotice]=useState("");
@@ -107,6 +107,22 @@ export default function EvolutionPanel(){
             {skill.status==="staged"&&<button type="button" disabled={busy}
               style={button} onClick={()=>action("approve_skill",{id:skill.id})}>APPROVE</button>}
             {skill.status==="approved"&&<>
+              <button type="button" disabled={busy||busyTask||!onRunSkill} style={button}
+                title="Run using the existing JARVIS Core, Guardian and effect journal"
+                onClick={()=>{
+                  try{
+                    const inputs=JSON.parse(skillInputs);
+                    if(!inputs||typeof inputs!=="object"||Array.isArray(inputs)||
+                       Object.keys(inputs).length>8)
+                      throw Error("Inputs must be a bounded JSON object");
+                    for(const value of Object.values(inputs)){
+                      if(!["string","number","boolean"].includes(typeof value) ||
+                         String(value).length>240)
+                        throw Error("Inputs must be short string, number or Boolean values");
+                    }
+                    onRunSkill?.(`Run my approved JARVIS skill ${skill.id} with inputs ${JSON.stringify(inputs)}`);
+                  }catch(e){setError(e instanceof Error?e.message:"Invalid skill inputs");}
+                }}>RUN APPROVED SKILL IN JARVIS</button>
               <button type="button" disabled={busy} style={button}
                 onClick={()=>{
                   try {void action("expand_skill",{id:skill.id,inputs:JSON.parse(skillInputs)});}

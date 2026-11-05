@@ -94,7 +94,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "minecraft_companion_join",
   "minecraft_companion_stop",
   "adoption_stage_github", "adoption_list", "adoption_skill", "adoption_mcp_list", "adoption_mcp_call",
-  "evolution_skill_stage", "evolution_skill_list", "evolution_skill_expand",
+  "evolution_skill_stage", "evolution_skill_list", "evolution_skill_expand", "evolution_skill_run",
   "evolution_repair_stage", "evolution_repair_list", "evolution_owner_control",
 ] as const;
 
@@ -192,6 +192,7 @@ export async function authorizeToolCall(
         decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
           action:tool==="evolution_skill_list"?"list_skills":"list_repairs"}}};break;
       }
+      case "evolution_skill_run":
       case "evolution_skill_expand": {
         if(!ctx.ownerId || Object.keys(rawArgs).some(k=>!["id","inputs"].includes(k)) ||
            typeof rawArgs.id!=="string" || !/^sk_[0-9a-f]{32}$/.test(rawArgs.id)) {

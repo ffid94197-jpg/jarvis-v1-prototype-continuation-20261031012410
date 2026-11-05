@@ -61,6 +61,8 @@ import { needsPriorTaskContext, priorTaskContext, selectPriorTask } from "./prio
 import { parseInventorySource, validateInventoryDraft } from "./inventoryIntegrity";
 import { AutonomyGate, REPEATABLE_INPUT_TOOLS, DESKTOP_GUI_EFFECTS, hasDirectProof, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
+import {acceptedSkillQueue, type ActiveSkillQueue} from "./approvedSkillQueue";
+import {directApprovedSkillIntent,isPreviewOnlySkillRequest} from "./skillIntent";
 import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan, type GoalWatchdogLimits } from "./goalPlanner";
 import { AUTONOMY_PROFILES, deriveStepBudget, type AutonomyProfile } from "./autonomyPolicy";
 
@@ -361,6 +363,11 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
    */
   const settlementLines: string[] = [];
   const autonomy = new AutonomyGate(opts.pendingGuiVerification ?? 0);
+  // Approved Skill Forge stages run INSIDE THIS Core loop, not a new agent.
+  // This volatile queue is never replayed blindly after a crash or pause.
+  let skillQueue:ActiveSkillQueue|null=null;
+  let skillExecutionIncomplete=false;
+
 
   let installedCatalog="";
   try {
@@ -376,6 +383,19 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     { role: "assistant", content: `LAYA advisory (not permission): ${JSON.stringify(adviseTask(objective))}. Core and Guardian remain authoritative.` },
     { role: "user", content: plannerUserPrompt(objective, opts.replay) },
   ];
+
+  const haltSkill=(reason:string)=>{
+    if(!skillQueue)return;
+    skillExecutionIncomplete=true;
+    const pending=Math.max(0,skillQueue.steps.length-skillQueue.next);
+    settlementLines.push(`Skill '${skillQueue.name}' HALTED: ${reason.slice(0,150)}; ${pending} queued stage(s) not executed.`);
+    skillQueue=null;
+    // This advisory notice carries NO authorization. The next model decision
+    // still needs a fresh Guardian audit; it must not silently retry effects.
+    messages.push({role:"user",content:
+      "CORE SKILL EXECUTION HALTED: "+reason.slice(0,180)+
+      ". No further pre-approved steps will run automatically. Inspect actual state or report PARTIAL; never blind-retry an uncertain effect."});
+  };
 
   // Owner explicitly referred to a prior request: read ONLY prior objectives
   // belonging to the same authenticated principal. This is historical task
@@ -486,8 +506,14 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   if (minecraftAiTask) messages.splice(messages.findIndex(m => m.role === "user"), 0, {role:"assistant",content:MINECRAFT_AI_INSTRUCTIONS});
   const minecraftMission = !minecraftAiTask && process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" && !opts.replay
     ? minecraftMissionFromObjective(objective) : null;
+  // Explicit owner-approved Skill Forge runs are complete declarative plans.
+  // Their steps use the ORIGINAL Guardian/Core executor and do not require
+  // another AI model call or provider quota. Ambiguous natural-language
+  // requests continue to use LAYA and the normal planner.
+  const deterministicSkillIntent=!opts.replay?directApprovedSkillIntent(objective):null;
+  let deterministicSkillStarted=false;
   let model: ModelBridge | null = null;
-  if (!minecraftMission) try {
+  if (!minecraftMission && !deterministicSkillIntent) try {
     // Durable model pin: even after a task is paused or the owner changes
     // the selected provider, resume cannot silently disclose its context to
     // a different API. The -1 step is not a tool effect and is never replayed.
@@ -549,7 +575,8 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // asks a different model to invent a new plan after a crash.
   let goalPlan: GoalPlan | null = null;
   let goalWatchdog = new GoalProgressWatchdog(undefined, autonomyLimits);
-  if (process.env.JARVIS_GOAL_PLANNER_ENABLED === "1" && !minecraftMission && requiresGoalPlan(objective)) {
+  if (process.env.JARVIS_GOAL_PLANNER_ENABLED === "1" && !minecraftMission &&
+      !deterministicSkillIntent && requiresGoalPlan(objective)) {
     let planningStage = "PLAN_DB_LOOKUP_FAILED";
     try {
       const prior = await db.agentStep.findFirst({
@@ -642,9 +669,24 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       return;
     }
 
+    // Owner revocation or a replaced recipe must stop remaining stages.
+    // All reads are from the same owner registry; a crash never recreates a
+    // queued skill from stale or model-supplied metadata.
+    if(skillQueue){
+      try {
+        const {getSkill}=await import("../evolution/skillForge.mjs");
+        const live=await getSkill(opts.ownerId,skillQueue.skillId);
+        if(live.status!=="approved" || live.digest!==skillQueue.digest)
+          haltSkill("owner skill approval was withdrawn or its manifest changed");
+      }catch{
+        haltSkill("owner-approved skill registry cannot be revalidated");
+      }
+    }
+
     // ——— ask the model for the next single action ———
     emitStatus("executing");
     let raw: string;
+    let queuedSkillStep=false;
     try {
       // Exact single-step Windows launches are routed deterministically so
       // "open settings" cannot be mistaken for File Explorer by the LLM.
@@ -652,6 +694,21 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       // High-level Minecraft requests autonomously join and initiate the
       // persistent goal with two Guardian-authorized, journaled tool effects.
       // After that, the BOT owns observe/plan/act/verify, not the chat model.
+      const nextApprovedSkillStep=skillQueue && skillQueue.next<skillQueue.steps.length
+        ? skillQueue.steps[skillQueue.next] : null;
+      if(nextApprovedSkillStep && skillQueue) {
+        skillQueue.next++;
+        queuedSkillStep=true;
+      }
+      const approvedSkillIntent=stepsUsed===0 && !opts.replay && !deterministicSkillStarted
+        ? deterministicSkillIntent:null;
+      if(approvedSkillIntent) {
+        deterministicSkillStarted=true;
+        // Fail closed if Guardian refuses the first action or the process
+        // never receives a skill expansion; this flag clears only when all
+        // bounded skill stages return acceptable receipts.
+        skillExecutionIncomplete=true;
+      }
       const minecraftIntent = !minecraftAiTask && process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" &&
         !opts.replay && stepsUsed <= 1 ? directMinecraftMission(objective,stepsUsed) : null;
       const localIntent = process.env.JARVIS_WINDOWS_AGENT_ENABLED === "1" &&
@@ -668,7 +725,14 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       const firstMinecraftObserve=!firstMinecraftJoin&&minecraftFirstObservePending?
         firstMinecraftObservationDecision():null;
       if(firstMinecraftObserve)minecraftFirstObservePending=false;
-      raw = firstMinecraftJoin ? JSON.stringify(firstMinecraftJoin) :
+      raw = nextApprovedSkillStep
+        ? JSON.stringify({action:"tool",tool:nextApprovedSkillStep.tool,args:nextApprovedSkillStep.args})
+        : approvedSkillIntent ? JSON.stringify(approvedSkillIntent)
+        : deterministicSkillIntent && deterministicSkillStarted && !skillQueue
+        ? JSON.stringify({action:"final",answer:skillExecutionIncomplete
+            ? "Owner-approved skill stopped before all stages were verified; no complete-success claim is permitted."
+            : "Owner-approved skill stages have returned executor receipts; the Core will independently arbitrate completion."})
+        : firstMinecraftJoin ? JSON.stringify(firstMinecraftJoin) :
         firstMinecraftObserve ? JSON.stringify(firstMinecraftObserve) :
         minecraftIntent ? JSON.stringify(minecraftIntent) : localIntent ? JSON.stringify(localIntent) : capabilityIntent ?
         JSON.stringify(capabilityIntent) : await llmJson(model!, messages);
@@ -719,6 +783,13 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     // ——— FINAL ———
     if (decision.action === "final") {
       const answer = (decision.answer ?? "").trim();
+      if(deterministicSkillIntent && skillExecutionIncomplete &&
+         stepsUsed===opts.stepsUsedOffset){
+        await settleAndReport(taskId,"failed",stepsUsed,
+          "Owner-approved skill did not start: Guardian or execution admission prevented the first step. No skill effect was verified.",
+          emit,{effectsHappened:false});
+        return;
+      }
       if (minecraftAiGate) {
         const proof = minecraftAiGate.proof(objective);
         const gameStatus: TaskState = effectJournalDegraded ? "effect_unknown" : proof.verified ? "completed" : "partial";
@@ -870,7 +941,9 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       // effect table, and derives the terminal verdict from that — never
       // from model prose.
       const arbitration = await arbitrateCompletion({ taskId, objective, toolAssisted: true, inventorySource });
-      const groundedVerdict = requiresExternalActionEvidence(objective) && arbitration.verdict === "conversational"
+      const groundedVerdict = skillExecutionIncomplete
+        ? "partial"
+        : requiresExternalActionEvidence(objective) && arbitration.verdict === "conversational"
         ? "partial" : arbitration.verdict;
       const digestSections: string[] = [];
       if (reportIdentity.corrected) {
@@ -895,7 +968,9 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       const guiWarning = autonomy.completionWarning();
       if (guiWarning) digestSections.push(`── DESKTOP VERIFICATION GAP ──\n${guiWarning}`);
       if (groundedVerdict === "partial") {
-        digestSections.push("── TASK OUTCOME: PARTIAL — no independently verified completion of the full objective ──");
+        digestSections.push(skillExecutionIncomplete
+          ? "── SKILL EXECUTION INCOMPLETE — at least one approved stage failed, was denied, or remained unverified; no full-success claim authorized ──"
+          : "── TASK OUTCOME: PARTIAL — no independently verified completion of the full objective ──");
       }
       // The natural-language report is advisory. A model must not overrule a
       // Core PARTIAL/FAILED/EFFECT_UNKNOWN verdict with "success" prose.
@@ -954,6 +1029,26 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     const argsJson = JSON.stringify(args).slice(0, 2000);
     seq++;
 
+    // Prevent a model's mistaken tool selection from turning an informational
+    // skill preview into a real effectful workflow. The UI's explicit RUN
+    // command is unaffected.
+    if(tool==="evolution_skill_run" && isPreviewOnlySkillRequest(objective)){
+      await persistStep(taskId,seq,"guardian_deny",{
+        tool,argsJson,note:"Preview-only owner intent blocks skill execution"
+      });
+      messages.push({role:"assistant",content:raw});
+      messages.push({role:"user",content:
+        "CORE INTENT POLICY: The owner requested a PREVIEW, not execution. Use evolution_skill_expand for read-only preview; do not run a skill."});
+      denials++;
+      if(denials>=MAX_DENIALS){
+        await settleAndReport(taskId,"denied",stepsUsed,
+          "Skill execution rejected because the owner requested preview only.",
+          emit,{effectsHappened});
+        return;
+      }
+      continue;
+    }
+
     // Data-fidelity rejection BEFORE Guardian admission and filesystem write.
     // This is NOT an authorization grant, and does not weaken Guardian:
     // a correctly drafted effect still needs normal audit and admission.
@@ -962,6 +1057,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       : tool==="write_file"
         ? validateInventoryDraft(args.path, args.content, inventorySource) : null;
     if (inventoryMismatch) {
+      if(queuedSkillStep)haltSkill("source-fidelity preflight rejected the queued write");
       inventoryDraftCorrections++;
       stepsUsed++;
       await persistStep(taskId,seq,"error",{tool,note:inventoryMismatch.slice(0,500)});
@@ -986,6 +1082,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     if (minecraftAiGate) {
       const gate = minecraftAiGate.check(tool,args);
       if (!gate.ok) {
+        if(queuedSkillStep)haltSkill("Minecraft safety gate denied queued action");
         minecraftAiDenied++;
         stepsUsed++;
         await persistStep(taskId,seq,"guardian_deny",{tool,argsJson,note:`Minecraft AI boundary: ${gate.reason}`});
@@ -1004,6 +1101,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     const guardian = await authorizeToolCall({ taskId, ownerId: opts.ownerId }, tool, args);
 
     if (guardian.verdict === "deny") {
+      if(queuedSkillStep)haltSkill("Guardian denied queued action");
       denials++;
       emit({
         type: "step",
@@ -1046,6 +1144,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     if (isEffectfulToolInvocation(tool,args)) {
       const effectKey = canonicalKey(tool, args);
       if (!STEP_SCOPED_EFFECTS.has(tool) && !REPEATABLE_INPUT_TOOLS.has(tool) && executedEffects.has(effectKey)) {
+        if(queuedSkillStep)haltSkill("duplicate effect already recorded; fresh observation required");
         // Journal-derived duplicate (pre-admission fast path — same
         // guarantee, belt+suspenders with the durable table).
         stepsUsed++;
@@ -1187,6 +1286,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     // then the durable budget pause, keeping the hard cap meaningful no
     // matter which guard fired.
     if (skipExecution) {
+      if(queuedSkillStep)haltSkill("effect was skipped or required reconciliation");
       if (isCancelled()) {
         const text = "Task cancelled by the operator. All execution has stopped; partial progress is recorded in the task journal.";
         await persistStep(taskId, seq + 1, "pause", { note: "cancelled at budget boundary (guard path)" });
@@ -1279,6 +1379,52 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       if (!settled) {
         effectJournalDegraded = true;
         console.error(`[journal] effect settlement failed for task ${taskId} seq ${seq}`);
+      }
+    }
+
+    // A skill run is only an approved recipe EXPANSION. The Core now takes
+    // responsibility for the next individually audited stage. The recipe
+    // itself is NEVER an effect authorization or proof of completion.
+    if(tool==="evolution_skill_run" && deterministicSkillIntent)
+      deterministicSkillStarted=true;
+    if(tool==="evolution_skill_run" && !result.ok) {
+      skillExecutionIncomplete=true;
+    }
+    if(tool==="evolution_skill_run" && result.ok) {
+      const candidate=result.detail?.queueRequested===true
+        ? acceptedSkillQueue(args.id,result) : null;
+      if(!candidate){
+        await persistStep(taskId,seq+1,"error",{
+          note:"Native skill expansion failed Core provenance/bounds validation"
+        });
+        await settleAndReport(taskId,effectJournalDegraded?"effect_unknown":"failed",
+          stepsUsed,"Approved skill expansion could not be validated by JARVIS Core. No skill stages were executed.",
+          emit,{effectsHappened});
+        return;
+      }
+      if(candidate.steps.length>effectiveBudget-(stepsUsed-opts.stepsUsedOffset)){
+        await settleAndReport(taskId,"partial",stepsUsed,
+          `Skill '${candidate.name}' requires ${candidate.steps.length} individual tool stages, but the remaining Core step budget is smaller. No recipe stage was executed. Request a larger owner-authorized autonomy budget.`,
+          emit,{effectsHappened});
+        return;
+      }
+      skillQueue=candidate;
+      settlementLines.push(
+        `Skill '${candidate.name}' admitted as ${candidate.steps.length} bounded Core steps; each still requires Guardian and durable effect admission.`);
+    }
+    if(queuedSkillStep){
+      if(!result.ok || effectJournalDegraded ||
+         (DESKTOP_GUI_EFFECTS.has(tool) && !hasDirectProof(result))){
+        haltSkill(effectJournalDegraded
+          ? "durable effect journal degraded; outcome unknown"
+          : !result.ok
+          ? "tool failed or its actual effect is not verified"
+          : "GUI side effect lacks independent live proof");
+      }else if(skillQueue && skillQueue.next>=skillQueue.steps.length){
+        settlementLines.push(
+          `All ${skillQueue.steps.length} approved stages returned acceptable tool-level receipts; full objective remains subject to independent final arbitration.`);
+        skillQueue=null;
+        if(deterministicSkillIntent)skillExecutionIncomplete=false;
       }
     }
 

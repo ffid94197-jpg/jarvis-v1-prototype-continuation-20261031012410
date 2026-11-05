@@ -209,6 +209,7 @@ export async function expandSkill(owner,id,inputs={}){
     throw new EvolutionError("Invalid skill inputs");
   for(const [k,v] of Object.entries(inputs)){
     if(!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(k)||
+       ["__proto__","constructor","prototype"].includes(k)||
        !["string","number","boolean"].includes(typeof v)||
        String(v).length>240)
       throw new EvolutionError("Invalid skill input");
@@ -222,7 +223,7 @@ export async function expandSkill(owner,id,inputs={}){
   const plan=item.manifest.steps.map(s=>({tool:s.tool,args:interpolate(s.args,inputs),why:s.why}));
   if(Buffer.byteLength(JSON.stringify(plan))>MAX_MANIFEST_BYTES)
     throw new EvolutionError("Expanded skill exceeds limit");
-  return {name:item.manifest.name,skillId:id,steps:plan,stageCount:plan.length,
+  return {name:item.manifest.name,skillId:id,digest:item.digest,steps:plan,stageCount:plan.length,
     crucible,
     advisoryOnly:true,executed:false,authorizationGranted:false,
     requiresPerStepGuardianAudit:true,requiresCoreDurableEffectAdmission:true};

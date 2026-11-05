@@ -13,24 +13,30 @@ if(!fs.existsSync(path.join(upstream,"aicompanion","build.gradle"))) fatal("init
 if(run("git",["rev-parse","HEAD"])!==PIN)fatal("upstream commit does not match pinned audited revision");
 const mainRel="aicompanion/src/main/java/com/neovetta/aicompanion/AiCompanion.java";
 const engRel="engine/src/autoclef/java/adris/altoclef/AltoClefController.java";
+const serviceRel="engine/src/autoclef/java/adris/altoclef/player2api/Player2APIService.java";
 const overlayRel="aicompanion/src/main/java/com/neovetta/aicompanion/jarvis/JarvisBridgeServer.java";
-const originalMain=read(mainRel),originalEngine=read(engRel);
+const originalMain=read(mainRel),originalEngine=read(engRel),originalService=read(serviceRel);
 const mainCall="        ConversationManager.init();";
 const mainPatch="        if (!com.neovetta.aicompanion.jarvis.JarvisBridgeServer.enabled()) ConversationManager.init();\n        com.neovetta.aicompanion.jarvis.JarvisBridgeServer.install();";
 const engineCall="      ConversationManager.injectOnTick(server);";
+const serviceCall='   private Map<String, JsonElement> chatCompletion(JsonObject requestBody) throws Exception {';
+const servicePatch='   private Map<String, JsonElement> chatCompletion(JsonObject requestBody) throws Exception {\n      if ("1".equals(System.getenv("JARVIS_MC_BRIDGE_ENABLE"))) throw new SecurityException("JARVIS-only mode disables independent companion LLM requests");';
 const enginePatch='      if (!"1".equals(System.getenv("JARVIS_MC_BRIDGE_ENABLE"))) ConversationManager.injectOnTick(server);';
 if(!originalMain.includes(mainCall)&&!originalMain.includes(mainPatch))fatal("main source no longer matches pinned API");
 if(!originalEngine.includes(engineCall)&&!originalEngine.includes(enginePatch))fatal("engine source no longer matches pinned API");
+if(!originalService.includes(serviceCall)&&!originalService.includes(servicePatch))fatal("LLM service source no longer matches pinned API");
 const clean=run("git",["status","--porcelain","--untracked-files=all"]);
-if(clean && !(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)))fatal("submodule contains existing edits; preserve them before overlay");
+if(clean && !(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalService.includes(servicePatch)))fatal("submodule contains existing edits; preserve them before overlay");
 const target=path.join(upstream,overlayRel);
 const content=fs.readFileSync(path.join(bridge,"overlay/com/neovetta/aicompanion/jarvis/JarvisBridgeServer.java"),"utf8");
-if(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)) {
+if(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalService.includes(servicePatch)) {
  if(!fs.existsSync(target)||fs.readFileSync(target,"utf8")!==content)fatal("existing overlay differs; refusing overwrite");
  console.log("JARVIS AI Companion overlay already applied");
  process.exit(0);
 }
-const nextMain=editOnce(originalMain,mainCall,mainPatch),nextEngine=editOnce(originalEngine,engineCall,enginePatch);
+const nextMain=editOnce(originalMain,mainCall,mainPatch),
+      nextEngine=editOnce(originalEngine,engineCall,enginePatch),
+      nextService=editOnce(originalService,serviceCall,servicePatch);
 const engProps=read("engine/gradle.properties"),appProps=read("aicompanion/gradle.properties");
 if(!/minecraft_version\s*=\s*1\.20\.1/.test(engProps) ||
    !/minecraft_version\s*=\s*1\.20\.1/.test(appProps) ||
@@ -38,6 +44,7 @@ if(!/minecraft_version\s*=\s*1\.20\.1/.test(engProps) ||
 if(!fs.existsSync(path.dirname(target)))fs.mkdirSync(path.dirname(target),{recursive:true});
 // All preconditions checked before modifying upstream. Original tracked files remain recoverable by Git.
 fs.writeFileSync(path.join(upstream,engRel),nextEngine,"utf8");
+fs.writeFileSync(path.join(upstream,serviceRel),nextService,"utf8");
 fs.writeFileSync(path.join(upstream,mainRel),nextMain,"utf8");
 fs.writeFileSync(target,content,"utf8");
 console.log("Overlay applied to pinned 1.20.1 source; build with JDK 17.");

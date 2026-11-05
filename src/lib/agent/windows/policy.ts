@@ -459,7 +459,9 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:"Enable Minecraft LAN companion."};
     const command=String(args.command||"");
     const allowed=["follow","stop","jump","move","look","status","come","stay","guard","collect_wood","inventory","say","observe","auto_goal","auto_status","auto_stop",
-      "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block","interact_entity","use_item","natural_goal","auto_checkpoint","auto_resume"];
+      "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block",
+      "interact_entity","use_item","natural_goal","auto_checkpoint","auto_resume",
+      "attack_hostile","inspect_villager","trade_villager","transfer_container","enchant_item"];
     if (!allowed.includes(command)) return {ok:false,reason:"Unknown Minecraft companion command."};
     if (command==="auto_goal" && !validMinecraftGoal(args))
       return {ok:false,reason:"Minecraft goal failed bounded Guardian validation; no effect authorized."};
@@ -489,6 +491,37 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:'Block placement requires reference coordinates and an adjacent face.'};
     if (command==='interact_entity' && (!Number.isInteger(args.entityId)||(args.entityId as number)<0))
       return {ok:false,reason:'Entity ID must be a nonnegative integer.'};
+    if(command==="attack_hostile" &&
+       (!Number.isInteger(args.entityId)||Number(args.entityId)<0||Number(args.entityId)>200000||
+        !Number.isInteger(args.maxSwings)||Number(args.maxSwings)<1||Number(args.maxSwings)>4))
+      return {ok:false,reason:"Attack requires a grounded hostile ID and 1-4 bounded swings"};
+    if(command==="inspect_villager" &&
+       (!Number.isInteger(args.entityId)||Number(args.entityId)<0||Number(args.entityId)>200000))
+      return {ok:false,reason:"Villager inspect needs a bounded observed entity ID"};
+    if(command==="trade_villager" &&
+       (!Number.isInteger(args.entityId)||Number(args.entityId)<0||Number(args.entityId)>200000||
+        !Number.isInteger(args.tradeIndex)||Number(args.tradeIndex)<0||Number(args.tradeIndex)>31||
+        !Number.isInteger(args.times)||Number(args.times)<1||Number(args.times)>4))
+      return {ok:false,reason:"Trade requires observed villager ID, offer index 0-31 and 1-4 trades"};
+    if(command==="transfer_container" &&
+       (!pos(args.position)||!name(args.item)||!Number.isInteger(args.count)||
+        Number(args.count)<1||Number(args.count)>64||
+        !["deposit","withdraw"].includes(String(args.operation))))
+      return {ok:false,reason:"Container transfer requires grounded position, item, count and direction"};
+    if(command==="enchant_item" &&
+       (!pos(args.position)||!name(args.item)||!Number.isInteger(args.choice)||
+        Number(args.choice)<0||Number(args.choice)>2))
+      return {ok:false,reason:"Enchant requires observed table, item and option 0-2"};
+    const directFields:Record<string,string[]>={
+      attack_hostile:["entityId","maxSwings"],
+      inspect_villager:["entityId"],
+      trade_villager:["entityId","tradeIndex","times"],
+      transfer_container:["position","item","count","operation"],
+      enchant_item:["position","item","choice"]
+    };
+    if(Object.hasOwn(directFields,command) &&
+       Object.keys(args).some(k=>k!=="command"&&!directFields[command].includes(k)))
+      return {ok:false,reason:"Unexpected Minecraft primitive parameters"};
     if (command==='use_item' && !['hand','off-hand'].includes(String(args.hand||'hand')))
       return {ok:false,reason:'Unsupported held-item hand.'};
     const prepared:DesktopPrepared={operation:'minecraft_command',command};
@@ -509,6 +542,20 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     if(command==='craft_item')prepared.count=args.count as number;
     if(command==='place_block'){prepared.reference=args.reference as {x:number;y:number;z:number};prepared.face=args.face as {x:number;y:number;z:number};}
     if(command==='interact_entity')prepared.entityId=args.entityId as number;
+    if(["attack_hostile","inspect_villager","trade_villager"].includes(command))prepared.entityId=args.entityId as number;
+    if(command==='attack_hostile')prepared.maxSwings=args.maxSwings as number;
+    if(command==='trade_villager'){prepared.tradeIndex=args.tradeIndex as number;prepared.times=args.times as number;}
+    if(command==='transfer_container'){
+      prepared.position=args.position as {x:number;y:number;z:number};
+      prepared.item=args.item as string;
+      prepared.count=args.count as number;
+      (prepared as unknown as Record<string,unknown>).operationDirection=args.operation;
+    }
+    if(command==='enchant_item'){
+      prepared.position=args.position as {x:number;y:number;z:number};
+      prepared.item=args.item as string;
+      prepared.choice=args.choice as number;
+    }
     if(command==='use_item')prepared.hand=String(args.hand||'hand');
     return {ok:true,prepared};
   }

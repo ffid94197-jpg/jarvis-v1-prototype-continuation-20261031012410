@@ -137,10 +137,15 @@ public final class JarvisBridgeServer {
                 client.setTcpNoDelay(true);
                 byte[] frameBytes = readLine(client.getInputStream());
                 JsonObject request = JsonParser.parseString(new String(frameBytes, StandardCharsets.UTF_8)).getAsJsonObject();
-                JsonObject body = request.getAsJsonObject("body");
+                String payload = request.get("payload").getAsString();
                 String mac = request.get("mac").getAsString();
                 String key = secret;
-                if (key == null || body == null || !validMac(key, body.toString(), mac)) continue;
+                if (key == null || payload == null || !payload.matches("[A-Za-z0-9_-]{1,87000}")
+                        || !validMac(key, payload, mac)) continue;
+                byte[] raw = java.util.Base64.getUrlDecoder().decode(payload);
+                if (raw.length > LIMIT || !java.util.Base64.getUrlEncoder().withoutPadding()
+                        .encodeToString(raw).equals(payload)) continue;
+                JsonObject body = JsonParser.parseString(new String(raw, StandardCharsets.UTF_8)).getAsJsonObject();
                 // Identity, replay protection, and game access happen ONLY on the server thread.
                 CompletableFuture<JsonObject> reply = new CompletableFuture<>();
                 server.execute(() -> {
@@ -148,9 +153,11 @@ public final class JarvisBridgeServer {
                     catch (Throwable t) { reply.completeExceptionally(t); }
                 });
                 JsonObject answer = reply.get(2500, TimeUnit.MILLISECONDS);
+                String responsePayload = java.util.Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(answer.toString().getBytes(StandardCharsets.UTF_8));
                 JsonObject wire = new JsonObject();
-                wire.add("body", answer);
-                wire.addProperty("mac", sign(key, answer.toString()));
+                wire.addProperty("payload", responsePayload);
+                wire.addProperty("mac", sign(key, responsePayload));
                 byte[] bytes = (wire.toString() + "\n").getBytes(StandardCharsets.UTF_8);
                 if (bytes.length <= LIMIT) client.getOutputStream().write(bytes);
             } catch (Exception ex) {

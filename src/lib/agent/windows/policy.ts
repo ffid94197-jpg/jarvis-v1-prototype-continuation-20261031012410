@@ -326,7 +326,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
   const validMinecraftGoal=(r:Record<string,unknown>,step=false):boolean=>{
     if(!r || typeof r!=="object" || Array.isArray(r) || typeof r.goal!=="string")return false;
     const fixed=new Set(["survive","wood","tools","explore","follow","guard","stone_age","iron_age",
-      "dragon_run","netherite_dragon_run","dragon_then_netherite_run","companion"]);
+      "dragon_run","netherite_armor_run","netherite_gear_run","netherite_dragon_run","dragon_then_netherite_run","companion"]);
     const params:Record<string,string[]>={
       gather:["resource","targetCount"],travel:["destination","arrivalRange"],
       craft:["item","targetCount"],equip:["item",step?"destination":"destinationSlot"],

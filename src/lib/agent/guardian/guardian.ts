@@ -39,6 +39,8 @@ export interface PreparedArgs {
   integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;operation?:string;arguments?:Record<string,unknown>};
   memory?: {ownerId:string;query:string;limit:number};
   world?: {ownerId:string;query:string;limit:number};
+  evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs";
+    id?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
 }
 
 export interface GuardianDecision {
@@ -92,6 +94,8 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "minecraft_companion_join",
   "minecraft_companion_stop",
   "adoption_stage_github", "adoption_list", "adoption_skill", "adoption_mcp_list", "adoption_mcp_call",
+  "evolution_skill_stage", "evolution_skill_list", "evolution_skill_expand",
+  "evolution_repair_stage", "evolution_repair_list", "evolution_owner_control",
 ] as const;
 
 export type GuardianTool = (typeof GUARDIAN_KNOWN_TOOLS)[number];
@@ -136,7 +140,7 @@ async function writeAudit(
 
 /** THE GATE. Authorize (and audit) one tool call. Fail-closed everywhere. */
 export async function authorizeToolCall(
-  ctx: { taskId: string | null; ownerId?:string },
+  ctx: { taskId: string | null; ownerId?:string; ownerControlPlane?:boolean },
   tool: string,
   rawArgs: Record<string, unknown>,
 ): Promise<GuardianDecision> {
@@ -144,6 +148,82 @@ export async function authorizeToolCall(
 
   if ((GUARDIAN_KNOWN_TOOLS as readonly string[]).includes(tool)) {
     switch (tool as GuardianTool) {
+      case "evolution_owner_control": {
+        // A model/agent can NEVER assert this flag. Only the trusted API,
+        // AFTER verified session, OWNER role and origin checks, sets it.
+        if(ctx.ownerControlPlane!==true || ctx.taskId!==null || !ctx.ownerId) {
+          decision=deny("Owner-only trusted control plane authorization required");break;
+        }
+        const permitted=new Set(["stage_skill","approve_skill","disable_skill",
+          "stage_repair","approve_repair","apply_repair","rollback_repair"]);
+        const action=rawArgs.action;
+        if(typeof action!=="string"||!permitted.has(action) ||
+           Object.keys(rawArgs).some(k=>!["action","id"].includes(k))) {
+          decision=deny("Unsupported owner evolution mutation");break;
+        }
+        if(!action.startsWith("stage_") &&
+           (typeof rawArgs.id!=="string" ||
+            !/^(?:sk|rp)_[0-9a-f]{32}$/.test(rawArgs.id) ||
+            (action.endsWith("skill")&&!rawArgs.id.startsWith("sk_")) ||
+            (action.endsWith("repair")&&!rawArgs.id.startsWith("rp_")))){
+          decision=deny("Exact type-matching candidate ID required");break;
+        }
+        decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
+          action:action as "stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs",
+          id:typeof rawArgs.id==="string"?rawArgs.id:undefined}}};
+        break;
+      }
+      case "evolution_skill_stage": {
+        if(!ctx.ownerId){decision=deny("Authenticated owner required");break;}
+        if(Object.keys(rawArgs).some(k=>k!=="manifest")){decision=deny("Only manifest is permitted");break;}
+        try{
+          const {normalizeSkillDraft}=await import("../evolution/skillForge.mjs");
+          const manifest=normalizeSkillDraft(rawArgs.manifest);
+          decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
+            action:"stage_skill",manifest}}};
+        }catch(e){decision=deny(e instanceof Error?e.message:"Invalid skill draft");}
+        break;
+      }
+      case "evolution_skill_list":
+      case "evolution_repair_list": {
+        if(!ctx.ownerId||Object.keys(rawArgs).length!==0) {
+          decision=deny("Only an authenticated owner may list evolution candidates");break;
+        }
+        decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
+          action:tool==="evolution_skill_list"?"list_skills":"list_repairs"}}};break;
+      }
+      case "evolution_skill_expand": {
+        if(!ctx.ownerId || Object.keys(rawArgs).some(k=>!["id","inputs"].includes(k)) ||
+           typeof rawArgs.id!=="string" || !/^sk_[0-9a-f]{32}$/.test(rawArgs.id)) {
+          decision=deny("Approved skill id and bounded inputs required");break;
+        }
+        const inputs=rawArgs.inputs===undefined?{}:rawArgs.inputs;
+        if(!inputs||typeof inputs!=="object"||Array.isArray(inputs)||
+           Object.keys(inputs).length>8||JSON.stringify(inputs).length>2400){
+          decision=deny("Invalid bounded skill inputs");break;
+        }
+        decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
+          action:"expand_skill",id:rawArgs.id,inputs:inputs as Record<string,unknown>}}};break;
+      }
+      case "evolution_repair_stage": {
+        if(!ctx.ownerId || Object.keys(rawArgs).some(k=>k!=="candidate") ||
+           !rawArgs.candidate||typeof rawArgs.candidate!=="object"||
+           Array.isArray(rawArgs.candidate) ||
+           JSON.stringify(rawArgs.candidate).length>11000) {
+          decision=deny("Bounded candidate repair and authenticated owner required");break;
+        }
+        const spec=rawArgs.candidate as Record<string,unknown>;
+        if(typeof spec.expectedSha256!=="string"||
+           !/^[a-f0-9]{64}$/.test(spec.expectedSha256) ||
+           typeof spec.path!=="string" || typeof spec.oldText!=="string" ||
+           typeof spec.newText!=="string" || typeof spec.diagnosis!=="string"){
+          decision=deny("Repair must be based on full observed file SHA and concrete replacement");break;
+        }
+        // Stage ONLY: no source mutations, no unattended approvals, no arbitrary
+        // patches of JARVIS runtime files. repairVault independently checks scope.
+        decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
+          action:"stage_repair",candidate:spec}}};break;
+      }
       case "adoption_stage_github": {
         if(!ctx.ownerId || typeof rawArgs.url!=="string") {decision=deny("Owner and GitHub URL required");break;}
         try { const {githubSpec}=await import("../adoption/registry.mjs");githubSpec(rawArgs.url);

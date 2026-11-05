@@ -147,8 +147,13 @@ public final class JarvisBridgeServer {
         if (listener != null) return;
         String key = System.getenv("JARVIS_MC_BRIDGE_SECRET");
         String world = System.getenv("JARVIS_MC_BRIDGE_WORLD");
+        String ownerConfig=System.getenv("JARVIS_MC_BRIDGE_OWNER_UUID");
+        String companionConfig=System.getenv("JARVIS_MC_BRIDGE_COMPANION_UUID");
         if (key == null || key.getBytes(StandardCharsets.UTF_8).length < 32 ||
-                world == null || !world.matches("[a-z0-9_.-]+:[a-z0-9_./-]+")) {
+                world == null || !world.matches("[a-z0-9_.-]+:[a-z0-9_./-]+") ||
+                ownerConfig==null || companionConfig==null ||
+                !ownerConfig.matches("[0-9a-fA-F-]{36}") ||
+                !companionConfig.matches("[0-9a-fA-F-]{36}")) {
             AiCompanion.LOGGER.error("JARVIS bridge DENIED: missing key or world allowlist");
             return;
         }
@@ -289,9 +294,16 @@ public final class JarvisBridgeServer {
         if (args == null) throw new IllegalArgumentException("args");
         UUID ownerId = id(args,"ownerUuid");
         UUID companionId = id(args,"companionUuid");
+        // Two separate local-environment owner/companion bindings prevent a
+        // stolen client envelope from selecting a different player's entity.
+        if(!ownerId.toString().equalsIgnoreCase(System.getenv("JARVIS_MC_BRIDGE_OWNER_UUID")) ||
+           !companionId.toString().equalsIgnoreCase(System.getenv("JARVIS_MC_BRIDGE_COMPANION_UUID")))
+            throw new IllegalArgumentException("server-owner-or-companion-config-mismatch");
         JarvisNativeJournal ledger=journal;
         if (ledger==null) throw new IllegalStateException("native-ledger-not-initialized");
-        if (server.getPlayerManager().getPlayer(ownerId) == null) throw new IllegalArgumentException("owner-offline");
+        net.minecraft.server.network.ServerPlayerEntity owner=
+            server.getPlayerManager().getPlayer(ownerId);
+        if (owner == null) throw new IllegalArgumentException("owner-offline");
         CompanionEntity companion = null;
         // worldId is the authorized LOCAL server-realm identity, not a
         // promise that a companion stays in the Overworld. Never lose E-stop
@@ -301,11 +313,70 @@ public final class JarvisBridgeServer {
             if (!java.util.Set.of("minecraft:overworld","minecraft:the_nether",
                     "minecraft:the_end").contains(dimension)) continue;
             for (Entity entity : world.iterateEntities()) {
-                if (entity instanceof CompanionEntity c && c.getUuid().equals(companionId)
-                        && ownerId.equals(c.getOwnerUuid()) && c.isAlive()) {
-                    companion = c;
+                if(entity.getUuid().equals(companionId) &&
+                   !(entity instanceof CompanionEntity))
+                    throw new IllegalArgumentException("configured-companion-uuid-collision");
+                if(entity instanceof CompanionEntity c && c.getUuid().equals(companionId)){
+                    if(!ownerId.equals(c.getOwnerUuid()) || !c.isAlive())
+                        throw new IllegalArgumentException("companion-uuid-owned-by-other-or-dead");
+                    companion=c;
                     break;
                 }
+            }
+        }
+        if("spawn".equals(op)){
+            // Spawn is a SEPARATE explicit owner request; the ordinary Core
+            // JOIN/observe route never reaches this branch. It cannot create
+            // a second bot, adopt an unowned one or choose a UUID on the fly.
+            if(companion!=null)throw new IllegalArgumentException("companion-already-spawned");
+            if(safetyStopped.contains(companionId)||
+               journal.hasUnresolved(companionId) || tasks.size()>=2048)
+                throw new IllegalArgumentException("native-spawn-reconciliation-required");
+            net.minecraft.server.world.ServerWorld spawnWorld=owner.getServerWorld();
+            if(!spawnWorld.getRegistryKey().equals(net.minecraft.world.World.OVERWORLD))
+                throw new IllegalArgumentException("spawn-owner-must-be-in-overworld");
+            for(ServerWorld world:server.getWorlds()){
+                for(Entity entity:world.iterateEntities()){
+                    if(entity instanceof CompanionEntity existing &&
+                       ownerId.equals(existing.getOwnerUuid()) && existing.isAlive())
+                        throw new IllegalArgumentException("owner-already-has-companion");
+                }
+            }
+            BlockPos ownerPos=owner.getBlockPos();
+            BlockPos spawnPos=null;
+            for(BlockPos offset:java.util.List.of(ownerPos.east(),ownerPos.west(),
+                    ownerPos.north(),ownerPos.south())){
+                if(!loaded(spawnWorld,offset) || !loaded(spawnWorld,offset.up()) ||
+                   !loaded(spawnWorld,offset.down()))continue;
+                if(spawnWorld.getBlockState(offset).isAir() &&
+                   spawnWorld.getBlockState(offset.up()).isAir() &&
+                   spawnWorld.getBlockState(offset.down()).isSolidBlock(spawnWorld,offset.down())){
+                    spawnPos=offset;break;
+                }
+            }
+            if(spawnPos==null)throw new IllegalArgumentException("no-safe-loaded-owner-adjacent-spawn");
+            // Journal BEFORE world mutation. If any subsequent call fails,
+            // the owner must explicitly reconcile; do not quietly spawn again.
+            journal.admit(taskId,authorizedCoreTask,companionId,worldId,op);
+            try {
+                CompanionEntity created=new CompanionEntity(AiCompanion.COMPANION,spawnWorld);
+                created.setUuid(companionId); // immutable after first spawn
+                var entry=com.neovetta.aicompanion.CompanionConfig.defaultEntry();
+                created.applyRosterEntry(entry);
+                created.refreshPositionAndAngles(spawnPos.getX()+0.5,
+                    spawnPos.getY(),spawnPos.getZ()+0.5,owner.getYaw(),0f);
+                if(!spawnWorld.spawnEntity(created))
+                    throw new IllegalStateException("game-server-rejected-companion-spawn");
+                created.initBrain(com.neovetta.aicompanion.CompanionConfig.character(entry),owner);
+                if(!created.isAlive() || !ownerId.equals(created.getOwnerUuid()) ||
+                    !companionId.equals(created.getUuid()) || created.getController()==null)
+                    throw new IllegalStateException("spawn-owner-controller-readback-failed");
+                journal.settle(taskId,"OBSERVED");
+                companion=created;
+            } catch(Exception ex){
+                try{journal.settle(taskId,"EFFECT_UNKNOWN");}
+                catch(Exception ignored){/* preserve ADMITTED quarantine */}
+                throw new IllegalStateException("native-spawn-effect-unknown-reconciliation-required",ex);
             }
         }
         if (companion == null || companion.getController() == null) throw new IllegalArgumentException("companion-unavailable");
@@ -316,6 +387,10 @@ public final class JarvisBridgeServer {
         Integer inspectedVillagerId=null;
         JsonObject inspectedBlock=null;
         switch (op) {
+            case "spawn" -> {
+                status="observed";
+                note="owner-authorized-native-companion-created-and-paired";
+            }
             case "inspect_block" -> {
                 BlockPos selected=position(args);
                 ServerWorld level=(ServerWorld)companion.getWorld();

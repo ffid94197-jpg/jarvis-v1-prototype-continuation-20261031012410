@@ -14,6 +14,7 @@ export type MinecraftAiObservation = {
   dimension?:string;
   nativeGoal?:string|null;
   wornNetherite?:boolean;
+  heldNetheriteSword?:boolean;
   dragonDeadObserved?:boolean;
   exitPortalPresent?:boolean;
   // Loaded server-observed positions only; the model may never invent mining targets.

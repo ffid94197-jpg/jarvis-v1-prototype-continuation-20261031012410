@@ -6,13 +6,21 @@ $ErrorActionPreference = 'Stop'
 $bridge = $PSScriptRoot
 $upstream = Join-Path (Split-Path $bridge -Parent) 'ai-companion'
 if (-not (Test-Path $upstream)) { throw 'Pinned AI Companion submodule missing. Run git submodule update --init integrations/ai-companion in the prototype checkout.' }
-$java = & java -version 2>&1 | Out-String
+$javaExecutable = if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin\java.exe' } else { 'java' }
+$java = & $javaExecutable -version 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0 -or $java -notmatch 'version "17|openjdk version "17') { throw 'JDK 17 must be active for Fabric 1.20.1 build.' }
 if (-not $BuildOnly) {
   & node (Join-Path $bridge 'apply-overlay.cjs')
   if ($LASTEXITCODE -ne 0) { throw 'Overlay installation failed; preserved upstream edits.' }
 }
 if ($ApplyOnly) { Write-Host 'JARVIS overlay installed; no build executed.'; exit 0 }
+$sourceOverlay = Join-Path $bridge 'overlay\com\neovetta\aicompanion\jarvis\JarvisBridgeServer.java'
+$installedOverlay = Join-Path $upstream 'aicompanion\src\main\java\com\neovetta\aicompanion\jarvis\JarvisBridgeServer.java'
+if (-not (Test-Path $installedOverlay)) { throw 'Native bridge source not installed; refusing a misleading build.' }
+if ((Get-FileHash -LiteralPath $sourceOverlay -Algorithm SHA256).Hash -ne
+    (Get-FileHash -LiteralPath $installedOverlay -Algorithm SHA256).Hash) {
+  throw 'Installed bridge overlay is stale or changed; preserve work and explicitly reconcile before building.'
+}
 $engine = Join-Path $upstream 'engine'
 $consumer = Join-Path $upstream 'aicompanion'
 $engineGradle = Join-Path $engine 'gradlew.bat'

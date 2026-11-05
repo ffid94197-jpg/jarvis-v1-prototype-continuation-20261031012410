@@ -556,34 +556,42 @@ public final class JarvisBridgeServer {
         out.addProperty("mainHand",held.isEmpty()?"":Registries.ITEM.getId(held.getItem()).getPath());
         // Observe only already loaded nearby chunks. Never load or generate terrain
         // for model perception; observations are a bounded telemetry snapshot.
-        JsonArray nearbyBlocks=new JsonArray();
+        JsonArray highPriorityBlocks=new JsonArray(), supportBlocks=new JsonArray();
         BlockPos center=companion.getBlockPos();
         ServerWorld level=(ServerWorld)companion.getWorld();
-        for (int radius=0;radius<=4 && nearbyBlocks.size()<12;radius++) {
-            for (int dx=-radius;dx<=radius && nearbyBlocks.size()<12;dx++) {
-                for (int dz=-radius;dz<=radius && nearbyBlocks.size()<12;dz++) {
-                    if (Math.max(Math.abs(dx),Math.abs(dz))!=radius)continue;
-                    for (int dy=-2;dy<=2 && nearbyBlocks.size()<12;dy++) {
+        for (int radius=0;radius<=4;radius++) {
+            for (int dx=-radius;dx<=radius;dx++) {
+                for (int dz=-radius;dz<=radius;dz++) {
+                    if (Math.max(Math.abs(dx),Math.abs(dz))!=radius) continue;
+                    for (int dy=-2;dy<=2;dy++) {
                         BlockPos pos=center.add(dx,dy,dz);
                         if (!loaded(level,pos)) continue;
                         String name=Registries.BLOCK.getId(
                             level.getBlockState(pos).getBlock()).getPath();
-                        if (!(name.endsWith("_log") || name.endsWith("_ore") ||
-                              name.equals("stone") || name.equals("cobblestone") ||
-                              name.equals("deepslate") || name.equals("crafting_table") ||
-                              name.equals("furnace") || name.equals("chest") ||
-                              name.equals("barrel") || name.equals("obsidian")))
-                            continue;
+                        boolean high=name.endsWith("_log") || name.endsWith("_ore") ||
+                            name.equals("crafting_table") || name.equals("furnace") ||
+                            name.equals("chest") || name.equals("barrel") ||
+                            name.equals("obsidian");
+                        boolean supporting=name.equals("grass_block") || name.equals("dirt") ||
+                            name.equals("stone") || name.equals("cobblestone") ||
+                            name.equals("deepslate") || name.equals("sand") ||
+                            name.equals("netherrack") || name.equals("end_stone");
+                        if ((!high || highPriorityBlocks.size()>=8) &&
+                            (!supporting || supportBlocks.size()>=4)) continue;
                         JsonObject row=new JsonObject();
                         row.addProperty("name",name);
                         row.addProperty("x",pos.getX());
                         row.addProperty("y",pos.getY());
                         row.addProperty("z",pos.getZ());
-                        nearbyBlocks.add(row);
+                        if (high && highPriorityBlocks.size()<8) highPriorityBlocks.add(row);
+                        else if (supporting && supportBlocks.size()<4) supportBlocks.add(row);
                     }
                 }
             }
         }
+        JsonArray nearbyBlocks=new JsonArray();
+        for (com.google.gson.JsonElement element:highPriorityBlocks) nearbyBlocks.add(element);
+        for (com.google.gson.JsonElement element:supportBlocks) nearbyBlocks.add(element);
         out.add("nearbyBlocks",nearbyBlocks);
         JsonArray threats=new JsonArray(),villagers=new JsonArray();
         Box local=companion.getBoundingBox().expand(16);

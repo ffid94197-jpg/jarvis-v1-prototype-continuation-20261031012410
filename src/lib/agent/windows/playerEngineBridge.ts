@@ -168,7 +168,7 @@ export async function runGuardianApprovedPlayerEngine(
       const packet=await send(current?"status":"inspect",current?.runId||randomUUID(),cfg,auth,{},2500);
       if(packet.status==="failed" && current)throw Error("Native task status failed");
       const world=observation(packet);
-      if(current && !world.busy)active.delete(coreTaskId);
+      if(current && !world.busy && !current.missionGoal)active.delete(coreTaskId);
       if(cmd==="join")return {ok:true,evidence:{joinedVerified:true,botAcknowledged:true,
         backend:"playerengine",worldId:cfg.worldId,companionUuid:cfg.companionUuid}};
       if(cmd==="auto_status") {

@@ -217,7 +217,8 @@ export async function runGuardianApprovedPlayerEngine(
       const sequenced=new Set(["sequence"]);
       const transfers=new Set(["transfer"]);
       const goal=String(desktop.goal||"");
-      const seconds=desktop.durationSeconds;
+      const seconds=desktop.durationSeconds===undefined?
+        (endgames.has(goal)?21600:3600):desktop.durationSeconds;
       if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal)&&!transfers.has(goal))||!Number.isInteger(seconds) ||
          (seconds as number)<10||(seconds as number)>43200)
         throw Error("Unsupported or unbounded owner mission");
@@ -259,11 +260,11 @@ export async function runGuardianApprovedPlayerEngine(
            typeof spec.item!=="string" || !/^[a-z0-9_]{1,64}$/.test(spec.item) ||
            typeof spec.targetCount!=="number" || !Number.isInteger(spec.targetCount) ||
            spec.targetCount<1 || spec.targetCount>64 ||
-           !["deposit","withdraw"].includes(String(spec.operation)))
+           !["deposit","withdraw"].includes(String(spec.operationDirection)))
           throw Error("Native transfer requires exact observed container, item, quantity and direction");
         op="transfer";
         details={goal,item:spec.item,targetCount:spec.targetCount,
-          direction:spec.operation,...spec.position,durationSeconds:seconds};
+          direction:spec.operationDirection,...spec.position,durationSeconds:seconds};
       }
       if(farms.has(goal)){
         const spec=desktop as unknown as Record<string,unknown>;

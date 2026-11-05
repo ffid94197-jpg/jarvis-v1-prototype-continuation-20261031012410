@@ -363,7 +363,7 @@ public final class JarvisBridgeServer {
                 status=previous.state;
                 note=previous.note;
             }
-            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "endgame" -> {
+            case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "endgame", "farm" -> {
                 if (safetyStopped.contains(companionId)) throw new IllegalArgumentException("owner-safety-stop-latched");
                 if (tasks.containsKey(taskId)) throw new IllegalArgumentException("duplicate-task");
                 if (tasks.size() >= 2048) throw new IllegalArgumentException("task-capacity");
@@ -372,7 +372,7 @@ public final class JarvisBridgeServer {
                         throw new IllegalArgumentException("companion-busy");
                 }
                 long runtimeBudget = budget;
-                if ("endgame".equals(op)) {
+                if ("endgame".equals(op) || "farm".equals(op)) {
                     int duration = args.get("durationSeconds").getAsInt();
                     if (duration < 10 || duration > 43200)
                         throw new IllegalArgumentException("mission-duration-out-of-range");
@@ -385,6 +385,51 @@ public final class JarvisBridgeServer {
                     JarvisEndgameTask mission=new JarvisEndgameTask(companion,goal);
                     run.endgame=mission;
                     task=mission;
+                } else if ("farm".equals(op)) {
+                    String goal=field(args,"goal");
+                    String crop=field(args,"crop");
+                    int width=args.get("width").getAsInt();
+                    int depth=args.get("depth").getAsInt();
+                    int requested=args.get("targetCount").getAsInt();
+                    if (!Set.of("farm_wheat","farm_crop").contains(goal) ||
+                            !Set.of("wheat","carrots","potatoes").contains(crop) ||
+                            (!goal.equals("farm_wheat") && crop.equals("wheat")) ||
+                            (goal.equals("farm_wheat") && !crop.equals("wheat")) ||
+                            width<1||width>4||depth<1||depth>4||
+                            requested<1||requested>16)
+                        throw new IllegalArgumentException("invalid-farm-spec");
+                    BlockPos origin=position(args);
+                    if (!withinReach(companion,origin))
+                        throw new IllegalArgumentException("farm-origin-not-nearby");
+                    Block block=crop.equals("wheat")?Blocks.WHEAT:
+                        crop.equals("carrots")?Blocks.CARROTS:Blocks.POTATOES;
+                    Item item=crop.equals("wheat")?Items.WHEAT:
+                        crop.equals("carrots")?Items.CARROT:Items.POTATO;
+                    Item seed=crop.equals("wheat")?Items.WHEAT_SEEDS:item;
+                    for(int dx=0;dx<width;dx++)for(int dz=0;dz<depth;dz++) {
+                        BlockPos pos=origin.add(dx,0,dz);
+                        if(!loaded((ServerWorld)companion.getWorld(),pos) ||
+                                !companion.getWorld().getBlockState(pos.down()).isOf(Blocks.FARMLAND))
+                            throw new IllegalArgumentException("field-unloaded-or-not-farmland");
+                        Block existing=companion.getWorld().getBlockState(pos).getBlock();
+                        if(existing!=block && existing!=Blocks.AIR)
+                            throw new IllegalArgumentException("owner-field-has-unrelated-block");
+                        run.cropCells.add(pos);
+                    }
+                    run.cropGoal=goal;
+                    run.cropKind=crop;
+                    run.cropBlock=block;
+                    run.cropItem=Registries.ITEM.getId(item).getPath();
+                    run.cropInitialCount=countItem(companion,run.cropItem);
+                    run.cropTargetCount=requested;
+                    int absoluteTarget=run.cropInitialCount+requested;
+                    if(absoluteTarget>256) throw new IllegalArgumentException("farm-quantity-over-budget");
+                    task=new CollectCropTask(
+                        new ItemTarget(item,absoluteTarget),
+                        new Block[]{block},
+                        new Item[]{seed},
+                        run.cropCells::contains);
+                    sampleFarmCells(run);
                 } else if ("travel".equals(op)) {
                     BlockPos pos = position(args);
                     if (companion.getBlockPos().getSquaredDistance(pos) > 160.0 * 160.0)
@@ -483,7 +528,10 @@ public final class JarvisBridgeServer {
                             run.blockId.equals(Registries.BLOCK.getId(run.entity.getWorld()
                                .getBlockState(run.blockPos).getBlock()).getPath()));
                     boolean killed = run.combatTarget != null && !run.combatTarget.isAlive();
-                    boolean proved = added||arrived||equipped||changedBlock||killed ||
+                    boolean farmProved=run.cropGoal!=null &&
+                            run.harvestedCells>=run.cropTargetCount &&
+                            countItem(run.entity,run.cropItem)>=run.cropInitialCount+run.cropTargetCount;
+                    boolean proved = added||arrived||equipped||changedBlock||killed ||farmProved||
                             (run.endgame != null && run.endgame.completed());
                     try {
                         // Postcondition failure is EFFECT_UNKNOWN, not a

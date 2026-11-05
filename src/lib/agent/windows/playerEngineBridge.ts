@@ -209,6 +209,21 @@ export async function runGuardianApprovedPlayerEngine(
           oldTaskRestarted:false,physicalReceipt:restored.observations},
         error:restored.status==="observed"?undefined:"Safety latch was not cleared"};
     }
+    if(cmd==="inspect_villager") {
+      if(typeof desktop.entityId!=="number"||!Number.isInteger(desktop.entityId) ||
+         desktop.entityId<0||desktop.entityId>200000)
+        throw Error("Villager inspection needs a grounded bounded entity ID");
+      const snapshot=await send("villager_offers",randomUUID(),cfg,auth,
+        {entityId:desktop.entityId},2500);
+      if(snapshot.status!=="observed" ||
+         snapshot.observations?.inspectedVillagerId!==desktop.entityId ||
+         !Array.isArray(snapshot.observations?.villagerOffers))
+        throw Error("No bound live villager trade observation");
+      const offers=snapshot.observations.villagerOffers.slice(0,8);
+      return {ok:true,evidence:{botAcknowledged:true,command:"inspect_villager",
+        entityId:desktop.entityId,offers,backend:"playerengine",
+        tradeExecuted:false,status:JSON.stringify({entityId:desktop.entityId,offers})}};
+    }
     if(cmd==="auto_goal") {
       const endgames=new Set(["dragon_run","netherite_armor_run","netherite_gear_run",
         "netherite_dragon_run","dragon_then_netherite_run"]);

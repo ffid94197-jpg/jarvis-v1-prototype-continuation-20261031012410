@@ -580,7 +580,7 @@ public final class JarvisBridgeServer {
                             run.entity.getBlockPos().isWithinDistance(run.arrival,2.5);
                     boolean equipped = run.equipItem != null && isEquipped(run.entity,
                             run.equipItem, run.equipDestination);
-                    boolean changedBlock = run.blockPos != null &&
+                    boolean changedBlock = run.interactiveBefore == null && run.blockPos != null &&
                             loaded((ServerWorld)run.entity.getWorld(),run.blockPos) &&
                             (run.expectAir ? run.entity.getWorld().getBlockState(run.blockPos).isAir() :
                             run.blockId.equals(Registries.BLOCK.getId(run.entity.getWorld()

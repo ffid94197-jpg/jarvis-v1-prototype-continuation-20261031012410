@@ -424,7 +424,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         /^[a-z0-9_]{1,64}$/.test(r.item) && integer(r.targetCount,1,64) &&
         ["deposit","withdraw"].includes(String(r.operation));
     if(g==="build_volume") {
-      if(!at(r.position) || !integer(r.width,1,5) || !integer(r.depth,1,5) ||
+      if(!at(r.position) || !integer(r.width,1,4) || !integer(r.depth,1,4) ||
           !integer(r.height,1,3) ||
           Number(r.width)*Number(r.depth)*Number(r.height)>64 ||
           !["floor","walls","solid","roof"].includes(String(r.shape)) ||

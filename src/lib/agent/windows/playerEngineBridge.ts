@@ -1,0 +1,163 @@
+/**
+ * Opt-in, fail-closed PlayerEngine executor behind the existing Core ->
+ * Guardian -> executor chain. NEVER callable directly from an LLM.
+ * This is not evidence of completed Minecraft autonomy/Dragon acceptance.
+ */
+import {randomUUID} from "node:crypto";
+import type {GuardianDecision} from "../guardian/guardian";
+import type {DesktopPrepared} from "./policy";
+type Packet = {version:number;taskId:string;idempotencyKey:string;nonce:string;worldId:string;
+  observedAt:number;status:string;observations?:Record<string,unknown>};
+type SendRequest={taskId:string;idempotencyKey:string;operation:string;worldId:string;
+  arguments:Record<string,unknown>;budgetMs:number;guardian:{receiptId:string;approved:true;taskId:string;worldId:string;operation:string}};
+const client = require("../../../../integrations/ai-companion-bridge/guardian-ipc-client.cjs") as
+  {sendAuthorizedObjective(request:SendRequest,options:{port:number;host:"127.0.0.1";secret:string;timeoutMs:number}):Promise<Packet>};
+export type PlayerEngineResult={ok:boolean;evidence?:Record<string,unknown>;error?:string};
+const active = new Map<string,{runId:string;operation:string;item?:string;before?:number;destination?:{x:number;y:number;z:number}}>();
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+type Settings={port:number;secret:string;worldId:string;ownerUuid:string;companionUuid:string};
+function settings(ownerId:string):Settings {
+  if(process.platform!=="win32" || process.env.JARVIS_MC_BRIDGE_ENABLE!=="1" ||
+     process.env.JARVIS_MC_BACKEND!=="playerengine")throw Error("PlayerEngine disabled");
+  if(!ownerId || process.env.JARVIS_MC_BRIDGE_OWNER_PRINCIPAL!==ownerId)
+    throw Error("PlayerEngine JARVIS owner mismatch");
+  const port=Number(process.env.JARVIS_MC_BRIDGE_PORT||"48251");
+  const secret=process.env.JARVIS_MC_BRIDGE_SECRET||"";
+  const worldId=process.env.JARVIS_MC_BRIDGE_WORLD||"";
+  const ownerUuid=process.env.JARVIS_MC_BRIDGE_OWNER_UUID||"";
+  const companionUuid=process.env.JARVIS_MC_BRIDGE_COMPANION_UUID||"";
+  if(!Number.isInteger(port)||port<1024||port>65535||Buffer.byteLength(secret)<32 ||
+      !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(worldId)||!UUID.test(ownerUuid)||!UUID.test(companionUuid))
+    throw Error("PlayerEngine owner/world/secret settings unavailable");
+  return {port,secret,worldId,ownerUuid,companionUuid};
+}
+function extract(o:Packet):{health:number;hunger:number;position:{x:number;y:number;z:number};items:Record<string,number>;armor:Set<string>} {
+  const s=o.observations;
+  if(!s || s.companionUuid===undefined)throw Error("Missing server observation");
+  const p={x:Number(s.x),y:Number(s.y),z:Number(s.z)};
+  if(!Object.values(p).every(Number.isFinite)||!Number.isFinite(Number(s.health))||!Number.isFinite(Number(s.hunger)) ||
+      !Array.isArray(s.inventory)||!Array.isArray(s.armor))throw Error("Invalid server observation");
+  const items:Record<string,number>={};
+  function normalizedName(entry:unknown) {
+    if(!entry || typeof entry!=="object")throw Error("Invalid inventory entry");
+    const raw=entry as Record<string,unknown>;
+    const item=String(raw.item||"").replace(/^minecraft:/,"");
+    const count=raw.count;
+    if(!/^[a-z0-9_]{1,64}$/.test(item)||!Number.isInteger(count)||Number(count)<1||Number(count)>64)
+      throw Error("Untrusted inventory entry");
+    return {item,count:Number(count)};
+  }
+  for(const entry of s.inventory){const {item,count}=normalizedName(entry);items[item]=(items[item]||0)+count;}
+  const armor=new Set<string>();
+  for(const entry of s.armor){const {item}=normalizedName(entry);armor.add(item);}
+  return {health:Number(s.health),hunger:Number(s.hunger),position:p,items,armor};
+}
+function observation(p:Packet) {
+  const state=extract(p), inv=state.items;
+  const netherite=["netherite_helmet","netherite_chestplate","netherite_leggings","netherite_boots"];
+  return {
+    position:state.position,inventory:{raw:inv,logs:Object.keys(inv).filter(k=>/_log$/.test(k)).reduce((n,k)=>n+inv[k],0),
+      woodenPickaxe:inv.wooden_pickaxe||0},health:state.health,hunger:state.hunger,
+    joined:true,busy:p.status==="running"||p.status==="accepted",
+    dimension:p.worldId,nativeGoal:null,wornNetherite:netherite.every(k=>state.armor.has(k)),
+    dragonDeadObserved:false,exitPortalPresent:false,nearbyBlocks:[],villagers:[],threats:[],
+    lastAction:"PlayerEngine game-server observation; no inferred scenery or victory"
+  };
+}
+function operationPacket(op:string, runId:string, c:Settings, extra:Record<string,unknown>={}, budgetMs=30000):SendRequest {
+  return {taskId:runId,idempotencyKey:randomUUID(),operation:op,worldId:c.worldId,
+    arguments:{ownerUuid:c.ownerUuid,companionUuid:c.companionUuid,...extra},budgetMs,
+    // This object is constructed ONLY inside the audited allow branch. The
+    // shared key authenticates JARVIS as the source; the server checks the live owner.
+    guardian:{approved:true,receiptId:randomUUID(),taskId:runId,worldId:c.worldId,operation:op}};
+}
+async function send(op:string, id:string, c:Settings, extra:Record<string,unknown>={}, budgetMs=30000) {
+  const response=await client.sendAuthorizedObjective(operationPacket(op,id,c,extra,budgetMs),{
+    port:c.port,host:"127.0.0.1",secret:c.secret,timeoutMs:Math.min(30000,Math.max(2000,budgetMs))
+  });
+  // The client separately authenticates the reply, task ID, nonce and world.
+  extract(response);
+  if(response.observations?.companionUuid!==c.companionUuid)throw Error("Wrong companion in signed server receipt");
+  return response;
+}
+function distance(a:{x:number;y:number;z:number},b:{x:number;y:number;z:number}) {
+  return Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+}
+/** Must be called by the existing Core executor with its already-audited allow decision. */
+export async function runGuardianApprovedPlayerEngine(
+  coreTaskId:string, ownerId:string, desktop:DesktopPrepared, decision:GuardianDecision,
+  isCancelled:()=>boolean=()=>false
+):Promise<PlayerEngineResult> {
+  try {
+    if(!coreTaskId||decision.verdict!=="allow"||decision.prepared?.desktop!==desktop)
+      throw Error("Guarded Core execution required");
+    const cfg=settings(ownerId);
+    const cmd=desktop.operation==="minecraft_command"?desktop.command:
+      desktop.operation==="minecraft_join"?"join":desktop.operation==="minecraft_stop"?"auto_stop":null;
+    if(!cmd)throw Error("Unsupported PlayerEngine tool");
+    if(isCancelled())throw Error("Operator cancellation before admission");
+    const current=active.get(coreTaskId);
+    if(["join","observe","status","inventory"].includes(cmd)){
+      const packet=await send(current?"status":"inspect",current?.runId||randomUUID(),cfg,{},2500);
+      if(packet.status==="failed" && current)throw Error("Native task status failed");
+      const world=observation(packet);
+      if(current && !world.busy)active.delete(coreTaskId);
+      if(cmd==="join")return {ok:true,evidence:{joinedVerified:true,botAcknowledged:true,
+        backend:"playerengine",worldId:cfg.worldId,companionUuid:cfg.companionUuid}};
+      return {ok:true,evidence:{botAcknowledged:true,command:cmd,backend:"playerengine",
+        status:JSON.stringify(world),verifiedGameReadback:true}};
+    }
+    if(cmd==="auto_stop"||cmd==="stop"||cmd==="stay") {
+      if(!current)return {ok:true,evidence:{backend:"playerengine",status:"no-active-native-task"}};
+      const stopped=await send("cancel",current.runId,cfg,{},2500);
+      active.delete(coreTaskId);
+      return {ok:stopped.status==="cancelled",evidence:{backend:"playerengine",
+        status:stopped.status,cancellationObserved:stopped.status==="cancelled"}};
+    }
+    if(current)throw Error("Previous native action remains unresolved: inspect/status before another effect");
+    let op:string, extra:Record<string,unknown>, requestedCount=0,item:string|undefined;
+    if(cmd==="collect_wood"){op="gather";item="oak_log";requestedCount=1;extra={item,count:1};}
+    else if(cmd==="craft_item" && typeof desktop.item==="string" &&
+      Number.isInteger(desktop.count) && desktop.count!>=1 && desktop.count!<=16) {
+      op="craft";item=desktop.item;requestedCount=desktop.count!;extra={item,count:requestedCount};
+    } else if(cmd==="navigate" && desktop.position){
+      op="travel";extra={...desktop.position};
+    } else throw Error("PlayerEngine operation not supported; no Mineflayer fallback mixed into this backend");
+    const baseline=await send("inspect",randomUUID(),cfg,{},2500);
+    const before=item?(extract(baseline).items[item]||0):undefined;
+    if(isCancelled())throw Error("Cancelled before native task dispatch");
+    const runId=randomUUID();
+    const started=await send(op,runId,cfg,extra,30000);
+    if(!["accepted","running","observed"].includes(started.status))
+      throw Error("Native task not admitted by game engine");
+    active.set(coreTaskId,{runId,operation:op,item,before,destination:desktop.position});
+    const until=Date.now()+29500;
+    while(Date.now()<until) {
+      if(isCancelled()) {
+        try {await send("cancel",runId,cfg,{},2500);}catch{}
+        return {ok:false,error:"Cancelled; final game effects may need reconciliation"};
+      }
+      await new Promise(resolve=>setTimeout(resolve,500));
+      const polled=await send("status",runId,cfg,{},2500);
+      if(polled.status==="running"||polled.status==="accepted")continue;
+      active.delete(coreTaskId);
+      const after=extract(polled);
+      const physicallyAdded=item?after.items[item]||0:0;
+      const arrived=desktop.position?distance(after.position,desktop.position)<=2.5:false;
+      const proved=polled.status==="observed" &&
+        (op==="travel"?arrived:Boolean(item && physicallyAdded>=Number(before)+requestedCount));
+      if(op==="craft" && proved) {
+        // An inventory increase alone is not evidence that the item was crafted.
+        return {ok:false,error:"Item acquired but crafting-method proof not yet available",
+          evidence:{backend:"playerengine",physicalAcquisitionObserved:true,craftVerified:false}};
+      }
+      return {ok:proved,evidence:{backend:"playerengine",status:polled.status,
+          observed:proved,inventory:after.items,position:after.position},
+        error:proved?undefined:"Native completion was not verified from actual game state"};
+    }
+    // Deliberately leave active until a later authenticated status query settles it.
+    return {ok:false,error:"Native task timed out; effect outcome unknown, do not retry"};
+  }catch(err) {
+    return {ok:false,error:"PlayerEngine rejected/unavailable: "+(err instanceof Error?err.message:"unknown")};
+  }
+}

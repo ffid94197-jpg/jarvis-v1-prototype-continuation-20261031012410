@@ -5,6 +5,7 @@ const {RESOURCES}=require('./resource_goal.cjs');
 const {validSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,validVolumeSpec}=require('./structure_goal.cjs');
 const {validFarmSpec}=require('./wheat_goal.cjs');
+const {validCropSpec}=require('./crop_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {validSmeltSpec}=require('./smelt_goal.cjs');
 const {validTransferSpec}=require('./container_goal.cjs');
@@ -42,6 +43,9 @@ function validateCommand(input) {
       height:input.height,shape:input.shape});
     const validFarm=input.goal==='farm_wheat'&&validFarmSpec({goal:'farm_wheat',
       position:input.position,width:input.width,depth:input.depth,targetCount:input.targetCount});
+    const validCrop=input.goal==='farm_crop'&&validCropSpec({goal:'farm_crop',
+      crop:input.crop,position:input.position,width:input.width,
+      depth:input.depth,targetCount:input.targetCount});
     const validBoundHostile=input.goal==='defeat_hostile' &&
       ALLOWED_HOSTILES.has(input.mob)&&Number.isInteger(input.entityId)&&
       input.entityId>=0&&input.entityId<=200000;
@@ -50,7 +54,7 @@ function validateCommand(input) {
        (Number.isInteger(input.width)&&input.width>=3&&input.width<=4&&
         Number.isInteger(input.depth)&&input.depth>=3&&input.depth<=4));
     const validGoal=(fixed.includes(input.goal) &&
-      (input.goal!=='shelter'||validShelter))||validBoundHostile||validTravel||validBuild||validVolume||validFarm||
+      (input.goal!=='shelter'||validShelter))||validBoundHostile||validTravel||validBuild||validVolume||validFarm||validCrop||
       (input.goal==='craft' && validCraftSpec({goal:'craft',item:input.item,targetCount:input.targetCount}))||
       (input.goal==='smelt' && validSmeltSpec({goal:'smelt',item:input.item,targetCount:input.targetCount}))||
       (input.goal==='transfer' && validTransferSpec({goal:'transfer',
@@ -62,9 +66,12 @@ function validateCommand(input) {
         input.targetCount>=1&&input.targetCount<=64)||
       (input.goal==='sequence' && validSequence(input.steps));
     const allowedKeys=new Set(['command','goal','durationSeconds','resource','targetCount',
-      'destination','arrivalRange','steps','position','block','axis','length','width','depth','height','shape','item','destinationSlot','mob','entityId','operation']);
+      'destination','arrivalRange','steps','position','block','axis','length','width','depth','height','shape','item','destinationSlot','mob','entityId','operation','crop']);
     if(Object.keys(input).some(key=>!allowedKeys.has(key)))return 'Unexpected autonomous parameter';
     const noUnrelatedParameters=
+      (input.goal==='farm_crop' &&
+        Object.keys(input).every(k=>['command','goal','durationSeconds',
+          'crop','position','width','depth','targetCount'].includes(k))) ||
       (input.goal==='transfer' &&
         Object.keys(input).every(k=>['command','goal','durationSeconds',
           'position','item','targetCount','operation'].includes(k))) ||
@@ -107,13 +114,14 @@ function validateCommand(input) {
       (input.goal==='defeat_hostile'||(input.mob===undefined&&input.entityId===undefined)) &&
       (['craft','equip','smelt','transfer'].includes(input.goal)||input.item===undefined) &&
       (input.goal==='transfer'||input.operation===undefined) &&
+      (input.goal==='farm_crop'||input.crop===undefined) &&
       (input.goal==='equip'||input.destinationSlot===undefined) &&
-      (['craft','smelt','transfer','gather','farm_wheat'].includes(input.goal)||input.targetCount===undefined) &&
+      (['craft','smelt','transfer','gather','farm_wheat','farm_crop'].includes(input.goal)||input.targetCount===undefined) &&
       (input.goal==='build_volume'||['height','shape'].every(k=>input[k]===undefined)) &&
       (['build','build_volume'].includes(input.goal)||['block','axis','length'].every(k=>input[k]===undefined)) &&
       (input.goal==='build_volume'||input.height===undefined&&input.shape===undefined) &&
-      (['farm_wheat','build_volume','shelter'].includes(input.goal)||['width','depth'].every(k=>input[k]===undefined)) &&
-      (['build','build_volume','farm_wheat','transfer'].includes(input.goal)||input.position===undefined) &&
+      (['farm_wheat','farm_crop','build_volume','shelter'].includes(input.goal)||['width','depth'].every(k=>input[k]===undefined)) &&
+      (['build','build_volume','farm_wheat','farm_crop','transfer'].includes(input.goal)||input.position===undefined) &&
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&
           input.durationSeconds<=43200)) ? null :

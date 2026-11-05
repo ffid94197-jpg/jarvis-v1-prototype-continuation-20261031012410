@@ -9,13 +9,14 @@ const {RESOURCES,SAFE_GENERIC_RESOURCES,ORE_RESOURCE_RULES,resourcePlan}=require
 const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,buildPlan,validVolumeSpec,volumePlan}=require('./structure_goal.cjs');
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
+const {validCropSpec,cropPlan}=require('./crop_goal.cjs');
 const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
 const {validSmeltSpec,smeltPlan}=require('./smelt_goal.cjs');
 const {validTransferSpec,transferPlan}=require('./container_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
-const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','sequence','craft','equip','smelt','transfer']);
+const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','farm_crop','sequence','craft','equip','smelt','transfer']);
 // Perception must include EVERY already-authorized hostile; otherwise the
 // planner never sees cave spiders, slimes or phantoms that the native combat
 // controller can safely handle. Add explicitly disallowed hazards for
@@ -232,6 +233,7 @@ function decide(goal, world, failures={}, progress={}) {
   if(goal==='craft'||goal==='equip')return generalPlan(world,{...progress,goal},
     (needed,extra)=>decide(needed,world,failures,{...progress,...extra}));
   if(goal==='gather')return resourcePlan(world,failures,progress,needed=>decide(needed,world,failures,progress));
+  if(goal==='farm_crop')return cropPlan(world,{...progress,goal});
   if(goal==='farm_wheat')return wheatPlan(world,{
     goal,position:progress.position,width:progress.width,
     depth:progress.depth,targetCount:progress.targetCount});
@@ -470,6 +472,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(goal==='farm_wheat' && !validFarmSpec({goal,position:spec?.position,
       width:spec?.width,depth:spec?.depth,targetCount:spec?.targetCount}))
       throw Error('Invalid bounded wheat farming goal');
+    if(goal==='farm_crop' && !validCropSpec({goal,crop:spec?.crop,
+      position:spec?.position,width:spec?.width,
+      depth:spec?.depth,targetCount:spec?.targetCount}))
+      throw Error('Carrot/potato farm must have exact crop, 1-4 footprint and count 1-16');
     if(goal==='build' && !validBuildSpec({goal,position:spec?.position,block:spec?.block,
       axis:spec?.axis,length:spec?.length}))throw Error('Invalid bounded construction goal');
     if(goal==='build_volume'&&!validVolumeSpec({goal,position:spec?.position,
@@ -509,6 +515,8 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         width:spec.width,depth:spec.depth,height:spec.height,shape:spec.shape}:{}),
       ...(goal==='farm_wheat'?{position:{...spec.position},width:spec.width,
         depth:spec.depth,targetCount:spec.targetCount}:{}),
+      ...(goal==='farm_crop'?{crop:spec.crop,position:{...spec.position},
+        width:spec.width,depth:spec.depth,targetCount:spec.targetCount}:{}),
       ...(goal==='travel'?{destination:{...spec.destination},
         arrivalRange:spec.arrivalRange}:{}),
       ...(goal==='sequence'?{sequence:canonicalSequence(spec.steps),sequenceIndex:0}:{})};return status();
@@ -719,6 +727,11 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         outcome.proof==='safe_scout_move') &&
       (decision.kind!=='recover_health' ||
         outcome.proof==='health_regenerated') &&
+      (decision.kind!=='harvest_crop' ||
+        (outcome.proof==='crop_harvest'&&outcome.crop===state.crop &&
+          Number.isInteger(outcome.count)&&outcome.count>=1&&outcome.count<=64)) &&
+      (decision.kind!=='plant_crop' ||
+        (outcome.proof==='crop_planted'&&outcome.crop===state.crop)) &&
       (decision.kind!=='approach_container' ||
         outcome.proof==='container_approach') &&
       (decision.kind!=='transfer_inventory' ||
@@ -752,6 +765,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       state.failures[decision.kind]=0;
       state.successes++;
       // A verified receipt from the wrong action cannot grant a victory milestone.
+      if(decision.kind==='harvest_crop'&&outcome.proof==='crop_harvest' &&
+         outcome.crop===state.crop)
+        state.milestones.harvestedCropCount=Math.min(16,
+          (state.milestones.harvestedCropCount||0)+outcome.count);
       if(decision.kind==='transfer_inventory'&&outcome.proof==='container_transfer')
         state.milestones.transferDone=true;
       if(decision.kind==='smelt_resource'&&outcome.proof==='smelt_output'){

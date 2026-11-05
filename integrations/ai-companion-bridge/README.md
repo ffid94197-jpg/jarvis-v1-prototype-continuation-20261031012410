@@ -144,6 +144,44 @@ item grant, and no independent LLM is invoked by the Fabric companion.
 **Source-only; the native Fabric artifact and live-game outcome have not yet
 been independently accepted.** Do not advertise guaranteed game success.
 
+## Owner live mission monitor after Core task settlement
+
+A multi-hour Minecraft survival goal may continue after the parent JARVIS
+chat task durably settles **PARTIAL**. Previously the only supported
+\`auto_status\` action lived inside that same finite chat task; a fresh UI
+request could not locate the original native mission without trying to
+relaunch it.
+
+Now the owner can use **Settings → Agent Skills & Integrations → Native
+Minecraft mission status** and enter the **original JARVIS Core task UUID**,
+or use read-only
+\`GET /api/jarvis/minecraft/mission-status?taskId=<original-uuid>\`.
+
+- The handler requires an active authenticated OWNER session and an
+  **original task owned by that exact principal**. Foreign task existence
+  is not disclosed.
+- It scans bounded, durably SETTLED original \`minecraft_companion_command\`
+  effects to find an actual native \`auto_goal\` admission. It rejects
+  arbitrary objective text, invalid historical receipts and unknown IDs.
+- Each read requests a **new real Guardian audit**, bound to the original
+  owner task, before the native PlayerEngine IPC client sends a signed
+  \`auto_status\` to the **already-running** Fabric game server.
+- The client reconstructs the original run UUID only from the matching
+  previously settled owner effect and pinned owner/companion/world identity,
+  and refuses unsettled effects or stale/drifted start records. The server
+  again validates the live native task's original Core task ID and returns
+  fresh game-world milestones.
+- This endpoint has **NO mutating operations**. It does not spawn, resume,
+  repeat, retry, cancel or restart any action and cannot make an
+  in-progress mission complete. It labels a Fabric \`complete\` receipt as
+  \`inGameMissionReportedComplete\`, never as independent field acceptance.
+- If the Node or Fabric server lost the original task, status is
+  \`unverified\`; the user must inspect/reconcile the original effect.
+  A missing receipt is NOT permission to issue a new mission.
+
+No Windows, actual world or independent Dragon/Netherite acceptance is
+claimed by adding this read-only control.
+
 ## Native Node-process restart recovery
 
 An owner-authorized native `auto_goal` stores its randomly generated native

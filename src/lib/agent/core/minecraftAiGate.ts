@@ -30,6 +30,7 @@ type NativeMissionReceipt = {
   since:number;
   milestones:Record<string,unknown>;
   item?:string;
+  resource?:string;
   targetCount?:number;
   operation?:string;
   crop?:string;
@@ -635,6 +636,11 @@ export class MinecraftAiGate {
   private nativeSmeltItem:string|null=null;
   private nativeSmeltQuantity:number|null=null;
   private nativeCraft:{item:string;count:number}|null=null;
+  private nativeGather:{resource:string;count:number}|null=null;
+  // Standalone primitive gather must grow inventory from the FIRST trusted
+  // observation and have an observed, admitted gameplay effect in this run.
+  private primitiveBaseline:{resource:string;count:number}|null=null;
+  private readonly primitiveEffectTools=new Set<string>();
   private nativeTransfer:{item:string;count:number;operation:string}|null=null;
   private nativeCrop:{crop:string;count:number}|null=null;
   private nativeWheatCount:number|null=null;
@@ -653,7 +659,7 @@ export class MinecraftAiGate {
        !Number.isSafeInteger(startedAt)||startedAt<0 ||
        startedAt>Date.now()+60000)return false;
     const expected=minecraftMissionFromObjective(this.objective);
-    if(expected&&goal===expected){
+    if(expected&&goal===expected&&goal!=='gather'){
       this.nativeGoalStarted=goal;
       this.nativeGoalStartedAt=startedAt;
       return true;
@@ -662,7 +668,8 @@ export class MinecraftAiGate {
     // string alone. Defer restoring its owner-task binding until the next
     // fresh, idle Mineflayer scene can independently revalidate the EXACT
     // saved tool arguments against current owner language.
-    const hint=goal==='craft'?/\b(?:craft|make)\b/i:
+    const hint=goal==='gather'?/\b(?:gather|collect|mine|obtain|get|fetch|bring|acquire)\b/i:
+      goal==='craft'?/\b(?:craft|make)\b/i:
       goal==='smelt'?/\b(?:smelt|cook|bake|refine)\b/i:
       goal==='sequence'?/\b(?:then|after that|next|and)\b/i:
       goal==='shelter'?/\b(?:shelter|hut)\b/i:null;
@@ -910,6 +917,10 @@ export class MinecraftAiGate {
       this.nativeCraft=admitted&&args.goal==='craft'&&
         typeof args.item==='string'&&Number.isInteger(args.targetCount)?
         {item:args.item,count:args.targetCount as number}:null;
+      this.nativeGather=admitted&&args.goal==='gather'&&
+        typeof args.resource==='string'&&Number.isInteger(args.targetCount)&&
+        (args.targetCount as number)>=1&&(args.targetCount as number)<=64?
+        {resource:args.resource,count:args.targetCount as number}:null;
       this.nativeTransfer=admitted&&args.goal==='transfer'&&
         typeof args.item==='string' && Number.isInteger(args.targetCount) &&
         ['deposit','withdraw'].includes(String(args.operation))?
@@ -948,6 +959,10 @@ export class MinecraftAiGate {
               milestones:parsed.milestones as Record<string,unknown>,
               ...(typeof parsed.item==='string'&&/^[a-z_]{2,64}$/.test(parsed.item)?
                  {item:parsed.item}:{}),
+              ...(typeof parsed.resource==='string'&&
+                 ['logs','planks','sticks','cobblestone','raw_iron','iron_ingot',
+                  'diamond','obsidian','flint','netherrack'].includes(parsed.resource)?
+                 {resource:parsed.resource}:{}),
               ...(typeof parsed.operation==='string'&&
                  ['deposit','withdraw'].includes(parsed.operation)?
                  {operation:parsed.operation}:{}),
@@ -966,6 +981,26 @@ export class MinecraftAiGate {
     }
     if(args.command==='observe'){
       const latest=observationFromResult(result);
+      // Capture only ONCE for this Core execution. On budget resume there is
+      // no trusted prior inventory baseline in memory: do not backfill it from
+      // a late observation or mistake preexisting items for task output.
+      if(latest && this.primitiveBaseline===null){
+        const resourceGoal=singleInventoryResourceGoal(this.objective);
+        const resource=resourceGoal?.resource||
+          (/\bcobblestone\b/i.test(this.objective)&&
+            /\b(?:mine|dig|collect|gather|obtain|acquire)\b/i.test(this.objective)?
+            'cobblestone':null);
+        if(resource){
+          const raw=latest.inventory.raw||{};
+          const count=resource==='logs'?
+            Math.max(Number(latest.inventory.logs)||0,
+              Object.entries(raw).filter(([key])=>key.endsWith('_log'))
+                .reduce((total,[,n])=>total+(Number.isFinite(n)?n:0),0)):
+            Number(raw[resource])||0;
+          if(Number.isSafeInteger(count)&&count>=0)
+            this.primitiveBaseline={resource,count};
+        }
+      }
       if(latest){
         const signature=this.sceneSignature(latest);
         this.sameIdleObservations=latest.busy?0:(signature===this.lastSceneSignature?this.sameIdleObservations+1:0);
@@ -990,12 +1025,28 @@ export class MinecraftAiGate {
             typeof pending.args.item==='string'&&
             Number.isInteger(pending.args.targetCount)?
             {item:String(pending.args.item),count:Number(pending.args.targetCount)}:null;
+          this.nativeGather=pending.goal==='gather'&&
+            typeof pending.args.resource==='string'&&
+            Number.isInteger(pending.args.targetCount)&&
+            Number(pending.args.targetCount)>=1&&Number(pending.args.targetCount)<=64?
+            {resource:String(pending.args.resource),count:Number(pending.args.targetCount)}:null;
           this.nativeStageCount=pending.goal==='sequence' &&
             Array.isArray(pending.args.steps)?pending.args.steps.length:
             pending.goal==='shelter'?3:null;
         }
       }
     }else if(CONTROLLED_EFFECTS.has(String(args.command))){
+      // An effect ACK alone is not completion, but only a real successful
+      // gameplay action may explain a later fresh inventory delta.
+      const resultRecord=result && typeof result==='object'?
+        result as Record<string,unknown>:null;
+      const detail=resultRecord?.detail && typeof resultRecord.detail==='object'?
+        resultRecord.detail as Record<string,unknown>:null;
+      if(this.primitiveBaseline && resultRecord?.ok===true &&
+         (detail?.botAcknowledged===true || detail?.verifiedGameReadback===true ||
+          detail?.observed===true) &&
+         ['dig_block','collect_wood','craft_item'].includes(String(args.command)))
+        this.primitiveEffectTools.add(String(args.command));
       if(args.command!=='auto_goal')this.nativeStatus=null;
       this.fresh=false;
       this.sameIdleObservations=0;
@@ -1008,6 +1059,39 @@ export class MinecraftAiGate {
     const raw=o.inventory.raw||{};
     const logs=Object.entries(raw).filter(([name])=>/_log$/.test(name)).reduce((n,[,v])=>n+(Number.isFinite(v)?v:0),0);
     const pick=raw.wooden_pickaxe||o.inventory.woodenPickaxe||0;
+    if(this.nativeGoalStarted==='gather'){
+      const receipt=this.nativeStatus, requested=this.nativeGather;
+      const started=this.nativeGoalStartedAt;
+      const milestone=receipt?.milestones;
+      const expectedItem=requested?.resource==='logs'?'log':
+        requested?.resource==='sticks'?'stick':requested?.resource;
+      // Never convert a held inventory count into proof of THIS gathering
+      // operation. Both task-bound signed progress and fresh physical inventory
+      // are required, including the server's initial count for the mission.
+      const observedCount=expectedItem==='log'?logs:
+        expectedItem==='planks'?
+          Object.entries(raw).filter(([name])=>name.endsWith('_planks'))
+            .reduce((n,[,v])=>n+(Number.isFinite(v)?v:0),0):
+          expectedItem?Number(raw[expectedItem])||0:0;
+      const initial=Number(milestone?.initialCount);
+      const current=Number(milestone?.currentCount);
+      const newly=Number(milestone?.newItems);
+      if(!receipt||!requested||started===null||
+         receipt.goal!=='gather'||receipt.status!=='complete'||
+         o.nativeGoal!=='gather'||receipt.resource!==requested.resource||
+         receipt.targetCount!==requested.count||
+         !Number.isSafeInteger(receipt.since)||
+         Math.abs(receipt.since-started)>60000||
+         milestone?.gatherDone!==true||
+         ![initial,current,newly].every(n=>Number.isSafeInteger(n)&&n>=0)||
+         current-initial<requested.count||
+         newly<requested.count||newly!==Math.max(0,current-initial)||
+         observedCount<current)
+        return {verified:false,reason:'Gather mission lacks matching task-bound signed NEW-item receipt and fresh physical inventory readback'};
+      return {verified:true,reason:'Native gather completed this owner mission with '+
+        newly+' newly collected '+requested.resource+
+        ', independently matched to baseline inventory and fresh game-server holdings'};
+    }
     if(this.nativeGoalStarted==='farm_wheat'){
       const receipt=this.nativeStatus,requested=this.nativeWheatCount,
         started=this.nativeGoalStartedAt;
@@ -1163,20 +1247,29 @@ export class MinecraftAiGate {
       const count=Number(raw.cobblestone)||0;
       const required=cobblestoneGoalQuantity(objective);
       if(required===null)return {verified:false,reason:'Unsupported or invalid cobblestone quantity; manual clarification required'};
-      return count>=required ? {verified:true,reason:`Fresh inventory independently reports ${count} cobblestone (at least ${required} required)`} :
-        {verified:false,reason:`Only ${count} cobblestone observed in current inventory; ${required} required`};
+      const baseline=this.primitiveBaseline?.resource==='cobblestone'?this.primitiveBaseline.count:null;
+      const verified=baseline!==null&&this.primitiveEffectTools.has('dig_block')&&
+        count-baseline>=required;
+      return verified?
+        {verified:true,reason:`Fresh inventory gained ${count-baseline} cobblestone after a successful task-bound dig; requested ${required}`}:
+        {verified:false,reason:'Cobblestone requires a witnessed digging action and fresh task-relative inventory increase; old inventory alone is not completion'};
     }
     const collection=singleInventoryResourceGoal(objective);
     if(collection){
       const count=collection.resource==='logs'?Math.max(logs,Number(o.inventory.logs)||0):
         Number(raw[collection.resource])||0;
-      // The receipt proves CURRENT holdings, not a specific acquisition action.
-      // Do not report 'mined' or 'crafted' without an action-level server receipt.
-      return count>=collection.quantity?
-        {verified:true,reason:'Current Mineflayer inventory confirms '+count+' '+
-          collection.resource+' (requested '+collection.quantity+'); acquisition method not attested'}:
-        {verified:false,reason:'Observed '+count+' '+collection.resource+
-          '; need '+collection.quantity+' for the requested inventory goal'};
+      const baseline=this.primitiveBaseline?.resource===collection.resource?
+        this.primitiveBaseline.count:null;
+      const methodRequiresDig=/\b(?:mine|dig|excavate)\b/.test(s);
+      const relevant=methodRequiresDig?
+        this.primitiveEffectTools.has('dig_block'):
+        this.primitiveEffectTools.has('dig_block')||
+        this.primitiveEffectTools.has('collect_wood')||
+        this.primitiveEffectTools.has('craft_item');
+      if(baseline===null||!relevant||count-baseline<collection.quantity)
+        return {verified:false,reason:'No matching current-task observed gameplay effect plus fresh inventory increase; old holdings alone cannot satisfy a new acquisition request'};
+      return {verified:true,reason:'Fresh inventory gained '+(count-baseline)+' '+
+        collection.resource+' since the original game observation, following a task-bound real gameplay action'};
     }
     if(/\b(?:wooden pickaxe|wooden tools?|craft tools?)\b/.test(s))
       return pick>0 ? {verified:true,reason:'Wooden pickaxe observed in current inventory'} :

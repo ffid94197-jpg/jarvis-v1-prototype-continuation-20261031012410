@@ -172,7 +172,7 @@ function directIntent(raw){
  // world data, or retry a transfer with an ambiguous prior receipt.
  const transfer=new RegExp('^(deposit|store|put|withdraw|take|retrieve)(?: me)? ('+
   COUNT_PATTERN+') ([a-z_ ]{2,56}) (?:into|in|from|out of) (?:the |a |that )?'+
-  '(chest|barrel) (?:at |at coordinates? )?(-?\\d{1,8})[\\s,]+(-?\\d{1,8})[\\s,]+(-?\\d{1,8})$').exec(s);
+  '(chest|barrel) (?:at |at coordinates? )?(-?\\d{1,8})[\\s,]+(-?\\d{1,8})[\\s,]+(-?\\d{1,8})(?: in minecraft)?$').exec(s);
  if(transfer){
    const item=itemName(transfer[3]);
    const operation=['deposit','store','put'].includes(transfer[1])?'deposit':'withdraw';

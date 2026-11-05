@@ -10,7 +10,7 @@ import {
   listSkills,getSkill,stageSkill,changeSkill,expandSkill,EvolutionError
 } from "@/lib/agent/evolution/skillForge.mjs";
 import {
-  listRepairs,getRepair,stageRepair,approveRepair,applyRepair,rollbackRepair,
+  listRepairs,inspectRecovery,getRepair,stageRepair,approveRepair,applyRepair,rollbackRepair,
   RepairError
 } from "@/lib/agent/evolution/repairVault.mjs";
 
@@ -38,10 +38,11 @@ const headers={"Cache-Control":"no-store"};
 export async function GET(req:NextRequest){
   const session=await gate(req,false);if(!session.ok)return session.response;
   try{
-    const [skills,repairs]=await Promise.all([
-      listSkills(session.ownerId,{includeDrafts:true}),listRepairs(session.ownerId)
+    const [skills,repairs,recovery]=await Promise.all([
+      listSkills(session.ownerId,{includeDrafts:true}),listRepairs(session.ownerId),
+      inspectRecovery(session.ownerId)
     ]);
-    return Response.json({skills,repairs,mode:"native_guardian_controlled",
+    return Response.json({skills,repairs,recovery,mode:"native_guardian_controlled",
       autoExecution:false,ownerApprovalRequired:true},{headers});
   }catch(e){return error(e);}
 }

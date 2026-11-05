@@ -151,11 +151,14 @@ def _status():
 
 
 def _evidence(command, status, extra=None):
+    encoded = json.dumps(status, separators=(",", ":"))
+    if len(encoded) > 12000:
+        raise RuntimeError("PlayerEngine observation exceeded the JARVIS evidence limit.")
     detail = {
         "engine": "ai-companion-playerengine",
         "command": command,
         "botAcknowledged": True,
-        "status": json.dumps(status, separators=(",", ":"))[:1900],
+        "status": encoded,
         "inGameOutcomeVerified": False,
     }
     if isinstance(extra, dict):
@@ -176,14 +179,19 @@ def command(body):
             task = snapshot.get("task") if isinstance(snapshot.get("task"), dict) else {}
             state = str(task.get("state", "idle"))
             status = {
-                "status": "complete" if state == "completed" else state,
+                "status": str(task.get("status", "running" if state in ("queued", "running") else state)),
                 "goal": str(task.get("goal", ""))[:64],
                 "taskId": str(task.get("taskId", ""))[:64],
+                "since": int(task.get("since", 0) or 0),
+                "milestones": task.get("milestones") if isinstance(task.get("milestones"), dict) else {},
                 "steps": 1 if state != "idle" else 0,
                 "successes": 1 if state == "completed" else 0,
                 "verified": False,
-                "snapshot": snapshot,
             }
+            if isinstance(task.get("item"), str):
+                status["item"] = task["item"]
+            if isinstance(task.get("targetCount"), int):
+                status["targetCount"] = task["targetCount"]
             return _evidence("auto_status", status, {"inGameOutcomeVerified": False})
         if name in ("stop", "auto_stop", "stay"):
             result = stop()

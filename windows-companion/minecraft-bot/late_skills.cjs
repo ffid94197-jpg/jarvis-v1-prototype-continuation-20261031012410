@@ -707,12 +707,65 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     return observed(true,'Bounded melee attack dispatched at the observed Dragon; no damage or death claimed','dragon_seen');
   }
   async function destroyCrystal(epoch){
-    const c=bot.nearestEntity(e=>e?.name==='end_crystal' && e?.position);
-    if(!c||!bot.entity?.position)return observed(false,'No End crystal observed');
+    if(!bot.entity?.position)return observed(false,'No server-observed End player location');
+    // Several End spikes have iron-bar cages. Repeatedly shooting the
+    // nearest protected crystal can waste the entire legitimate arrow
+    // budget without an exposed trajectory. Choose from *real* entity
+    // positions only when its small surrounding cage volume is loaded
+    // and no iron bars protect it. This is an obstruction preflight,
+    // NOT proof that the subsequent arrow will hit.
+    const possible=Object.values(bot.entities||{}).filter(e=>
+      e?.name==='end_crystal'&&e?.position&&Number.isSafeInteger(e.id)&&
+      bot.entity.position.distanceTo(e.position)<=54)
+      .sort((a,b)=>bot.entity.position.distanceTo(a.position)-
+        bot.entity.position.distanceTo(b.position));
+    if(!possible.length)return observed(false,'No observed End crystal in bounded real bow range');
+    const cageState=e=>{
+      const base=new Vec3(Math.floor(e.position.x),Math.floor(e.position.y),
+        Math.floor(e.position.z));
+      let bars=0,unloaded=0;
+      for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)
+        for(let dy=-2;dy<=2;dy++){
+          const block=bot.blockAt(base.offset(dx,dy,dz));
+          if(!block)unloaded++;
+          else if(block.name==='iron_bars')bars++;
+        }
+      return bars>0?'caged':unloaded>0?'unloaded':'exposed';
+    };
+    const clearShot=e=>{
+      // Server-loaded block preflight. A cage can have a real aperture,
+      // including a visible top opening, so do not declare ALL iron-bar
+      // cages untargetable. A straight, real line to the currently observed
+      // crystal must not intersect solid terrain or any iron bar.
+      // This is only trajectory eligibility; it never proves a future hit.
+      const start=bot.entity.position.offset(0,1.62,0);
+      const end=e.position.offset(0,.5,0);
+      const delta=end.minus(start),distance=start.distanceTo(end);
+      if(!Number.isFinite(distance)||distance<1||distance>55)return false;
+      const steps=Math.min(240,Math.max(2,Math.ceil(distance*4)));
+      for(let i=1;i<steps;i++){
+        const sample=start.plus(delta.scaled(i/steps));
+        const block=bot.blockAt(new Vec3(Math.floor(sample.x),
+          Math.floor(sample.y),Math.floor(sample.z)));
+        if(!block||block.boundingBox!=='empty'||
+           ['iron_bars','lava','water','fire'].includes(block.name))
+          return false;
+      }
+      return true;
+    };
+    const candidates=possible.filter(e=>cageState(e)!=='unloaded'&&clearShot(e));
+    // Prefer uncaged, directly visible crystals first. When the only
+    // remaining target is inside iron bars, use only a physically confirmed
+    // unobstructed aperture; never pretend to break a cage.
+    const c=candidates.find(e=>cageState(e)==='exposed')||candidates[0];
+    if(!c)return observed(false,
+      'No real End crystal has a fully loaded, obstruction-free bow line; reposition without firing');
     check(epoch);
     let current=bot.entities?.[c.id];
     if(!current?.position||current.name!=='end_crystal')
       return observed(false,'Crystal identity changed before controlled attack');
+    if(cageState(current)==='unloaded'||!clearShot(current))
+      return observed(false,'Crystal approach or cage line of fire changed before actual bow shot');
     // End crystals explode on close-range impact. NEVER melee a crystal in
     // survival, even when the current weapon is powerful. Reuse physically
     // observed standable terrain to retreat before any bounded bow shot.
@@ -743,6 +796,11 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
       return observed(false,'Crystal disappeared before ranged attack; destruction unproven');
     if(bot.entity.position.distanceTo(current.position)<9)
       return observed(false,'Crystal still too close to safely attack');
+    // The safety retreat may have moved the player behind an obsidian
+    // tower or iron-bar cage. Re-evaluate from the NEW physical eye
+    // position before consuming any arrow.
+    if(cageState(current)==='unloaded'||!clearShot(current))
+      return observed(false,'Crystal shot became obstructed after measured standoff repositioning');
     const shot=await shootVisibleEntity(current,epoch);
     if(!shot.ok)return shot;
     // A shot can require several server ticks and an actual arrow flight

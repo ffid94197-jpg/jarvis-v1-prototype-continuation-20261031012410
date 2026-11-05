@@ -366,18 +366,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // This volatile queue is never replayed blindly after a crash or pause.
   let skillQueue:ActiveSkillQueue|null=null;
   let skillExecutionIncomplete=false;
-  const haltSkill=(reason:string)=>{
-    if(!skillQueue)return;
-    skillExecutionIncomplete=true;
-    const pending=Math.max(0,skillQueue.steps.length-skillQueue.next);
-    settlementLines.push(`Skill '${skillQueue.name}' HALTED: ${reason.slice(0,150)}; ${pending} queued stage(s) not executed.`);
-    skillQueue=null;
-    // This advisory notice carries NO authorization. The next model decision
-    // still needs a fresh Guardian audit; it must not silently retry effects.
-    messages.push({role:"user",content:
-      "CORE SKILL EXECUTION HALTED: "+reason.slice(0,180)+
-      ". No further pre-approved steps will run automatically. Inspect actual state or report PARTIAL; never blind-retry an uncertain effect."});
-  };
+
 
   let installedCatalog="";
   try {
@@ -393,6 +382,19 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     { role: "assistant", content: `LAYA advisory (not permission): ${JSON.stringify(adviseTask(objective))}. Core and Guardian remain authoritative.` },
     { role: "user", content: plannerUserPrompt(objective, opts.replay) },
   ];
+
+  const haltSkill=(reason:string)=>{
+    if(!skillQueue)return;
+    skillExecutionIncomplete=true;
+    const pending=Math.max(0,skillQueue.steps.length-skillQueue.next);
+    settlementLines.push(`Skill '${skillQueue.name}' HALTED: ${reason.slice(0,150)}; ${pending} queued stage(s) not executed.`);
+    skillQueue=null;
+    // This advisory notice carries NO authorization. The next model decision
+    // still needs a fresh Guardian audit; it must not silently retry effects.
+    messages.push({role:"user",content:
+      "CORE SKILL EXECUTION HALTED: "+reason.slice(0,180)+
+      ". No further pre-approved steps will run automatically. Inspect actual state or report PARTIAL; never blind-retry an uncertain effect."});
+  };
 
   // Owner explicitly referred to a prior request: read ONLY prior objectives
   // belonging to the same authenticated principal. This is historical task
@@ -657,6 +659,20 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       await persistStep(taskId, seq + 1, "pause", { note: "cancelled between steps" });
       await settleAndReport(taskId, "cancelled", stepsUsed, text, emit, { effectsHappened });
       return;
+    }
+
+    // Owner revocation or a replaced recipe must stop remaining stages.
+    // All reads are from the same owner registry; a crash never recreates a
+    // queued skill from stale or model-supplied metadata.
+    if(skillQueue){
+      try {
+        const {getSkill}=await import("../evolution/skillForge.mjs");
+        const live=await getSkill(opts.ownerId,skillQueue.skillId);
+        if(live.status!=="approved" || live.digest!==skillQueue.digest)
+          haltSkill("owner skill approval was withdrawn or its manifest changed");
+      }catch{
+        haltSkill("owner-approved skill registry cannot be revalidated");
+      }
     }
 
     // ——— ask the model for the next single action ———

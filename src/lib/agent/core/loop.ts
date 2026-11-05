@@ -1311,6 +1311,46 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       }
     }
 
+    // A skill run is only an approved recipe EXPANSION. The Core now takes
+    // responsibility for the next individually audited stage. The recipe
+    // itself is NEVER an effect authorization or proof of completion.
+    if(tool==="evolution_skill_run" && result.ok) {
+      const candidate=result.detail?.queueRequested===true
+        ? acceptedSkillQueue(args.id,result) : null;
+      if(!candidate){
+        await persistStep(taskId,seq+1,"error",{
+          note:"Native skill expansion failed Core provenance/bounds validation"
+        });
+        await settleAndReport(taskId,effectJournalDegraded?"effect_unknown":"failed",
+          stepsUsed,"Approved skill expansion could not be validated by JARVIS Core. No skill stages were executed.",
+          emit,{effectsHappened});
+        return;
+      }
+      if(candidate.steps.length>effectiveBudget-(stepsUsed-opts.stepsUsedOffset)){
+        await settleAndReport(taskId,"partial",stepsUsed,
+          `Skill '${candidate.name}' requires ${candidate.steps.length} individual tool stages, but the remaining Core step budget is smaller. No recipe stage was executed. Request a larger owner-authorized autonomy budget.`,
+          emit,{effectsHappened});
+        return;
+      }
+      skillQueue=candidate;
+      settlementLines.push(
+        `Skill '${candidate.name}' admitted as ${candidate.steps.length} bounded Core steps; each still requires Guardian and durable effect admission.`);
+    }
+    if(queuedSkillStep){
+      if(!result.ok || effectJournalDegraded ||
+         (DESKTOP_GUI_EFFECTS.has(tool) && !hasDirectProof(result))){
+        haltSkill(effectJournalDegraded
+          ? "durable effect journal degraded; outcome unknown"
+          : !result.ok
+          ? "tool failed or its actual effect is not verified"
+          : "GUI side effect lacks independent live proof");
+      }else if(skillQueue && skillQueue.next>=skillQueue.steps.length){
+        settlementLines.push(
+          `All ${skillQueue.steps.length} approved stages dispatched with tool-level receipts; full objective remains subject to independent final arbitration.`);
+        skillQueue=null;
+      }
+    }
+
     if(minecraftAiGate && tool==="minecraft_companion_join" && !result.ok){
       // A failed join is not a game observation, does not prove a world
       // was loaded and must not feed the model a fictitious scene.

@@ -208,9 +208,10 @@ export async function runGuardianApprovedPlayerEngine(
         "netherite_dragon_run","dragon_then_netherite_run"]);
       const farms=new Set(["farm_crop","farm_wheat"]);
       const smelts=new Set(["smelt"]);
+      const sequenced=new Set(["sequence"]);
       const goal=String(desktop.goal||"");
       const seconds=desktop.durationSeconds;
-      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal))||!Number.isInteger(seconds) ||
+      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal))||!Number.isInteger(seconds) ||
          (seconds as number)<10||(seconds as number)>43200)
         throw Error("Unsupported or unbounded owner mission");
       if(current)throw Error("Active native mission unresolved; inspect before any new mission");
@@ -223,6 +224,16 @@ export async function runGuardianApprovedPlayerEngine(
       if(isCancelled())throw Error("Owner cancellation before native mission admission");
       let op="endgame";
       let details:Record<string,unknown>={goal,durationSeconds:seconds};
+      if(sequenced.has(goal)){
+        const spec=desktop as unknown as Record<string,unknown>;
+        if(!Array.isArray(spec.steps) || spec.steps.length<1 || spec.steps.length>8 ||
+           spec.steps.some(step=>!step||typeof step!=="object"||Array.isArray(step)||
+             !["gather","craft","smelt","equip","travel"].includes(String(
+               (step as Record<string,unknown>).goal||""))))
+          throw Error("Unsupported native sequence stage or invalid owner-declared plan");
+        op="sequence";
+        details={goal,steps:spec.steps,durationSeconds:seconds};
+      }
       if(smelts.has(goal)) {
         const spec=desktop as unknown as Record<string,unknown>;
         const permitted=new Set(["iron_ingot","gold_ingot","glass","charcoal",

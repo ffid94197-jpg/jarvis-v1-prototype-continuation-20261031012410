@@ -6,6 +6,7 @@
 import {NextRequest} from "next/server";
 import {requireActiveSession} from "@/lib/agent/auth/session";
 import {mutationOriginError} from "@/lib/agent/auth/origin";
+import {authorizeToolCall} from "@/lib/agent/guardian/guardian";
 import {
   listSkills,getSkill,stageSkill,changeSkill,expandSkill,EvolutionError
 } from "@/lib/agent/evolution/skillForge.mjs";
@@ -59,6 +60,20 @@ export async function POST(req:NextRequest){
     body=input;
   }catch{return Response.json({error:"Invalid JSON"},{status:400});}
   const owner=session.ownerId;
+  // Every actual OWNER mutation is audited by the same mandatory Guardian
+  // ledger as ordinary agent tools. Only this authenticated/origin-checked
+  // control plane may present ownerControlPlane=true; Core cannot do so.
+  const mutations=new Set(["stage_skill","approve_skill","disable_skill",
+    "stage_repair","approve_repair","apply_repair","rollback_repair"]);
+  if(typeof body.action==="string" && mutations.has(body.action)){
+    const decision=await authorizeToolCall(
+      {taskId:null,ownerId:owner,ownerControlPlane:true},
+      "evolution_owner_control",
+      {action:body.action,id:typeof body.id==="string"?body.id:undefined}
+    );
+    if(decision.verdict!=="allow")
+      return Response.json({error:decision.reason||"Guardian owner action denied"},{status:403});
+  }
   try{
     switch(body.action){
       case "stage_skill":

@@ -7,6 +7,7 @@
 const {roofedRoomSteps}=require('./structure_goal.cjs');
 const {SMELT_RECIPES}=require('./smelt_goal.cjs');
 const {validTransferSpec}=require('./container_goal.cjs');
+const {validCropSpec}=require('./crop_goal.cjs');
 // A whole armor set is an owner-defined four-slot objective, not permission
 // to select arbitrary equipment or execute raw Minecraft actions.
 function armorEquipSteps(ownerText){
@@ -362,6 +363,18 @@ function modelGoalGrounded(q,ownerText,context=''){
    return Array.isArray(scene?.nearbyBlocks)&&scene.nearbyBlocks.some(block=>
      ['chest','trapped_chest','barrel'].includes(block?.name)&&
      ['x','y','z'].every(k=>block[k]===q.position[k]));
+  }
+  case 'farm_crop':{
+   if(!validCropSpec(q)||!has(/\b(?:farm|grow|harvest)\b/)||
+      !s.includes(q.crop)||!Number.isInteger(q.targetCount))return false;
+   const size=s.match(/\b([1-4])\s*(?:by|x|×)\s*([1-4])\b/);
+   if(!size||Number(size[1])!==q.width||Number(size[2])!==q.depth)return false;
+   const coords=s.match(/-?\d{1,8}[\s,]+-?\d{1,8}[\s,]+-?\d{1,8}/g)||[];
+   if(coords.length!==1 || coords[0].match(/-?\d+/g)?.map(Number).some((n,i)=>
+      n!==[q.position.x,q.position.y,q.position.z][i]))return false;
+   const pre=s.slice(0,s.indexOf(size[0]));
+   const quantities=pre.match(/\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)\b/g)||[];
+   return quantities.length===1&&amount(quantities[0])===q.targetCount;
   }
   case 'smelt':{
    const rule=SMELT_RECIPES[q.item];

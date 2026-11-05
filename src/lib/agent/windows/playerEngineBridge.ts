@@ -96,7 +96,7 @@ export async function runGuardianApprovedPlayerEngine(
     const cmd=desktop.operation==="minecraft_command"?desktop.command:
       desktop.operation==="minecraft_join"?"join":desktop.operation==="minecraft_stop"?"auto_stop":null;
     if(!cmd)throw Error("Unsupported PlayerEngine tool");
-    if(isCancelled())throw Error("Operator cancellation before admission");
+    if(isCancelled() && !["auto_stop","stop","stay"].includes(cmd))throw Error("Operator cancellation before admission");
     const current=active.get(coreTaskId);
     if(["join","observe","status","inventory"].includes(cmd)){
       const packet=await send(current?"status":"inspect",current?.runId||randomUUID(),cfg,{},2500);
@@ -109,9 +109,10 @@ export async function runGuardianApprovedPlayerEngine(
         status:JSON.stringify(world),verifiedGameReadback:true}};
     }
     if(cmd==="auto_stop"||cmd==="stop"||cmd==="stay") {
-      if(!current)return {ok:false,error:"No tracked native task to cancel; game-state stop unverified"};
-      const stopped=await send("cancel",current.runId,cfg,{},2500);
-      active.delete(coreTaskId);
+      // Emergency stop addresses the verified owner/companion, NOT the original
+      // JS process's task map. It remains effective after a Node restart.
+      const stopped=await send("stop",randomUUID(),cfg,{},2500);
+      if(stopped.status==="cancelled")active.delete(coreTaskId);
       return {ok:stopped.status==="cancelled",evidence:{backend:"playerengine",
         status:stopped.status,cancellationObserved:stopped.status==="cancelled"}};
     }

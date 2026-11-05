@@ -145,7 +145,7 @@ export async function runGuardianApprovedPlayerEngine(
 ):Promise<PlayerEngineResult> {
   try {
     if(!UUID.test(coreTaskId)||decision.verdict!=="allow"||
-      decision.prepared?.desktop!==desktop||!UUID.test(decision.auditId)||
+      decision.prepared?.desktop!==desktop||(typeof decision.auditId!=="string" || !UUID.test(decision.auditId))||
       decision.auditedTaskId!==coreTaskId)
       throw Error("Real audited Core/Guardian authorization required");
     const auth={auditId:decision.auditId,coreTaskId};
@@ -199,7 +199,7 @@ export async function runGuardianApprovedPlayerEngine(
       ["hand","head","torso","legs","feet"].includes(String(desktop.destination))){
       op="equip";item=desktop.item;equipDestination=String(desktop.destination);
       extra={item,destination:equipDestination};
-    }else if(cmd==="attack_hostile"&&Number.isInteger(desktop.entityId)&&
+    }else if(cmd==="attack_hostile"&&typeof desktop.entityId==="number"&&Number.isInteger(desktop.entityId)&&
       (desktop.entityId as number)>=0&&(desktop.entityId as number)<=200000){
       op="combat";extra={entityId:desktop.entityId};
     }else throw Error("PlayerEngine operation unsupported; no mixed Mineflayer fallback in this backend");

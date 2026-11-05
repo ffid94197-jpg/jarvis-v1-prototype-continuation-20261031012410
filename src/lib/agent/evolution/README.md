@@ -32,7 +32,7 @@ The Crucible is static and **not** an isolated runtime test of arbitrary code. T
 ### Repair Vault — \`repairVault.mjs\`
 
 1. The existing Core can read a file inside \`JARVIS_AGENT_WORKSPACE\`, observe the entire content SHA-256 and propose one precise edit using \`evolution_repair_stage\`.
-2. The vault checks exact SHA, one unique old-text occurrence, allowed scope, non-symlink regular files, UTF-8 and bounded sizes (64 KiB file, 4 KiB replacement spans).
+2. The vault checks exact SHA, one unique old-text occurrence, allowed scope, non-symlink regular files, UTF-8 and bounded sizes (64 KiB file, 4 KiB replacement spans). Hidden paths, dependencies, core Guardian/auth, evolution implementation, API routes and deployment configuration are immune to this automatic-repair proposal mechanism.
 3. The candidate is **staged**, not applied. The owner reviews the old/new text and must separately approve.
 4. A second explicit owner action **applies** the approved repair, after saving an owner-private original file and durably marking the operation as \`applying\` **before touching the target**.
 5. Exact readback determines \`applied\`; ambiguity becomes \`effect_unknown\`.

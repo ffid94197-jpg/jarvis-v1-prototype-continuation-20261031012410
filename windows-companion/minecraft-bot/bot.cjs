@@ -331,6 +331,7 @@ async function craftNamed(name,count,epoch,table=null){
   });
   const verified=result.ok===true && result.after>=before+count;
   return {ok:verified,verified,
+    ...(verified?{producedCount:result.after-before,craftedItem:name}:{}),
     detail:`${name}: inventory ${before} -> ${result.after}; requested at least ${count}`+
       (verified?' (server receipt)':' (result unverified or incomplete)')};
 }
@@ -389,7 +390,15 @@ async function autoExecute(plan,epoch){
         return {ok:false,verified:false,detail:'Required workstation not server-observed'};
       // The live recipe registry and actual inventory, not a language-model
       // message, determine whether this crafting effect is possible.
-      return craftNamed(plan.item,1,epoch,needsTable?table:null);
+      const result=await craftNamed(plan.item,1,epoch,needsTable?table:null);
+      const valid=result?.ok===true&&result?.verified===true&&
+        result.craftedItem===plan.item &&
+        Number.isSafeInteger(result.producedCount)&&
+        result.producedCount>=1&&result.producedCount<=64;
+      return {ok:valid,verified:valid,
+        ...(valid?{proof:'craft_output',item:plan.item,
+          count:result.producedCount}:{}),
+        detail:String(result?.detail||'Crafting inventory change not verified').slice(0,190)};
     }
     case 'equip_general':{
       if(!validEquipSpec({goal:'equip',item:plan.item,destination:plan.destination}))

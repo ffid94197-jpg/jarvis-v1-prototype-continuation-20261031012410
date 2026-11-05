@@ -10,6 +10,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import {assessSkill} from "./crucible.mjs";
 
 export class EvolutionError extends Error {
   constructor(message, status=400){super(message);this.name="EvolutionError";this.status=status;}
@@ -138,7 +139,8 @@ async function serialized(owner,fn){
 const summary=item=>({id:item.id,name:item.manifest.name,
   description:item.manifest.description,status:item.status,
   version:item.manifest.schemaVersion,digest:item.digest,createdAt:item.createdAt,
-  approvedAt:item.approvedAt||null,stageCount:item.manifest.steps.length});
+  approvedAt:item.approvedAt||null,stageCount:item.manifest.steps.length,
+  crucible:item.crucible||null});
 export async function listSkills(owner,{includeDrafts=false}={}){
   const items=await read(owner);
   return items.filter(x=>includeDrafts||x.status==="approved").map(summary);
@@ -150,14 +152,15 @@ export async function getSkill(owner,id){
   return {...summary(item),manifest:item.manifest};
 }
 export async function stageSkill(owner,raw){
-  const manifest=normalizeSkillDraft(raw),digest=hash(JSON.stringify(manifest));
+  const manifest=normalizeSkillDraft(raw),crucible=assessSkill(manifest),
+    digest=hash(JSON.stringify(manifest));
   return serialized(owner,async()=>{
     const items=await read(owner);
     const existing=items.find(x=>x.digest===digest&&x.status!=="disabled");
     if(existing)return {...summary(existing),alreadyExists:true};
     if(items.length>=MAX_SKILLS)throw new EvolutionError("Skill capacity reached",409);
     const item={id:"sk_"+crypto.randomBytes(16).toString("hex"),
-      status:"staged",manifest,digest,createdAt:new Date().toISOString()};
+      status:"staged",manifest,digest,crucible,createdAt:new Date().toISOString()};
     items.push(item);await write(owner,items);
     return summary(item);
   });
@@ -170,6 +173,8 @@ export async function changeSkill(owner,id,action){
     if(!item)throw new EvolutionError("Skill not found",404);
     if(action==="approve"){
       if(item.status!=="staged")throw new EvolutionError("Only staged skills can be approved",409);
+      if(!item.crucible?.passed||assessSkill(item.manifest).passed!==true)
+        throw new EvolutionError("Static Crucible preflight required before approval",409);
       item.status="approved";item.approvedAt=new Date().toISOString();
     }else{
       if(item.status!=="approved")throw new EvolutionError("Only active skills can be disabled",409);
@@ -212,10 +217,13 @@ export async function expandSkill(owner,id,inputs={}){
   if(!item)throw new EvolutionError("Skill is not owner-approved",403);
   const digest=hash(JSON.stringify(item.manifest));
   if(digest!==item.digest)throw new EvolutionError("Skill registry digest mismatch",503);
+  const crucible=assessSkill(item.manifest);
+  if(!item.crucible?.passed)throw new EvolutionError("Missing skill Crucible admission",503);
   const plan=item.manifest.steps.map(s=>({tool:s.tool,args:interpolate(s.args,inputs),why:s.why}));
   if(Buffer.byteLength(JSON.stringify(plan))>MAX_MANIFEST_BYTES)
     throw new EvolutionError("Expanded skill exceeds limit");
   return {name:item.manifest.name,skillId:id,steps:plan,stageCount:plan.length,
+    crucible,
     advisoryOnly:true,executed:false,authorizationGranted:false,
     requiresPerStepGuardianAudit:true,requiresCoreDurableEffectAdmission:true};
 }

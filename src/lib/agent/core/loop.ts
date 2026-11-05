@@ -365,8 +365,10 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // Approved Skill Forge stages run INSIDE THIS Core loop, not a new agent.
   // This volatile queue is never replayed blindly after a crash or pause.
   let skillQueue:ActiveSkillQueue|null=null;
+  let skillExecutionIncomplete=false;
   const haltSkill=(reason:string)=>{
     if(!skillQueue)return;
+    skillExecutionIncomplete=true;
     const pending=Math.max(0,skillQueue.steps.length-skillQueue.next);
     settlementLines.push(`Skill '${skillQueue.name}' HALTED: ${reason.slice(0,150)}; ${pending} queued stage(s) not executed.`);
     skillQueue=null;
@@ -894,7 +896,9 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       // effect table, and derives the terminal verdict from that — never
       // from model prose.
       const arbitration = await arbitrateCompletion({ taskId, objective, toolAssisted: true, inventorySource });
-      const groundedVerdict = requiresExternalActionEvidence(objective) && arbitration.verdict === "conversational"
+      const groundedVerdict = skillExecutionIncomplete
+        ? "partial"
+        : requiresExternalActionEvidence(objective) && arbitration.verdict === "conversational"
         ? "partial" : arbitration.verdict;
       const digestSections: string[] = [];
       if (reportIdentity.corrected) {
@@ -919,7 +923,9 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       const guiWarning = autonomy.completionWarning();
       if (guiWarning) digestSections.push(`── DESKTOP VERIFICATION GAP ──\n${guiWarning}`);
       if (groundedVerdict === "partial") {
-        digestSections.push("── TASK OUTCOME: PARTIAL — no independently verified completion of the full objective ──");
+        digestSections.push(skillExecutionIncomplete
+          ? "── SKILL EXECUTION INCOMPLETE — at least one approved stage failed, was denied, or remained unverified; no full-success claim authorized ──"
+          : "── TASK OUTCOME: PARTIAL — no independently verified completion of the full objective ──");
       }
       // The natural-language report is advisory. A model must not overrule a
       // Core PARTIAL/FAILED/EFFECT_UNKNOWN verdict with "success" prose.
@@ -1314,6 +1320,9 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     // A skill run is only an approved recipe EXPANSION. The Core now takes
     // responsibility for the next individually audited stage. The recipe
     // itself is NEVER an effect authorization or proof of completion.
+    if(tool==="evolution_skill_run" && !result.ok) {
+      skillExecutionIncomplete=true;
+    }
     if(tool==="evolution_skill_run" && result.ok) {
       const candidate=result.detail?.queueRequested===true
         ? acceptedSkillQueue(args.id,result) : null;

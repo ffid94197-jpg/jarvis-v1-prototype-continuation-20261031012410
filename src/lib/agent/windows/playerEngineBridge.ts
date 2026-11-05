@@ -202,11 +202,12 @@ export async function runGuardianApprovedPlayerEngine(
         error:restored.status==="observed"?undefined:"Safety latch was not cleared"};
     }
     if(cmd==="auto_goal") {
-      const goals=new Set(["dragon_run","netherite_armor_run","netherite_gear_run",
+      const endgames=new Set(["dragon_run","netherite_armor_run","netherite_gear_run",
         "netherite_dragon_run","dragon_then_netherite_run"]);
+      const farms=new Set(["farm_crop","farm_wheat"]);
       const goal=String(desktop.goal||"");
       const seconds=desktop.durationSeconds;
-      if(!goals.has(goal)||!Number.isInteger(seconds) ||
+      if((!endgames.has(goal)&&!farms.has(goal))||!Number.isInteger(seconds) ||
          (seconds as number)<10||(seconds as number)>43200)
         throw Error("Unsupported or unbounded owner mission");
       if(current)throw Error("Active native mission unresolved; inspect before any new mission");
@@ -216,21 +217,38 @@ export async function runGuardianApprovedPlayerEngine(
         throw Error("Native recovery or E-stop latch active: explicitly reconcile before new mission");
       if(typeof before.observations?.activeTaskId==="string")
         throw Error("Previous game-server task must be reconciled before starting a mission");
-      if(isCancelled())throw Error("Owner cancellation before native endgame admission");
+      if(isCancelled())throw Error("Owner cancellation before native mission admission");
+      let op="endgame";
+      let details:Record<string,unknown>={goal,durationSeconds:seconds};
+      if(farms.has(goal)){
+        const spec=desktop as unknown as Record<string,unknown>;
+        if(!authorizedCoords(spec.position) ||
+           !Number.isInteger(spec.width)||!Number.isInteger(spec.depth)||
+           !Number.isInteger(spec.targetCount) ||
+           Number(spec.width)<1||Number(spec.width)>4 ||
+           Number(spec.depth)<1||Number(spec.depth)>4 ||
+           Number(spec.targetCount)<1||Number(spec.targetCount)>16)
+          throw Error("Native farm requires exact owner field and bounded target");
+        const crop=goal==="farm_wheat"?"wheat":String(spec.crop);
+        if(!["wheat","carrots","potatoes"].includes(crop)||
+           (goal==="farm_crop"&&crop==="wheat"))throw Error("Invalid owner crop");
+        op="farm";
+        details={goal,durationSeconds:seconds,crop,...spec.position,
+          width:spec.width,depth:spec.depth,targetCount:spec.targetCount};
+      }
       const runId=randomUUID();
-      // Record intent before the remote effect. A dropped acknowledgement may
-      // still have started a mission; there is NEVER a blind automatic retry.
-      active.set(coreTaskId,{runId,operation:"endgame",missionGoal:goal,
+      // Record intent before the remote effect. Lost acknowledgement does not
+      // confer permission to retry a potentially active long-running mission.
+      active.set(coreTaskId,{runId,operation:op,missionGoal:goal,
         missionSince:Date.now()});
-      const receipt=await send("endgame",runId,cfg,auth,
-        {goal,durationSeconds:seconds},30000);
-      return {ok:["accepted","running","observed"].includes(receipt.status),
-        evidence:{botAcknowledged:["accepted","running","observed"].includes(receipt.status),
-          backend:"playerengine",command:"auto_goal",goal,
-          status:receipt.status,missionStartedOnly:true,
-          missionReceipt:receipt.observations?.missionStatus},
-        error:["accepted","running","observed"].includes(receipt.status)?undefined:
-          "Native endgame not admitted; reconcile game state before a retry"};
+      const receipt=await send(op,runId,cfg,auth,details,30000);
+      const admitted=["accepted","running","observed"].includes(receipt.status);
+      return {ok:admitted,
+        evidence:{botAcknowledged:admitted,backend:"playerengine",
+          command:"auto_goal",goal,status:receipt.status,
+          missionStartedOnly:true,missionReceipt:receipt.observations?.missionStatus},
+        error:admitted?undefined:
+          "Native mission not admitted; reconcile game state before a retry"};
     }
     if(current)throw Error("Previous native action remains unresolved: inspect/status before another effect");
     let op:string, extra:Record<string,unknown>, requestedCount=0,item:string|undefined;

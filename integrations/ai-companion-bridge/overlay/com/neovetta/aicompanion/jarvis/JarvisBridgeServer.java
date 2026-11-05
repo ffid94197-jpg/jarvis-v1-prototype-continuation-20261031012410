@@ -588,8 +588,8 @@ public final class JarvisBridgeServer {
                     boolean interacted = run.interactiveBefore != null &&
                             run.blockPos != null &&
                             loaded((ServerWorld)run.entity.getWorld(),run.blockPos) &&
-                            !interactionState(run.entity.getWorld().getBlockState(run.blockPos))
-                                == run.interactiveBefore;
+                            interactionState(run.entity.getWorld().getBlockState(run.blockPos))
+                                != run.interactiveBefore;
                     boolean killed = run.combatTarget != null && !run.combatTarget.isAlive();
                     boolean farmProved=run.cropGoal!=null &&
                             run.harvestedCells>=run.cropTargetCount &&

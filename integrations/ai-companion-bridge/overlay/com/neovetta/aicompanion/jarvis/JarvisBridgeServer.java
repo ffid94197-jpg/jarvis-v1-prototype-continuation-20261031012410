@@ -398,6 +398,30 @@ public final class JarvisBridgeServer {
             default -> { status = "failed"; note = "unsupported-operation-fail-closed"; }
         }
         JsonObject snapshot = snapshot(companion);
+        Run receiptTask = tasks.get(taskId);
+        if (receiptTask != null && receiptTask.companion.equals(companionId)) {
+            if (receiptTask.blockPos != null) {
+                JsonObject blockProof = new JsonObject();
+                BlockPos pos = receiptTask.blockPos;
+                blockProof.addProperty("x",pos.getX());
+                blockProof.addProperty("y",pos.getY());
+                blockProof.addProperty("z",pos.getZ());
+                if (loaded((ServerWorld)companion.getWorld(),pos)) {
+                    blockProof.addProperty("block",Registries.BLOCK.getId(
+                        companion.getWorld().getBlockState(pos).getBlock()).getPath());
+                } else blockProof.addProperty("block","chunk-unloaded");
+                snapshot.add("targetBlock",blockProof);
+            }
+            if (receiptTask.combatTarget != null)
+                snapshot.addProperty("targetAlive",receiptTask.combatTarget.isAlive());
+            if (receiptTask.equipItem != null) {
+                snapshot.addProperty("targetEquipmentItem",receiptTask.equipItem);
+                snapshot.addProperty("targetEquipmentSlot",receiptTask.equipDestination);
+                snapshot.addProperty("targetEquipmentObserved",isEquipped(companion,
+                    receiptTask.equipItem,receiptTask.equipDestination));
+            }
+            snapshot.addProperty("nativeTaskNote",receiptTask.note);
+        }
         snapshot.addProperty("note", note);
         JsonObject receipt = new JsonObject();
         receipt.addProperty("version",1);
@@ -488,13 +512,23 @@ public final class JarvisBridgeServer {
         JsonArray armor = new JsonArray();
         for (ItemStack stack : companion.getLivingInventory().armor) addStack(armor,stack);
         out.add("armor", armor);
+        JsonArray armorSlots = new JsonArray();
+        for (ItemStack stack : companion.getLivingInventory().armor)
+            armorSlots.add(stack.isEmpty() ? "" :
+                Registries.ITEM.getId(stack.getItem()).getPath());
+        out.add("armorSlots",armorSlots);
+        ItemStack held=companion.getLivingInventory().getMainHandStack();
+        out.addProperty("mainHand",held.isEmpty()?"":Registries.ITEM.getId(held.getItem()).getPath());
         return out;
     }
     private static int countItem(CompanionEntity companion, String item) {
         int total=0;
         for (ItemStack stack : companion.getLivingInventory().main) {
-            if (!stack.isEmpty() && Registries.ITEM.getId(stack.getItem()).getPath().equals(item))
-                total += stack.getCount();
+            if (!stack.isEmpty()) {
+                String name=Registries.ITEM.getId(stack.getItem()).getPath();
+                if (name.equals(item) || ("log".equals(item) && name.endsWith("_log")))
+                    total += stack.getCount();
+            }
         }
         return total;
     }

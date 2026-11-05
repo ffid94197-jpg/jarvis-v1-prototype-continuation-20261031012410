@@ -481,7 +481,8 @@ def validate_action(body):
         if os.environ.get('JARVIS_MINECRAFT_LAN_ENABLED') != '1':
             return 'Minecraft LAN integration is not enabled.'
         if body.get('command') not in ('follow','stop','jump','move','look','status','come','stay','guard','collect_wood','inventory','say','observe','auto_goal','auto_status','auto_stop',
-            'inspect_block','navigate','dig_block','equip_item','craft_item','place_block','interact_block','interact_entity','use_item','natural_goal','auto_checkpoint','auto_resume'):
+            'inspect_block','navigate','dig_block','equip_item','craft_item','place_block','interact_block','interact_entity','use_item','natural_goal','auto_checkpoint','auto_resume',
+            'attack_hostile','inspect_villager','trade_villager','transfer_container','enchant_item'):
             return 'Unsupported Minecraft command.'
         # The Python Guardian side of the bridge validates the same bounded
         # primitives as friend_protocol.cjs. All keys remain allowlisted.
@@ -498,7 +499,8 @@ def validate_action(body):
                 return False
             goal=record['goal']
             fixed={'survive','wood','tools','explore','follow','guard','stone_age','iron_age',
-                   'dragon_run','netherite_dragon_run','dragon_then_netherite_run','companion'}
+                   'dragon_run','netherite_dragon_run','dragon_then_netherite_run',
+                   'netherite_armor_run','netherite_gear_run','companion'}
             fields={
                 'gather':{'resource','targetCount'},
                 'travel':{'destination','arrivalRange'},
@@ -506,6 +508,11 @@ def validate_action(body):
                 'equip':{'item',('destination' if step else 'destinationSlot')},
                 'build':{'position','block','axis','length'},
                 'farm_wheat':{'position','width','depth','targetCount'},
+                'farm_crop':{'crop','position','width','depth','targetCount'},
+                'smelt':{'item','targetCount'},
+                'transfer':{'position','item','targetCount','operationDirection'},
+                'shelter':{'width','depth'},
+                'build_volume':{'position','block','width','depth','height','shape'},
                 'sequence':{'steps'}
             }
             if goal in fixed:
@@ -562,6 +569,32 @@ def validate_action(body):
                 return (-62 <= p['y'] <= 318 and abs(p['x'])<=29999984 and
                     abs(p['z'])<=29999984 and abs(p['x']+dx*(n-1))<=29999984 and
                     abs(p['z']+dz*(n-1))<=29999984)
+            if goal=='farm_crop':
+                p=record.get('position'); w=record.get('width'); d=record.get('depth')
+                return (record.get('crop') in ('carrots','potatoes') and
+                    mc_position(p) and bounded_int(w,1,4) and bounded_int(d,1,4) and
+                    bounded_int(record.get('targetCount'),1,16) and
+                    -62 <= p['y'] <= 319 and -29999984 <= p['x'] and -29999984 <= p['z'] and
+                    p['x']+w-1 <= 29999984 and p['z']+d-1 <= 29999984)
+            if goal=='smelt':
+                return (record.get('item') in ('iron_ingot','gold_ingot','glass','charcoal',
+                    'netherite_scrap','cooked_beef','cooked_porkchop','cooked_chicken')
+                    and bounded_int(record.get('targetCount'),1,16))
+            if goal=='transfer':
+                return (mc_position(record.get('position')) and mc_item(record.get('item')) and
+                    bounded_int(record.get('targetCount'),1,64) and
+                    record.get('operationDirection') in ('deposit','withdraw'))
+            if goal=='shelter':
+                return ('width' not in record and 'depth' not in record) or (
+                    bounded_int(record.get('width'),3,4) and bounded_int(record.get('depth'),3,4))
+            if goal=='build_volume':
+                w=record.get('width'); d=record.get('depth'); h=record.get('height')
+                return (mc_position(record.get('position')) and
+                    bounded_int(w,1,5) and bounded_int(d,1,5) and bounded_int(h,1,3) and
+                    w*d*h <= 64 and record.get('shape') in ('floor','walls','solid','roof') and
+                    record.get('block') in ('cobblestone','dirt','oak_planks','spruce_planks',
+                    'birch_planks','stone_bricks','netherrack') and
+                    (record.get('shape') not in ('floor','roof') or h==1))
             if goal=='farm_wheat':
                 p=record.get('position')
                 w=record.get('width')
@@ -606,6 +639,21 @@ def validate_action(body):
             return 'Invalid entity interaction.'
         if command == 'use_item' and body.get('hand','hand') not in ('hand','off-hand'):
             return 'Invalid use-item hand.'
+        if command=='attack_hostile' and (not bounded_int(body.get('entityId'),0,200000) or
+            not bounded_int(body.get('maxSwings'),1,4)):
+            return 'Invalid observed hostile or bounded attack'
+        if command=='inspect_villager' and not bounded_int(body.get('entityId'),0,200000):
+            return 'Invalid observed villager'
+        if command=='trade_villager' and (not bounded_int(body.get('entityId'),0,200000) or
+            not bounded_int(body.get('tradeIndex'),0,31) or not bounded_int(body.get('times'),1,4)):
+            return 'Invalid bounded villager trade'
+        if command=='transfer_container' and (not mc_position(body.get('position')) or
+            not mc_item(body.get('item')) or not bounded_int(body.get('count'),1,64) or
+            body.get('operationDirection') not in ('deposit','withdraw')):
+            return 'Invalid container transaction'
+        if command=='enchant_item' and (not mc_position(body.get('position')) or
+            not mc_item(body.get('item')) or not bounded_int(body.get('choice'),0,2)):
+            return 'Invalid enchant interaction'
         if body.get('command') == 'move' and (body.get('directionInput') not in ('forward','back','left','right') or
             type(body.get('durationMs')) is not int or not 100 <= body['durationMs'] <= 3000):
             return 'Invalid Minecraft movement instruction.'
@@ -775,7 +823,12 @@ def minecraft_command(body):
             message={k:v for k,v in body.items() if k in ('command','directionInput','durationMs','text','goal','durationSeconds',
                                                        'position','range','item','destination','count','reference','face','entityId','hand',
                                                        'resource','targetCount','arrivalRange','steps','block','axis','length',
-                                                       'width','depth','destinationSlot')}
+                                                       'width','depth','height','shape','crop','operationDirection',
+                                                       'destinationSlot','maxSwings','tradeIndex','times','choice')}
+            # DesktopPrepared.operation is the host command kind. The
+            # validated container transaction direction is carried separately.
+            if 'operationDirection' in message:
+                message['operation']=message.pop('operationDirection')
             message['id']=request_id
             bot_proc.stdin.write(json.dumps(message)+'\n')
             bot_proc.stdin.flush()

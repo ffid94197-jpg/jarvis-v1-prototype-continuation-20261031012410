@@ -707,12 +707,40 @@ function createLateSkills({bot,navigate,craftNamed,getEpoch,getOwner,digest,Vec3
     return observed(true,'Bounded melee attack dispatched at the observed Dragon; no damage or death claimed','dragon_seen');
   }
   async function destroyCrystal(epoch){
-    const c=bot.nearestEntity(e=>e?.name==='end_crystal' && e?.position);
-    if(!c||!bot.entity?.position)return observed(false,'No End crystal observed');
+    if(!bot.entity?.position)return observed(false,'No server-observed End player location');
+    // Several End spikes have iron-bar cages. Repeatedly shooting the
+    // nearest protected crystal can waste the entire legitimate arrow
+    // budget without an exposed trajectory. Choose from *real* entity
+    // positions only when its small surrounding cage volume is loaded
+    // and no iron bars protect it. This is an obstruction preflight,
+    // NOT proof that the subsequent arrow will hit.
+    const possible=Object.values(bot.entities||{}).filter(e=>
+      e?.name==='end_crystal'&&e?.position&&Number.isSafeInteger(e.id)&&
+      bot.entity.position.distanceTo(e.position)<=54)
+      .sort((a,b)=>bot.entity.position.distanceTo(a.position)-
+        bot.entity.position.distanceTo(b.position));
+    if(!possible.length)return observed(false,'No observed End crystal in bounded real bow range');
+    const cageState=e=>{
+      const base=new Vec3(Math.floor(e.position.x),Math.floor(e.position.y),
+        Math.floor(e.position.z));
+      let bars=0,unloaded=0;
+      for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)
+        for(let dy=-2;dy<=2;dy++){
+          const block=bot.blockAt(base.offset(dx,dy,dz));
+          if(!block)unloaded++;
+          else if(block.name==='iron_bars')bars++;
+        }
+      return bars>0?'caged':unloaded>0?'unloaded':'exposed';
+    };
+    const c=possible.find(e=>cageState(e)==='exposed');
+    if(!c)return observed(false,
+      'All observed nearby End crystals are behind iron bars or have unloaded surrounding geometry; no blind shot authorized');
     check(epoch);
     let current=bot.entities?.[c.id];
     if(!current?.position||current.name!=='end_crystal')
       return observed(false,'Crystal identity changed before controlled attack');
+    if(cageState(current)!=='exposed')
+      return observed(false,'Crystal now obstructed by newly observed iron bars or unloaded blocks');
     // End crystals explode on close-range impact. NEVER melee a crystal in
     // survival, even when the current weapon is powerful. Reuse physically
     // observed standable terrain to retreat before any bounded bow shot.

@@ -692,6 +692,18 @@ def minecraft_action(op):
     global bot_proc
     if os.environ.get('JARVIS_MINECRAFT_LAN_ENABLED') != '1':
         return {'ok':False,'error':'Minecraft LAN integration not enabled.'}
+    if os.environ.get('JARVIS_MINECRAFT_ENGINE') == 'ai-companion':
+        # The Fabric entity is JARVIS's in-world body. Do not start a second
+        # Mineflayer/Mine AI player beside it.
+        try:
+            import ai_companion_bridge
+            if op == 'minecraft_join':
+                return ai_companion_bridge.join()
+            if op == 'minecraft_stop':
+                return ai_companion_bridge.stop()
+            return {'ok':False,'error':'Unsupported AI Companion lifecycle action.'}
+        except Exception as err:
+            return {'ok':False,'error':'AI Companion bridge unavailable ('+type(err).__name__+').'}
     with bot_lock:
         if op == 'minecraft_stop':
             if bot_proc and bot_proc.poll() is None:
@@ -764,6 +776,12 @@ def minecraft_action(op):
 def minecraft_command(body):
     if os.environ.get('JARVIS_MINECRAFT_LAN_ENABLED') != '1':
         return {'ok':False,'error':'Minecraft LAN bot not enabled.'}
+    if os.environ.get('JARVIS_MINECRAFT_ENGINE') == 'ai-companion':
+        try:
+            import ai_companion_bridge
+            return ai_companion_bridge.command(body)
+        except Exception as err:
+            return {'ok':False,'error':'AI Companion command bridge unavailable ('+type(err).__name__+').'}
     global bot_proc
     with bot_lock:
         if not bot_proc or bot_proc.poll() is not None or not bot_proc.stdin:

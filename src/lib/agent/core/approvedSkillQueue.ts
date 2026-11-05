@@ -20,6 +20,7 @@ export interface SkillQueueStep {
 }
 export interface ActiveSkillQueue {
   skillId:string;
+  digest:string;
   name:string;
   steps:SkillQueueStep[];
   next:number;
@@ -54,7 +55,8 @@ export function acceptedSkillQueue(
   if(typeof requestedId!=="string" || !GUID.test(requestedId) || !receipt.ok)
     return null;
   const d=receipt.detail;
-  if(!object(d)||d.skillId!==requestedId||
+  if(!object(d)||d.skillId!==requestedId || typeof d.digest!=="string" ||
+     !/^[a-f0-9]{64}$/.test(d.digest)||
      typeof d.name!=="string" || !d.name.trim() || d.name.length>70 ||
      d.advisoryOnly!==true || d.executed!==false ||
      d.authorizationGranted!==false ||
@@ -77,5 +79,5 @@ export function acceptedSkillQueue(
       args:JSON.parse(JSON.stringify(entry.args)) as Record<string,unknown>,
       why:entry.why});
   }
-  return {skillId:requestedId,name:d.name,steps:stages,next:0};
+  return {skillId:requestedId,digest:d.digest,name:d.name,steps:stages,next:0};
 }

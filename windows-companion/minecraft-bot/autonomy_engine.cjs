@@ -607,6 +607,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         // Each ordered furnace stage must earn its own actual verified
         // outputs; earlier stage receipts never satisfy a later request.
         state.milestones.smeltedOutput=0;
+        state.milestones.craftedOutput=0;
         state.milestones.wheatHarvested=0;
         state.failures={};
         // An arrival proof for a prior target must never prove the next one.
@@ -757,6 +758,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
       (decision.kind!=='smelt_resource' ||
         !['smelt','sequence'].includes(state.goal) ||
         outcome.proof==='smelt_output') &&
+      (decision.kind!=='craft_general' || (
+        outcome.proof==='craft_output'&&
+        Number.isInteger(outcome.count)&&outcome.count>=1&&outcome.count<=64&&
+        outcome.item===decision.item)) &&
       (decision.kind!=='fight_bound_hostile' ||
         (outcome.proof==='bound_hostile_death' &&
           outcome.targetId===state.entityId && outcome.mob===state.mob)) &&
@@ -783,6 +788,14 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           (state.milestones.harvestedCropCount||0)+outcome.count);
       if(decision.kind==='transfer_inventory'&&outcome.proof==='container_transfer')
         state.milestones.transferDone=true;
+      if(decision.kind==='craft_general'&&outcome.proof==='craft_output'){
+        const target=state.goal==='craft'?state.item:
+          state.goal==='sequence'&&state.sequence?.[state.sequenceIndex]?.goal==='craft'?
+          state.sequence[state.sequenceIndex].item:null;
+        if(target===outcome.item)
+          state.milestones.craftedOutput=Math.min(16,
+            (state.milestones.craftedOutput||0)+outcome.count);
+      }
       if(decision.kind==='smelt_resource'&&outcome.proof==='smelt_output'){
         const pending=state.goal==='smelt'?state.item:
           state.goal==='sequence'&&state.sequence?.[state.sequenceIndex]?.goal==='smelt'?

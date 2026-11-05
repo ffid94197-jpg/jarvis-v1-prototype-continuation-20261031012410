@@ -215,9 +215,10 @@ export async function runGuardianApprovedPlayerEngine(
       const farms=new Set(["farm_crop","farm_wheat"]);
       const smelts=new Set(["smelt"]);
       const sequenced=new Set(["sequence"]);
+      const transfers=new Set(["transfer"]);
       const goal=String(desktop.goal||"");
       const seconds=desktop.durationSeconds;
-      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal))||!Number.isInteger(seconds) ||
+      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal)&&!transfers.has(goal))||!Number.isInteger(seconds) ||
          (seconds as number)<10||(seconds as number)>43200)
         throw Error("Unsupported or unbounded owner mission");
       if(current)throw Error("Active native mission unresolved; inspect before any new mission");
@@ -251,6 +252,18 @@ export async function runGuardianApprovedPlayerEngine(
         op="smelt";
         details={goal,item:spec.item,targetCount:spec.targetCount,
           durationSeconds:seconds};
+      }
+      if(transfers.has(goal)){
+        const spec=desktop as unknown as Record<string,unknown>;
+        if(!authorizedCoords(spec.position) ||
+           typeof spec.item!=="string" || !/^[a-z0-9_]{1,64}$/.test(spec.item) ||
+           typeof spec.targetCount!=="number" || !Number.isInteger(spec.targetCount) ||
+           spec.targetCount<1 || spec.targetCount>64 ||
+           !["deposit","withdraw"].includes(String(spec.operation)))
+          throw Error("Native transfer requires exact observed container, item, quantity and direction");
+        op="transfer";
+        details={goal,item:spec.item,targetCount:spec.targetCount,
+          direction:spec.operation,...spec.position,durationSeconds:seconds};
       }
       if(farms.has(goal)){
         const spec=desktop as unknown as Record<string,unknown>;

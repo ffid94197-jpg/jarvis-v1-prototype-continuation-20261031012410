@@ -63,13 +63,40 @@ function extract(o:Packet):{health:number;hunger:number;position:{x:number;y:num
 function observation(p:Packet) {
   const state=extract(p), inv=state.items;
   const netherite=["netherite_helmet","netherite_chestplate","netherite_leggings","netherite_boots"];
+  const s=p.observations||{};
+  const isWorldPoint=(b:unknown):b is {x:number;y:number;z:number}=>{
+    if(!b||typeof b!=="object"||Array.isArray(b))return false;
+    const o=b as Record<string,unknown>;
+    return ["x","y","z"].every(k=>typeof o[k]==="number"&&Number.isFinite(o[k]));
+  };
+  const nearbyBlocks=(Array.isArray(s.nearbyBlocks)?s.nearbyBlocks:[])
+    .filter((v:unknown)=>v&&typeof v==="object"&&
+      /^[a-z_]{1,64}$/.test(String((v as Record<string,unknown>).name||""))&&
+      isWorldPoint(v)&&["x","y","z"].every(k=>Number.isInteger((v as Record<string,unknown>)[k])))
+    .slice(0,12);
+  const threats=(Array.isArray(s.threats)?s.threats:[])
+    .filter((v:unknown)=>v&&typeof v==="object"&&
+      Number.isInteger((v as Record<string,unknown>).id)&&
+      typeof (v as Record<string,unknown>).name==="string"&&
+      /^[a-z_]{1,64}$/.test(String((v as Record<string,unknown>).name))&&
+      typeof (v as Record<string,unknown>).distance==="number"&&
+      Number.isFinite((v as Record<string,unknown>).distance)&&
+      Number((v as Record<string,unknown>).distance)<=16)
+    .slice(0,6);
+  const villagers=(Array.isArray(s.villagers)?s.villagers:[])
+    .filter((v:unknown)=>v&&typeof v==="object"&&
+      Number.isInteger((v as Record<string,unknown>).id)&&
+      (v as Record<string,unknown>).name==="villager"&&
+      typeof (v as Record<string,unknown>).distance==="number"&&
+      Number((v as Record<string,unknown>).distance)<=10)
+    .slice(0,3);
   return {
     position:state.position,inventory:{raw:inv,logs:Object.keys(inv).filter(k=>/_log$/.test(k)).reduce((n,k)=>n+inv[k],0),
       woodenPickaxe:inv.wooden_pickaxe||0},health:state.health,hunger:state.hunger,
     joined:true,busy:p.status==="running"||p.status==="accepted"||
       (typeof p.observations?.activeTaskId==="string" && UUID.test(p.observations.activeTaskId)),
     dimension:p.worldId,nativeGoal:null,wornNetherite:netherite.every(k=>state.armor.has(k)),
-    dragonDeadObserved:false,exitPortalPresent:false,nearbyBlocks:[],villagers:[],threats:[],
+    dragonDeadObserved:false,exitPortalPresent:false,nearbyBlocks,villagers,threats,
     lastAction:"PlayerEngine game-server observation; no inferred scenery or victory"
   };
 }

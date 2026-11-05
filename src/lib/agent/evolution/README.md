@@ -41,6 +41,42 @@ The Crucible is static and **not** an isolated runtime test of arbitrary code. T
 
 This is a safe repair candidate and rollback feature, **not** unrestricted autonomous patching of the JARVIS security core. It does not currently auto-synthesize a patch for every runtime crash, run arbitrary generated code, or certify deployment.
 
+## Core-executed approved skill (source extension)
+
+A saved and **owner-approved** skill is now executable through the **same** JARVIS
+Core loop. The UI offers **RUN APPROVED SKILL IN JARVIS** alongside the separate
+**PREVIEW PLAN** action.
+
+- The UI's explicit run command is deterministically routed by
+  `src/lib/agent/core/skillIntent.ts`. It does not need a new model call
+  or provider quota just to run a known recipe.
+- The model can also select `evolution_skill_run` for an owner's open-ended
+  request. `evolution_skill_expand` remains **preview only** and never starts
+  an action.
+- `approvedSkillQueue.ts` binds the expansion to the owner's approved skill
+  ID and SHA-256 manifest digest, refuses nested skill recursion, validates
+  the tool allowlist and creates at most eight process-local stages.
+- `core/loop.ts` takes one stage at a time. **Every stage** executes through
+  the unchanged Guardian audit -> durable effect admission -> cancellation
+  check -> actual executor -> settlement -> final independent arbitration.
+- Before each stage, Core re-reads the original owner registry to ensure
+  that approval is still active and its digest has not changed. Revocation
+  stops the remaining stages; there is no permission inheritance.
+- A denied tool, failed effect, uncertain journal, unverified GUI mutation or
+  duplicate/reconciled effect stops the remaining queue; Core cannot claim
+  a fully completed skill if a stage was halted.
+- The owner autonomy-tier step budget includes expansion and every staged
+  tool. A run refuses to start if its maximum bounded stages will not fit.
+- A process-local queue is **not** replayed blindly after crash/pause. The
+  durable Core effect journal remains the source of truth; external effects
+  must be reconciled before a fresh owner-approved run.
+- The normal JARVIS Core does not become a new separate agent, and no
+  generated Python, JS, shell or third-party runtime is executed.
+
+The optional local-only fixture `npm run test:evolution-core-offline`
+parses changed TypeScript and checks deterministic intent and bounded
+receipt acceptance. It is **not** a live runtime or Windows field acceptance.
+
 ## Owner controls
 
 **Existing UI:** Settings → Agent Skills & Integrations → Native Skill Forge & Repair Vault.

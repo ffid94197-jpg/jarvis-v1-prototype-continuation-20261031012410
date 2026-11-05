@@ -37,6 +37,16 @@ export interface DesktopPrepared {
   destination?: string;
   count?: number;
   entityId?: number;
+  maxSwings?: number;
+  tradeIndex?: number;
+  times?: number;
+  choice?: number;
+  targetCount?: number;
+  width?: number;
+  depth?: number;
+  height?: number;
+  shape?: string;
+  crop?: string;
   hand?: string;
   action?: string;
   elementId?: string;
@@ -321,17 +331,43 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:"Minecraft action requires an approved input and duration 100–1500ms."};
     return {ok:true,prepared:{operation:"minecraft_input",action:args.action,durationMs:args.durationMs as number}};
   }
+  // Native Fabric gameplay is opt-in and requires pinned loopback identity.
+  // It must not inherit Mineflayer's Java LAN name/port prerequisites.
+  const playerEngineSelected=process.env.JARVIS_MC_BACKEND==="playerengine";
+  const nativeMinecraftPreflight=():string|null=>{
+    if(!playerEngineSelected)return null;
+    if(process.env.JARVIS_MC_BRIDGE_ENABLE!=="1")
+      return "PlayerEngine adapter is disabled by operator";
+    const key=process.env.JARVIS_MC_BRIDGE_SECRET||"";
+    const principal=process.env.JARVIS_MC_BRIDGE_OWNER_PRINCIPAL||"";
+    const own=process.env.JARVIS_MC_BRIDGE_OWNER_UUID||"";
+    const bot=process.env.JARVIS_MC_BRIDGE_COMPANION_UUID||"";
+    const world=process.env.JARVIS_MC_BRIDGE_WORLD||"";
+    const port=Number(process.env.JARVIS_MC_BRIDGE_PORT||"48251");
+    const uid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if(!principal||Buffer.byteLength(key,"utf8")<32 ||
+       !uid.test(own)||!uid.test(bot)||
+       !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(world)||
+       !Number.isInteger(port)||port<1024||port>65535)
+      return "PlayerEngine owner UUID, companion UUID, world, principal, port or secret unavailable";
+    return null;
+  };
   // Declarative Minecraft goals share JARVIS's existing Guardian boundary.
   // The companion independently revalidates. This grants NO raw code/tool authority.
   const validMinecraftGoal=(r:Record<string,unknown>,step=false):boolean=>{
     if(!r || typeof r!=="object" || Array.isArray(r) || typeof r.goal!=="string")return false;
     const fixed=new Set(["survive","wood","tools","explore","follow","guard","stone_age","iron_age",
-      "dragon_run","netherite_dragon_run","dragon_then_netherite_run","companion"]);
+      "dragon_run","netherite_dragon_run","dragon_then_netherite_run",
+      "netherite_armor_run","netherite_gear_run","companion"]);
     const params:Record<string,string[]>={
       gather:["resource","targetCount"],travel:["destination","arrivalRange"],
       craft:["item","targetCount"],equip:["item",step?"destination":"destinationSlot"],
       build:["position","block","axis","length"],
-      farm_wheat:["position","width","depth","targetCount"],sequence:["steps"]
+      farm_wheat:["position","width","depth","targetCount"],
+      farm_crop:["crop","position","width","depth","targetCount"],
+      smelt:["item","targetCount"],shelter:["width","depth"],
+      build_volume:["position","block","width","depth","height","shape"],
+      transfer:["position","item","targetCount","operation"],sequence:["steps"]
     };
     const g=r.goal,extra=fixed.has(g)?[]:(Object.hasOwn(params,g)?params[g]:undefined);
     if(!extra || (step && (g==="sequence" || (fixed.has(g)&&!["tools","stone_age","iron_age"].includes(g)))))
@@ -376,6 +412,35 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return integer(p.y,-62,318)&&Math.abs(p.x)<=29999984&&Math.abs(p.z)<=29999984&&
         Math.abs(p.x+dx*(n-1))<=29999984&&Math.abs(p.z+dz*(n-1))<=29999984;
     }
+    if(g==="shelter")
+      return r.width===undefined&&r.depth===undefined ||
+        integer(r.width,3,4)&&integer(r.depth,3,4);
+    if(g==="smelt")
+      return ["iron_ingot","gold_ingot","glass","charcoal","netherite_scrap",
+        "cooked_beef","cooked_porkchop","cooked_chicken"].includes(String(r.item)) &&
+        integer(r.targetCount,1,16);
+    if(g==="transfer")
+      return at(r.position) && typeof r.item==="string" &&
+        /^[a-z0-9_]{1,64}$/.test(r.item) && integer(r.targetCount,1,64) &&
+        ["deposit","withdraw"].includes(String(r.operation));
+    if(g==="build_volume") {
+      if(!at(r.position) || !integer(r.width,1,5) || !integer(r.depth,1,5) ||
+          !integer(r.height,1,3) ||
+          Number(r.width)*Number(r.depth)*Number(r.height)>64 ||
+          !["floor","walls","solid","roof"].includes(String(r.shape)) ||
+          !["cobblestone","dirt","oak_planks","spruce_planks",
+            "birch_planks","stone_bricks","netherrack"].includes(String(r.block)))
+        return false;
+      return !["floor","roof"].includes(String(r.shape)) || r.height===1;
+    }
+    if(g==="farm_crop") {
+      if(!["carrots","potatoes"].includes(String(r.crop))||!at(r.position)||
+         !integer(r.width,1,4)||!integer(r.depth,1,4)||
+         !integer(r.targetCount,1,16))return false;
+      const p=r.position as {x:number;y:number;z:number};
+      return integer(p.y,-62,319)&&p.x>=-29999984&&p.z>=-29999984&&
+        p.x+Number(r.width)-1<=29999984&&p.z+Number(r.depth)-1<=29999984;
+    }
     if(g==="farm_wheat"){
       if(!at(r.position)||!integer(r.width,1,4)||!integer(r.depth,1,4)||!integer(r.targetCount,1,16))return false;
       const p=r.position as {x:number;y:number;z:number};
@@ -387,10 +452,16 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     return false;
   };
   if (tool === "minecraft_companion_command") {
-    if (process.env.JARVIS_MINECRAFT_LAN_ENABLED !== "1") return {ok:false,reason:"Enable Minecraft LAN companion."};
+    if(playerEngineSelected){
+      const failure=nativeMinecraftPreflight();
+      if(failure)return {ok:false,reason:failure};
+    }else if (process.env.JARVIS_MINECRAFT_LAN_ENABLED !== "1")
+      return {ok:false,reason:"Enable Minecraft LAN companion."};
     const command=String(args.command||"");
     const allowed=["follow","stop","jump","move","look","status","come","stay","guard","collect_wood","inventory","say","observe","auto_goal","auto_status","auto_stop",
-      "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block","interact_entity","use_item","natural_goal","auto_checkpoint","auto_resume"];
+      "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block",
+      "interact_entity","use_item","natural_goal","auto_checkpoint","auto_resume",
+      "attack_hostile","inspect_villager","trade_villager","transfer_container","enchant_item"];
     if (!allowed.includes(command)) return {ok:false,reason:"Unknown Minecraft companion command."};
     if (command==="auto_goal" && !validMinecraftGoal(args))
       return {ok:false,reason:"Minecraft goal failed bounded Guardian validation; no effect authorized."};
@@ -420,6 +491,37 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:'Block placement requires reference coordinates and an adjacent face.'};
     if (command==='interact_entity' && (!Number.isInteger(args.entityId)||(args.entityId as number)<0))
       return {ok:false,reason:'Entity ID must be a nonnegative integer.'};
+    if(command==="attack_hostile" &&
+       (!Number.isInteger(args.entityId)||Number(args.entityId)<0||Number(args.entityId)>200000||
+        !Number.isInteger(args.maxSwings)||Number(args.maxSwings)<1||Number(args.maxSwings)>4))
+      return {ok:false,reason:"Attack requires a grounded hostile ID and 1-4 bounded swings"};
+    if(command==="inspect_villager" &&
+       (!Number.isInteger(args.entityId)||Number(args.entityId)<0||Number(args.entityId)>200000))
+      return {ok:false,reason:"Villager inspect needs a bounded observed entity ID"};
+    if(command==="trade_villager" &&
+       (!Number.isInteger(args.entityId)||Number(args.entityId)<0||Number(args.entityId)>200000||
+        !Number.isInteger(args.tradeIndex)||Number(args.tradeIndex)<0||Number(args.tradeIndex)>31||
+        !Number.isInteger(args.times)||Number(args.times)<1||Number(args.times)>4))
+      return {ok:false,reason:"Trade requires observed villager ID, offer index 0-31 and 1-4 trades"};
+    if(command==="transfer_container" &&
+       (!pos(args.position)||!name(args.item)||!Number.isInteger(args.count)||
+        Number(args.count)<1||Number(args.count)>64||
+        !["deposit","withdraw"].includes(String(args.operation))))
+      return {ok:false,reason:"Container transfer requires grounded position, item, count and direction"};
+    if(command==="enchant_item" &&
+       (!pos(args.position)||!name(args.item)||!Number.isInteger(args.choice)||
+        Number(args.choice)<0||Number(args.choice)>2))
+      return {ok:false,reason:"Enchant requires observed table, item and option 0-2"};
+    const directFields:Record<string,string[]>={
+      attack_hostile:["entityId","maxSwings"],
+      inspect_villager:["entityId"],
+      trade_villager:["entityId","tradeIndex","times"],
+      transfer_container:["position","item","count","operation"],
+      enchant_item:["position","item","choice"]
+    };
+    if(Object.hasOwn(directFields,command) &&
+       Object.keys(args).some(k=>k!=="command"&&!directFields[command].includes(k)))
+      return {ok:false,reason:"Unexpected Minecraft primitive parameters"};
     if (command==='use_item' && !['hand','off-hand'].includes(String(args.hand||'hand')))
       return {ok:false,reason:'Unsupported held-item hand.'};
     const prepared:DesktopPrepared={operation:'minecraft_command',command};
@@ -429,8 +531,13 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       prepared.goal=args.goal as string;
       if(args.durationSeconds!==undefined)prepared.durationSeconds=args.durationSeconds as number;
       const fields=["resource","targetCount","destination","arrivalRange","steps","position","block","axis",
-        "length","width","depth","item","destinationSlot"];
-      for(const key of fields)if(args[key]!==undefined)(prepared as unknown as Record<string,unknown>)[key]=args[key];
+        "length","width","depth","height","shape","item","destinationSlot","crop","operation"];
+      for(const key of fields)if(args[key]!==undefined) {
+        // "operation" in the original goal means deposit/withdraw; do not
+        // override the Windows companion's transport operation discriminator.
+        const outputKey=key==="operation"?"operationDirection":key;
+        (prepared as unknown as Record<string,unknown>)[outputKey]=args[key];
+      }
     }
     if(command==='natural_goal')prepared.text=args.text as string;
     if(['navigate','dig_block','inspect_block','interact_block'].includes(command))prepared.position=args.position as {x:number;y:number;z:number};
@@ -440,10 +547,29 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     if(command==='craft_item')prepared.count=args.count as number;
     if(command==='place_block'){prepared.reference=args.reference as {x:number;y:number;z:number};prepared.face=args.face as {x:number;y:number;z:number};}
     if(command==='interact_entity')prepared.entityId=args.entityId as number;
+    if(["attack_hostile","inspect_villager","trade_villager"].includes(command))prepared.entityId=args.entityId as number;
+    if(command==='attack_hostile')prepared.maxSwings=args.maxSwings as number;
+    if(command==='trade_villager'){prepared.tradeIndex=args.tradeIndex as number;prepared.times=args.times as number;}
+    if(command==='transfer_container'){
+      prepared.position=args.position as {x:number;y:number;z:number};
+      prepared.item=args.item as string;
+      prepared.count=args.count as number;
+      (prepared as unknown as Record<string,unknown>).operationDirection=args.operation;
+    }
+    if(command==='enchant_item'){
+      prepared.position=args.position as {x:number;y:number;z:number};
+      prepared.item=args.item as string;
+      prepared.choice=args.choice as number;
+    }
     if(command==='use_item')prepared.hand=String(args.hand||'hand');
     return {ok:true,prepared};
   }
   if (tool === "minecraft_companion_join" || tool === "minecraft_companion_stop") {
+    if(playerEngineSelected){
+      const failure=nativeMinecraftPreflight();
+      if(failure)return {ok:false,reason:failure};
+      return {ok:true,prepared:{operation:tool==="minecraft_companion_join"?"minecraft_join":"minecraft_stop"}};
+    }
     if (process.env.JARVIS_MINECRAFT_LAN_ENABLED !== "1") {
       // Name every variable the launcher preflight also requires, so a
       // half-configured Minecraft setup is diagnosable from the denial instead

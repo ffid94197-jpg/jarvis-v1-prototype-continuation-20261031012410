@@ -1,0 +1,3 @@
+[submodule "integrations/ai-companion"]
+	path = integrations/ai-companion
+	url = https://github.com/adevivo/ai-companion.git

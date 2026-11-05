@@ -14,6 +14,7 @@
     "test:provider-offline": "node scripts/verify-provider-offline.cjs",
     "test:evolution-native": "node scripts/verify-evolution-native.cjs",
     "test:evolution-core-offline": "node scripts/verify-evolution-core-offline.cjs",
+    "test:evolution-learn-offline": "node scripts/verify-evolution-learn-offline.cjs",
     "test:memory-contracts": "node scripts/verify-memory-contracts.cjs",
     "test:memory-route": "node scripts/verify-memory-route.cjs",
     "test:local-fallback": "node scripts/verify-local-fallback.cjs",

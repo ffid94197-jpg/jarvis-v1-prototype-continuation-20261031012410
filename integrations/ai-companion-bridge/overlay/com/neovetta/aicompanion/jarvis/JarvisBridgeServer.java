@@ -328,7 +328,7 @@ public final class JarvisBridgeServer {
                     Run run=entry.getValue();
                     if (companionId.equals(run.companion) && "running".equals(run.state)) {
                         try {
-                            ledger.settle(entry.getKey(),"CANCELLED");
+                            journal.settle(entry.getKey(),"CANCELLED");
                             run.state="cancelled";
                             run.note="owner-emergency-stop-with-durable-receipt";
                         } catch (Exception ex) {
@@ -347,11 +347,11 @@ public final class JarvisBridgeServer {
                 if (tasks.values().stream().anyMatch(r ->
                         r.companion.equals(companionId) && "running".equals(r.state)))
                     throw new IllegalArgumentException("active-task-reconciliation-required");
-                if (!safetyStopped.contains(companionId) && !ledger.hasUnresolved(companionId))
+                if (!safetyStopped.contains(companionId) && !journal.hasUnresolved(companionId))
                     throw new IllegalArgumentException("no-recovery-latch");
-                ledger.reconcileAfterExplicitOwnerResume(companionId);
+                journal.reconcileAfterExplicitOwnerResume(companionId);
                 safetyStopped.remove(companionId);
-                if (ledger.hasUnresolved(companionId)) throw new IllegalStateException("resume-not-durable");
+                if (journal.hasUnresolved(companionId)) throw new IllegalStateException("resume-not-durable");
                 ctrl.getTaskRunner().enable();
                 status="observed";
                 note="owner-resumed-ready-for-new-authorized-tasks";
@@ -363,7 +363,7 @@ public final class JarvisBridgeServer {
                     throw new IllegalArgumentException("task-mismatch");
                 ctrl.cancelUserTask();
                 try {
-                    ledger.settle(taskId,"CANCELLED");
+                    journal.settle(taskId,"CANCELLED");
                     previous.state="cancelled";
                     previous.note="cancel-sent-and-durably-recorded";
                 } catch (Exception ex) {
@@ -548,7 +548,7 @@ public final class JarvisBridgeServer {
                 if (task == null) throw new IllegalArgumentException("missing-task");
                 // Journal-before-effect. A crash after this write leaves an
                 // explicit quarantine rather than a silently retried action.
-                ledger.admit(taskId,authorizedCoreTask,companionId,worldId,op);
+                journal.admit(taskId,authorizedCoreTask,companionId,worldId,op);
                 tasks.put(taskId, run);
                 try {
                 ctrl.runUserTask(task, () -> {
@@ -574,7 +574,7 @@ public final class JarvisBridgeServer {
                     try {
                         // Postcondition failure is EFFECT_UNKNOWN, not a
                         // claim of zero side effects or clean completion.
-                        ledger.settle(taskId,proved?"OBSERVED":"EFFECT_UNKNOWN");
+                        journal.settle(taskId,proved?"OBSERVED":"EFFECT_UNKNOWN");
                         run.state=proved?"observed":"failed";
                         run.note=proved?"server-postcondition-and-durable-receipt":
                             "engine-done-effect-requires-reconciliation";
@@ -598,7 +598,7 @@ public final class JarvisBridgeServer {
         }
         JsonObject snapshot = snapshot(companion);
         snapshot.addProperty("safetyStopped",safetyStopped.contains(companionId));
-        snapshot.addProperty("recoveryRequired",ledger.hasUnresolved(companionId));
+        snapshot.addProperty("recoveryRequired",journal.hasUnresolved(companionId));
         for (Run candidate : tasks.values()) {
             if (!candidate.companion.equals(companionId) ||
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||

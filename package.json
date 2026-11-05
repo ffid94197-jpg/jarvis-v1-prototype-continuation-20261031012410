@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
     "test:provider-offline": "node scripts/verify-provider-offline.cjs",
+    "test:evolution-native": "node scripts/verify-evolution-native.cjs",
     "test:memory-contracts": "node scripts/verify-memory-contracts.cjs",
     "test:memory-route": "node scripts/verify-memory-route.cjs",
     "test:local-fallback": "node scripts/verify-local-fallback.cjs",

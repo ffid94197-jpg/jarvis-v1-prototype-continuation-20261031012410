@@ -41,6 +41,40 @@ The Crucible is static and **not** an isolated runtime test of arbitrary code. T
 
 This is a safe repair candidate and rollback feature, **not** unrestricted autonomous patching of the JARVIS security core. It does not currently auto-synthesize a patch for every runtime crash, run arbitrary generated code, or certify deployment.
 
+## Skill learning from completed JARVIS tasks
+
+`evolution_skill_learn` can stage a new reusable recipe from a **previous,
+Core-completed task** whose durable trace belongs to the same authenticated
+owner. The owner may specify a real completed task UUID, or allow JARVIS to
+select the most recent completed owned task. The feature is also available
+from **Settings → Agent Skills & Integrations → Learn from a completed task**
+and the owner-only `learn_skill` API action.
+
+The learner enforces:
+
+- Only complete traces of 1–8 explicitly supported tool calls are accepted:
+  `read_file`, `list_dir`, `create_folder`,
+  `windows_discover_apps`, `windows_find_capability`. It rejects GUI clicks,
+  Minecraft effects, shell commands, credentialed calls, file writes, and
+  all other potentially sensitive action types.
+- Each source call must have **one matching successful result** in the original
+  durable Core step journal. Truncated/invalid JSON, unverified readbacks,
+  denied/error steps, foreign-owner history and partial tasks are refused.
+- Every learned folder creation must also match an independently durable,
+  successfully settled `EffectRecord` with the exact folder path and live
+  `isDirectory` receipt.
+- The learner copies **tool names and bounded prepared input arguments only**.
+  It does not copy prior file contents, output text, API keys, model prompts,
+  screenshots or arbitrary code.
+- Learning stages a **new candidate**, not an approved action. The owner must
+  inspect its actual steps and explicitly approve it before Core execution.
+  Future runs are freshly Guardian-audited and may still fail if the outside
+  world or owner policy changed.
+
+The optional mock-receipt fixture is
+`npm run test:evolution-learn-offline` (authored, **not run here**).
+It is not evidence of real Windows field success or independent acceptance.
+
 ## Core-executed approved skill (source extension)
 
 A saved and **owner-approved** skill is now executable through the **same** JARVIS

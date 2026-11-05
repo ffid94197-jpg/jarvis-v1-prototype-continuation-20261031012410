@@ -592,7 +592,30 @@ public final class JarvisBridgeServer {
         for (Run candidate : tasks.values()) {
             if (!candidate.companion.equals(companionId) ||
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
-                    (candidate.endgame == null && candidate.cropGoal == null)) continue;
+                    (candidate.endgame == null && candidate.cropGoal == null &&
+                     candidate.smeltGoal == null)) continue;
+            if (candidate.smeltGoal != null) {
+                snapshot.addProperty("nativeGoal","smelt");
+                JsonObject summary=new JsonObject();
+                summary.addProperty("goal","smelt");
+                summary.addProperty("status",candidate.state.equals("observed")?
+                    "complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("item",candidate.smeltOutput);
+                summary.addProperty("targetCount",candidate.smeltTarget);
+                JsonObject milestones=new JsonObject();
+                int fresh=Math.max(0,countItem(companion,candidate.smeltOutput)
+                    -candidate.initialCount);
+                // SmeltInFurnaceTask is the sole native task used for this run.
+                // Its callback + newly held output are required; a callback
+                // alone never claims physical smelting success.
+                milestones.addProperty("smeltedOutputCount",
+                    candidate.state.equals("observed")?
+                        Math.min(candidate.smeltTarget,fresh):0);
+                summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
             if (candidate.cropGoal != null) {
                 snapshot.addProperty("nativeGoal",candidate.cropGoal);
                 JsonObject summary=new JsonObject();

@@ -51,6 +51,8 @@ public final class JarvisNativeSequenceTask extends Task {
     private String equipmentSlot;
     private BlockPos destination;
     private int arrivalRange;
+    private int equipmentProgress;
+    private String[] equipmentTargets;
     private final long since=System.currentTimeMillis();
 
     public JarvisNativeSequenceTask(CompanionEntity entity,JsonArray input){
@@ -63,7 +65,7 @@ public final class JarvisNativeSequenceTask extends Task {
             if(row.size()<1||row.size()>7)
                 throw new IllegalArgumentException("stage-width");
             String goal=row.get("goal").getAsString();
-            if(!Set.of("gather","craft","smelt","equip","travel").contains(goal))
+            if(!Set.of("gather","craft","smelt","equip","travel","tools","stone_age","iron_age").contains(goal))
                 throw new IllegalArgumentException("unsupported-native-stage");
             // Validate the ENTIRE owner's declared sequence before admitting
             // the first effect; no partially executed surprise operations.
@@ -81,6 +83,8 @@ public final class JarvisNativeSequenceTask extends Task {
                 throw new IllegalArgumentException("stage-count");
             if(!(goal.equals("gather")?GATHER:goal.equals("craft")?CRAFT:SMELT.keySet()).contains(item))
                 throw new IllegalArgumentException("stage-resource");
+        } else if(Set.of("tools","stone_age","iron_age").contains(goal)) {
+            if(row.size()!=1)throw new IllegalArgumentException("preset-has-unexpected-arguments");
         } else if(goal.equals("equip")){
             String item=row.get("item").getAsString();
             String slot=row.get("destination").getAsString();
@@ -132,6 +136,7 @@ public final class JarvisNativeSequenceTask extends Task {
         String goal=row.get("goal").getAsString();
         currentItem=null;currentBefore=0;currentQuantity=0;
         equipmentSlot=null;destination=null;
+        equipmentTargets=null;equipmentProgress=0;
         stage=goal+"["+index+"]";
         if(Set.of("gather","craft","smelt").contains(goal)){
             currentItem=goal.equals("gather")?row.get("resource").getAsString():row.get("item").getAsString();
@@ -151,6 +156,12 @@ public final class JarvisNativeSequenceTask extends Task {
                 throw new IllegalArgumentException("unknown-catalogue-resource");
             return TaskCatalogue.getItemTask(currentItem,currentBefore+currentQuantity);
         }
+        if(Set.of("tools","stone_age","iron_age").contains(goal)) {
+            equipmentTargets=goal.equals("iron_age")?
+                new String[]{"iron_pickaxe","iron_sword"}:
+                new String[]{"stone_pickaxe","stone_sword"};
+            return nextEquipmentTarget();
+        }
         if(goal.equals("equip")){
             currentItem=row.get("item").getAsString();
             equipmentSlot=row.get("destination").getAsString();
@@ -168,6 +179,15 @@ public final class JarvisNativeSequenceTask extends Task {
         return new GetToBlockTask(destination);
     }
 
+    private Task nextEquipmentTarget() {
+        if(equipmentTargets==null || equipmentProgress>=equipmentTargets.length)
+            throw new IllegalStateException("equipment-stage-finished");
+        currentItem=equipmentTargets[equipmentProgress];
+        currentBefore=count(currentItem);
+        currentQuantity=currentBefore>0?0:1;
+        if(!TaskCatalogue.taskExists(currentItem))throw new IllegalArgumentException("catalogue-equipment-missing");
+        return TaskCatalogue.getItemTask(currentItem,Math.max(1,currentBefore));
+    }
     private boolean physicallyDone(){
         if(currentItem!=null && equipmentSlot!=null)
             return wearing(currentItem,equipmentSlot);
@@ -186,6 +206,12 @@ public final class JarvisNativeSequenceTask extends Task {
         if(current.isFinished()){
             if(!physicallyDone()){
                 failed=true;stage="postcondition-unverified";return null;
+            }
+            if(equipmentTargets!=null && equipmentProgress+1<equipmentTargets.length){
+                equipmentProgress++;
+                current=nextEquipmentTarget();
+                stage="equipment["+index+":"+equipmentProgress+"]";
+                return current;
             }
             index++;
             current=null;

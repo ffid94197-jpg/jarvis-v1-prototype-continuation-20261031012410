@@ -2,7 +2,7 @@ import {readFileSync} from "node:fs";
 import {join} from "node:path";
 /** Operator opt-in Windows capabilities. Never infer privileges from model output. */
 export interface DesktopPrepared {
-  operation: "open_url" | "open_app" | "open_settings" | "discover_apps" | "find_capability" | "youtube_oldest" | "screen_watch" | "minecraft_join" | "minecraft_stop" | "browser_search" | "browser_inspect" | "browser_read_page" | "browser_click_link" | "browser_fill_search" | "browser_scroll" | "list_windows" | "focus_app" | "desktop_state" | "desktop_windows" | "desktop_focus" | "desktop_click" | "desktop_move" | "desktop_type" | "desktop_keys" | "desktop_scroll" | "launch_installed" | "minecraft_command" | "minecraft_input" | "native_open_url" | "native_inspect" | "native_action" | "native_verify" | "desktop_observe";
+  operation: "open_url" | "open_app" | "open_settings" | "discover_apps" | "find_capability" | "youtube_oldest" | "screen_watch" | "minecraft_join" | "minecraft_spawn" | "minecraft_stop" | "browser_search" | "browser_inspect" | "browser_read_page" | "browser_click_link" | "browser_fill_search" | "browser_scroll" | "list_windows" | "focus_app" | "desktop_state" | "desktop_windows" | "desktop_focus" | "desktop_click" | "desktop_move" | "desktop_type" | "desktop_keys" | "desktop_scroll" | "launch_installed" | "minecraft_command" | "minecraft_input" | "native_open_url" | "native_inspect" | "native_action" | "native_verify" | "desktop_observe";
   goal?: string;
   url?: string;
   app?: string;

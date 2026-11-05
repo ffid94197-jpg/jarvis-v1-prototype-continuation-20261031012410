@@ -63,6 +63,7 @@ public final class JarvisBridgeServer {
     private static volatile MinecraftServer running;
     private static volatile String secret;
     private static volatile String allowedWorld;
+    private static volatile JarvisNativeJournal journal;
     // Accessed only from server.execute; bounded to avoid indefinite replay state.
     private static final Map<String, Long> seen = new HashMap<>();
     private static final Map<UUID, Run> tasks = new HashMap<>();
@@ -130,7 +131,11 @@ public final class JarvisBridgeServer {
             ServerSocket sock = new ServerSocket();
             sock.setReuseAddress(false);
             sock.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), port), 8);
+            // A corrupt or ambiguous native ledger blocks the entire bridge
+            // BEFORE the socket is exposed to local clients.
+            JarvisNativeJournal restored=JarvisNativeJournal.load();
             listener = sock;
+            journal=restored;
             running = server;
             secret = key;
             allowedWorld = world;
@@ -150,6 +155,7 @@ public final class JarvisBridgeServer {
         running = null;
         secret = null;
         allowedWorld = null;
+        journal = null;
         seen.clear();
         tasks.clear();
         safetyStopped.clear();
@@ -250,6 +256,8 @@ public final class JarvisBridgeServer {
         if (args == null) throw new IllegalArgumentException("args");
         UUID ownerId = id(args,"ownerUuid");
         UUID companionId = id(args,"companionUuid");
+        JarvisNativeJournal ledger=journal;
+        if (ledger==null) throw new IllegalStateException("native-ledger-not-initialized");
         if (server.getPlayerManager().getPlayer(ownerId) == null) throw new IllegalArgumentException("owner-offline");
         CompanionEntity companion = null;
         for (ServerWorld world : server.getWorlds()) {
@@ -300,8 +308,14 @@ public final class JarvisBridgeServer {
                 status="cancelled"; note="companion-emergency-stop-latched";
             }
             case "resume" -> {
-                if (!safetyStopped.remove(companionId))
-                    throw new IllegalArgumentException("not-paused");
+                if (tasks.values().stream().anyMatch(r ->
+                        r.companion.equals(companionId) && "running".equals(r.state)))
+                    throw new IllegalArgumentException("active-task-reconciliation-required");
+                if (!safetyStopped.contains(companionId) && !ledger.hasUnresolved(companionId))
+                    throw new IllegalArgumentException("no-recovery-latch");
+                ledger.reconcileAfterExplicitOwnerResume(companionId);
+                safetyStopped.remove(companionId);
+                if (ledger.hasUnresolved(companionId)) throw new IllegalStateException("resume-not-durable");
                 ctrl.getTaskRunner().enable();
                 status="observed";
                 note="owner-resumed-ready-for-new-authorized-tasks";

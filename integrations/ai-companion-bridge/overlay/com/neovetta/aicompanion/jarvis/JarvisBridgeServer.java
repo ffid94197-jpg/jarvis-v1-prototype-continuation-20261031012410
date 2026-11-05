@@ -298,14 +298,25 @@ public final class JarvisBridgeServer {
                 }
                 ctrl.stop();
                 safetyStopped.add(companionId);
-                for (Run run : tasks.values()) {
+                boolean allRecorded=true;
+                for (Map.Entry<UUID,Run> entry : tasks.entrySet()) {
+                    Run run=entry.getValue();
                     if (companionId.equals(run.companion) && "running".equals(run.state)) {
-                        run.state="cancelled";
+                        try {
+                            ledger.settle(entry.getKey(),"CANCELLED");
+                            run.state="cancelled";
+                            run.note="owner-emergency-stop-with-durable-receipt";
+                        } catch (Exception ex) {
+                            allRecorded=false;
+                            run.state="failed";
+                            run.note="stop-sent-but-native-journal-outcome-unknown";
+                        }
                         run.settledAt=now;
-                        run.note="owner-emergency-stop-observed";
                     }
                 }
-                status="cancelled"; note="companion-emergency-stop-latched";
+                status=allRecorded?"cancelled":"failed";
+                note=allRecorded?"companion-emergency-stop-latched":
+                    "stop-sent-but-durable-state-unknown";
             }
             case "resume" -> {
                 if (tasks.values().stream().anyMatch(r ->
@@ -326,10 +337,17 @@ public final class JarvisBridgeServer {
                         !previous.coreTaskId.equals(authorizedCoreTask))
                     throw new IllegalArgumentException("task-mismatch");
                 ctrl.cancelUserTask();
-                previous.state = "cancelled";
-                previous.settledAt = now;
-                previous.note = "cancel-sent-observe-before-retry";
-                status = "cancelled"; note = previous.note;
+                try {
+                    ledger.settle(taskId,"CANCELLED");
+                    previous.state="cancelled";
+                    previous.note="cancel-sent-and-durably-recorded";
+                } catch (Exception ex) {
+                    previous.state="failed";
+                    previous.note="cancel-sent-but-journal-uncertain";
+                }
+                previous.settledAt=now;
+                status=previous.state;
+                note=previous.note;
             }
             case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat", "endgame" -> {
                 if (safetyStopped.contains(companionId)) throw new IllegalArgumentException("owner-safety-stop-latched");
@@ -544,11 +562,17 @@ public final class JarvisBridgeServer {
         long now = System.currentTimeMillis();
         Iterator<Map.Entry<UUID, Run>> it = tasks.entrySet().iterator();
         while (it.hasNext()) {
-            Run run = it.next().getValue();
+            Map.Entry<UUID,Run> entry=it.next();
+            Run run = entry.getValue();
             if ("running".equals(run.state) && now >= run.deadline) {
                 try { run.ctrl.cancelUserTask(); } catch (Exception ignored) {}
+                try {
+                    if (journal != null) journal.settle(entry.getKey(),"EFFECT_UNKNOWN");
+                } catch (Exception ignored) {
+                    // An unsettled ADMITTED journal still quarantines this effect.
+                }
                 run.state = "failed";
-                run.note = "task-budget-expired-cancelled";
+                run.note = "task-deadline-expired-reconciliation-required";
                 run.settledAt = now;
             }
             if (!"running".equals(run.state) && run.settledAt > 0 && now-run.settledAt > 1800000)

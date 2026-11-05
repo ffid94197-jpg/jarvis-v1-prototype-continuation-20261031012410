@@ -352,10 +352,12 @@ function modelGoalGrounded(q,ownerText,context=''){
    const withdraw=/\b(?:withdraw|take|retrieve)\b/.test(s);
    if(q.operation==='deposit'?!deposit:!withdraw)return false;
    if(!s.includes(String(q.item).replace(/_/g,' ')))return false;
-   const quantities=s.match(/\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)\b/g)||[];
-   if(quantities.length!==1||amount(quantities[0])!==q.targetCount)return false;
    const coords=s.match(/-?\d{1,8}[\s,]+-?\d{1,8}[\s,]+-?\d{1,8}/g)||[];
    if(coords.length!==1 || coords[0].match(/-?\d+/g)?.map(Number).some((v,i)=>v!==[q.position.x,q.position.y,q.position.z][i]))return false;
+   // Explicit coordinates are not additional item quantities.
+   const pre=s.slice(0,s.indexOf(coords[0]));
+   const quantities=pre.match(/\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)\b/g)||[];
+   if(quantities.length!==1||amount(quantities[0])!==q.targetCount)return false;
    let scene;try{scene=JSON.parse(context);}catch{return false;}
    return Array.isArray(scene?.nearbyBlocks)&&scene.nearbyBlocks.some(block=>
      ['chest','trapped_chest','barrel'].includes(block?.name)&&

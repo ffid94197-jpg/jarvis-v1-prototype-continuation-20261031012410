@@ -43,7 +43,8 @@ function extract(o:Packet):{health:number;hunger:number;position:{x:number;y:num
     const raw=entry as Record<string,unknown>;
     const item=String(raw.item||"").replace(/^minecraft:/,"");
     const count=raw.count;
-    if(!/^[a-z0-9_]{1,64}$/.test(item)||!Number.isInteger(count)||Number(count)<1||Number(count)>64)
+    if(!/^[a-z0-9_]{1,64}$/.test(item)||typeof count!=="number"||
+       !Number.isInteger(count)||count<1||count>64)
       throw Error("Untrusted inventory entry");
     return {item,count:Number(count)};
   }

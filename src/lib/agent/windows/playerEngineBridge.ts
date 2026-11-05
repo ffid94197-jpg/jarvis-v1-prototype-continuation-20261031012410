@@ -4,6 +4,7 @@
  * This is not evidence of completed Minecraft autonomy/Dragon acceptance.
  */
 import {randomUUID} from "node:crypto";
+import {db} from "@/lib/db";
 import type {GuardianDecision} from "../guardian/guardian";
 import type {DesktopPrepared} from "./policy";
 type Packet = {version:number;taskId:string;idempotencyKey:string;nonce:string;worldId:string;
@@ -32,6 +33,49 @@ function settings(ownerId:string):Settings {
       !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(worldId)||!UUID.test(ownerUuid)||!UUID.test(companionUuid))
     throw Error("PlayerEngine owner/world/secret settings unavailable");
   return {port,secret,worldId,ownerUuid,companionUuid};
+}
+/**
+ * Restore ONLY the original Core task's native mission identity, never
+ * executable authority. The source is the OWNER'S durably SETTLED effect,
+ * not a model message, process-local cache or guessed game entity ID.
+ * A signed native status read is still required before any progress proof.
+ */
+async function restoreNativeMissionFromCore(
+  coreTaskId:string,ownerId:string,cfg:Settings
+):Promise<(typeof active extends Map<string,infer V>?V:never)|undefined>{
+  const task=await db.agentTask.findUnique({
+    where:{id:coreTaskId},select:{ownerId:true}
+  });
+  if(!task || task.ownerId!==ownerId)
+    throw Error("Native mission owner provenance unavailable");
+  const rows=await db.effectRecord.findMany({
+    where:{taskId:coreTaskId,tool:"minecraft_companion_command",status:"SETTLED"},
+    orderBy:{admittedAt:"desc"},take:40,
+    select:{argsJson:true,receiptJson:true}
+  });
+  for(const row of rows){
+    try{
+      const args=JSON.parse(row.argsJson||"{}") as Record<string,unknown>;
+      const receipt=JSON.parse(row.receiptJson||"{}") as Record<string,unknown>;
+      const proof=receipt.detail as Record<string,unknown>|undefined;
+      if(args.command!=="auto_goal" || typeof args.goal!=="string" ||
+         receipt.ok!==true || !proof || proof.botAcknowledged!==true ||
+         proof.command!=="auto_goal" || proof.goal!==args.goal ||
+         proof.missionStartedOnly!==true ||
+         !UUID.test(String(proof.nativeRunId||"")) ||
+         proof.worldId!==cfg.worldId || proof.ownerUuid!==cfg.ownerUuid ||
+         proof.companionUuid!==cfg.companionUuid ||
+         typeof proof.nativeSince!=="number" ||
+         !Number.isSafeInteger(proof.nativeSince) ||
+         proof.nativeSince>Date.now()+30000 ||
+         Date.now()-proof.nativeSince>14*60*60*1000)continue;
+      const restored={runId:String(proof.nativeRunId),operation:"endgame",
+        missionGoal:args.goal,missionSince:proof.nativeSince};
+      active.set(coreTaskId,restored);
+      return restored;
+    }catch{/* Unknown or damaged receipt cannot restore authority. */}
+  }
+  return undefined;
 }
 function extract(o:Packet):{health:number;hunger:number;position:{x:number;y:number;z:number};
   items:Record<string,number>;armor:Set<string>;armorSlots:string[];mainHand:string} {
@@ -163,7 +207,9 @@ export async function runGuardianApprovedPlayerEngine(
       desktop.operation==="minecraft_join"?"join":desktop.operation==="minecraft_stop"?"auto_stop":null;
     if(!cmd)throw Error("Unsupported PlayerEngine tool");
     if(isCancelled() && !["auto_stop","stop","stay"].includes(cmd))throw Error("Operator cancellation before admission");
-    const current=active.get(coreTaskId);
+    let current=active.get(coreTaskId);
+    if(!current && cmd==="auto_status")
+      current=await restoreNativeMissionFromCore(coreTaskId,ownerId,cfg);
     if(["join","observe","status","inventory","auto_status"].includes(cmd)){
       const packet=await send(current?"status":"inspect",current?.runId||randomUUID(),cfg,auth,{},2500);
       if(packet.status==="failed" && current)throw Error("Native task status failed");
@@ -311,15 +357,18 @@ export async function runGuardianApprovedPlayerEngine(
           width:spec.width,depth:spec.depth,targetCount:spec.targetCount};
       }
       const runId=randomUUID();
+      const nativeSince=Date.now();
       // Record intent before the remote effect. Lost acknowledgement does not
       // confer permission to retry a potentially active long-running mission.
       active.set(coreTaskId,{runId,operation:op,missionGoal:goal,
-        missionSince:Date.now()});
+        missionSince:nativeSince});
       const receipt=await send(op,runId,cfg,auth,details,30000);
       const admitted=["accepted","running","observed"].includes(receipt.status);
       return {ok:admitted,
         evidence:{botAcknowledged:admitted,backend:"playerengine",
           command:"auto_goal",goal,status:receipt.status,
+          nativeRunId:runId,nativeSince,worldId:cfg.worldId,
+          ownerUuid:cfg.ownerUuid,companionUuid:cfg.companionUuid,
           missionStartedOnly:true,missionReceipt:receipt.observations?.missionStatus},
         error:admitted?undefined:
           "Native mission not admitted; reconcile game state before a retry"};

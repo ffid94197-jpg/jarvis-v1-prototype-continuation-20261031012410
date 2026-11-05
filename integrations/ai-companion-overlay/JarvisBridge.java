@@ -465,26 +465,54 @@ public final class JarvisBridge {
             }
         }
         out.add("nearbyBlocks", nearby);
-        out.add("threats", new JsonArray());
-        out.add("villagers", new JsonArray());
+        JsonArray threats = new JsonArray();
+        JsonArray villagers = new JsonArray();
+        AABB entityBounds = AABB.ofSize(companion.position(), 24, 12, 24);
+        java.util.Set<String> hostileTypes = java.util.Set.of("zombie","skeleton","creeper","spider",
+                "enderman","witch","drowned","husk","stray","blaze","ghast","wither_skeleton",
+                "piglin_brute","guardian","silverfish","slime","phantom","vindicator","evoker",
+                "ravager","hoglin","zoglin","warden","breeze","bogged","pillager");
+        for (Entity entity : level.getEntitiesOfClass(Entity.class, entityBounds)) {
+            String type = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getPath();
+            if (hostileTypes.contains(type) && threats.size() < 16) {
+                JsonObject row = new JsonObject();
+                row.addProperty("id", entity.getId());
+                row.addProperty("name", type);
+                row.addProperty("distance", entity.distanceTo(companion));
+                row.addProperty("x", entity.getX());
+                row.addProperty("y", entity.getY());
+                row.addProperty("z", entity.getZ());
+                threats.add(row);
+            } else if ("villager".equals(type) && villagers.size() < 12) {
+                JsonObject row = new JsonObject();
+                row.addProperty("id", entity.getId());
+                row.addProperty("distance", entity.distanceTo(companion));
+                row.addProperty("x", entity.getX());
+                row.addProperty("y", entity.getY());
+                row.addProperty("z", entity.getZ());
+                villagers.add(row);
+            }
+        }
+        out.add("threats", threats);
+        out.add("villagers", villagers);
 
         var owner = controller == null ? null : controller.getOwner();
         boolean ownerVisible = owner != null && owner.level() == companion.level();
         out.addProperty("ownerVisible", ownerVisible);
         if (ownerVisible) out.addProperty("ownerDistance", owner.distanceTo(companion));
-        else out.add("ownerDistance", null);
+        else out.add("ownerDistance", com.google.gson.JsonNull.INSTANCE);
 
         ServerLevel end = gameServer == null ? null : gameServer.getLevel(Level.END);
         boolean dragonDead = end != null && dragonPreviouslyKilled(end);
         out.addProperty("dragonDeadObserved", dragonDead);
-        out.addProperty("exitPortalPresent", dragonDead);
+        out.addProperty("exitPortalPresent", end != null && hasExitPortal(end));
         boolean dragonPresent = false;
         int crystals = 0;
         if (end != null) {
             for (Entity entity : end.getAllEntities()) {
                 String id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getPath();
                 if ("ender_dragon".equals(id)) dragonPresent = true;
-                if ("end_crystal".equals(id)) crystals++;
+                if ("end_crystal".equals(id) && companion.level() == end && entity.distanceTo(companion) <= 128.0F) crystals++;
             }
         }
         out.addProperty("dragonPresent", dragonPresent);
@@ -503,6 +531,16 @@ public final class JarvisBridge {
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             return false;
         }
+    }
+
+    private static boolean hasExitPortal(ServerLevel end) {
+        for (int x = -2; x <= 2; x++) for (int y = 58; y <= 72; y++)
+            for (int z = -2; z <= 2; z++) {
+                BlockPos pos = new BlockPos(x, y, z);
+                if (end.hasChunkAt(pos) && end.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.END_PORTAL))
+                    return true;
+            }
+        return false;
     }
 
     private static boolean hasBlock(ServerLevel level, BlockPos origin, net.minecraft.world.level.block.Block target, int radius) {
@@ -547,6 +585,7 @@ public final class JarvisBridge {
 
     private static void dispatch(TaskReceipt receipt, JsonObject body) {
         try {
+            if (!"queued".equals(receipt.state)) return;
             MinecraftServer server = gameServer;
             var owner = server == null ? null : server.getPlayerList().getPlayerByName(receipt.ownerName);
             if (owner == null) throw new IllegalStateException("Owner is not online.");
@@ -628,9 +667,10 @@ public final class JarvisBridge {
             case "follow", "companion" -> "follow " + ownerName;
             case "guard" -> "bodyguard";
             case "dragon_run" -> "gamer";
+            case "netherite_armor_run" -> netheriteArmorCommands();
+            case "netherite_gear_run" -> netheriteGearCommands();
             case "netherite_dragon_run", "dragon_then_netherite_run" ->
-                    "gamer;get netherite_helmet 1;get netherite_chestplate 1;get netherite_leggings 1;" +
-                    "get netherite_boots 1;get netherite_sword 1;get netherite_pickaxe 1;equip netherite;equip netherite_sword";
+                    "gamer;" + netheriteGearCommands();
             case "gather" -> "get " + resource(string(body, "resource")) + " " + bounded(body, "targetCount", 1, 64);
             case "craft" -> "get " + item(body, "item") + " " + bounded(body, "targetCount", 1, 16);
             case "equip" -> "equip " + item(body, "item");
@@ -640,6 +680,15 @@ public final class JarvisBridge {
             case "sequence" -> sequenceCommand(body, ownerName);
             default -> throw new IllegalArgumentException("No reviewed PlayerEngine mapping exists for goal " + goal + ".");
         };
+    }
+
+    private static String netheriteArmorCommands() {
+        return "get netherite_helmet 1;get netherite_chestplate 1;get netherite_leggings 1;" +
+                "get netherite_boots 1;equip netherite";
+    }
+
+    private static String netheriteGearCommands() {
+        return netheriteArmorCommands() + ";get netherite_sword 1;get netherite_pickaxe 1;equip netherite_sword";
     }
 
     private static String sequenceCommand(JsonObject body, String ownerName) {

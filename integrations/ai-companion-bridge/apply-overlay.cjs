@@ -15,7 +15,7 @@ const mainRel="aicompanion/src/main/java/com/neovetta/aicompanion/AiCompanion.ja
 const engRel="engine/src/autoclef/java/adris/altoclef/AltoClefController.java";
 const serviceRel="engine/src/autoclef/java/adris/altoclef/player2api/Player2APIService.java";
 const commandRel="aicompanion/src/main/java/com/neovetta/aicompanion/CompanionCommands.java";
-const overlayNames=["JarvisBridgeServer.java","JarvisEndgameTask.java","JarvisNativeJournal.java","JarvisNativeSequenceTask.java"];
+const overlayNames=["JarvisBridgeServer.java","JarvisEndgameTask.java","JarvisNativeJournal.java","JarvisNativeSequenceTask.java","JarvisNativeInventoryTransfer.java"];
 const overlayRoot="aicompanion/src/main/java/com/neovetta/aicompanion/jarvis";
 const originalMain=read(mainRel),originalEngine=read(engRel),
       originalService=read(serviceRel),originalCommands=read(commandRel);

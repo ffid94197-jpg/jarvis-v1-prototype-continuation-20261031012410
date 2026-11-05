@@ -18,6 +18,19 @@ This opt-in branch now includes an actual source-level Core-to-Fabric path:
 
 **Still not a fully built/released prototype:** This branch has not passed Java/Gradle compilation, Next.js TypeScript typechecking, the new local contract tests, security acceptance, the complete 200k Internet prompt evaluation, or Minecraft Java playthrough. Full Netherite, Dragon, broad arbitrary gameplay, and independent final acceptance are not demonstrated. A development commit is not proof of those milestones.
 
+## Source extension: sequence, container and observation bridges
+
+Additional prototype source now includes:
+
+- Native sequence stages `tools`, `stone_age`, `iron_age` and owner-bounded linear `build` (up to eight physically checked adjacent placement targets per stage), aligned with the existing Guardian `x+`/`x-`/`z+`/`z-` construction axis contract.
+- Local `JarvisNativeInventoryTransfer.java` for an exact quantity of one named vanilla item in a nearby loaded chest/barrel. The Java server journals the task before the effect, checks both inventories and reports a same-task `missionStatus` including `transferDone`. Both `auto_goal transfer` and the direct `transfer_container` primitive are wired at the Core adapter, but method correctness has not been field-tested.
+- Owner-bound native read-only `inspect_villager` (up to eight real trade offers, no trading) and `inspect_block` (loaded-world block identifier, open/powered state where present).
+- Native `interact_block` for observed doors, trapdoors, levers and buttons, reporting an actual changed state before success; it does not pretend to prove chest/container transactions from a click alone.
+- Correct `operationDirection` from Guardian-prepared Minecraft transfer goals, default bounded mission durations, Core-native auto-status matching of the original goal and task, and retention of settled mission identity until final evidence readback.
+- A corrected reference to the actually declared durable native journal within the Fabric bridge.
+
+**Remaining build-only limitations:** unimplemented native villager purchase transactions, enchanting, multi-operation advanced container and world interactions, broad generic construction beyond bounded primitives, hardening of all long-horizon edge cases, and remaining general-purpose Windows/AI autonomy coverage. Also, this code has NOT been compiled or field-accepted. GitHub Actions have not been used in this pass.
+
 ## Architecture and code
 
 - Pinned AI Companion upstream: \`adevivo/ai-companion@6bb1df1a06258ca712b66f1404dd05204f25b9c7\`, LGPL-3.0; PlayerEngine / AltoClef / Automatone.

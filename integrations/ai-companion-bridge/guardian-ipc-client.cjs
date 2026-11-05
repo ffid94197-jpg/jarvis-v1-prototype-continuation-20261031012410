@@ -79,7 +79,10 @@ async function sendAuthorizedObjective(request, options={}) {
   return new Promise((resolve,rejectPromise)=>{
     let done=false, buffer=Buffer.alloc(0);
     const socket=socketPath != null ? net.createConnection({path:socketPath}) : net.createConnection({port,host});
-    function finish(err,result) {if(done)return;done=true;socket.destroy();if(err)rejectPromise(err);else resolve(result);}
+    // Socket timeouts reset on trickled input. A wall-clock deadline remains
+    // mandatory even when a peer sends a byte every few milliseconds.
+    const deadline=setTimeout(()=>finish(new Error("AI_COMPANION_IPC_DEADLINE")),timeoutMs);
+    function finish(err,result) {if(done)return;done=true;clearTimeout(deadline);socket.destroy();if(err)rejectPromise(err);else resolve(result);}
     socket.setTimeout(timeoutMs,()=>finish(new Error("AI_COMPANION_IPC_TIMEOUT")));
     socket.on("error",err=>finish(new Error("AI_COMPANION_IPC_TRANSPORT_"+err.code)));
     socket.on("connect",()=>socket.write(canonical({payload:frame.payload,mac:frame.mac})+"\n"));

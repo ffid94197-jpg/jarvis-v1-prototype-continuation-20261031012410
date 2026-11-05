@@ -326,12 +326,17 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
   const validMinecraftGoal=(r:Record<string,unknown>,step=false):boolean=>{
     if(!r || typeof r!=="object" || Array.isArray(r) || typeof r.goal!=="string")return false;
     const fixed=new Set(["survive","wood","tools","explore","follow","guard","stone_age","iron_age",
-      "dragon_run","netherite_dragon_run","dragon_then_netherite_run","companion"]);
+      "dragon_run","netherite_dragon_run","dragon_then_netherite_run",
+      "netherite_armor_run","netherite_gear_run","companion"]);
     const params:Record<string,string[]>={
       gather:["resource","targetCount"],travel:["destination","arrivalRange"],
       craft:["item","targetCount"],equip:["item",step?"destination":"destinationSlot"],
       build:["position","block","axis","length"],
-      farm_wheat:["position","width","depth","targetCount"],sequence:["steps"]
+      farm_wheat:["position","width","depth","targetCount"],
+      farm_crop:["crop","position","width","depth","targetCount"],
+      smelt:["item","targetCount"],shelter:["width","depth"],
+      build_volume:["position","block","width","depth","height","shape"],
+      transfer:["position","item","targetCount","operation"],sequence:["steps"]
     };
     const g=r.goal,extra=fixed.has(g)?[]:(Object.hasOwn(params,g)?params[g]:undefined);
     if(!extra || (step && (g==="sequence" || (fixed.has(g)&&!["tools","stone_age","iron_age"].includes(g)))))
@@ -375,6 +380,35 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       const dz=r.axis==="z+"?1:r.axis==="z-"?-1:0;
       return integer(p.y,-62,318)&&Math.abs(p.x)<=29999984&&Math.abs(p.z)<=29999984&&
         Math.abs(p.x+dx*(n-1))<=29999984&&Math.abs(p.z+dz*(n-1))<=29999984;
+    }
+    if(g==="shelter")
+      return r.width===undefined&&r.depth===undefined ||
+        integer(r.width,3,4)&&integer(r.depth,3,4);
+    if(g==="smelt")
+      return ["iron_ingot","gold_ingot","glass","charcoal","netherite_scrap",
+        "cooked_beef","cooked_porkchop","cooked_chicken"].includes(String(r.item)) &&
+        integer(r.targetCount,1,16);
+    if(g==="transfer")
+      return at(r.position) && typeof r.item==="string" &&
+        /^[a-z0-9_]{1,64}$/.test(r.item) && integer(r.targetCount,1,64) &&
+        ["deposit","withdraw"].includes(String(r.operation));
+    if(g==="build_volume") {
+      if(!at(r.position) || !integer(r.width,1,5) || !integer(r.depth,1,5) ||
+          !integer(r.height,1,3) ||
+          Number(r.width)*Number(r.depth)*Number(r.height)>64 ||
+          !["floor","walls","solid","roof"].includes(String(r.shape)) ||
+          !["cobblestone","dirt","oak_planks","spruce_planks",
+            "birch_planks","stone_bricks","netherrack"].includes(String(r.block)))
+        return false;
+      return !["floor","roof"].includes(String(r.shape)) || r.height===1;
+    }
+    if(g==="farm_crop") {
+      if(!["carrots","potatoes"].includes(String(r.crop))||!at(r.position)||
+         !integer(r.width,1,4)||!integer(r.depth,1,4)||
+         !integer(r.targetCount,1,16))return false;
+      const p=r.position as {x:number;y:number;z:number};
+      return integer(p.y,-62,319)&&p.x>=-29999984&&p.z>=-29999984&&
+        p.x+Number(r.width)-1<=29999984&&p.z+Number(r.depth)-1<=29999984;
     }
     if(g==="farm_wheat"){
       if(!at(r.position)||!integer(r.width,1,4)||!integer(r.depth,1,4)||!integer(r.targetCount,1,16))return false;

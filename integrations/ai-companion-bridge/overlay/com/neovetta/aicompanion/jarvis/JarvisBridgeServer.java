@@ -313,7 +313,28 @@ public final class JarvisBridgeServer {
         String note;
         JsonArray viewedOffers=null;
         Integer inspectedVillagerId=null;
+        JsonObject inspectedBlock=null;
         switch (op) {
+            case "inspect_block" -> {
+                BlockPos selected=position(args);
+                ServerWorld level=(ServerWorld)companion.getWorld();
+                if(companion.getBlockPos().getSquaredDistance(selected)>16*16 ||
+                   !loaded(level,selected))
+                    throw new IllegalArgumentException("block-not-nearby-or-loaded");
+                BlockState state=level.getBlockState(selected);
+                JsonObject block=new JsonObject();
+                block.addProperty("x",selected.getX());
+                block.addProperty("y",selected.getY());
+                block.addProperty("z",selected.getZ());
+                block.addProperty("name",Registries.BLOCK.getId(state.getBlock()).toString());
+                if(state.contains(Properties.OPEN))
+                    block.addProperty("open",state.get(Properties.OPEN));
+                if(state.contains(Properties.POWERED))
+                    block.addProperty("powered",state.get(Properties.POWERED));
+                inspectedBlock=block;
+                status="observed";
+                note="server-observed-loaded-block-no-mutation";
+            }
             case "villager_offers" -> {
                 int targetId=args.get("entityId").getAsInt();
                 VillagerEntity selected=null;
@@ -708,6 +729,7 @@ public final class JarvisBridgeServer {
             default -> { status = "failed"; note = "unsupported-operation-fail-closed"; }
         }
         JsonObject snapshot = snapshot(companion);
+        if(inspectedBlock!=null)snapshot.add("inspectedBlock",inspectedBlock);
         if(viewedOffers!=null){
             snapshot.add("villagerOffers",viewedOffers);
             snapshot.addProperty("inspectedVillagerId",inspectedVillagerId);

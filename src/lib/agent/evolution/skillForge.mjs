@@ -222,7 +222,7 @@ export async function expandSkill(owner,id,inputs={}){
   const plan=item.manifest.steps.map(s=>({tool:s.tool,args:interpolate(s.args,inputs),why:s.why}));
   if(Buffer.byteLength(JSON.stringify(plan))>MAX_MANIFEST_BYTES)
     throw new EvolutionError("Expanded skill exceeds limit");
-  return {name:item.manifest.name,skillId:id,steps:plan,stageCount:plan.length,
+  return {name:item.manifest.name,skillId:id,digest:item.digest,steps:plan,stageCount:plan.length,
     crucible,
     advisoryOnly:true,executed:false,authorizationGranted:false,
     requiresPerStepGuardianAudit:true,requiresCoreDurableEffectAdmission:true};

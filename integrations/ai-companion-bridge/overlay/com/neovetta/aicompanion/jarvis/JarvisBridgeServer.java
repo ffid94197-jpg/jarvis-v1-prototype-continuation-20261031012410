@@ -284,6 +284,13 @@ public final class JarvisBridgeServer {
                 }
                 status="cancelled"; note="owner-companion-emergency-stop-issued";
             }
+            case "resume" -> {
+                if (!safetyStopped.remove(companionId))
+                    throw new IllegalArgumentException("not-paused");
+                ctrl.getTaskRunner().enable();
+                status="observed";
+                note="owner-resumed-ready-for-new-authorized-tasks";
+            }
             case "cancel" -> {
                 Run previous = tasks.get(taskId);
                 if (previous == null || !previous.companion.equals(companionId))
@@ -295,6 +302,7 @@ public final class JarvisBridgeServer {
                 status = "cancelled"; note = previous.note;
             }
             case "gather", "mine", "craft", "travel", "equip", "build", "dig", "combat" -> {
+                if (safetyStopped.contains(companionId)) throw new IllegalArgumentException("owner-safety-stop-latched");
                 if (tasks.containsKey(taskId)) throw new IllegalArgumentException("duplicate-task");
                 if (tasks.size() >= 2048) throw new IllegalArgumentException("task-capacity");
                 for (Run existing : tasks.values()) {
@@ -404,6 +412,7 @@ public final class JarvisBridgeServer {
             default -> { status = "failed"; note = "unsupported-operation-fail-closed"; }
         }
         JsonObject snapshot = snapshot(companion);
+        snapshot.addProperty("safetyStopped",safetyStopped.contains(companionId));
         Run receiptTask = tasks.get(taskId);
         if (receiptTask != null && receiptTask.companion.equals(companionId)) {
             if (receiptTask.blockPos != null) {

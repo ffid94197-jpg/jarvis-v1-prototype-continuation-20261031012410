@@ -14,12 +14,16 @@ if (-not $BuildOnly) {
   if ($LASTEXITCODE -ne 0) { throw 'Overlay installation failed; preserved upstream edits.' }
 }
 if ($ApplyOnly) { Write-Host 'JARVIS overlay installed; no build executed.'; exit 0 }
-$sourceOverlay = Join-Path $bridge 'overlay\com\neovetta\aicompanion\jarvis\JarvisBridgeServer.java'
-$installedOverlay = Join-Path $upstream 'aicompanion\src\main\java\com\neovetta\aicompanion\jarvis\JarvisBridgeServer.java'
-if (-not (Test-Path $installedOverlay)) { throw 'Native bridge source not installed; refusing a misleading build.' }
-if ((Get-FileHash -LiteralPath $sourceOverlay -Algorithm SHA256).Hash -ne
-    (Get-FileHash -LiteralPath $installedOverlay -Algorithm SHA256).Hash) {
-  throw 'Installed bridge overlay is stale or changed; preserve work and explicitly reconcile before building.'
+foreach ($name in @('JarvisBridgeServer.java', 'JarvisEndgameTask.java')) {
+  $sourceOverlay = Join-Path $bridge ('overlay\com\neovetta\aicompanion\jarvis\' + $name)
+  $installedOverlay = Join-Path $upstream ('aicompanion\src\main\java\com\neovetta\aicompanion\jarvis\' + $name)
+  if (-not (Test-Path $installedOverlay)) {
+    throw ('Native JARVIS source missing: ' + $name)
+  }
+  if ((Get-FileHash -LiteralPath $sourceOverlay -Algorithm SHA256).Hash -ne
+      (Get-FileHash -LiteralPath $installedOverlay -Algorithm SHA256).Hash) {
+    throw ('Overlay has changed outside the pinned adapter: ' + $name)
+  }
 }
 $engine = Join-Path $upstream 'engine'
 $consumer = Join-Path $upstream 'aicompanion'

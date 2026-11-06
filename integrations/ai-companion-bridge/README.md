@@ -18,7 +18,7 @@ This opt-in branch now includes an actual source-level Core-to-Fabric path:
 
 **Craft/status evidence contract:** PlayerEngine craft completion now requires the exact run ID's native `missionStatus`, exact output/count, a task-scoped output delta captured inside the actual `CraftInInventoryTask` or `CraftInTableTask` execution, and matching fresh inventory increase. Status snapshots are bound to the exact requested task ID rather than an arbitrary task sharing the same Core task ID. Inventory acquisition alone cannot satisfy a craft request. This strict primitive accepts only the pinned AltoClef 2×2/3×3 crafting task types; unsupported recipe-task types fail closed rather than being mislabeled as crafting.
 
-Offline craft-receipt contract: `node scripts/verify-native-craft-proof.cjs` (27/27 source-isolated assertions in the development harness). The test validates receipt logic and source wiring only; it does not compile the Fabric mod or prove a real crafting session.
+Offline craft-receipt contract: `node scripts/verify-native-craft-proof.cjs` (28/28 source-isolated assertions in the development harness). The test validates receipt logic and source wiring only; it does not compile the Fabric mod or prove a real crafting session.
 
 **Still not a fully built/released prototype:** This branch has not passed Java/Gradle compilation, Next.js TypeScript typechecking, the new local contract tests, security acceptance, the complete 200k Internet prompt evaluation, or Minecraft Java playthrough. Full Netherite, Dragon, broad arbitrary gameplay, and independent final acceptance are not demonstrated. A development commit is not proof of those milestones.
 

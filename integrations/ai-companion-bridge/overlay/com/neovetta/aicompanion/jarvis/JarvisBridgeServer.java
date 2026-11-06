@@ -793,9 +793,12 @@ public final class JarvisBridgeServer {
                         throw new IllegalArgumentException("wrong-gather-goal");
                     String resource=field(args,"resource");
                     int count=args.get("targetCount").getAsInt();
-                    if(!Set.of("logs","planks","sticks","cobblestone",
-                        "raw_iron","iron_ingot","diamond","obsidian","flint",
-                        "netherrack").contains(resource) || count<1||count>64)
+                    if(!Set.of("logs","planks","sticks","cobblestone","raw_iron","iron_ingot",
+                        "diamond","obsidian","flint","netherrack","dirt","sand","red_sand",
+                        "gravel","mud","soul_sand","soul_soil","moss_block","andesite",
+                        "diorite","granite","tuff","calcite","cobbled_deepslate",
+                        "blackstone","basalt","coal","raw_copper","raw_gold","redstone",
+                        "lapis_lazuli","emerald","quartz").contains(resource) || count<1||count>64)
                         throw new IllegalArgumentException("unapproved-resource-or-count");
                     String name=resource.equals("logs")?"log":
                         resource.equals("sticks")?"stick":resource;
@@ -1323,7 +1326,9 @@ public final class JarvisBridgeServer {
         "iron_ore","diamond_ore","deepslate_iron_ore","deepslate_diamond_ore",
         "oak_log","spruce_log","dirt","gravel","netherrack");
     private static final java.util.Set<String> COMBAT_MOBS=java.util.Set.of(
-        "zombie","skeleton","spider","husk","drowned","stray","slime");
+        "zombie","husk","drowned","skeleton","stray","spider","cave_spider",
+        "witch","pillager","blaze","endermite","silverfish","slime","magma_cube",
+        "zoglin","hoglin","phantom","wither_skeleton");
     private static BlockPos position(JsonObject args) {
         int x=args.get("x").getAsInt(), y=args.get("y").getAsInt(),
             z=args.get("z").getAsInt();

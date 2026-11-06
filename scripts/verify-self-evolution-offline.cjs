@@ -49,6 +49,8 @@ const crypto=require("node:crypto");
     assert.ok(diagnosis.patterns.some(x=>x.code==="RUNTIME_TYPE_ERROR"));
     assert.ok(diagnosis.patterns.some(x=>x.code==="UNCERTAIN_EFFECT"));
     assert.ok(diagnosis.patterns.some(x=>x.code==="AUTHORIZATION_DENIAL"));
+    const runtimePatternId=diagnosis.patterns.find(x=>x.code==="RUNTIME_TYPE_ERROR").id;
+    assert.match(runtimePatternId,/^diag_[0-9a-f]{20}$/);
     assert.equal(diagnosis.safety.readOnly,true);
     assert.equal(diagnosis.safety.rawObjectivesExposed,false);
     assert.equal(JSON.stringify(diagnosis).includes("TypeError: value"),false);
@@ -63,7 +65,7 @@ const crypto=require("node:crypto");
       path:"src/feature.js",expectedSha256:sha,oldText:"const value = 1;",
       newText:"const value = 2;",
       diagnosis:"Repeated runtime failure was reproduced and the exact safe source span was inspected.",
-    },{taskId:taskA});
+    },{taskId:taskA,diagnosisPatternId:runtimePatternId});
     assert.equal(staged.state,"staged");
     await assert.rejects(repair.autoApplyRepair(owner,staged.id,taskA),/disabled by owner policy/);
     assert.equal(await fs.readFile(file,"utf8"),original);
@@ -85,9 +87,21 @@ const crypto=require("node:crypto");
       path:"src/second.js",expectedSha256:secondSha,oldText:"const second = 1;",
       newText:"const second = 2;",
       diagnosis:"A second independently observed source issue requires a bounded correction.",
-    },{taskId:taskA});
+    },{taskId:taskA,diagnosisPatternId:runtimePatternId});
     await assert.rejects(repair.autoApplyRepair(owner,second.id,taskA),/one automatic repair per task/i);
     assert.equal(await fs.readFile(secondFile,"utf8"),"const second = 1;\n");
+
+    const noPatternFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","no-pattern.js");
+    const noPatternOriginal="const noPattern = 1;\n";
+    await fs.writeFile(noPatternFile,noPatternOriginal,"utf8");
+    const noPatternSha=crypto.createHash("sha256").update(noPatternOriginal).digest("hex");
+    const noPattern=await repair.stageRepair(owner,{
+      path:"src/no-pattern.js",expectedSha256:noPatternSha,oldText:"const noPattern = 1;",
+      newText:"const noPattern = 2;",
+      diagnosis:"A textual diagnosis without a repairable diagnosis pattern must not auto-apply.",
+    },{taskId:taskB});
+    await assert.rejects(repair.autoApplyRepair(owner,noPattern.id,taskB),/current repairable diagnosis pattern/i);
+    assert.equal(await fs.readFile(noPatternFile,"utf8"),noPatternOriginal);
 
     const brokenFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","broken.js");
     const brokenOriginal="const flag = true;\n";
@@ -206,6 +220,8 @@ const crypto=require("node:crypto");
     assert.ok(guardian.includes('"evolution_repair_apply"'));
     assert.ok(executor.includes('request.action==="diagnose"'));
     assert.ok(executor.includes('request.action==="auto_apply_repair"'));
+    assert.ok(executor.includes("currentPattern"));
+    assert.ok(executor.includes("requiresSourceInspection"));
     assert.ok(effects.includes('"evolution_repair_apply"'));
     assert.ok(effects.includes('eff.tool === "evolution_skill_learn"'));
     assert.ok(effects.includes("recoverRepair"));

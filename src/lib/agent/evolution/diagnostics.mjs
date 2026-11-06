@@ -88,7 +88,7 @@ export async function diagnoseOwnerRuntime(ownerId, db) {
       return {
         schemaVersion: 1, status: "no_recent_tasks", generatedAt: new Date().toISOString(),
         sample: { tasks: 0, steps: 0, effects: 0, guardianDenials: 0 },
-        summary: { failedTasks: 0, uncertainEffects: 0, patterns: 0 },
+        summary: { failedTasks: 0, deniedTasks: 0, partialTasks: 0, uncertainTasks: 0, uncertainEffects: 0, patterns: 0 },
         patterns: [], recent: [],
         repairPolicy: { autoApplyEnabled: process.env.JARVIS_SELF_REPAIR_AUTO_APPLY === "1", defaultOff: true },
         safety: { readOnly: true, rawObjectivesExposed: false, fileContentsExposed: false, automaticRetry: false },

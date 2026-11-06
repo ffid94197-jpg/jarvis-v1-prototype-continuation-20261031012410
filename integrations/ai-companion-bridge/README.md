@@ -16,7 +16,7 @@ This opt-in branch now includes an actual source-level Core-to-Fabric path:
 - Local contract test entry: `npm run test:minecraft-playerengine-ipc`. **The test scripts have been authored but not run here.**
 - Owner cancellation via the existing task cancellation API now sends a scoped, audited native stop request when there is a recorded Minecraft effect.
 
-**Craft/status evidence contract:** PlayerEngine craft completion now requires the exact run ID's native `missionStatus`, exact output/count, a server-side `Stats.CRAFTED` delta, and matching fresh inventory increase. Status snapshots are bound to the exact requested task ID rather than an arbitrary task sharing the same Core task ID. Inventory acquisition alone cannot satisfy a craft request.
+**Craft/status evidence contract:** PlayerEngine craft completion now requires the exact run ID's native `missionStatus`, exact output/count, a task-scoped output delta captured inside the actual `CraftInInventoryTask` or `CraftInTableTask` execution, and matching fresh inventory increase. Status snapshots are bound to the exact requested task ID rather than an arbitrary task sharing the same Core task ID. Inventory acquisition alone cannot satisfy a craft request.
 
 Offline craft-receipt contract: `node scripts/verify-native-craft-proof.cjs` (22/22 source-isolated assertions in the development harness). The test validates receipt logic and source wiring only; it does not compile the Fabric mod or prove a real crafting session.
 

@@ -44,7 +44,8 @@ const crypto=require("node:crypto");
       ]},
     });
     assert.equal(diagnosis.status,"diagnosed");
-    assert.equal(diagnosis.summary.failedTasks,2);
+    assert.equal(diagnosis.summary.failedTasks,1);
+    assert.equal(diagnosis.summary.uncertainTasks,1);
     assert.ok(diagnosis.patterns.some(x=>x.code==="RUNTIME_TYPE_ERROR"));
     assert.ok(diagnosis.patterns.some(x=>x.code==="UNCERTAIN_EFFECT"));
     assert.ok(diagnosis.patterns.some(x=>x.code==="AUTHORIZATION_DENIAL"));

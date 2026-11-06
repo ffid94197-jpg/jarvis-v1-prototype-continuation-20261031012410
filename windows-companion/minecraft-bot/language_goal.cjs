@@ -184,16 +184,15 @@ function directIntent(raw){
      item,targetCount:asCount(transfer[2]),operation,
      position:{x:Number(transfer[5]),y:Number(transfer[6]),z:Number(transfer[7])}});
  }
- // Coordinate-grounded carrots/potatoes use the existing farmland
- // observer. The exact crop, target count and small field footprint are
- // owner-defined; no LLM may invent a field or substitute a crop.
- // New wheat harvesting uses the same exact owner field contract as
- // vegetable harvesting; preexisting inventory is never mission progress.
+ // Coordinate-grounded wheat uses the same owner-defined field contract.
+ // Quantity, dimensions and origin are explicit; no model-generated site.
  const wheatRequest=new RegExp('^(?:farm|grow|harvest)(?: me)? ('+
-   COUNT_PATTERN+') wheat (?:in|from) (?:a |the |my )?'+
-   '(?:field|farm) (?:of |sized |size )?(\\d)\\s*(?:by|x|×)\\s*(\\d) '+
-   '(?:at|starting at|from) (?:coordinates? )?(-?\\d{1,8})[\\s,]+'+
-   '(-?\\d{1,8})[\\s,]+(-?\\d{1,8})(?: in minecraft)?'^(?:farm|grow|harvest)(?: me)? ('+
+  COUNT_PATTERN+') wheat (?:in|from) (?:a |the |my )?'+
+  '(?:field|farm) (?:of |sized |size )?(\\\\d)\\\\s*(?:by|x|×)\\\\s*(\\\\d) '+
+  '(?:at|starting at|from) (?:coordinates? )?(-?\\\\d{1,8})[\\\\s,]+'+
+  '(-?\\\\d{1,8})[\\\\s,]+(-?\\\\d{1,8})(?: in minecraft)? // observer. The exact crop, target count and small field footprint are
+ // owner-defined; no LLM may invent a field or substitute a crop.
+ const cropRequest=new RegExp('^(?:farm|grow|harvest)(?: me)? ('+
   COUNT_PATTERN+') (carrots|potatoes) (?:in|from) (?:a |the |my )?'+
   '(?:field|farm) (?:of |sized |size )?(\\d)\\s*(?:by|x|×)\\s*(\\d) '+
   '(?:at|starting at|from) (?:coordinates? )?(-?\\d{1,8})[\\s,]+'+
@@ -445,9 +444,12 @@ async function interpretOwnerInstruction(input,{env=process.env,context='',fetch
 module.exports={strictFormat,canonicalIntent,directIntent,modelConfig,interpretOwnerInstruction};
 ).exec(s);
  if(wheatRequest)return canonicalIntent({command:'auto_goal',goal:'farm_wheat',
-    targetCount:asCount(wheatRequest[1]),width:Number(wheatRequest[2]),
-    depth:Number(wheatRequest[3]),position:{x:Number(wheatRequest[4]),
-      y:Number(wheatRequest[5]),z:Number(wheatRequest[6])}});
+  targetCount:asCount(wheatRequest[1]),width:Number(wheatRequest[2]),
+  depth:Number(wheatRequest[3]),position:{x:Number(wheatRequest[4]),
+   y:Number(wheatRequest[5]),z:Number(wheatRequest[6])}});
+ // Coordinate-grounded carrots/potatoes use the existing farmland
+ // observer. The exact crop, target count and small field footprint are
+ // owner-defined; no LLM may invent a field or substitute a crop.
  const cropRequest=new RegExp('^(?:farm|grow|harvest)(?: me)? ('+
   COUNT_PATTERN+') (carrots|potatoes) (?:in|from) (?:a |the |my )?'+
   '(?:field|farm) (?:of |sized |size )?(\\d)\\s*(?:by|x|×)\\s*(\\d) '+

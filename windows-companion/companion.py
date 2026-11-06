@@ -729,6 +729,9 @@ def _minecraft_supervisor_loop(generation):
                     continue
                 bot_proc = None
                 bot_reconnecting = True
+            reader_done = getattr(child, "_jarvis_reader_done", None)
+            if reader_done is not None:
+                reader_done.wait(timeout=1)
             terminal = getattr(child, "_jarvis_reconnect_allowed", None)
             if exit_code == 2 or (terminal is not None and not terminal.is_set()):
                 with bot_lock:
@@ -885,35 +888,41 @@ def minecraft_action(op):
             joined = threading.Event()
             reconnect_allowed = threading.Event()
             reconnect_allowed.set()
-            # Per-process marker: a server kick is not a transient disconnect
-            # and must never trigger repeated login attempts.
+            reader_done = threading.Event()
+            # Per-process markers: a server kick is not a transient disconnect
+            # and must never trigger repeated login attempts. The supervisor
+            # waits for stdout drain before deciding whether to reconnect.
             child._jarvis_reconnect_allowed = reconnect_allowed
+            child._jarvis_reader_done = reader_done
 
             def read_bot(process=child, engine_name=engine, joined_event=joined,
-                         terminal_event=reconnect_allowed):
-                for line in process.stdout:
+                         terminal_event=reconnect_allowed, done_event=reader_done):
+                try:
+                    for line in process.stdout:
                     stripped = line.strip()
                     if (engine_name == 'jarvis' and stripped == 'MINECRAFT_COMPANION_JOINED (spawn observed)') or \
                        (engine_name == 'mine-ai-mcp' and stripped == 'MINECRAFT_MCP_JOINED (live connected status observed)'):
                         joined_event.set()
-                    if stripped == 'MINECRAFT_SESSION_TERMINAL':
-                        terminal_event.clear()
-                    if line.startswith('BOT_ACK '):
-                        try:
-                            ack=json.loads(line[8:])
-                            with bot_ack_lock:
-                                pending=bot_ack_waiters.get(ack.get('id'))
-                                if pending and pending.get('process') is process:
-                                    pending['result']=ack
-                                    pending['event'].set()
-                        except (ValueError,TypeError):pass
-                # Wake only requests issued to this exact child. A late EOF
-                # from an old process cannot consume a new process's ACKs.
-                with bot_ack_lock:
-                    for pending in list(bot_ack_waiters.values()):
-                        if pending.get('process') is process:
-                            pending['result']={'ok':False,'error':'Minecraft child exited; gameplay outcome is unknown.'}
-                            pending['event'].set()
+                        if stripped == 'MINECRAFT_SESSION_TERMINAL':
+                            terminal_event.clear()
+                        if line.startswith('BOT_ACK '):
+                            try:
+                                ack=json.loads(line[8:])
+                                with bot_ack_lock:
+                                    pending=bot_ack_waiters.get(ack.get('id'))
+                                    if pending and pending.get('process') is process:
+                                        pending['result']=ack
+                                        pending['event'].set()
+                            except (ValueError,TypeError):pass
+                finally:
+                    # Wake only requests issued to this exact child. A late EOF
+                    # from an old process cannot consume a new process's ACKs.
+                    with bot_ack_lock:
+                        for pending in list(bot_ack_waiters.values()):
+                            if pending.get('process') is process:
+                                pending['result']={'ok':False,'error':'Minecraft child exited; gameplay outcome is unknown.'}
+                                pending['event'].set()
+                    done_event.set()
 
             threading.Thread(target=read_bot,daemon=True,name='minecraft-join-evidence').start()
 

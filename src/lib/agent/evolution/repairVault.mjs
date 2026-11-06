@@ -158,7 +158,8 @@ const summary=r=>({id:r.id,path:r.path,state:r.state,diagnosis:r.diagnosis,
   approvedAt:r.approvedAt||null,appliedAt:r.appliedAt||null,
   rolledBackAt:r.rolledBackAt||null,approvalMode:r.approvalMode||"owner",
   autoApplyTaskId:r.autoApplyTaskId||null,stagedByTaskId:r.stagedByTaskId||null,
-  verification:r.verification||null,recovery:r.recovery||null});
+  diagnosisPatternId:r.diagnosisPatternId||null,verification:r.verification||null,
+  recovery:r.recovery||null});
 export async function listRepairs(owner){
   return (await load(owner)).map(summary);
 }
@@ -190,9 +191,13 @@ export async function getRepair(owner,id){
 }
 export async function stageRepair(owner,raw,metadata={}){
   const stagedByTaskId=metadata?.taskId;
+  const diagnosisPatternId=metadata?.diagnosisPatternId;
   if(stagedByTaskId!==undefined&&(typeof stagedByTaskId!=="string"||
       !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(stagedByTaskId)))
     throw new RepairError("Invalid Core task provenance",403);
+  if(diagnosisPatternId!==undefined&&(typeof diagnosisPatternId!=="string"||
+      !/^diag_[0-9a-f]{20}$/.test(diagnosisPatternId)))
+    throw new RepairError("Invalid diagnostic pattern provenance",403);
   const spec=proposedPatch(raw);
   return serialized(owner,async()=>{
     const {bytes,hash}=await boundedFile(spec.path);
@@ -204,7 +209,8 @@ export async function stageRepair(owner,raw,metadata={}){
     if(items.length>=MAX_REPAIRS)throw new RepairError("Repair vault capacity reached",409);
     const candidate={id:"rp_"+crypto.randomBytes(16).toString("hex"),
       ...spec,beforeSha256:hash,afterSha256:afterHash,state:"staged",
-      stagedByTaskId:stagedByTaskId||null,createdAt:new Date().toISOString()};
+      stagedByTaskId:stagedByTaskId||null,diagnosisPatternId:diagnosisPatternId||null,
+      createdAt:new Date().toISOString()};
     items.push(candidate);await save(owner,items);
     return summary(candidate);
   });
@@ -400,6 +406,8 @@ export async function autoApplyRepair(owner,id,taskId){
       throw new RepairError("Only a fresh staged repair can enter bounded auto-apply",409);
     if(item.stagedByTaskId!==taskId)
       throw new RepairError("Automatic repair must use a candidate staged by this exact Core task",403);
+    if(!/^diag_[0-9a-f]{20}$/.test(item.diagnosisPatternId||""))
+      throw new RepairError("Automatic repair requires a current repairable diagnosis pattern",403);
     if(items.some(r=>r.autoApplyTaskId===taskId))
       throw new RepairError("One automatic repair per task is the configured limit",409);
     const original=await boundedFile(item.path);

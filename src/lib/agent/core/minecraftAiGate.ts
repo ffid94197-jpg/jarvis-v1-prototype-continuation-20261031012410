@@ -364,7 +364,7 @@ export function mayStartNativeMinecraftGoal(
   }
   // Action conjunctions preserve the following verb; "logs and planks"
   // is not split or silently treated as an extra task.
-  const stages=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|smelt|cook|refine|bake|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
+  const stages=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|smelt|cook|refine|bake|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring|farm|trade|buy|purchase|exchange|store|deposit|put|withdraw|take|retrieve|enchant|attack|fight|defeat|kill)\b)/);
   if(stages.length!==args.steps.length)return false;
   const supported=new Set(['tools','stone_age','iron_age','gather','craft','smelt','equip','travel','build_volume','shelter','farm_wheat','farm_crop','defeat_hostile','transfer','trade','enchant']);
   return args.steps.every((stage,index)=>{

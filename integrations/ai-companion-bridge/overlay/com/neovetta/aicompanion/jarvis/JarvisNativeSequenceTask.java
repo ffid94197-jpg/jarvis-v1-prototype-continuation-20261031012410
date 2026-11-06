@@ -179,7 +179,7 @@ public final class JarvisNativeSequenceTask extends Task {
             String crop=goal.equals("farm_wheat")?"wheat":row.get("crop").getAsString();
             if((goal.equals("farm_wheat") && row.size()!=5) ||
                (goal.equals("farm_crop") && row.size()!=6) ||
-               !Set.of("wheat","carrots","potatoes").contains(crop) ||
+               !Set.of("wheat","carrots","potatoes","beetroot").contains(crop) ||
                (goal.equals("farm_crop") && crop.equals("wheat")))
                 throw new IllegalArgumentException("farm-stage-fields-or-crop");
             int width=row.get("width").getAsInt(),depth=row.get("depth").getAsInt();
@@ -308,10 +308,13 @@ public final class JarvisNativeSequenceTask extends Task {
         if(Set.of("farm_wheat","farm_crop").contains(goal)) {
             String crop=goal.equals("farm_wheat")?"wheat":row.get("crop").getAsString();
             cropBlock=crop.equals("wheat")?Blocks.WHEAT:
-                crop.equals("carrots")?Blocks.CARROTS:Blocks.POTATOES;
+                crop.equals("carrots")?Blocks.CARROTS:
+                crop.equals("beetroot")?Blocks.BEETROOTS:Blocks.POTATOES;
             Item item=crop.equals("wheat")?Items.WHEAT:
-                crop.equals("carrots")?Items.CARROT:Items.POTATO;
-            Item seed=crop.equals("wheat")?Items.WHEAT_SEEDS:item;
+                crop.equals("carrots")?Items.CARROT:
+                crop.equals("beetroot")?Items.BEETROOT:Items.POTATO;
+            Item seed=crop.equals("wheat")?Items.WHEAT_SEEDS:
+                crop.equals("beetroot")?Items.BEETROOT_SEEDS:item;
             JsonObject p=row.getAsJsonObject("position");
             BlockPos origin=new BlockPos(p.get("x").getAsInt(),p.get("y").getAsInt(),p.get("z").getAsInt());
             int width=row.get("width").getAsInt(),depth=row.get("depth").getAsInt();

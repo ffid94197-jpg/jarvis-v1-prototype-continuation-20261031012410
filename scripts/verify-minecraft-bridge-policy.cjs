@@ -37,6 +37,20 @@ const javaBuildMatch=javaBridgeSource.match(/BUILD_BLOCKS=java\.util\.Set\.of\((
 assert.ok(javaBuildMatch,'Java PlayerEngine bridge has a bounded BUILD_BLOCKS allowlist');
 for(const block of safeBuildMaterials)assert.ok(javaBuildMatch[1].includes('"'+block+'"'),
   'Java PlayerEngine bridge allows safe build material '+block);
+const sequenceSource=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/overlay/com/neovetta/aicompanion/jarvis/JarvisNativeSequenceTask.java'),'utf8');
+const sequenceBuildMatch=sequenceSource.match(/BUILD_BLOCKS=Set\.of\(([\s\S]*?)\);/);
+const sequenceGatherMatch=sequenceSource.match(/GATHER=Set\.of\(([\s\S]*?)\);/);
+assert.ok(sequenceBuildMatch,'native sequence has a bounded BUILD_BLOCKS allowlist');
+assert.ok(sequenceGatherMatch,'native sequence has a bounded GATHER allowlist');
+for(const block of safeBuildMaterials)assert.ok(sequenceBuildMatch[1].includes('"'+block+'"'),
+  'native sequence allows safe build material '+block);
+for(const resource of safeGatherResources)assert.ok(sequenceGatherMatch[1].includes('"'+resource+'"'),
+  'native sequence allows safe gather resource '+resource);
+assert.ok(sequenceSource.includes('item-stage-fields')&&sequenceSource.includes('equip-stage-fields')&&sequenceSource.includes('travel-stage-fields'),
+  'native sequence rejects extra fields on item, equip and travel stages');
+const overlaySource=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/apply-overlay.cjs'),'utf8');
+assert.ok(overlaySource.includes('mud')&&overlaySource.includes('moss_block'),
+  'pinned AltoClef TaskCatalogue overlay registers the two additional native gather resources');
 const compiled=ts.transpileModule(fs.readFileSync(path.join(root,'src/lib/agent/windows/policy.ts'),'utf8'),{reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
 const errors=(compiled.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
 assert.equal(errors.length,0,'Windows Guardian TypeScript must parse without syntax errors');

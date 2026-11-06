@@ -22,6 +22,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -59,6 +60,8 @@ public final class JarvisNativeSequenceTask extends Task {
         "cooked_beef","beef","cooked_porkchop","porkchop",
         "cooked_chicken","chicken");
     private final CompanionEntity entity;
+    private final ServerPlayerEntity owner;
+    private boolean transferVerified,tradeVerified,enchantVerified;
     private final List<JsonObject> steps=new ArrayList<>();
     private int index;
     private Task current;
@@ -87,18 +90,19 @@ public final class JarvisNativeSequenceTask extends Task {
     private String combatMob;
     private final long since=System.currentTimeMillis();
 
-    public JarvisNativeSequenceTask(CompanionEntity entity,JsonArray input){
+    public JarvisNativeSequenceTask(CompanionEntity entity,ServerPlayerEntity owner,JsonArray input){
         this.entity=entity;
+        this.owner=owner;
         if(input==null||input.size()<1||input.size()>8)
             throw new IllegalArgumentException("stage-count");
         for(JsonElement element:input){
             if(!element.isJsonObject())throw new IllegalArgumentException("stage-shape");
             JsonObject row=element.getAsJsonObject();
-            if(row.size()<1||row.size()>7)
+            if(row.size()<1||row.size()>11)
                 throw new IllegalArgumentException("stage-width");
             String goal=row.get("goal").getAsString();
             if(!Set.of("gather","craft","smelt","equip","travel","tools","stone_age","iron_age","build",
-                "farm_wheat","farm_crop","build_volume","shelter","defeat_hostile").contains(goal))
+                "farm_wheat","farm_crop","build_volume","shelter","defeat_hostile","transfer","trade","enchant").contains(goal))
                 throw new IllegalArgumentException("unsupported-native-stage");
             // Validate the ENTIRE owner's declared sequence before admitting
             // the first effect; no partially executed surprise operations.
@@ -133,6 +137,44 @@ public final class JarvisNativeSequenceTask extends Task {
             int length=row.get("length").getAsInt();
             if(!Set.of("x+","x-","z+","z-").contains(axis)||length<1||length>8)
                 throw new IllegalArgumentException("build-stage-size");
+        } else if(goal.equals("transfer")) {
+            if(row.size()!=5)throw new IllegalArgumentException("transfer-stage-fields");
+            JsonObject point=row.getAsJsonObject("position");
+            if(point==null||point.size()!=3)throw new IllegalArgumentException("transfer-stage-position");
+            for(String k:List.of("x","y","z"))
+                if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999984)
+                    throw new IllegalArgumentException("transfer-stage-coordinate");
+            if(!row.get("item").getAsString().matches("[a-z0-9_]{1,64}")||
+               row.get("targetCount").getAsInt()<1||row.get("targetCount").getAsInt()>64||
+               !Set.of("deposit","withdraw").contains(row.get("operation").getAsString()))
+                throw new IllegalArgumentException("transfer-stage-bounds");
+        } else if(goal.equals("trade")) {
+            if(row.size()!=11)throw new IllegalArgumentException("trade-stage-fields");
+            int id=row.get("entityId").getAsInt(),offer=row.get("offerIndex").getAsInt(),
+                times=row.get("times").getAsInt(),uses=row.get("expectedUses").getAsInt();
+            String first=row.get("expectedFirstItem").getAsString();
+            String second=row.get("expectedSecondItem").getAsString();
+            String output=row.get("expectedOutputItem").getAsString();
+            if(id<0||id>200000||offer<0||offer>7||times<1||times>4||
+               uses<0||uses>10000||
+               !first.matches("minecraft:[a-z0-9_]{1,64}")||
+               !(second.isEmpty()||second.matches("minecraft:[a-z0-9_]{1,64}"))||
+               !output.matches("minecraft:[a-z0-9_]{1,64}")||
+               row.get("expectedFirstCount").getAsInt()<1||row.get("expectedFirstCount").getAsInt()>64||
+               row.get("expectedSecondCount").getAsInt()<0||row.get("expectedSecondCount").getAsInt()>64||
+               row.get("expectedOutputCount").getAsInt()<1||row.get("expectedOutputCount").getAsInt()>64)
+                throw new IllegalArgumentException("trade-stage-bounds");
+        } else if(goal.equals("enchant")) {
+            if(row.size()!=5||!row.get("ownerXpConsent").getAsBoolean())
+                throw new IllegalArgumentException("enchant-stage-owner-consent");
+            JsonObject point=row.getAsJsonObject("position");
+            if(point==null||point.size()!=3)throw new IllegalArgumentException("enchant-stage-position");
+            for(String k:List.of("x","y","z"))
+                if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999984)
+                    throw new IllegalArgumentException("enchant-stage-coordinate");
+            if(!row.get("item").getAsString().matches("[a-z0-9_]{1,64}")||
+               row.get("choice").getAsInt()<0||row.get("choice").getAsInt()>2)
+                throw new IllegalArgumentException("enchant-stage-bounds");
         } else if(Set.of("farm_wheat","farm_crop").contains(goal)) {
             String crop=goal.equals("farm_wheat")?"wheat":row.get("crop").getAsString();
             if((goal.equals("farm_wheat") && row.size()!=5) ||
@@ -237,6 +279,7 @@ public final class JarvisNativeSequenceTask extends Task {
         construction=null;constructionMaterial=null;constructionIndex=0;
         volumeStage=null;cropBlock=null;cropItem=null;cropCells.clear();lastCropAge.clear();
         cropInitialCount=0;cropTargetCount=0;harvestedCropCount=0;combatTarget=null;combatMob=null;
+        transferVerified=false;tradeVerified=false;enchantVerified=false;
         stage=goal+"["+index+"]";
         if(Set.of("gather","craft","smelt").contains(goal)){
             currentItem=goal.equals("gather")?row.get("resource").getAsString():row.get("item").getAsString();
@@ -382,7 +425,44 @@ public final class JarvisNativeSequenceTask extends Task {
                 harvestedCropCount++;
         }
     }
+    private void executeImmediate(JsonObject row) {
+        String goal=row.get("goal").getAsString();
+        if(goal.equals("transfer")) {
+            JsonObject p=row.getAsJsonObject("position");
+            BlockPos pos=new BlockPos(p.get("x").getAsInt(),p.get("y").getAsInt(),p.get("z").getAsInt());
+            String item=row.get("item").getAsString(),direction=row.get("operation").getAsString();
+            int amount=row.get("targetCount").getAsInt();
+            JarvisNativeInventoryTransfer.Result moved=
+                JarvisNativeInventoryTransfer.move(entity,pos,item,amount,direction);
+            transferVerified=moved.moved==amount &&
+                moved.afterPlayer==(direction.equals("deposit")?moved.beforePlayer-amount:moved.beforePlayer+amount) &&
+                moved.afterContainer==(direction.equals("deposit")?moved.beforeContainer+amount:moved.beforeContainer-amount);
+            if(!transferVerified)throw new IllegalStateException("sequence-transfer-receipt-mismatch");
+            return;
+        }
+        if(goal.equals("trade")) {
+            JarvisNativeVillagerTrade.Result traded=JarvisNativeVillagerTrade.execute(entity,row);
+            tradeVerified=traded.verified;
+            if(!tradeVerified)throw new IllegalStateException("sequence-trade-receipt-mismatch");
+            return;
+        }
+        if(goal.equals("enchant")) {
+            if(!"1".equals(System.getenv("JARVIS_MC_BRIDGE_OWNER_XP_ENCHANT_ENABLE"))||
+               owner==null||!row.get("ownerXpConsent").getAsBoolean())
+                throw new IllegalArgumentException("sequence-enchant-owner-xp-opt-in-required");
+            JsonObject p=row.getAsJsonObject("position");
+            BlockPos table=new BlockPos(p.get("x").getAsInt(),p.get("y").getAsInt(),p.get("z").getAsInt());
+            JarvisNativeOwnerEnchant.Result enchanted=JarvisNativeOwnerEnchant.enchant(
+                entity,owner,table,row.get("item").getAsString(),row.get("choice").getAsInt());
+            enchantVerified=enchanted.verified;
+            if(!enchantVerified)throw new IllegalStateException("sequence-enchant-receipt-mismatch");
+            return;
+        }
+        throw new IllegalArgumentException("unknown-immediate-sequence-stage");
+    }
+
     private boolean physicallyDone(){
+        if(transferVerified||tradeVerified||enchantVerified)return true;
         if(volumeStage!=null)return volumeStage.complete();
         if(cropBlock!=null)
             return harvestedCropCount>=cropTargetCount &&
@@ -406,7 +486,20 @@ public final class JarvisNativeSequenceTask extends Task {
         if(failed || index>=steps.size())return null;
         sampleFarmCells();
         if(current==null){
-            try {current=prepare(steps.get(index));}
+            JsonObject row=steps.get(index);
+            String goal=row.get("goal").getAsString();
+            try {
+                if(Set.of("transfer","trade","enchant").contains(goal)) {
+                    transferVerified=false;tradeVerified=false;enchantVerified=false;
+                    stage=goal+"["+index+"]";
+                    executeImmediate(row);
+                    if(!physicallyDone())throw new IllegalStateException("sequence-transaction-postcondition-unverified");
+                    index++;
+                    stage=index>=steps.size()?"complete":"stage-complete";
+                    return null;
+                }
+                current=prepare(row);
+            }
             catch(Exception ex){failed=true;stage="blocked:"+ex.getClass().getSimpleName();return null;}
             return current;
         }

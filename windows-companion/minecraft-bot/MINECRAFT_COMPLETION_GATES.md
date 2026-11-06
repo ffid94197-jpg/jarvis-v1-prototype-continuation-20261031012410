@@ -190,4 +190,4 @@ Separately, the Internet-corpus validator's Node.js 22.16.0 regression harness p
 
 - The sidecar now uses a 30-second ACK window for local-model `natural_goal` interpretation and real inventory/window transactions (`craft_item`, villager inspection/trading, container transfer, enchanting and bounded hostile attacks). Short status, observation, goal-admission and dig commands retain an 8-second window.
 - This remains bounded below the existing 79-second HTTP companion deadline. The bot lock is not held during the ACK wait, so the longer transaction window does not delay explicit stop.
-- Offline contracts cover the per-command timeout table. They do not prove a particular server operation finishes within its deadline or certify real Minecraft transactions.
+- Local typed-command/timeout harness: 10/10 tests passed, including protocol parity and command-specific deadlines. Offline contracts do not prove a particular server operation finishes within its deadline or certify real Minecraft transactions.

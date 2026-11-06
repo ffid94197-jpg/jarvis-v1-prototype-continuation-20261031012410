@@ -3,8 +3,9 @@
  * verified cobblestone gathered through the normal survival progression.
  * No commands, creative inventory, arbitrary mining or remote build sites.
  */
-const BLOCKS=new Set(['cobblestone','dirt','oak_planks','spruce_planks',
- 'birch_planks','stone_bricks','netherrack']);
+const BLOCKS=new Set(['cobblestone','cobbled_deepslate','stone','dirt',
+ 'oak_planks','spruce_planks','birch_planks','stone_bricks',
+ 'oak_log','glass','sandstone','netherrack']);
 const AXES=Object.freeze({'x+':[1,0],'x-':[-1,0],
  'z+':[0,1],'z-':[0,-1]});
 const DANGER=/lava|water|fire|magma|cactus|powder_snow|campfire/;

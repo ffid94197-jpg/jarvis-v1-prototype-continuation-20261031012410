@@ -826,6 +826,7 @@ def minecraft_action(op):
 
     if op == 'minecraft_stop':
         with bot_lock:
+            was_supervising = bot_supervisor_enabled or bot_reconnecting
             _disable_minecraft_supervisor_locked()
             child = bot_proc
             engine = bot_engine
@@ -835,7 +836,7 @@ def minecraft_action(op):
         _terminate_minecraft_child(child)
         remote = engine == 'mine-ai-mcp'
         return {'ok':True,'evidence':{
-            'stopRequested':was_running or remote,
+            'stopRequested':was_running or was_supervising or remote,
             'joinedVerified':False,
             'remoteHostStopVerified':False if remote else None,
             'warning':'External Mine AI MCP server may remain running; stop its host to disconnect player.' if remote else None}}
@@ -923,7 +924,14 @@ def minecraft_action(op):
 
     # Do not hold bot_lock while waiting for a game-server spawn: explicit
     # owner stop and process shutdown must remain responsive during join.
-    success = joined.wait(25)
+    deadline = time.monotonic() + 25
+    success = False
+    while time.monotonic() < deadline:
+        if joined.wait(0.25):
+            success = True
+            break
+        if child.poll() is not None:
+            break
     if not success:
         with bot_lock:
             if bot_proc is child:
@@ -951,11 +959,11 @@ def minecraft_command(body):
         return {'ok':False,'error':'Minecraft LAN bot not enabled.'}
     global bot_proc
     with bot_lock:
+        if bot_reconnecting:
+            return {'ok':False,'error':'Minecraft companion is reconnecting; no gameplay action was dispatched.'}
         if not bot_proc or bot_proc.poll() is not None or not bot_proc.stdin:
             return {'ok':False,'error':'Minecraft companion is not connected. Join LAN world first.'}
         request_id=secrets.token_hex(8)
-        if bot_reconnecting:
-            return {'ok':False,'error':'Minecraft companion is reconnecting; no gameplay action was dispatched.'}
         pending={'event':threading.Event(),'result':None,'process':bot_proc}
         with bot_ack_lock:bot_ack_waiters[request_id]=pending
         try:

@@ -23,7 +23,7 @@ This opt-in branch now includes an actual source-level Core-to-Fabric path:
 
 The Windows sidecar now includes an **opt-in, bounded network reconnect supervisor** for the native JarvisBuddy/Mineflayer engine:
 
-- Enable only on the local Windows sidecar with `JARVIS_MINECRAFT_AUTO_RECONNECT=1`; default is disabled.
+- Enable only on the local Windows sidecar with both existing `JARVIS_MINECRAFT_LAN_ENABLED=1` and `JARVIS_MINECRAFT_AUTO_RECONNECT=1`; reconnect is disabled by default and cannot override the LAN opt-in.
 - Applies only to `JARVIS_MINECRAFT_ENGINE=jarvis`, never to the external `mine-ai-mcp` process.
 - Retries with 2/4/8/16/30-second backoff and at most five attempts in any rolling ten-minute window.
 - A server kick or invalid startup configuration stops retries. Explicit owner stop and sidecar shutdown invalidate the supervisor and terminate the local child.

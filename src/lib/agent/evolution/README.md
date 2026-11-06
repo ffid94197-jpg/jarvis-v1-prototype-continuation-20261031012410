@@ -196,8 +196,8 @@ all of these limits:
   files are immune to self-patching.
 - The patch must match the full current SHA-256 and exactly one old-text span.
 - In bounded-auto mode, the candidate must carry a current repairable diagnosis
-  pattern ID. Executor rechecks that same owner-scoped failure signal immediately
-  before applying the patch.
+  pattern ID from the same active Core task. Executor rechecks that owner-scoped
+  failure signal and task reference immediately before applying the patch.
 - At most one automatic repair may be applied in a Core task.
 - A static syntax preflight must pass before the write. The write is journaled
   before effect, backed up, atomically replaced and checked by exact readback.

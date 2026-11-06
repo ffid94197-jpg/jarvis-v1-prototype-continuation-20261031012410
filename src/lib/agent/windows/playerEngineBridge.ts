@@ -692,7 +692,7 @@ export async function runGuardianApprovedPlayerEngine(
         observedEquipment(polled,item,equipDestination) : false;
       const defeated=op==="combat" && polled.observations?.targetAlive===false;
       const nativeTransfer=polled.observations?.missionStatus as Record<string,unknown>|undefined;
-      const transferProof=op==="transfer" && nativeTransfer &&
+      const transferProof=Boolean(op==="transfer" && nativeTransfer &&
         nativeTransfer.goal==="transfer" && nativeTransfer.status==="complete" &&
         nativeTransfer.item===item &&
         nativeTransfer.targetCount===requestedCount &&
@@ -700,7 +700,7 @@ export async function runGuardianApprovedPlayerEngine(
         (nativeTransfer.milestones as Record<string,unknown>|undefined)?.transferDone===true &&
         (String((desktop as unknown as Record<string,unknown>).operationDirection)==="deposit"?
           physicallyAdded===Number(before)-requestedCount:
-          physicallyAdded===Number(before)+requestedCount);
+          physicallyAdded===Number(before)+requestedCount));
       const nativeCraft=polled.observations?.missionStatus;
       const craftVerified=op==="craft" && typeof item==="string" &&
         Number.isSafeInteger(before) &&

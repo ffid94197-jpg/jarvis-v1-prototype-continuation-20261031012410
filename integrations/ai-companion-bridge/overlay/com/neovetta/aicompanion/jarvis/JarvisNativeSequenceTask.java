@@ -481,6 +481,16 @@ public final class JarvisNativeSequenceTask extends Task {
             return count(currentItem)>=currentBefore+currentQuantity;
         return destination!=null && entity.getBlockPos().isWithinDistance(destination,arrivalRange);
     }
+    private static final class ReceiptTickTask extends Task {
+        private boolean done;
+        @Override protected void onStart(){}
+        @Override protected Task onTick(){done=true;return null;}
+        @Override protected void onStop(Task interruptTask){done=true;}
+        @Override public boolean isFinished(){return done;}
+        @Override protected boolean isEqual(Task other){return other instanceof ReceiptTickTask;}
+        @Override protected String toDebugString(){return "JARVIS native transaction receipt";}
+    }
+
     @Override protected void onStart(){stage="running";}
     @Override protected Task onTick(){
         if(failed || index>=steps.size())return null;
@@ -494,9 +504,8 @@ public final class JarvisNativeSequenceTask extends Task {
                     stage=goal+"["+index+"]";
                     executeImmediate(row);
                     if(!physicallyDone())throw new IllegalStateException("sequence-transaction-postcondition-unverified");
-                    index++;
-                    stage=index>=steps.size()?"complete":"stage-complete";
-                    return null;
+                    current=new ReceiptTickTask();
+                    return current;
                 }
                 current=prepare(row);
             }

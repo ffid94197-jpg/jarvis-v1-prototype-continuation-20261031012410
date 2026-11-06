@@ -272,7 +272,7 @@ export async function executeTool(
     integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;arguments?:Record<string,unknown>};
     memory?: {ownerId:string;query:string;limit:number};
     world?: {ownerId:string;query:string;limit:number};
-    evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill";id?:string;sourceTaskId?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
+    evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill"|"diagnose"|"auto_apply_repair"|"verify_repair";id?:string;sourceTaskId?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
   };
   switch (tool) {
     case "evolution_skill_stage":
@@ -281,12 +281,32 @@ export async function executeTool(
     case "evolution_skill_run":
     case "evolution_skill_expand":
     case "evolution_repair_stage":
-    case "evolution_repair_list": {
+    case "evolution_repair_list":
+    case "evolution_diagnose":
+    case "evolution_repair_apply": {
       const request=prepared.evolution;
       if(!request || isCancelled())
         return {ok:false,tool,evidence:"",error:"Guardian evolution owner/session unavailable"};
       const ownerId=request.ownerId;
       try{
+        if(request.action==="diagnose"){
+          const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
+          const report=await diagnoseOwnerRuntime(ownerId,db);
+          return {ok:report.status==="diagnosed"||report.status==="no_recent_tasks",
+            tool,evidence:"Read-only owner-scoped runtime diagnosis; no code changed and no effects retried",
+            detail:{...report,readOnly:true,repairAuthorizationGranted:false}};
+        }
+        if(request.action==="auto_apply_repair"){
+          if(!request.id)return {ok:false,tool,evidence:"",error:"Repair ID missing"};
+          const {autoApplyRepair}=await import("../evolution/repairVault.mjs");
+          const result=await autoApplyRepair(ownerId,request.id,taskId);
+          const verified=result.state==="verified"&&result.verified===true;
+          return {ok:verified,tool,
+            evidence:verified
+              ?"Bounded self-repair applied and static syntax verified; project tests/runtime acceptance were not run"
+              :"Bounded self-repair did not reach verified state; inspect repair ledger and rollback status",
+            detail:{...result,sourceContentsReturned:false,runtimeTestsExecuted:false}};
+        }
         if(request.action==="learn_skill"){
           const {learnFromCompletedTask}=await import("../evolution/learnFromTask.mjs");
           const learned=await learnFromCompletedTask(ownerId,db,request.sourceTaskId);

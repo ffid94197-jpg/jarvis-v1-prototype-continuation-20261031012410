@@ -62,10 +62,10 @@ export function acceptedSkillQueue(
      d.authorizationGranted!==false ||
      d.requiresPerStepGuardianAudit!==true ||
      d.requiresCoreDurableEffectAdmission!==true ||
-     !Array.isArray(d.steps) || d.steps.length<1||d.steps.length>8 ||
+     !Array.isArray(d.steps) || d.steps.length<1||d.steps.length>16 ||
      d.stageCount!==d.steps.length)return null;
   const serialized=JSON.stringify(d.steps);
-  if(serialized.length>2800)return null;
+  if(serialized.length>6400)return null;
   const stages:SkillQueueStep[]=[];
   for(const entry of d.steps){
     if(!object(entry) ||

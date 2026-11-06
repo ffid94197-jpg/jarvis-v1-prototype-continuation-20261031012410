@@ -59,7 +59,9 @@ const allowedPath=p=>{
       "src/lib/agent/core/modelErrors.ts","src/lib/agent/core/priorTaskContext.ts",
       "src/lib/agent/core/minecraftIntent.ts","src/lib/agent/core/capabilityIntent.ts",
       "src/lib/agent/tools/","src/lib/agent/windows/","src/lib/agent/adoption/",
-      "src/lib/agent/scheduler/","src/lib/agent/routines/","src/app/api/","prisma/"].some(prefix=>
+      "src/lib/agent/scheduler/","src/lib/agent/routines/","src/app/api/","prisma/",
+      "src/lib/db/","src/lib/db.ts","src/lib/auth/","src/lib/security/",
+      "src/lib/secrets/","src/lib/crypto/","src/lib/credentials/"].some(prefix=>
         p.toLowerCase().startsWith(prefix)))
     throw new RepairError("JARVIS protected configuration/security file is immune to self-repair");
   return p;

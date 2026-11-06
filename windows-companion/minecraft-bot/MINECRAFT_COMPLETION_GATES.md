@@ -191,3 +191,10 @@ Separately, the Internet-corpus validator's Node.js 22.16.0 regression harness p
 - The sidecar now uses a 30-second ACK window for local-model `natural_goal` interpretation and real inventory/window transactions (`craft_item`, villager inspection/trading, container transfer, enchanting and bounded hostile attacks). Short status, observation, goal-admission and dig commands retain an 8-second window.
 - This remains bounded below the existing 79-second HTTP companion deadline. The bot lock is not held during the ACK wait, so the longer transaction window does not delay explicit stop.
 - Local typed-command/timeout harness: 10/10 tests passed, including protocol parity and command-specific deadlines. Offline contracts do not prove a particular server operation finishes within its deadline or certify real Minecraft transactions.
+
+## 2026-11-06: align Core AI farm instructions with native goal schemas
+
+- The Core Minecraft system prompt incorrectly directed wheat farming to `farm_crop`, even though the native schema has a separate `farm_wheat` goal and `farm_crop` accepts carrots/potatoes only. This mismatch could cause an otherwise valid owner wheat request to be rejected by the Core goal gate.
+- Corrected the model instructions: wheat maps to `farm_wheat` with owner-supplied origin, 1–4 width/depth and targetCount 1–16; carrots/potatoes map to `farm_crop` with exact crop, origin, dimensions and count.
+- Added six assertions to `scripts/verify-minecraft-natural-language-routing.cjs`: explicit prompt routing, removal of the old mismatch, carrot admission and crop/wheat substitution denials. A source-contract check passed **7/7**, and the modified CJS test script syntax-compiles.
+- The full TypeScript transpile/Guardian natural-language test, full Minecraft offline gate runner, Windows companion, and live crop farming were **not run**. No GitHub Actions were used.

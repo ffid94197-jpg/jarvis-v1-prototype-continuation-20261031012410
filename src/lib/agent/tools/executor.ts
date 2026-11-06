@@ -298,7 +298,15 @@ export async function executeTool(
         }
         if(request.action==="auto_apply_repair"){
           if(!request.id)return {ok:false,tool,evidence:"",error:"Repair ID missing"};
-          const {autoApplyRepair}=await import("../evolution/repairVault.mjs");
+          const {getRepair,autoApplyRepair}=await import("../evolution/repairVault.mjs");
+          const staged=await getRepair(ownerId,request.id);
+          const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
+          const diagnosis=await diagnoseOwnerRuntime(ownerId,db);
+          const currentPattern=diagnosis.patterns?.find((item:{id:string;requiresSourceInspection:boolean})=>
+            item.id===staged.diagnosisPatternId&&item.requiresSourceInspection===true);
+          if(!currentPattern)
+            return {ok:false,tool,evidence:"",
+              error:"Automatic repair requires a current repairable runtime diagnosis signal"};
           const result=await autoApplyRepair(ownerId,request.id,taskId);
           const verified=result.state==="verified"&&result.verified===true;
           const effectUnknown=!verified&&(result.state==="effect_unknown"||result.state==="applied");
@@ -340,10 +348,25 @@ export async function executeTool(
             detail:{...plan,untrustedInstructions:true,queueRequested:runRequested}};
         }
         if(request.action==="stage_repair"){
+          let diagnosisPatternId:string|undefined;
+          if(process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1"){
+            const spec=request.candidate as {diagnosis?:unknown};
+            const match=typeof spec?.diagnosis==="string"
+              ?spec.diagnosis.match(/\\b(diag_[0-9a-f]{20})\\b/):null;
+            if(!match)return {ok:false,tool,evidence:"",
+              error:"Automatic repair staging requires a current diagnosis pattern ID in the repair rationale"};
+            const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
+            const diagnosis=await diagnoseOwnerRuntime(ownerId,db);
+            const pattern=diagnosis.patterns?.find((item:{id:string;requiresSourceInspection:boolean})=>
+              item.id===match[1]&&item.requiresSourceInspection===true);
+            if(!pattern)return {ok:false,tool,evidence:"",
+              error:"Automatic repair staging is allowed only for a current repairable code-failure signal"};
+            diagnosisPatternId=match[1];
+          }
           const {stageRepair}=await import("../evolution/repairVault.mjs");
-          const candidate=await stageRepair(ownerId,request.candidate,{taskId});
-          return {ok:true,tool,evidence:"Repair candidate STAGED, no file modified; owner approval required",
-            detail:{...candidate,applied:false,executed:false,ownerApprovalRequired:true}};
+          const candidate=await stageRepair(ownerId,request.candidate,{taskId,diagnosisPatternId});
+          return {ok:true,tool,evidence:"Repair candidate STAGED, no file modified; automatic apply remains bounded by owner policy",
+            detail:{...candidate,applied:false,executed:false,ownerApprovalRequired:process.env.JARVIS_SELF_REPAIR_AUTO_APPLY!=="1"}};
         }
         if(request.action==="list_repairs"){
           const {listRepairs}=await import("../evolution/repairVault.mjs");

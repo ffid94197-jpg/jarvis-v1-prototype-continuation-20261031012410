@@ -17,7 +17,6 @@ import adris.altoclef.tasks.resources.CollectCropTask;
 import adris.altoclef.tasks.container.SmeltInFurnaceTask;
 import adris.altoclef.util.SmeltTarget;
 import adris.altoclef.util.ItemTarget;
-import adris.altoclef.tasksystem.Task;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -1007,7 +1006,6 @@ public final class JarvisBridgeServer {
                      candidate.enchant == null)) continue;
             if(candidate.craftGoal!=null) {
                 int current=countItem(companion,candidate.item);
-                Item target=Registries.ITEM.get(new Identifier("minecraft",candidate.item));
                 int craftedCount=Math.max(0,candidate.craftProofCount);
                 boolean complete=candidate.state.equals("observed") &&
                     current>=candidate.initialCount+candidate.craftTargetCount &&

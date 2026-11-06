@@ -191,3 +191,10 @@ Separately, the Internet-corpus validator's Node.js 22.16.0 regression harness p
 - The sidecar now uses a 30-second ACK window for local-model `natural_goal` interpretation and real inventory/window transactions (`craft_item`, villager inspection/trading, container transfer, enchanting and bounded hostile attacks). Short status, observation, goal-admission and dig commands retain an 8-second window.
 - This remains bounded below the existing 79-second HTTP companion deadline. The bot lock is not held during the ACK wait, so the longer transaction window does not delay explicit stop.
 - Local typed-command/timeout harness: 10/10 tests passed, including protocol parity and command-specific deadlines. Offline contracts do not prove a particular server operation finishes within its deadline or certify real Minecraft transactions.
+
+## 2026-11-06: repair owner-grounded wheat natural-language routing
+
+- The November 5 wheat-language edit left a malformed `wheatRequest` expression and duplicated the remainder of `language_goal.cjs`. The companion imports that module at startup, so the malformed source was a blocking integration regression.
+- Restored the last clean parser baseline and reapplied the wheat intent as one bounded typed goal. Natural requests must name the wheat count, 1x1–4x4 field dimensions and exact origin; the existing `friend_protocol.cjs` and `wheat_goal.cjs` validators enforce target count 1–16 and world-coordinate bounds. No field origin is inferred.
+- Executed the current `language_goal.cjs`, `friend_protocol.cjs` and `wheat_goal.cjs` source in a source-isolated V8 harness with test doubles only for unrelated modules: **5/5 wheat-intent contract cases passed** (valid word/numeric quantities and dimensions; oversized quantity and field denied; missing origin not admitted). The modified language test file also passed syntax compilation.
+- This is targeted source-level evidence only. The complete `verify_language_goal.cjs` suite, full Minecraft offline gate runner, Windows companion/Node startup, Java server and real wheat farming were **not run**. No GitHub Actions were used. Live Minecraft acceptance remains separate.

@@ -130,6 +130,25 @@ const crypto=require("node:crypto");
     assert.equal(recovered.repair.state,"verified");
     assert.equal(await fs.readFile(crashFile,"utf8"),"const crashValue = 3;\n");
 
+    // Simulate a crash after durable apply admission but before the file write.
+    const noWriteFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","no-write.js");
+    const noWriteOriginal="const noWrite = 1;\n";
+    await fs.writeFile(noWriteFile,noWriteOriginal,"utf8");
+    const noWriteSha=crypto.createHash("sha256").update(noWriteOriginal).digest("hex");
+    const noWriteCandidate=await repair.stageRepair(owner,{
+      path:"src/no-write.js",expectedSha256:noWriteSha,oldText:"const noWrite = 1;",
+      newText:"const noWrite = 2;",
+      diagnosis:"An exact candidate is admitted before the simulated pre-write crash.",
+    });
+    await repair.approveRepair(owner,noWriteCandidate.id);
+    const noWriteLedger=JSON.parse(await fs.readFile(ledgerPath,"utf8"));
+    noWriteLedger.repairs.find(x=>x.id===noWriteCandidate.id).state="applying";
+    await fs.writeFile(ledgerPath,JSON.stringify(noWriteLedger),"utf8");
+    const noWriteRecovery=await repair.recoverRepair(owner,noWriteCandidate.id);
+    assert.equal(noWriteRecovery.kind,"rolled_back");
+    assert.equal(noWriteRecovery.repair.state,"rolled_back");
+    assert.equal(await fs.readFile(noWriteFile,"utf8"),noWriteOriginal);
+
     // A third-party edit is never overwritten by crash recovery.
     const externalFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","external.js");
     const externalOriginal="const externalValue = 1;\n";

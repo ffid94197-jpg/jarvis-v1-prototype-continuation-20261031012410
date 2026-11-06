@@ -47,6 +47,10 @@ public final class JarvisNativeSequenceTask extends Task {
         "soul_sand","soul_soil","moss_block","andesite","diorite","granite","tuff","calcite",
         "cobbled_deepslate","blackstone","basalt","coal","raw_copper","raw_gold","redstone",
         "lapis_lazuli","emerald","quartz");
+    private static final Set<String> BUILD_BLOCKS=Set.of(
+        "cobblestone","cobbled_deepslate","stone","dirt",
+        "oak_planks","spruce_planks","birch_planks","stone_bricks",
+        "oak_log","glass","sandstone","netherrack");
     private static final Set<String> CRAFT=Set.of("stick","crafting_table","chest",
         "furnace","ladder","bread","shield","torch");
     private static final Map<String,String> SMELT=Map.of(
@@ -105,6 +109,7 @@ public final class JarvisNativeSequenceTask extends Task {
     private static void validateStage(JsonObject row,String goal) {
         int count;
         if(Set.of("gather","craft","smelt").contains(goal)){
+            if(row.size()!=3)throw new IllegalArgumentException("item-stage-fields");
             String item=goal.equals("gather")?row.get("resource").getAsString():
                 row.get("item").getAsString();
             count=row.get("targetCount").getAsInt();
@@ -122,7 +127,7 @@ public final class JarvisNativeSequenceTask extends Task {
                 if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999980)
                     throw new IllegalArgumentException("build-stage-coordinate");
             String material=row.get("block").getAsString();
-            if(!Set.of("cobblestone","oak_planks","dirt","spruce_planks","birch_planks","stone_bricks","netherrack").contains(material))
+            if(!BUILD_BLOCKS.contains(material))
                 throw new IllegalArgumentException("build-stage-material");
             String axis=row.get("axis").getAsString();
             int length=row.get("length").getAsInt();
@@ -155,8 +160,7 @@ public final class JarvisNativeSequenceTask extends Task {
             int width=row.get("width").getAsInt(),depth=row.get("depth").getAsInt(),
                 height=row.get("height").getAsInt();
             String shape=row.get("shape").getAsString();
-            if(!Set.of("cobblestone","dirt","oak_planks","spruce_planks","birch_planks",
-                    "stone_bricks","netherrack").contains(material)||
+            if(!BUILD_BLOCKS.contains(material)||
                width<1||width>4||depth<1||depth>4||height<1||height>3||
                width*depth*height>64||
                !Set.of("floor","walls","solid","roof").contains(shape)||
@@ -177,6 +181,7 @@ public final class JarvisNativeSequenceTask extends Task {
                id<0||id>200000)
                 throw new IllegalArgumentException("combat-stage-target");
         } else if(goal.equals("equip")){
+            if(row.size()!=3)throw new IllegalArgumentException("equip-stage-fields");
             String item=row.get("item").getAsString();
             String slot=row.get("destination").getAsString();
             if(!item.matches("[a-z0-9_]{1,64}") ||
@@ -187,7 +192,8 @@ public final class JarvisNativeSequenceTask extends Task {
                 item.endsWith("_leggings") && slot.equals("legs") ||
                 item.endsWith("_boots") && slot.equals("feet")))
                 throw new IllegalArgumentException("stage-armor-slot");
-        } else {
+        } else if(goal.equals("travel")) {
+            if(row.size()!=3)throw new IllegalArgumentException("travel-stage-fields");
             JsonObject p=row.getAsJsonObject("destination");
             if(p==null || p.size()!=3)throw new IllegalArgumentException("stage-position");
             for(String key:List.of("x","y","z")){

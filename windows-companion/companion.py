@@ -833,7 +833,7 @@ def _shutdown_minecraft_bot():
 
 def minecraft_action(op):
     global bot_proc, bot_engine, bot_reconnecting
-    if os.environ.get('JARVIS_MINECRAFT_LAN_ENABLED') != '1':
+    if op != 'minecraft_stop' and os.environ.get('JARVIS_MINECRAFT_LAN_ENABLED') != '1':
         return {'ok':False,'error':'Minecraft LAN integration not enabled.'}
 
     if op == 'minecraft_stop':

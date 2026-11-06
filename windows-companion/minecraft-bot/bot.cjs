@@ -1874,7 +1874,7 @@ bot.on('spawn',()=>{
     mode='auto';lastAction='Server respawn observed; autonomous mission restarted from actual inventory';
   }else{mode='stay';lastAction='Respawn observed, autonomous deadline expired';}
 });
-bot.on('kicked',reason=>{process.stderr.write('Bot kicked: '+String(reason).slice(0,150)+'\n');process.exitCode=1;});
+bot.on('kicked',reason=>{process.stdout.write('MINECRAFT_SESSION_TERMINAL\n');process.stderr.write('Bot kicked: '+String(reason).slice(0,150)+'\n');process.exitCode=1;});
 bot.on('error',err=>{process.stderr.write('Bot error: '+String(err.code||'unknown')+'\n');process.exitCode=1;});
 let intentionalProcessStop=false;
 bot.on('end',()=>{

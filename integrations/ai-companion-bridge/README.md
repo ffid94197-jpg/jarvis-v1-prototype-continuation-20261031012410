@@ -9,7 +9,7 @@ Do not enable this instead of the existing Mineflayer/MCP bot until the acceptan
 This opt-in branch now includes an actual source-level Core-to-Fabric path:
 
 - Core and Guardian audit -> native executor -> HMAC loopback service -> AltoClef task -> real server observations.
-- **Supported native operations:** inspect/status, collect (including mixed tree logs), typed craft-item acquisition, travel up to 160 blocks, equip armor/tools, dig selected loaded blocks, place one allow-listed block, fight one nearby allow-listed hostile, owner-wide emergency stop, task-scoped cancel, explicit resume of an emergency-stop latch. Unsupported actions are rejected.
+- **Supported native operations:** inspect/status, collect (including mixed tree logs), typed craft-item acquisition, travel up to 160 blocks, equip armor/tools, dig selected loaded blocks, place one allow-listed block, fight one nearby allow-listed hostile, inspect real villager offers, execute a bounded vanilla villager purchase against a freshly re-read offer, and owner-assisted vanilla enchanting using the owner's explicitly authorized XP plus the companion's real lapis/item. Owner-wide emergency stop, task-scoped cancel and explicit resume of an emergency-stop latch are also wired. Unsupported actions are rejected.
 - Native JARVIS-controlled sessions disable upstream chat-brain packet delivery, upstream independent LLM requests, and idle command planning.
 - Signed requests carry the actual Guardian audit-record UUID and original Core task UUID; signed responses echo both. Server validates owner, companion identity, world allow-list, deadline and task-binding.
 - Per-task receipts expose real main-hand, exact four armor slots, inventory, health, hunger, coordinates, nearby loaded blocks and visible mobs.
@@ -17,6 +17,20 @@ This opt-in branch now includes an actual source-level Core-to-Fabric path:
 - Owner cancellation via the existing task cancellation API now sends a scoped, audited native stop request when there is a recorded Minecraft effect.
 
 **Still not a fully built/released prototype:** This branch has not passed Java/Gradle compilation, Next.js TypeScript typechecking, the new local contract tests, security acceptance, the complete 200k Internet prompt evaluation, or Minecraft Java playthrough. Full Netherite, Dragon, broad arbitrary gameplay, and independent final acceptance are not demonstrated. A development commit is not proof of those milestones.
+
+
+## Bounded Minecraft LAN reconnect supervisor
+
+The Windows sidecar now includes an **opt-in, bounded network reconnect supervisor** for the native JarvisBuddy/Mineflayer engine:
+
+- Enable only on the local Windows sidecar with both existing `JARVIS_MINECRAFT_LAN_ENABLED=1` and `JARVIS_MINECRAFT_AUTO_RECONNECT=1`; reconnect is disabled by default and cannot override the LAN opt-in.
+- Applies only to `JARVIS_MINECRAFT_ENGINE=jarvis`, never to the external `mine-ai-mcp` process.
+- Retries with 2/4/8/16/30-second backoff and at most five attempts in any rolling ten-minute window.
+- A server kick or invalid startup configuration stops retries. Explicit owner stop and sidecar shutdown invalidate the supervisor and terminate the local child.
+- A successful reconnect confirms only a fresh protocol spawn. It does **not** restore task authority, replay an effect, resume a mission or reuse old world proofs. The owner must observe the current world and issue a new Guardian-authorized `auto_resume` if appropriate.
+- If the retry budget is exhausted, the companion remains disconnected until an owner starts it again.
+
+Offline policy contracts: run `python windows-companion/verify_companion_offline.py` and `python windows-companion/verify_minecraft_supervisor_offline.py` from repository root. These tests do not exercise Windows process lifecycle, Mineflayer, a LAN server or mission acceptance.
 
 ## Source extension: sequence, container and observation bridges
 
@@ -29,7 +43,7 @@ Additional prototype source now includes:
 - Correct `operationDirection` from Guardian-prepared Minecraft transfer goals, default bounded mission durations, Core-native auto-status matching of the original goal and task, and retention of settled mission identity until final evidence readback.
 - A corrected reference to the actually declared durable native journal within the Fabric bridge.
 
-**Remaining build-only limitations:** unimplemented native villager purchase transactions, enchanting, multi-operation advanced container and world interactions, broad generic construction beyond bounded primitives, hardening of all long-horizon edge cases, and remaining general-purpose Windows/AI autonomy coverage. Also, this code has NOT been compiled or field-accepted. GitHub Actions have not been used in this pass.
+**Remaining build-only limitations:** multi-operation advanced container and world interactions, broad generic construction beyond bounded primitives, generalized skill composition beyond the typed goal vocabulary, and hardening of long-horizon edge cases. Native villager purchase and owner-assisted enchanting source paths are present, but they have NOT been compiled, contract-tested or field-accepted; do not count them as verified capability. Also, this code has NOT passed Java/Gradle compilation, full TypeScript typechecking, security acceptance, the complete 200k Internet prompt evaluation, or a Minecraft Java playthrough. GitHub Actions have not been used in this pass.
 
 ## One-instruction explicit owner companion spawn and pairing
 

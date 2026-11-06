@@ -354,7 +354,7 @@ export async function executeTool(
           if(process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1"){
             const spec=request.candidate as {diagnosis?:unknown};
             const match=typeof spec?.diagnosis==="string"
-              ?spec.diagnosis.match(/\\b(diag_[0-9a-f]{20})\\b/):null;
+              ?spec.diagnosis.match(/\b(diag_[0-9a-f]{20})\b/):null;
             if(!match)return {ok:false,tool,evidence:"",
               error:"Automatic repair staging requires a current diagnosis pattern ID in the repair rationale"};
             const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");

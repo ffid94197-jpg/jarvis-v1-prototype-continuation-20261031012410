@@ -138,7 +138,7 @@ const crypto=require("node:crypto");
     const backupRiskResult=await repair.verifyRepair(owner,backupRisk.id);
     assert.equal(backupRiskResult.state,"effect_unknown");
     assert.equal(backupRiskResult.effectUnknown,true);
-    assert.equal(await fs.readFile(backupRiskFile,"utf8"),"const backupRisk = ;\n");
+    assert.equal(await fs.readFile(backupRiskFile,"utf8"),"const backupRisk = ;;\n");
 
     // Simulate a process crash after the file replacement but before the
     // repair ledger advances from "applying" to "applied".

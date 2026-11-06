@@ -214,9 +214,10 @@ export function singleInventoryResourceGoal(objective:string):
  * No generated code, new tools, unrelated goals or invented locations.
  */
 export function mayStartNativeMinecraftGoal(
- objective:string,args:Record<string,unknown>,observed:MinecraftAiObservation|null):boolean {
+ objective:string,args:Record<string,unknown>,observed:MinecraftAiObservation|null,
+ minecraftModeEnabled=false):boolean {
  if(!observed || observed.joined!==true || observed.busy ||
-    !isMinecraftAiObjective(objective) || args?.command!=='auto_goal' ||
+    !isMinecraftAiObjective(objective,minecraftModeEnabled) || args?.command!=='auto_goal' ||
     typeof args.goal!=='string')return false;
  const goal=args.goal,s=objective.toLowerCase();
  const fields:Record<string,string[]>={
@@ -638,6 +639,7 @@ export class MinecraftAiGate {
   private sameIdleObservations=0;
   private lastSceneSignature: string|null=null;
   private bootstrapJoinConsumed=false;
+  private readonly minecraftModeEnabled:boolean;
   private nativeGoalStarted:string|null=null;
   private nativeGoalStartedAt:number|null=null;
   private nativeSmeltItem:string|null=null;
@@ -655,7 +657,10 @@ export class MinecraftAiGate {
   private pendingNativeRestore:{goal:string;startedAt:number;args:Record<string,unknown>}|null=null;
   private nativeStatus:NativeMissionReceipt|null=null;
   constructor(private readonly objective: string = '',
-              private readonly allowBootstrapJoin=false) {}
+              private readonly allowBootstrapJoin=false,
+              minecraftModeEnabled=false) {
+    this.minecraftModeEnabled=minecraftModeEnabled;
+  }
   get lastObservation(){return this.observed;}
   /** Rehydrate ONLY a real current-task effect receipt after a durable
    * budget pause. A replayed model summary, external status or different
@@ -746,7 +751,7 @@ export class MinecraftAiGate {
     if(command==='auto_goal'){
       if(this.observed.health<=6 && !['survive','guard'].includes(String(args.goal)))
         return {ok:false,reason:'Health critically low; refuse non-defensive long-running Minecraft mission'};
-      return mayStartNativeMinecraftGoal(this.objective,args,this.observed)?
+      return mayStartNativeMinecraftGoal(this.objective,args,this.observed,this.minecraftModeEnabled)?
         {ok:true,reason:'Owner-matched existing JARVIS bounded mission, requires later status/evidence'}:
         {ok:false,reason:'Unmatched or unsafe proposed native Minecraft mission; use observed primitives instead'};
     }
@@ -1021,7 +1026,7 @@ export class MinecraftAiGate {
       if(latest && !latest.busy && this.pendingNativeRestore){
         const pending=this.pendingNativeRestore;
         this.pendingNativeRestore=null;
-        if(mayStartNativeMinecraftGoal(this.objective,pending.args,latest)){
+        if(mayStartNativeMinecraftGoal(this.objective,pending.args,latest,this.minecraftModeEnabled)){
           this.nativeGoalStarted=pending.goal;
           this.nativeGoalStartedAt=pending.startedAt;
           this.nativeSmeltItem=pending.goal==='smelt'?

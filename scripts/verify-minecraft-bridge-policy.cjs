@@ -38,6 +38,11 @@ assert.ok(javaBuildMatch,'Java PlayerEngine bridge has a bounded BUILD_BLOCKS al
 for(const block of safeBuildMaterials)assert.ok(javaBuildMatch[1].includes('"'+block+'"'),
   'Java PlayerEngine bridge allows safe build material '+block);
 const sequenceSource=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/overlay/com/neovetta/aicompanion/jarvis/JarvisNativeSequenceTask.java'),'utf8');
+const volumeSource=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/overlay/com/neovetta/aicompanion/jarvis/JarvisNativeVolumeTask.java'),'utf8');
+const volumeMaterialMatch=volumeSource.match(/MATERIALS=Set\.of\(([\s\S]*?)\);/);
+assert.ok(volumeMaterialMatch,'native volume task has a bounded MATERIALS allowlist');
+for(const block of safeBuildMaterials)assert.ok(volumeMaterialMatch[1].includes('"'+block+'"'),
+  'native volume task allows safe build material '+block);
 const sequenceBuildMatch=sequenceSource.match(/BUILD_BLOCKS=Set\.of\(([\s\S]*?)\);/);
 const sequenceGatherMatch=sequenceSource.match(/GATHER=Set\.of\(([\s\S]*?)\);/);
 assert.ok(sequenceBuildMatch,'native sequence has a bounded BUILD_BLOCKS allowlist');

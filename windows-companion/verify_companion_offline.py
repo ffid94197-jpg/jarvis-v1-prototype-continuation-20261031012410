@@ -56,6 +56,16 @@ run(budget.reserve() is None,'reconnect stops after five attempts per ten minute
 clock.advance(600)
 run(budget.reserve()==2,'reconnect budget expires after rolling ten-minute window')
 source_text=source
+minecraft_command_fn=next(n for n in parsed.body
+    if isinstance(n,ast.FunctionDef) and n.name=='minecraft_command')
+lock_blocks=[n for n in ast.walk(minecraft_command_fn) if isinstance(n,ast.With) and
+    any(isinstance(item.context_expr,ast.Name) and item.context_expr.id=='bot_lock'
+        for item in n.items)]
+wait_inside_lock=any(
+    isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='wait'
+    for block in lock_blocks for node in ast.walk(block))
+run(bool(lock_blocks) and not wait_inside_lock,
+    'Minecraft ACK wait is outside bot lock so owner STOP stays responsive')
 run("missionAutoResume':False" in source_text,
     'reconnect result explicitly reports that mission auto-resume is disabled')
 run("MINECRAFT_SESSION_TERMINAL" in source_text,

@@ -938,6 +938,8 @@ def minecraft_action(op):
         except Exception as err:
             bot_proc = None
             bot_engine = None
+            if not bot_supervisor_enabled:
+                bot_reconnecting = False
             return {'ok':False,'error':f'Minecraft bot launcher failed ({type(err).__name__})'}
 
     # Do not hold bot_lock while waiting for a game-server spawn: explicit

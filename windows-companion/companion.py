@@ -741,7 +741,16 @@ def _minecraft_supervisor_loop(generation):
                 print("[companion] Minecraft reconnect stopped after a terminal kick/configuration failure.", flush=True)
                 return
         elif not reconnecting:
-            return
+            # A manual join can replace a dead child before this waiter wakes.
+            # If that replacement then fails, keep the supervisor authoritative
+            # and schedule the same bounded reconnect path rather than exiting
+            # with an enabled-but-unmonitored supervisor.
+            with bot_lock:
+                if not bot_supervisor_enabled or generation != bot_supervisor_generation:
+                    return
+                if bot_proc is not None:
+                    continue
+                bot_reconnecting = True
 
         if not auto_reconnect_enabled("jarvis", os.environ):
             with bot_lock:

@@ -53,7 +53,13 @@ const allowedPath=p=>{
       "src/lib/agent/core/taskState.ts","src/lib/agent/core/verifier.ts",
       "src/lib/agent/core/autonomyPolicy.ts","src/lib/agent/core/approvedSkillQueue.ts",
       "src/lib/agent/core/skillIntent.ts","src/lib/agent/core/modelProvider.ts",
-      "src/lib/agent/tools/","src/lib/agent/windows/"].some(prefix=>
+      "src/lib/agent/core/prompts.ts","src/lib/agent/core/autonomyGate.ts",
+      "src/lib/agent/core/goalPlanner.ts","src/lib/agent/core/minecraftAiGate.ts",
+      "src/lib/agent/core/observation.ts","src/lib/agent/core/inventoryIntegrity.ts",
+      "src/lib/agent/core/modelErrors.ts","src/lib/agent/core/priorTaskContext.ts",
+      "src/lib/agent/core/minecraftIntent.ts","src/lib/agent/core/capabilityIntent.ts",
+      "src/lib/agent/tools/","src/lib/agent/windows/","src/lib/agent/adoption/",
+      "src/lib/agent/scheduler/","src/lib/agent/routines/","src/app/api/","prisma/"].some(prefix=>
         p.toLowerCase().startsWith(prefix)))
     throw new RepairError("JARVIS protected configuration/security file is immune to self-repair");
   return p;

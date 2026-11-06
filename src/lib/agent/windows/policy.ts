@@ -1,5 +1,6 @@
 import {readFileSync} from "node:fs";
 import {join} from "node:path";
+import {MINECRAFT_SAFE_GATHER_RESOURCES} from "../core/minecraftResources";
 /** Operator opt-in Windows capabilities. Never infer privileges from model output. */
 export interface DesktopPrepared {
   operation: "open_url" | "open_app" | "open_settings" | "discover_apps" | "find_capability" | "youtube_oldest" | "screen_watch" | "minecraft_join" | "minecraft_spawn" | "minecraft_stop" | "browser_search" | "browser_inspect" | "browser_read_page" | "browser_click_link" | "browser_fill_search" | "browser_scroll" | "list_windows" | "focus_app" | "desktop_state" | "desktop_windows" | "desktop_focus" | "desktop_click" | "desktop_move" | "desktop_type" | "desktop_keys" | "desktop_scroll" | "launch_installed" | "minecraft_command" | "minecraft_input" | "native_open_url" | "native_inspect" | "native_action" | "native_verify" | "desktop_observe";
@@ -382,8 +383,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       ["x","y","z"].every(k=>integer((v as Record<string,unknown>)[k],-30000000,30000000));
     if(!step && r.durationSeconds!==undefined && !integer(r.durationSeconds,10,43200))return false;
     if(fixed.has(g))return true;
-    if(g==="gather")return ["logs","planks","sticks","cobblestone","raw_iron","iron_ingot",
-      "diamond","obsidian","flint","netherrack"].includes(String(r.resource))&&integer(r.targetCount,1,64);
+    if(g==="gather")return MINECRAFT_SAFE_GATHER_RESOURCES.includes(
+      String(r.resource) as typeof MINECRAFT_SAFE_GATHER_RESOURCES[number])&&integer(r.targetCount,1,64);
     if(g==="travel")return at(r.destination)&&integer(r.arrivalRange,1,8);
     if(g==="craft")return ["stick","crafting_table","chest","furnace","ladder","bread","shield","torch"]
       .includes(String(r.item))&&integer(r.targetCount,1,16);

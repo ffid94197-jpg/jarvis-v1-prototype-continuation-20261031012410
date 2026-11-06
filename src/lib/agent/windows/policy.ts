@@ -458,7 +458,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return !["floor","roof"].includes(String(r.shape)) || r.height===1;
     }
     if(g==="farm_crop") {
-      if(!["carrots","potatoes"].includes(String(r.crop))||!at(r.position)||
+      if(!["carrots","potatoes","beetroot"].includes(String(r.crop))||!at(r.position)||
          !integer(r.width,1,4)||!integer(r.depth,1,4)||
          !integer(r.targetCount,1,16))return false;
       const p=r.position as {x:number;y:number;z:number};

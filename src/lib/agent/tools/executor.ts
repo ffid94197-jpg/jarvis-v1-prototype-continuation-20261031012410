@@ -301,11 +301,12 @@ export async function executeTool(
           const {autoApplyRepair}=await import("../evolution/repairVault.mjs");
           const result=await autoApplyRepair(ownerId,request.id,taskId);
           const verified=result.state==="verified"&&result.verified===true;
+          const effectUnknown=!verified&&(result.state==="effect_unknown"||result.state==="applied");
           return {ok:verified,tool,
             evidence:verified
               ?"Bounded self-repair applied and static syntax verified; project tests/runtime acceptance were not run"
               :"Bounded self-repair did not reach verified state; inspect repair ledger and rollback status",
-            detail:{...result,sourceContentsReturned:false,runtimeTestsExecuted:false}};
+            detail:{...result,effectUnknown,sourceContentsReturned:false,runtimeTestsExecuted:false}};
         }
         if(request.action==="learn_skill"){
           const {learnFromCompletedTask}=await import("../evolution/learnFromTask.mjs");
@@ -352,7 +353,12 @@ export async function executeTool(
               truncated:pending.length>8,sourceContentReturned:false}};
         }
         return {ok:false,tool,evidence:"",error:"Unknown guarded evolution operation"};
-      }catch(e){return {ok:false,tool,evidence:"",error:e instanceof Error?e.message:"Evolution registry unavailable"};}
+      }catch(e){
+        const status=(e&&typeof e==="object")?(e as {status?:unknown}).status:undefined;
+        const effectUnknown=tool==="evolution_repair_apply"&&status===503;
+        return {ok:false,tool,evidence:"",error:e instanceof Error?e.message:"Evolution registry unavailable",
+          detail:effectUnknown?{effectUnknown:true}:undefined};
+      }
     }
     case "memory_recall": {
       if(!prepared.memory || isCancelled() ||

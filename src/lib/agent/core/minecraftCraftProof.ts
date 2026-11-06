@@ -29,13 +29,14 @@ export function verifyNativeCraftReceipt(
   const before=m.initialCount, after=m.currentCount;
   const statBefore=m.craftStatBefore, statAfter=m.craftStatAfter;
   const crafted=m.craftedCount;
-  return r.goal==="craft" && r.status==="complete" &&
-    r.item===item && r.targetCount===count && m.craftDone===true &&
-    Number.isSafeInteger(before) && before===inventoryBefore &&
-    Number.isSafeInteger(after) && after===inventoryAfter &&
-    inventoryAfter-inventoryBefore>=count &&
-    Number.isSafeInteger(statBefore) && statBefore>=0 &&
-    Number.isSafeInteger(statAfter) && statAfter>=0 &&
-    Number.isSafeInteger(crafted) && crafted>=count &&
-    statAfter-statBefore>=count && crafted===statAfter-statBefore;
+  if (r.goal!=="craft" || r.status!=="complete" ||
+      r.item!==item || r.targetCount!==count || m.craftDone!==true ||
+      typeof before!=="number" || !Number.isSafeInteger(before) || before!==inventoryBefore ||
+      typeof after!=="number" || !Number.isSafeInteger(after) || after!==inventoryAfter ||
+      inventoryAfter-inventoryBefore<count ||
+      typeof statBefore!=="number" || !Number.isSafeInteger(statBefore) || statBefore<0 ||
+      typeof statAfter!=="number" || !Number.isSafeInteger(statAfter) || statAfter<0 ||
+      typeof crafted!=="number" || !Number.isSafeInteger(crafted) || crafted<count ||
+      statAfter-statBefore<count || crafted!==statAfter-statBefore) return false;
+  return true;
 }

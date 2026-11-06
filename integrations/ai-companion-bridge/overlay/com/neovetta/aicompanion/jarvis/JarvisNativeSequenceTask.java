@@ -229,6 +229,8 @@ public final class JarvisNativeSequenceTask extends Task {
         equipmentSlot=null;destination=null;
         equipmentTargets=null;equipmentProgress=0;
         construction=null;constructionMaterial=null;constructionIndex=0;
+        volumeStage=null;cropBlock=null;cropItem=null;cropCells.clear();lastCropAge.clear();
+        cropInitialCount=0;cropTargetCount=0;harvestedCropCount=0;combatTarget=null;combatMob=null;
         stage=goal+"["+index+"]";
         if(Set.of("gather","craft","smelt").contains(goal)){
             currentItem=goal.equals("gather")?row.get("resource").getAsString():row.get("item").getAsString();
@@ -253,6 +255,57 @@ public final class JarvisNativeSequenceTask extends Task {
                 new String[]{"iron_pickaxe","iron_sword"}:
                 new String[]{"stone_pickaxe","stone_sword"};
             return nextEquipmentTarget();
+        }
+        if(Set.of("farm_wheat","farm_crop").contains(goal)) {
+            String crop=goal.equals("farm_wheat")?"wheat":row.get("crop").getAsString();
+            cropBlock=crop.equals("wheat")?Blocks.WHEAT:
+                crop.equals("carrots")?Blocks.CARROTS:Blocks.POTATOES;
+            Item item=crop.equals("wheat")?Items.WHEAT:
+                crop.equals("carrots")?Items.CARROT:Items.POTATO;
+            Item seed=crop.equals("wheat")?Items.WHEAT_SEEDS:item;
+            JsonObject p=row.getAsJsonObject("position");
+            BlockPos origin=new BlockPos(p.get("x").getAsInt(),p.get("y").getAsInt(),p.get("z").getAsInt());
+            int width=row.get("width").getAsInt(),depth=row.get("depth").getAsInt();
+            cropTargetCount=row.get("targetCount").getAsInt();
+            if(entity.getBlockPos().getSquaredDistance(origin)>12*12)
+                throw new IllegalArgumentException("farm-stage-origin-not-nearby");
+            ServerWorld world=(ServerWorld)entity.getWorld();
+            for(int dx=0;dx<width;dx++)for(int dz=0;dz<depth;dz++) {
+                BlockPos pos=origin.add(dx,0,dz);
+                if(!world.getChunkManager().isChunkLoaded(pos.getX()>>4,pos.getZ()>>4) ||
+                   !world.getBlockState(pos.down()).isOf(Blocks.FARMLAND))
+                    throw new IllegalArgumentException("farm-stage-field-not-loaded-farmland");
+                Block existing=world.getBlockState(pos).getBlock();
+                if(existing!=cropBlock && existing!=Blocks.AIR)
+                    throw new IllegalArgumentException("farm-stage-unrelated-crop-cell");
+                cropCells.add(pos);
+            }
+            cropItem=Registries.ITEM.getId(item).getPath();
+            cropInitialCount=count(cropItem);
+            if(cropInitialCount+cropTargetCount>256)
+                throw new IllegalArgumentException("farm-stage-output-budget");
+            return new CollectCropTask(new ItemTarget(item,cropInitialCount+cropTargetCount),
+                new Block[]{cropBlock},new Item[]{seed},cropCells::contains);
+        }
+        if(goal.equals("build_volume") || goal.equals("shelter")) {
+            volumeStage=new JarvisNativeVolumeTask(entity,row);
+            return volumeStage;
+        }
+        if(goal.equals("defeat_hostile")) {
+            int entityId=row.get("entityId").getAsInt();
+            combatMob=row.get("mob").getAsString();
+            ServerWorld world=(ServerWorld)entity.getWorld();
+            for(Entity candidate:world.iterateEntities()) {
+                if(candidate.getId()==entityId && candidate instanceof HostileEntity &&
+                   candidate.isAlive() &&
+                   candidate.getPos().squaredDistanceTo(entity.getPos())<=12*12 &&
+                   Registries.ENTITY_TYPE.getId(candidate.getType()).getPath().equals(combatMob)) {
+                    combatTarget=candidate;break;
+                }
+            }
+            if(combatTarget==null)
+                throw new IllegalArgumentException("combat-stage-target-not-currently-observed");
+            return new KillEntityTask(combatTarget);
         }
         if(goal.equals("build")) {
             JsonObject p=row.getAsJsonObject("position");
@@ -308,7 +361,27 @@ public final class JarvisNativeSequenceTask extends Task {
         if(!TaskCatalogue.taskExists(currentItem))throw new IllegalArgumentException("catalogue-equipment-missing");
         return TaskCatalogue.getItemTask(currentItem,Math.max(1,currentBefore));
     }
+    private void sampleFarmCells() {
+        if(cropCells.isEmpty() || cropBlock==null)return;
+        ServerWorld world=(ServerWorld)entity.getWorld();
+        for(BlockPos pos:cropCells) {
+            if(!world.getChunkManager().isChunkLoaded(pos.getX()>>4,pos.getZ()>>4))continue;
+            BlockState state=world.getBlockState(pos);
+            int age=-1;
+            if(state.isOf(cropBlock) && cropBlock instanceof CropBlock crop)
+                age=crop.getAge(state);
+            else if(!state.isAir())age=-2;
+            Integer previous=lastCropAge.put(pos,age);
+            if(previous!=null && previous==7 && age>=-1 && age<7 && harvestedCropCount<256)
+                harvestedCropCount++;
+        }
+    }
     private boolean physicallyDone(){
+        if(volumeStage!=null)return volumeStage.complete();
+        if(cropBlock!=null)
+            return harvestedCropCount>=cropTargetCount &&
+                count(cropItem)>=cropInitialCount+cropTargetCount;
+        if(combatTarget!=null)return !combatTarget.isAlive();
         if(construction!=null){
             BlockPos pos=construction[constructionIndex];
             ServerWorld world=(ServerWorld)entity.getWorld();
@@ -325,6 +398,7 @@ public final class JarvisNativeSequenceTask extends Task {
     @Override protected void onStart(){stage="running";}
     @Override protected Task onTick(){
         if(failed || index>=steps.size())return null;
+        sampleFarmCells();
         if(current==null){
             try {current=prepare(steps.get(index));}
             catch(Exception ex){failed=true;stage="blocked:"+ex.getClass().getSimpleName();return null;}

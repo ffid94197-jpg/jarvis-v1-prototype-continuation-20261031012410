@@ -236,7 +236,9 @@ export async function authorizeToolCall(
         if(process.env.JARVIS_SELF_REPAIR_AUTO_APPLY!=="1"){
           decision=deny("Bounded automatic repair is disabled by owner policy");break;
         }
-        if(!ctx.ownerId || Object.keys(rawArgs).some(k=>k!=="id") ||
+        if(!ctx.ownerId || !ctx.taskId ||
+           !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(ctx.taskId) ||
+           Object.keys(rawArgs).some(k=>k!=="id") ||
            typeof rawArgs.id!=="string" || !/^rp_[0-9a-f]{32}$/.test(rawArgs.id)){
           decision=deny("A fresh staged repair ID and authenticated owner are required");break;
         }

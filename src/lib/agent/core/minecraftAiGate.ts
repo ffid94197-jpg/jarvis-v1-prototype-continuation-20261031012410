@@ -95,7 +95,8 @@ export function isMinecraftAiObjective(objective:string,minecraftModeEnabled=fal
   // word "Minecraft" (e.g. "build a small house" or "farm wheat").
   const explicitMinecraftScope=/\b(?:minecraft|minecraft_companion_command|jarvisbuddy|ender dragon|netherite)\b/.test(s);
   const resourceScope=/\b(?:cobblestone|cobbled deepslate|stone pickaxe|wooden pickaxe|iron pickaxe|diamond pickaxe|raw iron|raw gold|raw copper|iron ingots?|gold ingots?|copper ingots?|netherite scraps?|ender pearls?|blaze rods?|ancient debris|diamond ore|iron ore|gold ore|redstone ore|end portal|nether portal|stronghold)\b/.test(s);
-  const otherDomain=/\b(?:browser|website|web page|file|folder|document|email|desktop|windows|chrome|terminal|powershell|repository|github|spreadsheet|database|notepad|application|app)\b/.test(s);
+  const otherDomain=/\b(?:browser|website|web page|file|folder|document|email|desktop|windows|chrome|terminal|powershell|repository|github|spreadsheet|database|notepad|application|app|youtube|video|music|audio|media|spotify|podcast|movie|stream|playback)\b/.test(s);
+  if(otherDomain&&!explicitMinecraftScope)return false;
   const contextualMinecraftScope=minecraftModeEnabled&&!otherDomain&&
     /\b(?:house|shelter|hut|wall|bridge|tower|castle|farm|wheat|carrots?|potatoes|villagers?|zombies?|skeletons?|spiders?|creepers?|dragon|nether|end|diamonds?|emeralds?|redstone|iron|gold|wood|planks|logs|pickaxes?|swords?|armor|armour|furnace|crafting table|chest|barrel|bed|boat|caves?|stronghold|ores?|blocks?|bucket|cake|portal|elytra|shulker|beacon|anvil|potions?|hunger|health)\b/.test(s);
   const minecraftScope=explicitMinecraftScope||contextualMinecraftScope;

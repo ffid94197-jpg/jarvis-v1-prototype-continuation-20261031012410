@@ -304,7 +304,7 @@ export function mayStartNativeMinecraftGoal(
   // A model may propose a durable sequence ONLY when each requested stage
   // maps one-to-one to an authorized existing companion subgoal. The actual
   // companion independently revalidates validSequence before execution.
-  if(!Array.isArray(args.steps)||args.steps.length<2||args.steps.length>8)return false;
+  if(!Array.isArray(args.steps)||args.steps.length<2||args.steps.length>16)return false;
   // Native one-sentence roofed room authorization is constrained to a
   // deterministic floor -> two-high entrance walls -> roof composition.
   // All three 3D coordinates originate from the owner's explicit start,

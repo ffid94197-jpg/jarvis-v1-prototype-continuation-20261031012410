@@ -286,18 +286,18 @@ async function persistStep(
  * (effect_unknown when effects occurred, or a failed state-conflict
  * report otherwise).
  */
-async function settleAndReport(
+async function settleTaskAndReport(
   taskId: string,
   to: TaskState,
   stepsUsed: number,
   finalText: string,
   emit: (ev: TaskEvent) => void,
   opts: { effectsHappened: boolean },
-) {
+): Promise<boolean> {
   const r = await transitionTask(taskId, to, { finalText, stepsUsed });
   if (r.ok) {
     emit({ type: "final", taskId, status: to, text: finalText });
-    return;
+    return true;
   }
   if (r.reason === "write_failed") {
     // DUR-02: the DB refused the settlement. Never claim success.
@@ -306,31 +306,95 @@ async function settleAndReport(
         type: "final",
         taskId,
         status: "effect_unknown",
-        text: `⚠ DURABILITY WARNING: the settlement could not be persisted; at least one real effect occurred but the durable task state remains RUNNING. This report is honest about that uncertainty.\n\n${finalText}`,
+        text: \`⚠ DURABILITY WARNING: the settlement could not be persisted; at least one real effect occurred but the durable task state remains RUNNING. This report is honest about that uncertainty.\\n\\n\${finalText}\`,
       });
     } else {
       emit({
         type: "final",
         taskId,
         status: "failed",
-        text: `⚠ DURABILITY WARNING: the settlement could not be persisted; the durable task state may be stale. Report follows.\n\n${finalText}`,
+        text: \`⚠ DURABILITY WARNING: the settlement could not be persisted; the durable task state may be stale. Report follows.\\n\\n\${finalText}\`,
       });
     }
-    return;
+    return false;
   }
   // invalid transition / unknown persisted state: surface the conflict.
   emit({
     type: "final",
     taskId,
     status: "failed",
-    text: `Task state conflict (durable state: ${r.from ?? "unknown"}). Nothing was double-settled. Report: ${finalText}`,
+    text: \`Task state conflict (durable state: \${r.from ?? "unknown"}). Nothing was double-settled. Report: \${finalText}\`,
   });
+  return false;
 }
 
 // ——— THE LOOP ———
 
 export async function runTask(opts: RunTaskOptions): Promise<void> {
   const { taskId, objective, budget, emit, isCancelled } = opts;
+  // A completed, fully receipted, bounded read-only task may teach JARVIS a
+  // reusable declarative skill. Learning is itself journal-before-effect,
+  // owner-scoped, and stages a candidate only; the owner still approves it.
+  const settleAndReport = async (
+    id: string, to: TaskState, used: number, report: string,
+    emitEvent: (ev: TaskEvent) => void, settleOptions: { effectsHappened: boolean },
+  ): Promise<void> => {
+    const settled = await settleTaskAndReport(id,to,used,report,emitEvent,settleOptions);
+    if(!settled || to!=="completed" || used<=opts.stepsUsedOffset) return;
+    try {
+      const [rejected,trace] = await Promise.all([
+        db.agentStep.count({where:{taskId:id,kind:{in:["guardian_deny","error"]}}}),
+        db.agentStep.findMany({
+          where:{taskId:id,kind:{in:["tool_call","tool_result"]}},
+          orderBy:[{seq:"asc"},{createdAt:"asc"}],take:48,
+          select:{seq:true,kind:true,tool:true},
+        }),
+      ]);
+      const calls=trace.filter((row:{kind:string})=>row.kind==="tool_call");
+      const learnable=new Set(["read_file","list_dir","create_folder","windows_discover_apps","windows_find_capability"]);
+      if(rejected>0 || calls.length<1 || calls.length>8 || trace.length!==calls.length*2 ||
+         calls.some((row:{tool:string|null})=>!row.tool||!learnable.has(row.tool))) return;
+      const admission=await admitEffect(id,opts.planRevision??0,{
+        tool:"evolution_skill_learn",args:{sourceTaskId:id},
+      });
+      if(admission.kind==="duplicate_settled") return;
+      if(admission.kind==="needs_reconciliation"){
+        await reconcileEffect(admission.effectId,{
+          tool:"evolution_skill_learn",args:{sourceTaskId:id},ownerId:opts.ownerId,
+        });
+        return;
+      }
+      if(admission.kind!=="admitted"){
+        console.warn("[evolution-learning] durable admission refused; no skill was staged");
+        return;
+      }
+      try {
+        const {learnFromCompletedTask}=await import("../evolution/learnFromTask.mjs");
+        const learned=await learnFromCompletedTask(opts.ownerId,db,id);
+        const receipt={ok:true,tool:"evolution_skill_learn",sourceTaskId:id,
+          skillId:learned.id,status:learned.status,ownerApprovalRequired:true};
+        const recorded=await settleEffect(admission.effectId,receipt,"SETTLED");
+        if(!recorded){
+          console.error("[evolution-learning] skill candidate staged but effect settlement is uncertain");
+          return;
+        }
+        await db.agentStep.create({data:{
+          taskId:id,seq:used*10+9,kind:"evolution_learning",tool:"evolution_skill_learn",
+          note:JSON.stringify({skillId:learned.id,status:learned.status,ownerApprovalRequired:true}),
+        }}).catch(()=>{});
+      } catch(error) {
+        await settleEffect(admission.effectId,{
+          ok:false,tool:"evolution_skill_learn",sourceTaskId:id,
+          errorName:error instanceof Error?error.name:"unknown",
+        },"FAILED");
+        // A non-learnable or incomplete task is an expected no-op, not a
+        // reason to downgrade the already completed owner task.
+        console.info("[evolution-learning] no reusable skill staged from this task");
+      }
+    } catch {
+      console.warn("[evolution-learning] post-completion learning check unavailable");
+    }
+  };
   // PART 2 — owner autonomy tier. When the caller supplies none, the most
   // restrictive profile applies, which reproduces the pre-tier behaviour
   // exactly (12-step default, 2 in-scope replans). This is NOT an
@@ -1241,7 +1305,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       if (admission.kind === "needs_reconciliation") {
         // Crash residue: ADMITTED but never settled. NEVER blind-replay —
         // reconcile against actual disk state first (§5.5, DUR-04).
-        const rec = await reconcileEffect(admission.effectId, { tool, args });
+        const rec = await reconcileEffect(admission.effectId, { tool, args, ownerId: opts.ownerId });
         if (rec.kind === "verified") {
           stepsUsed++;
           settlementLines.push(

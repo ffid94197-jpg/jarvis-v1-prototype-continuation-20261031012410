@@ -378,10 +378,6 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
           console.error("[evolution-learning] skill candidate staged but effect settlement is uncertain");
           return;
         }
-        await db.agentStep.create({data:{
-          taskId:id,seq:used*10+9,kind:"evolution_learning",tool:"evolution_skill_learn",
-          note:JSON.stringify({skillId:learned.id,status:learned.status,ownerApprovalRequired:true}),
-        }}).catch(()=>{});
       } catch(error) {
         await settleEffect(admission.effectId,{
           ok:false,tool:"evolution_skill_learn",sourceTaskId:id,

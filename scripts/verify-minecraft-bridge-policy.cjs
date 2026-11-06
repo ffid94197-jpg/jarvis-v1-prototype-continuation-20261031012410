@@ -2,12 +2,32 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 const root=path.join(__dirname,'..');
+const catalogSource=fs.readFileSync(path.join(root,'src/lib/agent/core/minecraftResources.ts'),'utf8');
+const catalogCompiled=ts.transpileModule(catalogSource,{reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
+const catalogErrors=(catalogCompiled.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
+assert.equal(catalogErrors.length,0,'shared Minecraft resource catalog must parse');
+const catalogExports={};
+vm.runInNewContext(catalogCompiled.outputText,{exports:catalogExports,Object,Array,Set});
+const safeGatherResources=catalogExports.MINECRAFT_SAFE_GATHER_RESOURCES;
+const resourceGoal=require('../windows-companion/minecraft-bot/resource_goal.cjs');
+assert.deepEqual([...safeGatherResources].sort(),[...resourceGoal.RESOURCES].sort(),
+  'Core/Guardian/PlayerEngine catalog must exactly match the native companion resource allowlist');
+assert.equal(new Set(safeGatherResources).size,safeGatherResources.length,'resource catalog has no duplicates');
+const coreGateSource=fs.readFileSync(path.join(root,'src/lib/agent/core/minecraftAiGate.ts'),'utf8');
+for(const resource of safeGatherResources)assert.ok(coreGateSource.includes(resource+':'),
+  'Core AI gate knows the safe resource '+resource);
+assert.ok(coreGateSource.includes('shared safe vanilla resource catalog'),
+  'Core Minecraft instructions describe the shared safe resource catalog');
+const playerEngineSource=fs.readFileSync(path.join(root,'src/lib/agent/windows/playerEngineBridge.ts'),'utf8');
+assert.ok(playerEngineSource.includes('new Set<string>(MINECRAFT_SAFE_GATHER_RESOURCES)'),
+  'PlayerEngine uses the shared resource catalog');
 const compiled=ts.transpileModule(fs.readFileSync(path.join(root,'src/lib/agent/windows/policy.ts'),'utf8'),{reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
 const errors=(compiled.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
 assert.equal(errors.length,0,'Windows Guardian TypeScript must parse without syntax errors');
 const code=compiled.outputText;
 const outputs={};
-vm.runInNewContext(code,{exports:outputs,URL,process:{platform:'win32',env:{JARVIS_WINDOWS_AGENT_ENABLED:'1',JARVIS_LOCAL_DEV_NO_LOGIN:'1',JARVIS_LOCAL_DEV_BIND:'127.0.0.1',JARVIS_WINDOWS_COMPANION_TOKEN:'a'.repeat(64),JARVIS_MINECRAFT_LAN_ENABLED:'1'},cwd:()=>root},require});
+const policyRequire=id=>id==='../core/minecraftResources'?catalogExports:require(id);
+vm.runInNewContext(code,{exports:outputs,URL,process:{platform:'win32',env:{JARVIS_WINDOWS_AGENT_ENABLED:'1',JARVIS_LOCAL_DEV_NO_LOGIN:'1',JARVIS_LOCAL_DEV_BIND:'127.0.0.1',JARVIS_WINDOWS_COMPANION_TOKEN:'a'.repeat(64),JARVIS_MINECRAFT_LAN_ENABLED:'1'},cwd:()=>root},require:policyRequire});
 const validate=outputs.validateDesktopTool;let ok=0;
 const run=(args,accepted)=>{const r=validate('minecraft_companion_command',args);assert.equal(r.ok,accepted,JSON.stringify({args,r}));ok++;return r;};
 const p={x:1,y:64,z:3};
@@ -54,6 +74,12 @@ const authorized=[
  {command:'auto_goal',goal:'dragon_then_netherite_run',durationSeconds:21600}
 ];
 const {validateCommand:validateBot}=require('../windows-companion/minecraft-bot/friend_protocol.cjs');
+for(const resource of safeGatherResources){
+ const input={command:'auto_goal',goal:'gather',resource,targetCount:4,durationSeconds:300};
+ assert.equal(validateBot(input),null,'Companion accepts safe resource '+resource);ok++;
+ const r=run(input,true);
+ assert.equal(r.prepared.resource,resource,'Guardian forwards safe resource '+resource);ok++;
+}
 for(const input of authorized){
  assert.equal(validateBot(input),null,'Bot accepts '+JSON.stringify(input));ok++;
  const r=run(input,true);
@@ -64,6 +90,9 @@ for(const input of authorized){
 }
 for(const input of [
  {command:'auto_goal',goal:'gather',resource:'command_block',targetCount:1},
+ {command:'auto_goal',goal:'gather',resource:'bedrock',targetCount:1},
+ {command:'auto_goal',goal:'gather',resource:'barrier',targetCount:1},
+ {command:'auto_goal',goal:'gather',resource:'tnt',targetCount:1},
  {command:'auto_goal',goal:'gather',resource:'diamond',targetCount:100},
  {command:'auto_goal',goal:'craft',item:'dragon_egg',targetCount:1},
  {command:'auto_goal',goal:'equip',item:'diamond_sword',destinationSlot:'head'},

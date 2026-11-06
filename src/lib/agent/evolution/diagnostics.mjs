@@ -90,6 +90,7 @@ export async function diagnoseOwnerRuntime(ownerId, db) {
         sample: { tasks: 0, steps: 0, effects: 0, guardianDenials: 0 },
         summary: { failedTasks: 0, uncertainEffects: 0, patterns: 0 },
         patterns: [], recent: [],
+        repairPolicy: { autoApplyEnabled: process.env.JARVIS_SELF_REPAIR_AUTO_APPLY === "1", defaultOff: true },
         safety: { readOnly: true, rawObjectivesExposed: false, fileContentsExposed: false, automaticRetry: false },
       };
     }
@@ -122,7 +123,7 @@ export async function diagnoseOwnerRuntime(ownerId, db) {
 
     const grouped = new Map();
     const recent = [];
-    let failedTasks = 0, uncertainEffects = 0;
+    let failedTasks = 0, deniedTasks = 0, partialTasks = 0, uncertainTasks = 0, uncertainEffects = 0;
     const add = (task, signal) => {
       const key = [signal.code, signal.category, signal.tool || "none"].join("|");
       let item = grouped.get(key);
@@ -171,9 +172,12 @@ export async function diagnoseOwnerRuntime(ownerId, db) {
           }
         }
       }
-      if (["failed", "denied", "effect_unknown", "partial"].includes(String(task.status))) {
-        failedTasks++;
-        if (!signals.length) addLocal({
+      if (task.status === "failed") failedTasks++;
+      if (task.status === "denied") deniedTasks++;
+      if (task.status === "partial") partialTasks++;
+      if (task.status === "effect_unknown") uncertainTasks++;
+      if (["failed", "denied", "effect_unknown", "partial"].includes(String(task.status)) && !signals.length) {
+        addLocal({
           code: "UNCLASSIFIED_FAILURE", category: "unclassified", repairable: false, tool: null, at: task.updatedAt,
         });
       }
@@ -208,9 +212,10 @@ export async function diagnoseOwnerRuntime(ownerId, db) {
     return {
       schemaVersion: 1, status: "diagnosed", generatedAt: new Date().toISOString(),
       sample: { tasks: tasks.length, steps: steps.length, effects: effects.length, guardianDenials: audits.length },
-      summary: { failedTasks, uncertainEffects, patterns: patterns.length },
+      summary: { failedTasks, deniedTasks, partialTasks, uncertainTasks, uncertainEffects, patterns: patterns.length },
       patterns: patterns.slice(0, 20),
       recent: recent.slice(0, 12),
+      repairPolicy: { autoApplyEnabled: process.env.JARVIS_SELF_REPAIR_AUTO_APPLY === "1", defaultOff: true },
       safety: { readOnly: true, rawObjectivesExposed: false, fileContentsExposed: false, automaticRetry: false },
     };
   } catch {

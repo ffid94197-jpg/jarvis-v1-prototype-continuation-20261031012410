@@ -1450,7 +1450,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       const settled = await settleEffect(
         admittedEffectId,
         result as unknown as Record<string, unknown>,
-        result.ok ? "SETTLED" : "FAILED",
+        result.ok ? "SETTLED" : result.detail?.effectUnknown === true ? "EFFECT_UNKNOWN" : "FAILED",
       );
       if (!settled) {
         effectJournalDegraded = true;
@@ -1472,6 +1472,15 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         messages.push({role:"assistant",content:
           "CORE SELF-DIAGNOSIS unavailable. Do not guess a root cause, weaken Guardian, or retry an uncertain effect."});
       }
+    }
+
+    // An explicit uncertain mutation outcome is a hard stop. Do not
+    // continue planning or retry against an external state that is unknown.
+    if(result.detail?.effectUnknown===true){
+      await settleAndReport(taskId,"effect_unknown",stepsUsed,
+        `The ${tool} operation has an uncertain outcome. Its durable effect is quarantined; inspect the owner-scoped repair/effect ledger and reconcile actual state before any retry.`,
+        emit,{effectsHappened:true});
+      return;
     }
 
     // A skill run is only an approved recipe EXPANSION. The Core now takes

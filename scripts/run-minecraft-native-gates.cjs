@@ -11,6 +11,7 @@ const python=process.env.PYTHON_BIN||'python';
 const tests=[
  {label:'Guardian TypeScript policy',cmd:process.execPath,args:['scripts/verify-minecraft-bridge-policy.cjs']},
  {label:'Main JARVIS language route',cmd:process.execPath,args:['scripts/verify-minecraft-natural-language-routing.cjs']},
+ {label:'PlayerEngine native craft receipt',cmd:process.execPath,args:['scripts/verify-native-craft-proof.cjs']},
  {label:'Python companion admission',cmd:python,args:['windows-companion/verify_minecraft_gateway_offline.py']},
  {label:'Minecraft bot offline suites',cmd:process.execPath,args:['windows-companion/minecraft-bot/run_offline_minecraft_gates.cjs']}
 ];

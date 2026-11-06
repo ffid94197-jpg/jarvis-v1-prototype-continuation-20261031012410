@@ -990,43 +990,55 @@ def minecraft_command(body):
     if os.environ.get('JARVIS_MINECRAFT_LAN_ENABLED') != '1':
         return {'ok':False,'error':'Minecraft LAN bot not enabled.'}
     global bot_proc
-    with bot_lock:
-        if bot_reconnecting:
-            return {'ok':False,'error':'Minecraft companion is reconnecting; no gameplay action was dispatched.'}
-        if not bot_proc or bot_proc.poll() is not None or not bot_proc.stdin:
-            return {'ok':False,'error':'Minecraft companion is not connected. Join LAN world first.'}
-        request_id=secrets.token_hex(8)
-        pending={'event':threading.Event(),'result':None,'process':bot_proc}
-        with bot_ack_lock:bot_ack_waiters[request_id]=pending
-        try:
+    request_id = None
+    try:
+        # Hold bot_lock only while binding and writing to the exact child.
+        # Waiting for Ollama/language parsing or a bot ACK must not block STOP.
+        with bot_lock:
+            if bot_reconnecting:
+                return {'ok':False,'error':'Minecraft companion is reconnecting; no gameplay action was dispatched.'}
+            if not bot_proc or bot_proc.poll() is not None or not bot_proc.stdin:
+                return {'ok':False,'error':'Minecraft companion is not connected. Join LAN world first.'}
+            child = bot_proc
+            request_id = secrets.token_hex(8)
+            pending = {'event':threading.Event(),'result':None,'process':child}
+            with bot_ack_lock:
+                bot_ack_waiters[request_id] = pending
             try:
-                message=build_minecraft_message(body,request_id)
+                message = build_minecraft_message(body, request_id)
             except ValueError as contract_error:
                 return {'ok':False,'error':'Minecraft command contract rejected: '+str(contract_error)}
-            bot_proc.stdin.write(json.dumps(message)+'\n')
-            bot_proc.stdin.flush()
-            if not pending['event'].wait(16 if body.get('command') == 'natural_goal' else 8):
-                return {'ok':False,'error':'Minecraft bot did not acknowledge action within deadline; outcome unknown.'}
-            ack=pending['result']
-            if not ack.get('ok'):
-                return {'ok':False,'error':str(ack.get('error','Bot rejected request.'))[:150]}
-            evidence={'command':body['command'],'botAcknowledged':True,
-                'status':str(ack.get('status',''))[:1900], 'inGameOutcomeVerified':False}
-            if body.get('command') == 'auto_status':
-                try:
-                    state=json.loads(ack.get('status',''))
-                    if isinstance(state,dict):
-                        evidence['autonomyGoalStatus']=str(state.get('status','unknown'))[:32]
-                        evidence['autonomyGoal']=str(state.get('goal',''))[:32]
-                        # Completion is attested by the bot state machine only;
-                        # real LAN world verification still requires a live test.
-                        evidence['inGameOutcomeVerified']=state.get('status')=='complete'
-                except (ValueError,TypeError):pass
-            return {'ok':True,'evidence':evidence}
-        except Exception as exc:
-            return {'ok':False,'error':'Minecraft command transport failed ('+type(exc).__name__+')'}
-        finally:
-            with bot_ack_lock:bot_ack_waiters.pop(request_id,None)
+            child.stdin.write(json.dumps(message)+'\n')
+            child.stdin.flush()
+
+        # Deliberately outside bot_lock: minecraft_stop and service shutdown can
+        # terminate the exact child while a natural-language model is thinking.
+        if not pending['event'].wait(16 if body.get('command') == 'natural_goal' else 8):
+            return {'ok':False,'error':'Minecraft bot did not acknowledge action within deadline; outcome unknown.'}
+        ack = pending.get('result')
+        if not isinstance(ack, dict):
+            return {'ok':False,'error':'Minecraft child exited without a correlated ACK; outcome unknown.'}
+        if not ack.get('ok'):
+            return {'ok':False,'error':str(ack.get('error','Bot rejected request.'))[:150]}
+        evidence = {'command':body['command'],'botAcknowledged':True,
+            'status':str(ack.get('status',''))[:1900], 'inGameOutcomeVerified':False}
+        if body.get('command') == 'auto_status':
+            try:
+                state=json.loads(ack.get('status',''))
+                if isinstance(state,dict):
+                    evidence['autonomyGoalStatus']=str(state.get('status','unknown'))[:32]
+                    evidence['autonomyGoal']=str(state.get('goal',''))[:32]
+                    # Completion is attested by the bot state machine only;
+                    # real LAN world verification still requires a live test.
+                    evidence['inGameOutcomeVerified']=state.get('status')=='complete'
+            except (ValueError,TypeError):pass
+        return {'ok':True,'evidence':evidence}
+    except Exception as exc:
+        return {'ok':False,'error':'Minecraft command transport failed ('+type(exc).__name__+')'}
+    finally:
+        if request_id is not None:
+            with bot_ack_lock:
+                bot_ack_waiters.pop(request_id,None)
 
 
 def watch_observation(seconds):

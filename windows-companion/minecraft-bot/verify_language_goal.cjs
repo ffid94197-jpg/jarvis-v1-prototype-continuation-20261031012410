@@ -41,7 +41,7 @@ for(const goal of ['constructor','__proto__','toString','hasOwnProperty'])
 ok(L.strictFormat([{role:'assistant',content:'hi'},{role:'user',content:'mine'}])[0].role==='user','Mindcraft formatter');
 const env={JARVIS_MODEL_BACKEND:'ollama',JARVIS_OLLAMA_MODEL:'local-test'};
 (async()=>{
- const yes=await L.interpretOwnerInstruction('collect five diamonds',{
+ const yes=await L.interpretOwnerInstruction('obtain five diamonds',{
   env,context:'world observed',
   fetchImpl:async(url,opts)=>{
    ok(url==='http://127.0.0.1:11434/api/chat','loopback JARVIS provider');
@@ -52,11 +52,11 @@ const env={JARVIS_MODEL_BACKEND:'ollama',JARVIS_OLLAMA_MODEL:'local-test'};
   }
  });
  ok(yes.ok&&yes.command.targetCount===5,'model interpretation passes same validator');
- const bad=await L.interpretOwnerInstruction('collect five diamonds',{env,
+ const bad=await L.interpretOwnerInstruction('obtain five diamonds',{env,
   fetchImpl:async()=>({ok:true,text:async()=>JSON.stringify({message:{
    content:JSON.stringify({command:'execute_js',script:'process.exit(1)'})}})})});
  ok(!bad.ok,'model-code output fails closed');
- const noProvider=await L.interpretOwnerInstruction('collect five diamonds',{env:{}});
+ const noProvider=await L.interpretOwnerInstruction('obtain five diamonds',{env:{}});
  ok(!noProvider.ok,'no unconfigured model calls');
  let disallowed=false;
  try{L.modelConfig({...env,JARVIS_OLLAMA_BASE_URL:'http://example.com'});}

@@ -26,6 +26,7 @@ from capability_discovery import recommend as find_capability
 from native_uia import validate_request as validate_native_request, run_native
 from browser_net_guard import is_public_http_url
 from desktop_control import check_input as validate_desktop_input, run_action as run_desktop_action, discover_installed, start_emergency_monitor
+from minecraft_supervisor import ReconnectBudget, auto_reconnect_enabled
 
 HOST = '127.0.0.1'
 PORT = 20189
@@ -62,6 +63,13 @@ def check_job_cancel(job):
 bot_proc = None
 bot_lock = threading.Lock()
 bot_ack_lock = threading.Lock()
+# Reconnect is a separate, explicit local opt-in. It may restore the network
+# session, but it never resumes a saved gameplay mission.
+bot_engine = None
+bot_reconnecting = False
+bot_supervisor_enabled = False
+bot_supervisor_generation = 0
+bot_supervisor_thread = None
 bot_ack_waiters = {}
 
 
@@ -688,30 +696,166 @@ def open_app(alias, settings_page='home'):
         return {'ok':False,'error':f'App launcher failed ({type(err).__name__})'}
 
 
+def _disable_minecraft_supervisor_locked():
+    """Invalidate a sleeping/waiting supervisor. Caller must hold bot_lock."""
+    global bot_supervisor_enabled, bot_supervisor_generation, bot_reconnecting
+    bot_supervisor_enabled = False
+    bot_supervisor_generation += 1
+    bot_reconnecting = False
+
+
+def _minecraft_supervisor_loop(generation):
+    """Rejoin the configured LAN session only; never resume an old goal."""
+    global bot_proc, bot_reconnecting, bot_supervisor_enabled
+    budget = ReconnectBudget()
+    while True:
+        with bot_lock:
+            if not bot_supervisor_enabled or generation != bot_supervisor_generation:
+                return
+            child = bot_proc
+            reconnecting = bot_reconnecting
+
+        if child is not None:
+            try:
+                exit_code = child.wait()
+            except Exception:
+                exit_code = 1
+            with bot_lock:
+                if not bot_supervisor_enabled or generation != bot_supervisor_generation:
+                    return
+                # A manual join may already have replaced the child while this
+                # waiter was waking. Follow the current child; never overwrite it.
+                if bot_proc is not child:
+                    continue
+                bot_proc = None
+                bot_reconnecting = True
+            terminal = getattr(child, "_jarvis_reconnect_allowed", None)
+            if exit_code == 2 or (terminal is not None and not terminal.is_set()):
+                with bot_lock:
+                    if generation == bot_supervisor_generation:
+                        bot_supervisor_enabled = False
+                        bot_reconnecting = False
+                print("[companion] Minecraft reconnect stopped after a terminal kick/configuration failure.", flush=True)
+                return
+        elif not reconnecting:
+            return
+
+        if not auto_reconnect_enabled("jarvis", os.environ):
+            with bot_lock:
+                if generation == bot_supervisor_generation:
+                    bot_supervisor_enabled = False
+                    bot_reconnecting = False
+            return
+
+        delay = budget.reserve()
+        if delay is None:
+            with bot_lock:
+                if generation == bot_supervisor_generation:
+                    bot_supervisor_enabled = False
+                    bot_reconnecting = False
+            print("[companion] Minecraft reconnect budget exhausted; owner action required.", flush=True)
+            return
+
+        # Interruptible bounded backoff; explicit stop/service shutdown wins.
+        for _ in range(delay * 4):
+            with bot_lock:
+                if not bot_supervisor_enabled or generation != bot_supervisor_generation:
+                    return
+            time.sleep(0.25)
+
+        with bot_lock:
+            if not bot_supervisor_enabled or generation != bot_supervisor_generation:
+                return
+        result = minecraft_action("minecraft_join")
+        if not result.get("ok"):
+            print("[companion] Minecraft reconnect attempt did not establish a live spawn; bounded retry remains.", flush=True)
+            # A failed join leaves bot_reconnecting true and bot_proc empty.
+            # The next loop consumes another finite retry-budget slot.
+
+
+def _enable_minecraft_supervisor_locked(engine):
+    """Enable once after a confirmed initial spawn; caller must hold bot_lock."""
+    global bot_supervisor_enabled, bot_supervisor_generation, bot_supervisor_thread
+    if not auto_reconnect_enabled(engine, os.environ):
+        if bot_supervisor_enabled:
+            _disable_minecraft_supervisor_locked()
+        return
+    if bot_supervisor_enabled:
+        return
+    bot_supervisor_generation += 1
+    generation = bot_supervisor_generation
+    bot_supervisor_enabled = True
+    bot_supervisor_thread = threading.Thread(
+        target=_minecraft_supervisor_loop,
+        args=(generation,),
+        daemon=True,
+        name="jarvis-minecraft-reconnect-supervisor",
+    )
+    bot_supervisor_thread.start()
+
+
+def _terminate_minecraft_child(child):
+    if child is None or child.poll() is not None:
+        return
+    try:
+        child.terminate()
+        child.wait(timeout=3)
+    except Exception:
+        try:
+            child.kill()
+            child.wait(timeout=2)
+        except Exception:
+            pass
+
+
+def _shutdown_minecraft_bot():
+    """Stop the child on Windows companion shutdown; do not leave a hidden bot."""
+    global bot_proc, bot_engine
+    with bot_lock:
+        _disable_minecraft_supervisor_locked()
+        child = bot_proc
+        bot_proc = None
+        bot_engine = None
+    _terminate_minecraft_child(child)
+
+
 def minecraft_action(op):
-    global bot_proc
+    global bot_proc, bot_engine, bot_reconnecting
     if os.environ.get('JARVIS_MINECRAFT_LAN_ENABLED') != '1':
         return {'ok':False,'error':'Minecraft LAN integration not enabled.'}
+
+    if op == 'minecraft_stop':
+        with bot_lock:
+            _disable_minecraft_supervisor_locked()
+            child = bot_proc
+            engine = bot_engine
+            bot_proc = None
+            bot_engine = None
+        was_running = child is not None and child.poll() is None
+        _terminate_minecraft_child(child)
+        remote = engine == 'mine-ai-mcp'
+        return {'ok':True,'evidence':{
+            'stopRequested':was_running or remote,
+            'joinedVerified':False,
+            'remoteHostStopVerified':False if remote else None,
+            'warning':'External Mine AI MCP server may remain running; stop its host to disconnect player.' if remote else None}}
+
     with bot_lock:
-        if op == 'minecraft_stop':
-            if bot_proc and bot_proc.poll() is None:
-                bot_proc.terminate()
-                # For Mine AI MCP the actual game player lives in a SEPARATE
-                # host process. Stopping this client does not prove that its
-                # active game action, survival reflexes, or bot has stopped.
-                remote = os.environ.get('JARVIS_MINECRAFT_ENGINE') == 'mine-ai-mcp'
-                return {'ok':True,'evidence':{'stopRequested':True,'joinedVerified':False,
-                    'remoteHostStopVerified':False if remote else None,
-                    'warning':'External Mine AI MCP server may remain running; stop its host to disconnect player.' if remote else None}}
-            return {'ok':True,'evidence':{'alreadyStopped':True}}
         if bot_proc and bot_proc.poll() is None:
-            return {'ok':True,'evidence':{'alreadyStarted':True,'joinedVerified':False}}
+            _enable_minecraft_supervisor_locked(bot_engine or os.environ.get('JARVIS_MINECRAFT_ENGINE','jarvis'))
+            return {'ok':True,'evidence':{'alreadyStarted':True,'joinedVerified':False,
+                'engine':bot_engine or 'jarvis'}}
+        if bot_proc is not None:
+            bot_proc = None
+
         # Opt-in: separate Mine AI MCP host provides the physical Minecraft player.
         # Default remains the existing JarvisBuddy Mineflayer companion; never run
         # both physical bot engines for one intended player without operator choice.
         engine = os.environ.get('JARVIS_MINECRAFT_ENGINE','jarvis')
         if engine not in ('jarvis','mine-ai-mcp'):
             return {'ok':False,'error':'Unsupported Minecraft engine selector.'}
+        if bot_supervisor_enabled and bot_engine and engine != bot_engine:
+            return {'ok':False,'error':'Cannot switch Minecraft engines while reconnect supervision is active.'}
         script = Path(__file__).parent/'minecraft-bot'/('mine_ai_mcp_bot.cjs' if engine == 'mine-ai-mcp' else 'bot.cjs')
         if not script.is_file():
             return {'ok':False,'error':'Minecraft companion module missing.'}
@@ -731,34 +875,75 @@ def minecraft_action(op):
                 for key in ('JARVIS_OLLAMA_MODEL','JARVIS_OLLAMA_BASE_URL'):
                     if key in os.environ:
                         child_env[key]=os.environ[key]
-            bot_proc = subprocess.Popen(['node', str(script)],cwd=str(script.parent), shell=False,
-                                         env=child_env,stdin=subprocess.PIPE,
-                                         stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
-                                         text=True,encoding='utf-8')
+            child = subprocess.Popen(['node', str(script)],cwd=str(script.parent), shell=False,
+                                     env=child_env,stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
+                                     text=True,encoding='utf-8')
+            bot_proc = child
+            bot_engine = engine
             joined = threading.Event()
-            def read_bot():
-                for line in bot_proc.stdout:
-                    if (engine == 'jarvis' and line.strip() == 'MINECRAFT_COMPANION_JOINED (spawn observed)') or \
-                       (engine == 'mine-ai-mcp' and line.strip() == 'MINECRAFT_MCP_JOINED (live connected status observed)'):
-                        joined.set()
+            reconnect_allowed = threading.Event()
+            reconnect_allowed.set()
+            # Per-process marker: a server kick is not a transient disconnect
+            # and must never trigger repeated login attempts.
+            child._jarvis_reconnect_allowed = reconnect_allowed
+
+            def read_bot(process=child, engine_name=engine, joined_event=joined,
+                         terminal_event=reconnect_allowed):
+                for line in process.stdout:
+                    stripped = line.strip()
+                    if (engine_name == 'jarvis' and stripped == 'MINECRAFT_COMPANION_JOINED (spawn observed)') or \
+                       (engine_name == 'mine-ai-mcp' and stripped == 'MINECRAFT_MCP_JOINED (live connected status observed)'):
+                        joined_event.set()
+                    if stripped == 'MINECRAFT_SESSION_TERMINAL':
+                        terminal_event.clear()
                     if line.startswith('BOT_ACK '):
                         try:
                             ack=json.loads(line[8:])
                             with bot_ack_lock:
                                 pending=bot_ack_waiters.get(ack.get('id'))
-                                if pending:
+                                if pending and pending.get('process') is process:
                                     pending['result']=ack
                                     pending['event'].set()
                         except (ValueError,TypeError):pass
+                # Wake only requests issued to this exact child. A late EOF
+                # from an old process cannot consume a new process's ACKs.
+                with bot_ack_lock:
+                    for pending in list(bot_ack_waiters.values()):
+                        if pending.get('process') is process:
+                            pending['result']={'ok':False,'error':'Minecraft child exited; gameplay outcome is unknown.'}
+                            pending['event'].set()
+
             threading.Thread(target=read_bot,daemon=True,name='minecraft-join-evidence').start()
-            success = joined.wait(25)
-            if not success:
-                return {'ok':False,'error':'Minecraft LAN join not confirmed. Open world to LAN and check bot dependencies, LAN port and version.'}
-            return {'ok':True,'evidence':{'botProcessPid':bot_proc.pid,
-                                         'joinAttempted':True, 'joinedVerified':True,
-                                         'scope':'Independent Java LAN player (' + engine + '); autonomous gameplay not certified.', 'engine':engine}}
+
         except Exception as err:
+            bot_proc = None
+            bot_engine = None
             return {'ok':False,'error':f'Minecraft bot launcher failed ({type(err).__name__})'}
+
+    # Do not hold bot_lock while waiting for a game-server spawn: explicit
+    # owner stop and process shutdown must remain responsive during join.
+    success = joined.wait(25)
+    if not success:
+        with bot_lock:
+            if bot_proc is child:
+                bot_proc = None
+                bot_engine = None
+            if not bot_supervisor_enabled:
+                bot_reconnecting = False
+        _terminate_minecraft_child(child)
+        return {'ok':False,'error':'Minecraft LAN join not confirmed. Open world to LAN and check bot dependencies, LAN port and version.'}
+
+    with bot_lock:
+        if bot_proc is not child or child.poll() is not None:
+            return {'ok':False,'error':'Minecraft process ended before its confirmed spawn could be retained.'}
+        bot_reconnecting = False
+        _enable_minecraft_supervisor_locked(engine)
+    return {'ok':True,'evidence':{'botProcessPid':child.pid,
+                                 'joinAttempted':True, 'joinedVerified':True,
+                                 'autoReconnectEnabled':auto_reconnect_enabled(engine, os.environ),
+                                 'missionAutoResume':False,
+                                 'scope':'Independent Java LAN player (' + engine + '); reconnect never replays gameplay.', 'engine':engine}}
 
 
 def minecraft_command(body):
@@ -769,7 +954,9 @@ def minecraft_command(body):
         if not bot_proc or bot_proc.poll() is not None or not bot_proc.stdin:
             return {'ok':False,'error':'Minecraft companion is not connected. Join LAN world first.'}
         request_id=secrets.token_hex(8)
-        pending={'event':threading.Event(),'result':None}
+        if bot_reconnecting:
+            return {'ok':False,'error':'Minecraft companion is reconnecting; no gameplay action was dispatched.'}
+        pending={'event':threading.Event(),'result':None,'process':bot_proc}
         with bot_ack_lock:bot_ack_waiters[request_id]=pending
         try:
             message={k:v for k,v in body.items() if k in ('command','directionInput','durationMs','text','goal','durationSeconds',
@@ -954,6 +1141,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        _shutdown_minecraft_bot()
         frame_running.clear();worker_stop.set()
         try: browser_commands.put_nowait(None)
         except queue.Full: pass

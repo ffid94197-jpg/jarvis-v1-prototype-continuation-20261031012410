@@ -720,7 +720,7 @@ export async function runGuardianApprovedPlayerEngine(
           craftVerified:op==="craft"?craftVerified:undefined,
           missionStatus:op==="craft"?nativeCraft:undefined},
         error:proved?undefined:(op==="craft"?
-          "Native craft lacks same-task Stats.CRAFTED and inventory-delta proof":
+          "Native craft lacks same-task craft-task output witness and inventory-delta proof":
           "Native completion was not verified from actual game state")};
     }
     // Deliberately leave active until a later authenticated status query settles it.

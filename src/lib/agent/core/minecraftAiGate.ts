@@ -361,7 +361,7 @@ export function mayStartNativeMinecraftGoal(
   // is not split or silently treated as an extra task.
   const stages=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|smelt|cook|refine|bake|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
   if(stages.length!==args.steps.length)return false;
-  const supported=new Set(['tools','stone_age','iron_age','gather','craft','smelt','equip','travel','build_volume']);
+  const supported=new Set(['tools','stone_age','iron_age','gather','craft','smelt','equip','travel','build_volume','shelter','farm_wheat','farm_crop','defeat_hostile']);
   return args.steps.every((stage,index)=>{
    if(!stage||typeof stage!=='object'||Array.isArray(stage))return false;
    const step=stage as Record<string,unknown>;

@@ -191,3 +191,11 @@ Separately, the Internet-corpus validator's Node.js 22.16.0 regression harness p
 - The sidecar now uses a 30-second ACK window for local-model `natural_goal` interpretation and real inventory/window transactions (`craft_item`, villager inspection/trading, container transfer, enchanting and bounded hostile attacks). Short status, observation, goal-admission and dig commands retain an 8-second window.
 - This remains bounded below the existing 79-second HTTP companion deadline. The bot lock is not held during the ACK wait, so the longer transaction window does not delay explicit stop.
 - Local typed-command/timeout harness: 10/10 tests passed, including protocol parity and command-specific deadlines. Offline contracts do not prove a particular server operation finishes within its deadline or certify real Minecraft transactions.
+
+## 2026-11-06: align PlayerEngine gather coverage with the native resource catalog
+
+- Found a cross-layer mismatch: the Core gate and native companion accepted 33 safe vanilla gather resources, while the Windows Guardian policy and PlayerEngine executor each hard-coded only ten. Valid owner requests for sand, gravel, coal, copper, redstone, lapis, emerald, quartz, and other supported resources could therefore be rejected before reaching AltoClef.
+- Added `src/lib/agent/core/minecraftResources.ts` as the shared 33-item safe vanilla catalog and wired both the Guardian policy and PlayerEngine executor to it. The Core prompt now describes the same catalog. The Java bridge still independently requires `TaskCatalogue.taskExists(item)`; the companion protocol remains authoritative and unchanged.
+- Extended `scripts/verify-minecraft-bridge-policy.cjs` to enforce exact catalog parity with `resource_goal.cjs`, verify all 33 resources across Core/Guardian/companion, and reject bedrock, barrier, command blocks and TNT.
+- Source-isolated validation: **8/8 cross-layer contract checks passed**; actual companion `friend_protocol.cjs` accepted **33/33** safe resource goals and denied all four unsafe examples. The updated CJS policy test syntax-compiles.
+- Full TypeScript transpilation, Windows PlayerEngine IPC, Java/Fabric build and live resource gathering were **not run**. No GitHub Actions were used.

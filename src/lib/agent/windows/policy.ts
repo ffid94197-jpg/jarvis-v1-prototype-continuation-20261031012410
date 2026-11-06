@@ -404,7 +404,6 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         torso:["leather_chestplate","iron_chestplate","golden_chestplate","diamond_chestplate","netherite_chestplate","elytra"],
         legs:["leather_leggings","iron_leggings","golden_leggings","diamond_leggings","netherite_leggings"],
         feet:["leather_boots","iron_boots","golden_boots","diamond_boots","netherite_boots"],
-        "off-hand":["shield","torch","totem_of_undying"]
       };
       const slot=step?r.destination:r.destinationSlot;
       return typeof slot==="string" && Object.hasOwn(slots,slot) && slots[slot].includes(String(r.item));
@@ -505,7 +504,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:'Bounded navigation requires integer target coordinates.'};
     if (['dig_block','inspect_block','interact_block'].includes(command) && !pos(args.position))
       return {ok:false,reason:'Block operation requires safe integer coordinates.'};
-    if (command==='equip_item' && (!name(args.item)||!['hand','head','torso','legs','feet','off-hand'].includes(String(args.destination||'hand'))))
+    if (command==='equip_item' && (!name(args.item)||!['hand','head','torso','legs','feet'].includes(String(args.destination||'hand'))))
       return {ok:false,reason:'Invalid equipment item/destination.'};
     if (command==='craft_item' && (!name(args.item)||!Number.isInteger(args.count)||(args.count as number)<1||(args.count as number)>16))
       return {ok:false,reason:'Craft count must be 1–16 for a valid item.'};

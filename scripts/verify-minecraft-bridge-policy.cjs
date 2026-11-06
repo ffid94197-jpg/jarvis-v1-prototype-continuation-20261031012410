@@ -9,7 +9,12 @@ assert.equal(catalogErrors.length,0,'shared Minecraft resource catalog must pars
 const catalogExports={};
 vm.runInNewContext(catalogCompiled.outputText,{exports:catalogExports,Object,Array,Set});
 const safeGatherResources=catalogExports.MINECRAFT_SAFE_GATHER_RESOURCES;
+const safeBuildMaterials=catalogExports.MINECRAFT_SAFE_BUILD_MATERIALS;
 const resourceGoal=require('../windows-companion/minecraft-bot/resource_goal.cjs');
+const structureGoal=require('../windows-companion/minecraft-bot/structure_goal.cjs');
+assert.deepEqual([...safeBuildMaterials].sort(),[...structureGoal.BLOCKS].sort(),
+  'Core/Guardian/PlayerEngine build catalog must exactly match the native companion structure allowlist');
+assert.equal(new Set(safeBuildMaterials).size,safeBuildMaterials.length,'build material catalog has no duplicates');
 assert.deepEqual([...safeGatherResources].sort(),[...resourceGoal.RESOURCES].sort(),
   'Core/Guardian/PlayerEngine catalog must exactly match the native companion resource allowlist');
 assert.equal(new Set(safeGatherResources).size,safeGatherResources.length,'resource catalog has no duplicates');
@@ -21,6 +26,17 @@ assert.ok(coreGateSource.includes('shared safe vanilla resource catalog'),
 const playerEngineSource=fs.readFileSync(path.join(root,'src/lib/agent/windows/playerEngineBridge.ts'),'utf8');
 assert.ok(playerEngineSource.includes('new Set<string>(MINECRAFT_SAFE_GATHER_RESOURCES)'),
   'PlayerEngine uses the shared resource catalog');
+assert.ok(playerEngineSource.includes('new Set<string>(MINECRAFT_SAFE_BUILD_MATERIALS)'),
+  'PlayerEngine uses the shared build-material catalog');
+assert.ok(coreGateSource.includes('!SAFE_BUILD_MATERIALS.has(String(args.block))'),
+  'Core AI goal gate enforces the safe build-material catalog');
+for(const block of safeBuildMaterials)assert.ok(coreGateSource.includes("'"+block+"'"),
+  'Core AI gate knows safe build material '+block);
+const javaBridgeSource=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/overlay/com/neovetta/aicompanion/jarvis/JarvisBridgeServer.java'),'utf8');
+const javaBuildMatch=javaBridgeSource.match(/BUILD_BLOCKS=java\.util\.Set\.of\(([\s\S]*?)\);/);
+assert.ok(javaBuildMatch,'Java PlayerEngine bridge has a bounded BUILD_BLOCKS allowlist');
+for(const block of safeBuildMaterials)assert.ok(javaBuildMatch[1].includes('"'+block+'"'),
+  'Java PlayerEngine bridge allows safe build material '+block);
 const compiled=ts.transpileModule(fs.readFileSync(path.join(root,'src/lib/agent/windows/policy.ts'),'utf8'),{reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
 const errors=(compiled.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
 assert.equal(errors.length,0,'Windows Guardian TypeScript must parse without syntax errors');
@@ -80,6 +96,13 @@ for(const resource of safeGatherResources){
  const r=run(input,true);
  assert.equal(r.prepared.resource,resource,'Guardian forwards safe resource '+resource);ok++;
 }
+for(const block of safeBuildMaterials){
+ const input={command:'auto_goal',goal:'build_volume',position:{x:1,y:64,z:3},
+  block,width:2,depth:2,height:1,shape:'floor',durationSeconds:300};
+ assert.equal(validateBot(input),null,'Companion accepts safe build material '+block);ok++;
+ const r=run(input,true);
+ assert.equal(r.prepared.block,block,'Guardian forwards safe build material '+block);ok++;
+}
 for(const input of authorized){
  assert.equal(validateBot(input),null,'Bot accepts '+JSON.stringify(input));ok++;
  const r=run(input,true);
@@ -93,6 +116,10 @@ for(const input of [
  {command:'auto_goal',goal:'gather',resource:'bedrock',targetCount:1},
  {command:'auto_goal',goal:'gather',resource:'barrier',targetCount:1},
  {command:'auto_goal',goal:'gather',resource:'tnt',targetCount:1},
+ {command:'auto_goal',goal:'build_volume',position:{x:1,y:64,z:3},block:'tnt',width:2,depth:2,height:1,shape:'floor'},
+ {command:'auto_goal',goal:'build_volume',position:{x:1,y:64,z:3},block:'bedrock',width:2,depth:2,height:1,shape:'floor'},
+ {command:'auto_goal',goal:'build_volume',position:{x:1,y:64,z:3},block:'barrier',width:2,depth:2,height:1,shape:'floor'},
+ {command:'auto_goal',goal:'build_volume',position:{x:1,y:64,z:3},block:'lava',width:2,depth:2,height:1,shape:'floor'},
  {command:'auto_goal',goal:'gather',resource:'diamond',targetCount:100},
  {command:'auto_goal',goal:'craft',item:'dragon_egg',targetCount:1},
  {command:'auto_goal',goal:'equip',item:'diamond_sword',destinationSlot:'head'},

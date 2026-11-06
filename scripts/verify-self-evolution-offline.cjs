@@ -105,6 +105,51 @@ const crypto=require("node:crypto");
     assert.equal(verification.automaticRollback,true);
     assert.equal(await fs.readFile(brokenFile,"utf8"),brokenOriginal);
 
+    // Simulate a process crash after the file replacement but before the
+    // repair ledger advances from "applying" to "applied".
+    const crashFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","crash.js");
+    const crashOriginal="const crashValue = 1;\n";
+    await fs.writeFile(crashFile,crashOriginal,"utf8");
+    const crashSha=crypto.createHash("sha256").update(crashOriginal).digest("hex");
+    const crashCandidate=await repair.stageRepair(owner,{
+      path:"src/crash.js",expectedSha256:crashSha,oldText:"const crashValue = 1;",
+      newText:"const crashValue = 3;",
+      diagnosis:"An exact bounded source defect was observed before the simulated crash.",
+    });
+    await repair.approveRepair(owner,crashCandidate.id);
+    await repair.applyRepair(owner,crashCandidate.id);
+    const ownerKey=crypto.createHash("sha256").update(owner).digest("hex").slice(0,40);
+    const ledgerPath=path.join(process.env.JARVIS_EVOLUTION_ROOT,ownerKey,"repairs.json");
+    const ledger=JSON.parse(await fs.readFile(ledgerPath,"utf8"));
+    const crashRecord=ledger.repairs.find(x=>x.id===crashCandidate.id);
+    crashRecord.state="applying";
+    delete crashRecord.appliedAt;
+    await fs.writeFile(ledgerPath,JSON.stringify(ledger),"utf8");
+    const recovered=await repair.recoverRepair(owner,crashCandidate.id);
+    assert.equal(recovered.kind,"verified");
+    assert.equal(recovered.repair.state,"verified");
+    assert.equal(await fs.readFile(crashFile,"utf8"),"const crashValue = 3;\n");
+
+    // A third-party edit is never overwritten by crash recovery.
+    const externalFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","external.js");
+    const externalOriginal="const externalValue = 1;\n";
+    await fs.writeFile(externalFile,externalOriginal,"utf8");
+    const externalSha=crypto.createHash("sha256").update(externalOriginal).digest("hex");
+    const externalCandidate=await repair.stageRepair(owner,{
+      path:"src/external.js",expectedSha256:externalSha,oldText:"const externalValue = 1;",
+      newText:"const externalValue = 2;",
+      diagnosis:"A source repair candidate is staged for external-writer safety testing.",
+    });
+    await repair.approveRepair(owner,externalCandidate.id);
+    await repair.applyRepair(owner,externalCandidate.id);
+    await fs.writeFile(externalFile,"const externalValue = 99;\n","utf8");
+    const externalLedger=JSON.parse(await fs.readFile(ledgerPath,"utf8"));
+    externalLedger.repairs.find(x=>x.id===externalCandidate.id).state="effect_unknown";
+    await fs.writeFile(ledgerPath,JSON.stringify(externalLedger),"utf8");
+    const externalRecovery=await repair.recoverRepair(owner,externalCandidate.id);
+    assert.equal(externalRecovery.kind,"external_change");
+    assert.equal(await fs.readFile(externalFile,"utf8"),"const externalValue = 99;\n");
+
     await assert.rejects(repair.stageRepair(owner,{
       path:"../outside.js",expectedSha256:brokenSha,oldText:"true",newText:"false",
       diagnosis:"A traversal attempt must be rejected before any filesystem read.",
@@ -125,6 +170,9 @@ const crypto=require("node:crypto");
     assert.ok(executor.includes('request.action==="auto_apply_repair"'));
     assert.ok(effects.includes('"evolution_repair_apply"'));
     assert.ok(effects.includes('eff.tool === "evolution_skill_learn"'));
+    assert.ok(effects.includes("recoverRepair"));
+    assert.ok(loop.includes('result.detail?.effectUnknown === true ? "EFFECT_UNKNOWN" : "FAILED"'));
+    assert.ok(loop.includes('if(result.detail?.effectUnknown===true)'));
     assert.ok(effects.includes("completedWithEvolutionResidue"));
     assert.ok(loop.includes("learnFromCompletedTask"));
     assert.ok(loop.includes("selfDiagnosisInjected"));

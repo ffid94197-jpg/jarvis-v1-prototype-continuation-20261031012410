@@ -1,8 +1,8 @@
 /**
  * JARVIS native repair vault: prepare -> owner approve -> apply -> rollback.
  * Original implementation of Brahma-inspired self-heal/boot-sentry concepts.
- * NO Brahma Evo/Echo source is embedded. No autonomous executable code or
- * changes outside JARVIS_AGENT_WORKSPACE. Failure => effect_unknown/quarantine.
+ * NO Brahma Evo/Echo source is embedded; no arbitrary generated code is executed.
+ * File changes stay inside JARVIS_AGENT_WORKSPACE and bounded policy. Failure => quarantine.
  */
 import fs from "node:fs/promises";
 import path from "node:path";

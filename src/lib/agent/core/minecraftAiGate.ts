@@ -456,7 +456,15 @@ export function mayStartNativeMinecraftGoal(
   const offer=s.match(/\b(?:offer|deal|option|trade)\s*(?:number\s*|#)?(\d{1,2})\b/);
   if(!offer||Number(offer[1])-1!==args.offerIndex)return false;
   const times=s.match(/\b(?:trade|buy|purchase|exchange)\s+(\d{1,2})\s+times\b/);
-  if((times?Number(times[1]):1)!==args.times)return false;
+  const outputName=String(args.expectedOutputItem).replace(/^minecraft:/,'').replace(/_/g,' ');
+  const statedOutput=explicitQuantity([outputName]);
+  if(statedOutput!==null&&(!amount(statedOutput,1,256)||
+     statedOutput!==Number(args.expectedOutputCount)*Number(args.times)))return false;
+  const inferredTimes=times?Number(times[1]):
+    (statedOutput!==null&&Number(args.expectedOutputCount)>0&&
+     statedOutput%Number(args.expectedOutputCount)===0?
+       statedOutput/Number(args.expectedOutputCount):1);
+  if(inferredTimes!==args.times)return false;
   const itemId=(v:unknown,allowEmpty=false)=>typeof v==='string'&&
     (allowEmpty?v==='':/^minecraft:[a-z0-9_]{1,64}$/.test(v));
   return itemId(args.expectedFirstItem)&&amount(args.expectedFirstCount,1,64)&&

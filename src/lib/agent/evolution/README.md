@@ -146,6 +146,9 @@ path on top of Skill Forge and Repair Vault.
 
 - **evolution_diagnose** reads only the authenticated owner's durable task, step,
   effect and Guardian audit records.
+- Core automatically injects one read-only diagnosis after the first failed tool
+  action in a task, without spending another model/provider call. The planner can
+  also invoke the same read-only tool explicitly.
 - It classifies observed signals such as provider quota/auth/network faults,
   Guardian denials, planner/syntax errors, runtime type failures, missing
   resources and unsettled effects.

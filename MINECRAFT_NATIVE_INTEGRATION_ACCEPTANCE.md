@@ -67,3 +67,11 @@ Source-isolated checks actually executed in this development session: `verify_go
 - **Checks performed in a source-isolated JavaScript evaluator on the repository branch:** modified source parsed; controller 4 mismatched proof cases denied and 6 legitimate proof checks accepted; the actual general-goal suite reported **226/226 assertions PASS**; the actual controller and independent recipe/world-model Dragon-first campaign reported **40/40 seeds, 37,878 assertions PASS**. This evaluator ran project CommonJS with controlled Node built-in shims and mocked game observations; it was not an installed Node/Windows or game-server run.
 - GitHub Actions was not invoked; PC Work JARVIS was not modified.
 - **Release status unchanged: NOT ACCEPTED.** Real Windows companion/GUARDIAN/LLM-to-game interaction, one-instruction survival from an empty inventory, observed Dragon death, End return, and subsequent equipped Netherite gear still require a genuine unassisted Minecraft Java server run and review of durable live evidence.
+
+## 2026-11-06 native PlayerEngine craft-method and task-bound status proof
+
+- Native `craft` no longer treats generic item acquisition as a successful craft. It accepts only the pinned AltoClef `CraftInInventoryTask` / `CraftInTableTask` types and wraps their actual `onResourceTick` calls to count output inserted into the companion's own inventory. Mining, pickup, smelting, pre-existing inventory or unrelated storage changes cannot create the craft witness.
+- The Java status snapshot now resolves the exact requested run UUID with `tasks.get(taskId)` rather than selecting an arbitrary matching task by `coreTaskId` from a HashMap. This binds craft/trade/enchant/sequence receipts to the run being polled.
+- Core requires matching same-run mission status, exact item and target count, task-witness output count, and fresh inventory delta before accepting craft completion.
+- Local source-isolated contract: 27/27 checks passed; strict TypeScript check passed for the receipt helper. The full repository typecheck, Fabric/Gradle build, Windows PlayerEngine IPC test and live Minecraft crafting were **not run**. No GitHub Actions were used.
+

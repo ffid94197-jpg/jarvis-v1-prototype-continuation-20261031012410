@@ -125,7 +125,9 @@ const crypto=require("node:crypto");
     assert.ok(executor.includes('request.action==="auto_apply_repair"'));
     assert.ok(effects.includes('"evolution_repair_apply"'));
     assert.ok(effects.includes('eff.tool === "evolution_skill_learn"'));
+    assert.ok(effects.includes("completedWithEvolutionResidue"));
     assert.ok(loop.includes("learnFromCompletedTask"));
+    assert.ok(loop.includes("selfDiagnosisInjected"));
     assert.ok(prompts.includes("JARVIS_SELF_REPAIR_AUTO_APPLY=1"));
 
     console.log("PASS: owner-scoped read-only diagnosis and redaction");

@@ -66,6 +66,8 @@ ok(MINECRAFT_AI_INSTRUCTIONS.includes('Build a small house using the blocks I ha
  'Minecraft system prompt demonstrates natural house-building language');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('shelter, hut or house'),
  'bounded shelter goal documents house as a supported alias');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('safe vanilla catalog (cobblestone, cobbled deepslate, stone, dirt'),
+ 'Minecraft build instructions enumerate the bounded safe material catalog');
 no(isMinecraftObservationOnlyObjective('Observe Minecraft and mine diamonds'),'mining is an effect');
 const {singleInventoryResourceGoal}=out;
 const expected=[
@@ -291,6 +293,18 @@ defaultSmallHouse.record('minecraft_companion_command',{command:'observe'},
  {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
 no(defaultSmallHouse.check('minecraft_companion_command',{command:'auto_goal',goal:'shelter'}).ok,
  'generic house routing remains disabled without the explicit Minecraft planner context');
+const glassFloor=new MinecraftAiGate('In Minecraft, build a 2 by 2 glass floor at 2 64 2');
+glassFloor.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(glassFloor.check('minecraft_companion_command',{command:'auto_goal',goal:'build_volume',
+ position:{x:2,y:64,z:2},block:'glass',width:2,depth:2,height:1,shape:'floor'}).ok,
+ 'owner-requested safe glass material is admitted by the Core build-volume gate');
+const tntFloor=new MinecraftAiGate('In Minecraft, build a 2 by 2 tnt floor at 2 64 2');
+tntFloor.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+no(tntFloor.check('minecraft_companion_command',{command:'auto_goal',goal:'build_volume',
+ position:{x:2,y:64,z:2},block:'tnt',width:2,depth:2,height:1,shape:'floor'}).ok,
+ 'unsafe TNT remains denied by the Core build-volume gate');
 
 // Independent Core goal/target integrity: one accepted action is not a
 // substitute for the user's entire ordered Dragon + Netherite mission.

@@ -2,6 +2,8 @@ package com.neovetta.aicompanion.jarvis;
 
 import adris.altoclef.TaskCatalogue;
 import adris.altoclef.tasks.container.SmeltInFurnaceTask;
+import adris.altoclef.tasks.resources.CollectCropTask;
+import adris.altoclef.tasks.entity.KillEntityTask;
 import adris.altoclef.tasks.misc.EquipArmorTask;
 import adris.altoclef.tasks.misc.HoldItemTask;
 import adris.altoclef.tasks.movement.GetToBlockTask;
@@ -15,6 +17,10 @@ import com.google.gson.JsonObject;
 import com.neovetta.aicompanion.entity.CompanionEntity;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.CropBlock;
+import net.minecraft.block.BlockState;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -24,6 +30,8 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,8 +42,11 @@ import java.util.Set;
  * postcondition and never repeats after an ambiguous result.
  */
 public final class JarvisNativeSequenceTask extends Task {
-    private static final Set<String> GATHER=Set.of("logs","planks","sticks","cobblestone",
-        "raw_iron","iron_ingot","diamond","obsidian","flint","netherrack");
+    private static final Set<String> GATHER=Set.of("logs","planks","sticks","cobblestone","raw_iron","iron_ingot",
+        "diamond","obsidian","flint","netherrack","dirt","sand","red_sand","gravel","mud",
+        "soul_sand","soul_soil","moss_block","andesite","diorite","granite","tuff","calcite",
+        "cobbled_deepslate","blackstone","basalt","coal","raw_copper","raw_gold","redstone",
+        "lapis_lazuli","emerald","quartz");
     private static final Set<String> CRAFT=Set.of("stick","crafting_table","chest",
         "furnace","ladder","bread","shield","torch");
     private static final Map<String,String> SMELT=Map.of(
@@ -60,6 +71,16 @@ public final class JarvisNativeSequenceTask extends Task {
     private BlockPos[] construction;
     private String constructionMaterial;
     private int constructionIndex;
+    private JarvisNativeVolumeTask volumeStage;
+    private Block cropBlock;
+    private String cropItem;
+    private int cropInitialCount;
+    private int cropTargetCount;
+    private int harvestedCropCount;
+    private final Set<BlockPos> cropCells=new HashSet<>();
+    private final Map<BlockPos,Integer> lastCropAge=new HashMap<>();
+    private Entity combatTarget;
+    private String combatMob;
     private final long since=System.currentTimeMillis();
 
     public JarvisNativeSequenceTask(CompanionEntity entity,JsonArray input){

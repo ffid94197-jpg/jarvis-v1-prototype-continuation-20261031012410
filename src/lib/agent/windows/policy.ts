@@ -35,7 +35,10 @@ export interface DesktopPrepared {
   face?: {x:number;y:number;z:number};
   range?: number;
   item?: string;
-  destination?: string;
+  destination?: string | {x:number;y:number;z:number};
+  destinationSlot?: string;
+  arrivalRange?: number;
+  mob?: string;
   count?: number;
   entityId?: number;
   maxSwings?: number;

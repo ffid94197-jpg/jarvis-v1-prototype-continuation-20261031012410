@@ -2,6 +2,10 @@ package com.neovetta.aicompanion.jarvis;
 
 import adris.altoclef.AltoClefController;
 import adris.altoclef.TaskCatalogue;
+import adris.altoclef.tasks.CraftInInventoryTask;
+import adris.altoclef.tasks.container.CraftInTableTask;
+import adris.altoclef.tasksystem.Task;
+import adris.altoclef.util.RecipeTarget;
 import adris.altoclef.tasks.InteractWithBlockTask;
 import adris.altoclef.tasks.movement.GetToBlockTask;
 import adris.altoclef.tasks.misc.EquipArmorTask;
@@ -36,7 +40,6 @@ import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
-import net.minecraft.stat.Stats;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -82,6 +85,41 @@ public final class JarvisBridgeServer {
 
     private JarvisBridgeServer() {}
 
+    private static final class JarvisCraftInInventoryTask extends CraftInInventoryTask {
+        private final Run run;
+        private final Item output;
+        JarvisCraftInInventoryTask(RecipeTarget target,Run run) {
+            super(target);
+            this.run=run;
+            this.output=target.getOutputItem();
+        }
+        @Override protected Task onResourceTick(AltoClefController controller) {
+            int before=controller.getItemStorage().getItemCount(output);
+            Task next=super.onResourceTick(controller);
+            int after=controller.getItemStorage().getItemCount(output);
+            if(after>before) run.craftProofCount+=after-before;
+            return next;
+        }
+    }
+
+    private static final class JarvisCraftInTableTask extends CraftInTableTask {
+        private final Run run;
+        private final Item output;
+        JarvisCraftInTableTask(RecipeTarget[] targets,Run run) {
+            super(targets);
+            if(targets.length!=1) throw new IllegalArgumentException("single-output-craft-required");
+            this.run=run;
+            this.output=targets[0].getOutputItem();
+        }
+        @Override protected Task onResourceTick(AltoClefController controller) {
+            int before=controller.getItemStorage().getItemCount(output);
+            Task next=super.onResourceTick(controller);
+            int after=controller.getItemStorage().getItemCount(output);
+            if(after>before) run.craftProofCount+=after-before;
+            return next;
+        }
+    }
+
     private static final class Run {
         final UUID companion;
         final UUID coreTaskId;
@@ -103,8 +141,7 @@ public final class JarvisBridgeServer {
         int transferContainerAfter;
         String craftGoal;
         int craftTargetCount;
-        int craftStatBefore;
-        int craftStatAfter;
+        int craftProofCount;
         String gatherGoal;
         String gatherResource;
         int gatherTargetCount;
@@ -798,16 +835,20 @@ public final class JarvisBridgeServer {
                     run.initialCount = current;
                     run.addedCount = count;
                     if ("craft".equals(op)) {
-                        Item craftTarget=Registries.ITEM.get(new Identifier("minecraft",item));
-                        if(craftTarget==Items.AIR)
-                            throw new IllegalArgumentException("unknown-craft-output");
                         run.craftGoal="craft";
                         run.craftTargetCount=count;
-                        run.craftStatBefore=companion.getStatHandler().getStat(
-                            Stats.CRAFTED.getOrCreateStat(craftTarget));
-                        run.craftStatAfter=run.craftStatBefore;
+                        run.craftProofCount=0;
+                        Task craftTask=TaskCatalogue.getItemTask(item,current+count);
+                        if(craftTask instanceof CraftInInventoryTask inventoryTask) {
+                            task=new JarvisCraftInInventoryTask(inventoryTask.getRecipeTarget(),run);
+                        } else if(craftTask instanceof CraftInTableTask tableTask) {
+                            task=new JarvisCraftInTableTask(tableTask.getRecipeTargets(),run);
+                        } else {
+                            throw new IllegalArgumentException("verified-craft-task-not-supported");
+                        }
+                    } else {
+                        task = TaskCatalogue.getItemTask(item, current + count);
                     }
-                    task = TaskCatalogue.getItemTask(item, current + count);
                 } else if ("equip".equals(op)) {
                     String itemName=field(args,"item"), destination=field(args,"destination");
                     if (!itemName.matches("[a-z0-9_]{1,64}") ||
@@ -894,14 +935,8 @@ public final class JarvisBridgeServer {
                     if (!"running".equals(run.state)) return;
                     boolean added = run.item != null &&
                             countItem(run.entity,run.item)>=run.initialCount+run.addedCount;
-                    boolean crafted=false;
-                    if(run.craftGoal!=null && run.item!=null) {
-                        Item craftTarget=Registries.ITEM.get(new Identifier("minecraft",run.item));
-                        run.craftStatAfter=run.entity.getStatHandler().getStat(
-                            Stats.CRAFTED.getOrCreateStat(craftTarget));
-                        crafted=added &&
-                            run.craftStatAfter-run.craftStatBefore>=run.craftTargetCount;
-                    }
+                    boolean crafted=run.craftGoal!=null && added &&
+                        run.craftProofCount>=run.craftTargetCount;
                     boolean itemProved=run.craftGoal!=null?crafted:added;
                     boolean arrived = run.arrival != null &&
                             run.entity.getBlockPos().isWithinDistance(run.arrival,2.5);
@@ -973,9 +1008,7 @@ public final class JarvisBridgeServer {
             if(candidate.craftGoal!=null) {
                 int current=countItem(companion,candidate.item);
                 Item target=Registries.ITEM.get(new Identifier("minecraft",candidate.item));
-                int statAfter=companion.getStatHandler().getStat(
-                    Stats.CRAFTED.getOrCreateStat(target));
-                int craftedCount=Math.max(0,statAfter-candidate.craftStatBefore);
+                int craftedCount=Math.max(0,candidate.craftProofCount);
                 boolean complete=candidate.state.equals("observed") &&
                     current>=candidate.initialCount+candidate.craftTargetCount &&
                     craftedCount>=candidate.craftTargetCount;
@@ -990,8 +1023,7 @@ public final class JarvisBridgeServer {
                 milestones.addProperty("craftDone",complete);
                 milestones.addProperty("initialCount",candidate.initialCount);
                 milestones.addProperty("currentCount",current);
-                milestones.addProperty("craftStatBefore",candidate.craftStatBefore);
-                milestones.addProperty("craftStatAfter",statAfter);
+                milestones.addProperty("craftProofCount",candidate.craftProofCount);
                 milestones.addProperty("craftedCount",craftedCount);
                 summary.add("milestones",milestones);
                 snapshot.add("missionStatus",summary);

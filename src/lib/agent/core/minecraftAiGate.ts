@@ -34,6 +34,9 @@ type NativeMissionReceipt = {
   targetCount?:number;
   operation?:string;
   crop?:string;
+  destination?:string;
+  mob?:string;
+  entityId?:number;
   sequenceIndex?:number;
 };
 
@@ -660,6 +663,9 @@ export class MinecraftAiGate {
   private nativeCrop:{crop:string;count:number}|null=null;
   private nativeWheatCount:number|null=null;
   private nativeStageCount:number|null=null;
+  private nativeEquip:{item:string;destination:string}|null=null;
+  private nativeTravel:{destination:{x:number;y:number;z:number};arrivalRange:number}|null=null;
+  private nativeDefeat:{mob:string;entityId:number}|null=null;
   private pendingNativeRestore:{goal:string;startedAt:number;args:Record<string,unknown>}|null=null;
   private nativeStatus:NativeMissionReceipt|null=null;
   constructor(private readonly objective: string = '',
@@ -950,6 +956,13 @@ export class MinecraftAiGate {
         {crop:String(args.crop),count:args.targetCount as number}:null;
       this.nativeWheatCount=admitted&&args.goal==='farm_wheat'&&
         Number.isInteger(args.targetCount)?args.targetCount as number:null;
+      this.nativeEquip=admitted&&args.goal==='equip'&&typeof args.item==='string'&&
+        typeof args.destinationSlot==='string'?{item:args.item,destination:args.destinationSlot}:null;
+      this.nativeTravel=admitted&&args.goal==='travel'&&point(args.destination)&&
+        Number.isInteger(args.arrivalRange)?{destination:args.destination as {x:number;y:number;z:number},
+          arrivalRange:args.arrivalRange as number}:null;
+      this.nativeDefeat=admitted&&args.goal==='defeat_hostile'&&typeof args.mob==='string'&&
+        Number.isInteger(args.entityId)?{mob:args.mob,entityId:args.entityId as number}:null;
       this.nativeStageCount=admitted&&args.goal==='sequence'&&
         Array.isArray(args.steps)&&args.steps.length>=1&&args.steps.length<=8?
           args.steps.length:admitted&&args.goal==='shelter'?3:null;
@@ -987,6 +1000,10 @@ export class MinecraftAiGate {
               ...(typeof parsed.crop==='string'&&
                  ['carrots','potatoes'].includes(parsed.crop)?
                  {crop:parsed.crop}:{}),
+              ...(typeof parsed.destination==='string'?{destination:parsed.destination}:{}),
+              ...(typeof parsed.mob==='string'&&/^[a-z_]{1,64}$/.test(parsed.mob)?{mob:parsed.mob}:{}),
+              ...(Number.isInteger(parsed.entityId)&&Number(parsed.entityId)>=0&&Number(parsed.entityId)<=200000?
+                 {entityId:parsed.entityId as number}:{}),
               ...(Number.isInteger(parsed.targetCount)&&
                  (parsed.targetCount as number)>=1&&(parsed.targetCount as number)<=64?
                  {targetCount:parsed.targetCount as number}:{}),
@@ -1197,6 +1214,38 @@ export class MinecraftAiGate {
           receipt.milestones.smeltedOutput+' '+product+'; observed inventory holds '+current+
           ' (requested '+quantity+')'}:
         {verified:false,reason:'Smelting receipt exists but fresh survival inventory is missing required output quantity'};
+    }
+    if(this.nativeGoalStarted==='equip'){
+      const receipt=this.nativeStatus,request=this.nativeEquip,started=this.nativeGoalStartedAt;
+      if(!receipt||!request||started===null||
+         !Number.isSafeInteger(receipt.since)||Math.abs(receipt.since-started)>60000||
+         receipt.goal!=='equip'||receipt.status!=='complete'||o.nativeGoal!=='equip'||
+         receipt.item!==request.item||receipt.destination!==request.destination||
+         receipt.milestones.equipped!==true)
+        return {verified:false,reason:'Native equipment goal lacks a same-task server-observed equipped-item and exact-slot receipt'};
+      return {verified:true,reason:'Native PlayerEngine equipped '+request.item+' in the owner-requested '+request.destination+' slot and freshly observed the completed mission'};
+    }
+    if(this.nativeGoalStarted==='travel'){
+      const receipt=this.nativeStatus,request=this.nativeTravel,started=this.nativeGoalStartedAt;
+      if(!receipt||!request||started===null||
+         !Number.isSafeInteger(receipt.since)||Math.abs(receipt.since-started)>60000||
+         receipt.goal!=='travel'||receipt.status!=='complete'||o.nativeGoal!=='travel'||
+         receipt.milestones.arrived!==true||
+         Math.hypot(o.position.x-request.destination.x,o.position.y-request.destination.y,
+           o.position.z-request.destination.z)>request.arrivalRange)
+        return {verified:false,reason:'Native travel goal lacks current-task arrival proof and fresh position inside the owner-requested radius'};
+      return {verified:true,reason:'Native PlayerEngine physically reached the exact owner destination within the requested arrival radius'};
+    }
+    if(this.nativeGoalStarted==='defeat_hostile'){
+      const receipt=this.nativeStatus,request=this.nativeDefeat,started=this.nativeGoalStartedAt;
+      if(!receipt||!request||started===null||
+         !Number.isSafeInteger(receipt.since)||Math.abs(receipt.since-started)>60000||
+         receipt.goal!=='defeat_hostile'||receipt.status!=='complete'||o.nativeGoal!=='defeat_hostile'||
+         receipt.mob!==request.mob||receipt.entityId!==request.entityId||
+         receipt.milestones.targetDead!==true||
+         o.threats?.some(t=>t.id===request.entityId&&t.name===request.mob))
+        return {verified:false,reason:'Native combat goal lacks same-entity server death proof for the exact owner-requested hostile'};
+      return {verified:true,reason:'Native PlayerEngine defeated the exact freshly observed '+request.mob+' target and the server confirmed that entity dead'};
     }
     if(this.nativeGoalStarted==='sequence'||this.nativeGoalStarted==='shelter'){
       const native=this.nativeStatus,target=this.nativeGoalStarted;

@@ -17,7 +17,7 @@ export class EvolutionError extends Error {
 }
 const ROOT=path.resolve(process.env.JARVIS_EVOLUTION_ROOT ||
   path.join(process.cwd(),"data","jarvis-evolution"));
-const MAX_SKILLS=64,MAX_STEPS=8,MAX_MANIFEST_BYTES=2800;
+const MAX_SKILLS=64,MAX_STEPS=16,MAX_MANIFEST_BYTES=6400;
 const SAFE_TOOLS=new Set([
   "create_folder","read_file","list_dir","write_file","edit_file",
   "memory_recall","world_recall","windows_discover_apps","windows_find_capability",
@@ -74,7 +74,7 @@ export function normalizeSkillDraft(raw){
       /[\x00-\x08\x0b-\x1f\x7f]/.test(description))
     throw new EvolutionError("Short bounded description required");
   if(!Array.isArray(steps)||steps.length<1||steps.length>MAX_STEPS)
-    throw new EvolutionError("Skill must contain 1–8 stages");
+    throw new EvolutionError("Skill must contain 1–16 stages");
   const normalized=steps.map((step,i)=>{
     if(!object(step)||Object.keys(step).some(k=>!["tool","args","why"].includes(k))||
        typeof step.tool!=="string"||!SAFE_TOOLS.has(step.tool)||!object(step.args)||

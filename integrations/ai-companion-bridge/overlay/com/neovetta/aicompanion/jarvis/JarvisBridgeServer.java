@@ -755,7 +755,7 @@ public final class JarvisBridgeServer {
                     int depth=args.get("depth").getAsInt();
                     int requested=args.get("targetCount").getAsInt();
                     if (!Set.of("farm_wheat","farm_crop").contains(goal) ||
-                            !Set.of("wheat","carrots","potatoes").contains(crop) ||
+                            !Set.of("wheat","carrots","potatoes","beetroot").contains(crop) ||
                             (!goal.equals("farm_wheat") && crop.equals("wheat")) ||
                             (goal.equals("farm_wheat") && !crop.equals("wheat")) ||
                             width<1||width>4||depth<1||depth>4||
@@ -765,10 +765,13 @@ public final class JarvisBridgeServer {
                     if (!withinReach(companion,origin))
                         throw new IllegalArgumentException("farm-origin-not-nearby");
                     Block block=crop.equals("wheat")?Blocks.WHEAT:
-                        crop.equals("carrots")?Blocks.CARROTS:Blocks.POTATOES;
+                        crop.equals("carrots")?Blocks.CARROTS:
+                        crop.equals("beetroot")?Blocks.BEETROOTS:Blocks.POTATOES;
                     Item item=crop.equals("wheat")?Items.WHEAT:
-                        crop.equals("carrots")?Items.CARROT:Items.POTATO;
-                    Item seed=crop.equals("wheat")?Items.WHEAT_SEEDS:item;
+                        crop.equals("carrots")?Items.CARROT:
+                        crop.equals("beetroot")?Items.BEETROOT:Items.POTATO;
+                    Item seed=crop.equals("wheat")?Items.WHEAT_SEEDS:
+                        crop.equals("beetroot")?Items.BEETROOT_SEEDS:item;
                     for(int dx=0;dx<width;dx++)for(int dz=0;dz<depth;dz++) {
                         BlockPos pos=origin.add(dx,0,dz);
                         if(!loaded((ServerWorld)companion.getWorld(),pos) ||

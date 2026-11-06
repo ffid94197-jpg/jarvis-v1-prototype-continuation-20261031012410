@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import unittest
+import re
+from pathlib import Path
 
-from minecraft_command_contract import build_minecraft_message
+from minecraft_command_contract import MINECRAFT_COMMAND_FIELDS, build_minecraft_message
 
 
 class MinecraftCommandForwardingTests(unittest.TestCase):
@@ -62,6 +64,16 @@ class MinecraftCommandForwardingTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 build_minecraft_message(body, "0123456789abcdef")
+
+    def test_forwarding_allowlist_covers_child_protocol(self):
+        protocol = Path(__file__).with_name("minecraft-bot").joinpath("friend_protocol.cjs").read_text()
+        primitive = protocol.split("const primitiveFields={", 1)[1].split("};", 1)[0]
+        allowed = protocol.split("const allowedKeys=new Set([", 1)[1].split("]);", 1)[0]
+        child_fields = set(re.findall(r"'([A-Za-z][A-Za-z0-9]*)'", primitive))
+        child_fields.update(re.findall(r"'([A-Za-z][A-Za-z0-9]*)'", allowed))
+        child_fields.add("command")
+        self.assertLessEqual(child_fields, MINECRAFT_COMMAND_FIELDS)
+        self.assertNotIn("id", MINECRAFT_COMMAND_FIELDS)
 
     def test_invalid_transport_ids_fail_closed(self):
         with self.assertRaises(ValueError):

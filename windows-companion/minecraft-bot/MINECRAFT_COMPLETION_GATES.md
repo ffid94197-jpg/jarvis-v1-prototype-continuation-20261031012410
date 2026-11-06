@@ -171,3 +171,10 @@ Using the exact current Prototype `main` source files fetched from the repositor
 The harness loads the actual planner/controller modules and tests; its CommonJS and assertion adapters are source-isolated. This is not a full Node/Mineflayer installation, not the entire offline gate runner, and not real Java gameplay. Do not interpret model campaigns or randomized snapshots as actual games.
 
 Separately, the Internet-corpus validator's Node.js 22.16.0 regression harness passed **12/12** cases, including source-path traversal and non-HTTPS URL rejection. This validates the validator only; no 200,000-record corpus exists or has been executed.
+
+## 2026-11-06: Core-to-Mineflayer typed command field parity
+
+- Fixed a real sidecar integration gap: the Windows companion previously filtered the JSON sent to the Mineflayer child through an incomplete field list. That silently removed valid parameters for villager trading (`tradeIndex`, `times`), enchanting (`choice`), container transfer (`operation`), crop farming (`crop`), volume construction (`height`, `shape`), and bounded hostile attacks (`maxSwings`).
+- Added one strict transport projection shared by the companion and offline contracts. It forwards every field in the existing child protocol, rejects unknown/reserved fields, and adds only the sidecar-generated 16-hex request correlation ID. The child `friend_protocol.cjs` remains the canonical per-command validator.
+- Added offline contracts for trade, enchant, transfer, crop, volume-build and hostile parameters, plus unknown-field and invalid-ID rejection.
+- Local policy/contract harness: 7/7 typed-field projection checks passed. No Windows companion, Node child, Java server or Minecraft world was launched. This fixes transport-field loss; it does not certify those gameplay operations end-to-end.

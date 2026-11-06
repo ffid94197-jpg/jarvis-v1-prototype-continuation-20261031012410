@@ -36,6 +36,7 @@ import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
+import net.minecraft.stat.Stats;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -100,6 +101,10 @@ public final class JarvisBridgeServer {
         int transferPlayerAfter;
         int transferContainerBefore;
         int transferContainerAfter;
+        String craftGoal;
+        int craftTargetCount;
+        int craftStatBefore;
+        int craftStatAfter;
         String gatherGoal;
         String gatherResource;
         int gatherTargetCount;
@@ -792,6 +797,16 @@ public final class JarvisBridgeServer {
                     run.item = item;
                     run.initialCount = current;
                     run.addedCount = count;
+                    if ("craft".equals(op)) {
+                        Item craftTarget=Registries.ITEM.get(new Identifier("minecraft",item));
+                        if(craftTarget==Items.AIR)
+                            throw new IllegalArgumentException("unknown-craft-output");
+                        run.craftGoal="craft";
+                        run.craftTargetCount=count;
+                        run.craftStatBefore=companion.getStatHandler().getStat(
+                            Stats.CRAFTED.getOrCreateStat(craftTarget));
+                        run.craftStatAfter=run.craftStatBefore;
+                    }
                     task = TaskCatalogue.getItemTask(item, current + count);
                 } else if ("equip".equals(op)) {
                     String itemName=field(args,"item"), destination=field(args,"destination");
@@ -879,6 +894,15 @@ public final class JarvisBridgeServer {
                     if (!"running".equals(run.state)) return;
                     boolean added = run.item != null &&
                             countItem(run.entity,run.item)>=run.initialCount+run.addedCount;
+                    boolean crafted=false;
+                    if(run.craftGoal!=null && run.item!=null) {
+                        Item craftTarget=Registries.ITEM.get(new Identifier("minecraft",run.item));
+                        run.craftStatAfter=run.entity.getStatHandler().getStat(
+                            Stats.CRAFTED.getOrCreateStat(craftTarget));
+                        crafted=added &&
+                            run.craftStatAfter-run.craftStatBefore>=run.craftTargetCount;
+                    }
+                    boolean itemProved=run.craftGoal!=null?crafted:added;
                     boolean arrived = run.arrival != null &&
                             run.entity.getBlockPos().isWithinDistance(run.arrival,2.5);
                     boolean equipped = run.equipItem != null && isEquipped(run.entity,
@@ -897,7 +921,7 @@ public final class JarvisBridgeServer {
                     boolean farmProved=run.cropGoal!=null &&
                             run.harvestedCells>=run.cropTargetCount &&
                             countItem(run.entity,run.cropItem)>=run.cropInitialCount+run.cropTargetCount;
-                    boolean proved = added||arrived||equipped||changedBlock||interacted||killed ||farmProved||
+                    boolean proved = itemProved||arrived||equipped||changedBlock||interacted||killed ||farmProved||
                             (run.endgame != null && run.endgame.completed()) ||
                             (run.sequence != null && run.sequence.isFinished()) ||
                             (run.volume != null && run.volume.complete());
@@ -943,9 +967,36 @@ public final class JarvisBridgeServer {
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
                     (candidate.endgame == null && candidate.cropGoal == null &&
                      candidate.smeltGoal == null && candidate.sequence == null &&
-                     candidate.gatherGoal == null && candidate.volume == null &&
+                     candidate.gatherGoal == null && candidate.craftGoal == null && candidate.volume == null &&
                      candidate.transferItem == null && candidate.trade == null &&
                      candidate.enchant == null)) continue;
+            if(candidate.craftGoal!=null) {
+                int current=countItem(companion,candidate.item);
+                Item target=Registries.ITEM.get(new Identifier("minecraft",candidate.item));
+                int statAfter=companion.getStatHandler().getStat(
+                    Stats.CRAFTED.getOrCreateStat(target));
+                int craftedCount=Math.max(0,statAfter-candidate.craftStatBefore);
+                boolean complete=candidate.state.equals("observed") &&
+                    current>=candidate.initialCount+candidate.craftTargetCount &&
+                    craftedCount>=candidate.craftTargetCount;
+                snapshot.addProperty("nativeGoal","craft");
+                JsonObject summary=new JsonObject();
+                summary.addProperty("goal","craft");
+                summary.addProperty("status",complete?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("item",candidate.item);
+                summary.addProperty("targetCount",candidate.craftTargetCount);
+                JsonObject milestones=new JsonObject();
+                milestones.addProperty("craftDone",complete);
+                milestones.addProperty("initialCount",candidate.initialCount);
+                milestones.addProperty("currentCount",current);
+                milestones.addProperty("craftStatBefore",candidate.craftStatBefore);
+                milestones.addProperty("craftStatAfter",statAfter);
+                milestones.addProperty("craftedCount",craftedCount);
+                summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
             if(candidate.enchant!=null) {
                 JarvisNativeOwnerEnchant.Result result=candidate.enchant;
                 snapshot.addProperty("nativeGoal","enchant");

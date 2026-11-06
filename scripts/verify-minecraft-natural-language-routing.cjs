@@ -276,16 +276,21 @@ house.record('minecraft_companion_command',{command:'observe'},
 no(house.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
  block:'cobblestone',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,
  'One short line may not be reported as a complete castle');
-const smallHouse=new MinecraftAiGate('Build me a small house');
+const smallHouse=new MinecraftAiGate('Build me a small house',false,true);
 smallHouse.record('minecraft_companion_command',{command:'observe'},
  {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
 ok(smallHouse.check('minecraft_companion_command',{command:'auto_goal',goal:'shelter'}).ok,
  'owner-requested small house maps to the bounded shelter controller');
-const unspecifiedHouse=new MinecraftAiGate('Build me a house');
+const unspecifiedHouse=new MinecraftAiGate('Build me a house',false,true);
 unspecifiedHouse.record('minecraft_companion_command',{command:'observe'},
  {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
 no(unspecifiedHouse.check('minecraft_companion_command',{command:'auto_goal',goal:'shelter'}).ok,
  'an unspecified house is not silently reduced to a small shelter');
+const defaultSmallHouse=new MinecraftAiGate('Build me a small house');
+defaultSmallHouse.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+no(defaultSmallHouse.check('minecraft_companion_command',{command:'auto_goal',goal:'shelter'}).ok,
+ 'generic house routing remains disabled without the explicit Minecraft planner context');
 
 // Independent Core goal/target integrity: one accepted action is not a
 // substitute for the user's entire ordered Dragon + Netherite mission.

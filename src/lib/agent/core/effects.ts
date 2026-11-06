@@ -186,8 +186,12 @@ export async function reconcileEffect(
       return {kind:"effect_unknown",reason:"repair identity cannot be reconciled"};
     }
     try{
-      const {getRepair,verifyRepair}=await import("../evolution/repairVault.mjs");
+      const {getRepair,verifyRepair,recoverRepair}=await import("../evolution/repairVault.mjs");
       let repair=await getRepair(eff.ownerId,repairId);
+      if(["applying","rolling_back","effect_unknown"].includes(repair.state)){
+        const recovered=await recoverRepair(eff.ownerId,repairId);
+        if(recovered.repair)repair={...repair,...recovered.repair};
+      }
       if(repair.state==="applied"){
         const checked=await verifyRepair(eff.ownerId,repairId);
         repair={...repair,...checked};
@@ -203,6 +207,12 @@ export async function reconcileEffect(
           repairSucceeded:false},"FAILED");
         return ok?{kind:"verified",detail:{repairId,state:"rolled_back",repairSucceeded:false}}:
           {kind:"effect_unknown",reason:"repair rollback settlement write failed"};
+      }
+      if(repair.state==="staged"||repair.state==="approved"){
+        const ok=await settleEffect(effectId,{reconciled:true,repairId,state:repair.state,
+          repairSucceeded:false,noFileMutation:true},"FAILED");
+        return ok?{kind:"verified",detail:{repairId,state:repair.state,noFileMutation:true}}:
+          {kind:"effect_unknown",reason:"no-write repair settlement failed"};
       }
       await settleEffect(effectId,{reconciled:false,repairId,state:repair.state,
         reason:"repair remains ambiguous or lacks static verification"},"EFFECT_UNKNOWN");

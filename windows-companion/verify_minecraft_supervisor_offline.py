@@ -20,11 +20,16 @@ class FakeClock:
 class ReconnectPolicyTests(unittest.TestCase):
     def test_requires_explicit_opt_in_and_native_engine(self) -> None:
         self.assertFalse(auto_reconnect_enabled("jarvis", {}))
+        self.assertFalse(auto_reconnect_enabled("jarvis", {
+            "JARVIS_MINECRAFT_AUTO_RECONNECT": "1"}))
         self.assertFalse(auto_reconnect_enabled("mine-ai-mcp", {
+            "JARVIS_MINECRAFT_LAN_ENABLED": "1",
             "JARVIS_MINECRAFT_AUTO_RECONNECT": "1"}))
         self.assertFalse(auto_reconnect_enabled("jarvis", {
+            "JARVIS_MINECRAFT_LAN_ENABLED": "1",
             "JARVIS_MINECRAFT_AUTO_RECONNECT": "true"}))
         self.assertTrue(auto_reconnect_enabled("jarvis", {
+            "JARVIS_MINECRAFT_LAN_ENABLED": "1",
             "JARVIS_MINECRAFT_AUTO_RECONNECT": "1"}))
 
     def test_backoff_is_bounded_and_attempt_count_capped(self) -> None:

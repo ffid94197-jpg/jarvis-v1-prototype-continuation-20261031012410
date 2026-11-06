@@ -365,10 +365,20 @@ export async function verifyRepair(owner,id){
       kind:checked.kind,passed:false,diagnostics:checked.diagnostics},
       automaticRollback:true,runtimeTestsExecuted:false};
   }catch(e){
+    await serialized(owner,async()=>{
+      const items=await load(owner),item=items.find(r=>r.id===id);
+      if(item&&item.state==="verification_failed"){
+        item.state="effect_unknown";
+        item.recovery={observed:"rollback_failed",recoveredAt:new Date().toISOString(),
+          outcome:"verification failed and rollback could not be confirmed"};
+        await save(owner,items);
+      }
+    }).catch(()=>{});
     const latest=(await load(owner)).find(r=>r.id===id);
     return {...summary(latest||initial),verified:false,verification:{
       kind:checked.kind,passed:false,diagnostics:checked.diagnostics},
-      automaticRollback:false,rollbackError:e instanceof Error?e.message:"rollback failed"};
+      automaticRollback:false,effectUnknown:true,
+      rollbackError:e instanceof Error?e.message:"rollback failed"};
   }
 }
 

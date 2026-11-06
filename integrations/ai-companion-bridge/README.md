@@ -23,14 +23,14 @@ This opt-in branch now includes an actual source-level Core-to-Fabric path:
 
 The Windows sidecar now includes an **opt-in, bounded network reconnect supervisor** for the native JarvisBuddy/Mineflayer engine:
 
-- Enable only on the local Windows sidecar with \`JARVIS_MINECRAFT_AUTO_RECONNECT=1\`; default is disabled.
-- Applies only to \`JARVIS_MINECRAFT_ENGINE=jarvis\`, never to the external \`mine-ai-mcp\` process.
+- Enable only on the local Windows sidecar with `JARVIS_MINECRAFT_AUTO_RECONNECT=1`; default is disabled.
+- Applies only to `JARVIS_MINECRAFT_ENGINE=jarvis`, never to the external `mine-ai-mcp` process.
 - Retries with 2/4/8/16/30-second backoff and at most five attempts in any rolling ten-minute window.
 - A server kick or invalid startup configuration stops retries. Explicit owner stop and sidecar shutdown invalidate the supervisor and terminate the local child.
-- A successful reconnect confirms only a fresh protocol spawn. It does **not** restore task authority, replay an effect, resume a mission or reuse old world proofs. The owner must observe the current world and issue a new Guardian-authorized \`auto_resume\` if appropriate.
+- A successful reconnect confirms only a fresh protocol spawn. It does **not** restore task authority, replay an effect, resume a mission or reuse old world proofs. The owner must observe the current world and issue a new Guardian-authorized `auto_resume` if appropriate.
 - If the retry budget is exhausted, the companion remains disconnected until an owner starts it again.
 
-Offline policy contracts: \`python -m unittest windows-companion/verify_minecraft_supervisor_offline.py\` (run from repository root). These tests do not exercise Windows process lifecycle, Mineflayer, a LAN server or mission acceptance.
+Offline policy contracts: run `python windows-companion/verify_companion_offline.py` and `python windows-companion/verify_minecraft_supervisor_offline.py` from repository root. These tests do not exercise Windows process lifecycle, Mineflayer, a LAN server or mission acceptance.
 
 ## Source extension: sequence, container and observation bridges
 

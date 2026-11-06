@@ -8,6 +8,7 @@ const PIN="6bb1df1a06258ca712b66f1404dd05204f25b9c7";
 function fatal(message){ throw new Error("JARVIS overlay refused: "+message); }
 function run(cmd,args){return cp.execFileSync(cmd,args,{cwd:upstream,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();}
 function read(rel){return fs.readFileSync(path.join(upstream,rel),"utf8");}
+function repoShow(ref,rel){try{return cp.execFileSync("git",["show",ref+":"+rel],{cwd:path.resolve(bridge,"../.."),encoding:"utf8",stdio:["ignore","pipe","pipe"]});}catch{return null;}}
 function editOnce(text,from,to){if(text.includes(to))return text;if(!text.includes(from))fatal("upstream code seam missing: "+from);return text.replace(from,to);}
 if(!fs.existsSync(path.join(upstream,"aicompanion","build.gradle"))) fatal("initialize integrations/ai-companion submodule first");
 if(run("git",["rev-parse","HEAD"])!==PIN)fatal("upstream commit does not match pinned audited revision");
@@ -53,9 +54,11 @@ if(!originalEngine.includes(idleCall)&&!originalEngine.includes(idlePatch))fatal
 if(!originalService.includes(serviceCall)&&!originalService.includes(servicePatch))fatal("LLM service source no longer matches pinned API");
 if(!originalCatalogue.includes(catalogueCall)&&!originalCatalogue.includes(cataloguePatch))fatal("resource catalogue source no longer matches pinned API");
 const clean=run("git",["status","--porcelain","--untracked-files=all"]);
-if(clean && !(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalService.includes(servicePatch)&&originalCatalogue.includes(cataloguePatch)))fatal("submodule contains existing edits; preserve them before overlay");
+if(clean && !(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalService.includes(servicePatch)&&
+    (originalCatalogue.includes(catalogueCall)||originalCatalogue.includes(cataloguePatch))))fatal("submodule contains existing edits; preserve them before overlay");
 const overlayFiles=overlayNames.map(name=>({
  target:path.join(upstream,overlayRoot,name),
+ sourceRel:"integrations/ai-companion-bridge/overlay/com/neovetta/aicompanion/jarvis/"+name,
  content:fs.readFileSync(path.join(bridge,"overlay/com/neovetta/aicompanion/jarvis",name),"utf8")
 }));
 if(originalMain.includes(mainPatch)&&originalMain.includes(brainPatch)&&originalEngine.includes(enginePatch)&&originalEngine.includes(idlePatch)&&originalService.includes(servicePatch)&&originalCatalogue.includes(cataloguePatch)&&guardedCommands.every(name=>{
@@ -63,10 +66,20 @@ if(originalMain.includes(mainPatch)&&originalMain.includes(brainPatch)&&original
  const i=originalCommands.indexOf(marker), start=originalCommands.indexOf("{",i);
  return i>=0&&originalCommands.slice(start+1,start+220).includes("This companion is controlled by JARVIS Core;");
 })) {
- if(overlayFiles.some(file=>!fs.existsSync(file.target)||
-    fs.readFileSync(file.target,"utf8")!==file.content))
-     fatal("existing overlay differs; refusing overwrite");
- console.log("JARVIS AI Companion overlay already applied");
+ let updated=0;
+ for(const file of overlayFiles){
+  if(!fs.existsSync(file.target)){
+   fs.writeFileSync(file.target,file.content,"utf8");updated++;continue;
+  }
+  const existing=fs.readFileSync(file.target,"utf8");
+  if(existing===file.content)continue;
+  const mainVersion=repoShow("main",file.sourceRel);
+  const previousVersion=repoShow("HEAD^",file.sourceRel);
+  if(existing!==mainVersion && existing!==previousVersion)
+   fatal("existing overlay contains unrecognized edits; refusing overwrite: "+file.sourceRel);
+  fs.writeFileSync(file.target,file.content,"utf8");updated++;
+ }
+ console.log(updated?"JARVIS AI Companion overlay updated from the repository's known prior version":"JARVIS AI Companion overlay already applied");
  process.exit(0);
 }
 const nextCommands=guardedCommands.reduce(guardOwnerBrainCommand,originalCommands);

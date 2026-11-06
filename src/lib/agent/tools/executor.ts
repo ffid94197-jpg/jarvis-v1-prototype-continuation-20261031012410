@@ -302,8 +302,10 @@ export async function executeTool(
           const staged=await getRepair(ownerId,request.id);
           const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
           const diagnosis=await diagnoseOwnerRuntime(ownerId,db);
-          const currentPattern=diagnosis.patterns?.find((item:{id:string;requiresSourceInspection:boolean})=>
-            item.id===staged.diagnosisPatternId&&item.requiresSourceInspection===true);
+          const taskRef=taskId.slice(-8);
+          const currentPattern=diagnosis.patterns?.find((item:{id:string;requiresSourceInspection:boolean;taskRefs?:string[]})=>
+            item.id===staged.diagnosisPatternId&&item.requiresSourceInspection===true&&
+            Array.isArray(item.taskRefs)&&item.taskRefs.includes(taskRef));
           if(!currentPattern)
             return {ok:false,tool,evidence:"",
               error:"Automatic repair requires a current repairable runtime diagnosis signal"};
@@ -357,8 +359,10 @@ export async function executeTool(
               error:"Automatic repair staging requires a current diagnosis pattern ID in the repair rationale"};
             const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
             const diagnosis=await diagnoseOwnerRuntime(ownerId,db);
-            const pattern=diagnosis.patterns?.find((item:{id:string;requiresSourceInspection:boolean})=>
-              item.id===match[1]&&item.requiresSourceInspection===true);
+            const taskRef=taskId.slice(-8);
+            const pattern=diagnosis.patterns?.find((item:{id:string;requiresSourceInspection:boolean;taskRefs?:string[]})=>
+              item.id===match[1]&&item.requiresSourceInspection===true&&
+              Array.isArray(item.taskRefs)&&item.taskRefs.includes(taskRef));
             if(!pattern)return {ok:false,tool,evidence:"",
               error:"Automatic repair staging is allowed only for a current repairable code-failure signal"};
             diagnosisPatternId=match[1];

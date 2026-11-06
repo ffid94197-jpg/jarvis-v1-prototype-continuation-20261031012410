@@ -942,11 +942,20 @@ def minecraft_action(op):
         if child.poll() is not None:
             break
     if not success:
+        if child.poll() is not None:
+            reader_done = getattr(child, "_jarvis_reader_done", None)
+            if reader_done is not None:
+                reader_done.wait(timeout=1)
+        terminal = getattr(child, "_jarvis_reconnect_allowed", None)
         with bot_lock:
             if bot_proc is child:
                 bot_proc = None
                 bot_engine = None
-            if not bot_supervisor_enabled:
+            if bot_supervisor_enabled and (
+                child.returncode == 2 or (terminal is not None and not terminal.is_set())
+            ):
+                _disable_minecraft_supervisor_locked()
+            elif not bot_supervisor_enabled:
                 bot_reconnecting = False
         _terminate_minecraft_child(child)
         return {'ok':False,'error':'Minecraft LAN join not confirmed. Open world to LAN and check bot dependencies, LAN port and version.'}

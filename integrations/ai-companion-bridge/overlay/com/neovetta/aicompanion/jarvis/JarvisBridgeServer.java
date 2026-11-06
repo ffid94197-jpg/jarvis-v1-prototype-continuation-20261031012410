@@ -1315,8 +1315,9 @@ public final class JarvisBridgeServer {
         "cooked_chicken","chicken"
     );
     private static final java.util.Set<String> BUILD_BLOCKS=java.util.Set.of(
-        "cobblestone","cobbled_deepslate","oak_planks","spruce_planks",
-        "stone","dirt","oak_log","glass","sandstone","netherrack");
+        "cobblestone","cobbled_deepslate","stone","dirt",
+        "oak_planks","spruce_planks","birch_planks","stone_bricks",
+        "oak_log","glass","sandstone","netherrack");
     private static final java.util.Set<String> MINE_BLOCKS=java.util.Set.of(
         "stone","cobblestone","deepslate","cobbled_deepslate","coal_ore",
         "iron_ore","diamond_ore","deepslate_iron_ore","deepslate_diamond_ore",

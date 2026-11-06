@@ -6,7 +6,7 @@ import os
 import re
 import urllib.parse
 from minecraft_supervisor import ReconnectBudget, auto_reconnect_enabled
-from minecraft_command_contract import build_minecraft_message
+from minecraft_command_contract import build_minecraft_message, minecraft_ack_timeout_seconds
 source=Path(__file__).with_name('companion.py').read_text()
 parsed=ast.parse(source)
 policy=next(n for n in parsed.body if isinstance(n,ast.FunctionDef) and n.name=='validate_action')
@@ -70,6 +70,14 @@ run("missionAutoResume':False" in source_text,
     'reconnect result explicitly reports that mission auto-resume is disabled')
 run("MINECRAFT_SESSION_TERMINAL" in source_text,
     'server-kick sentinel is observed before retry decision')
+run(minecraft_ack_timeout_seconds('natural_goal')==30,
+    'natural-language interpretation gets a bounded 30-second ACK window')
+run(all(minecraft_ack_timeout_seconds(command)==30 for command in
+    ('craft_item','inspect_villager','trade_villager','transfer_container','enchant_item','attack_hostile')),
+    'slow inventory/window operations get bounded ACK deadlines')
+run(all(minecraft_ack_timeout_seconds(command)==8 for command in
+    ('observe','auto_goal','auto_status','dig_block')),
+    'short Minecraft commands retain the short ACK deadline')
 # Core-to-Mineflayer transport must preserve every typed field supported by friend_protocol.cjs.
 trade=build_minecraft_message({'operation':'minecraft_command','command':'trade_villager','entityId':7,'tradeIndex':2,'times':3},
                               '0123456789abcdef')

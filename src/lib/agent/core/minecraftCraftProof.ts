@@ -9,7 +9,7 @@ export interface NativeCraftReceiptExpectation {
  * A native PlayerEngine craft is complete only when the SAME task reports:
  * - the exact output and requested quantity,
  * - a fresh inventory increase, and
- * - a server-side Stats.CRAFTED delta for that output.
+ * - a task-scoped output insertion delta witnessed inside the actual AltoClef crafting task.
  *
  * Inventory possession alone is never a craft-method proof.
  */

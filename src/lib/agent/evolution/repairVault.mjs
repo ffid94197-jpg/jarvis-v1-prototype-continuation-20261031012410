@@ -156,7 +156,7 @@ const summary=r=>({id:r.id,path:r.path,state:r.state,diagnosis:r.diagnosis,
   approvedAt:r.approvedAt||null,appliedAt:r.appliedAt||null,
   rolledBackAt:r.rolledBackAt||null,approvalMode:r.approvalMode||"owner",
   autoApplyTaskId:r.autoApplyTaskId||null,stagedByTaskId:r.stagedByTaskId||null,
-  verification:r.verification||null});
+  verification:r.verification||null,recovery:r.recovery||null});
 export async function listRepairs(owner){
   return (await load(owner)).map(summary);
 }
@@ -411,6 +411,51 @@ export async function autoApplyRepair(owner,id,taskId){
   const verified=await verifyRepair(owner,id);
   return {...verified,automaticApproval:true,verificationLevel:
     verified.verified?"static_syntax_only":"not_verified",runtimeTestsExecuted:false};
+}
+
+/**
+ * Deterministically recover an interrupted repair from the exact before/after
+ * SHA values. This never guesses and never overwrites a third-party edit.
+ */
+export async function recoverRepair(owner,id){
+  validId(id);
+  const decision=await serialized(owner,async()=>{
+    const items=await load(owner),item=items.find(r=>r.id===id);
+    if(!item)throw new RepairError("Repair candidate not found",404);
+    if(!["applying","rolling_back","effect_unknown"].includes(item.state))
+      return {kind:"stable",repair:summary(item)};
+    const observed=await boundedFile(item.path);
+    const now=new Date().toISOString();
+    if(observed.hash===item.beforeSha256){
+      item.state="rolled_back";
+      item.rolledBackAt=item.rolledBackAt||now;
+      item.recovery={observed:"original",recoveredAt:now,
+        outcome:"candidate is not present; no patch replayed"};
+      await save(owner,items);
+      return {kind:"rolled_back",repair:summary(item)};
+    }
+    if(observed.hash===item.afterSha256){
+      if(item.state==="rolling_back" || item.verification?.passed===false)
+        return {kind:"finish_rollback",repair:summary(item)};
+      item.state="applied";
+      item.appliedAt=item.appliedAt||now;
+      item.recovery={observed:"candidate",recoveredAt:now,
+        outcome:"exact candidate readback recovered; static verification required"};
+      await save(owner,items);
+      return {kind:"verify",repair:summary(item)};
+    }
+    return {kind:"external_change",repair:summary(item)};
+  });
+  if(decision.kind==="finish_rollback"){
+    const rolled=await rollbackRepair(owner,id);
+    return {kind:"rolled_back",repair:rolled};
+  }
+  if(decision.kind==="verify"){
+    const checked=await verifyRepair(owner,id);
+    return {kind:checked.state==="verified"?"verified":
+      checked.state==="rolled_back"?"rolled_back":"unresolved",repair:checked};
+  }
+  return decision;
 }
 
 export async function rollbackRepair(owner,id){

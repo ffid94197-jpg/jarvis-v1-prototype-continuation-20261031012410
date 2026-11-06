@@ -58,3 +58,15 @@ and then complete on-device acceptance scenarios.
 Console now includes **◉ FACE / VOICE**. Local YuNet + SFace face-enrollment/comparison and Vosk offline speech-to-text integrate with existing NEXUS. Speech transcripts are explicitly reviewed and submitted into normal LAYA/Core/Guardian task routing; face matching **never** authenticates the owner or bypasses authorization. Camera/microphone require explicit browser permission and activation; no background listening or facial surveillance.
 
 For setup, supported models, privacy limitations and acceptance, start with [FACE_VOICE_SETUP_AND_LIMITS.md](FACE_VOICE_SETUP_AND_LIMITS.md). The official model weights are downloaded separately via `INSTALL_FACE_VOICE_MODELS.ps1`. Run `RUN_FACE_VOICE_ACCEPTANCE.ps1` for repeatable sample-based offline checks. Real Windows camera/mic and actual model inference remain required acceptance tests.
+
+## 2026-11-06: Native autonomous self-evolution
+
+The prototype's self-evolution subsystem now includes owner-scoped runtime
+diagnosis, bounded post-completion skill learning, and an opt-in source-repair
+path with exact-SHA admission, protected-file exclusions, static syntax
+verification and rollback. Automatic repair is disabled by default and requires
+the trusted server setting JARVIS_SELF_REPAIR_AUTO_APPLY=1. This is not a claim
+of unrestricted self-modification or full test/runtime acceptance.
+
+See [Native Evolution](src/lib/agent/evolution/README.md) and run
+`npm run test:self-evolution-offline` for the disposable offline contract.

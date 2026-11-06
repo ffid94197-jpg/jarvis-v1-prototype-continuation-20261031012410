@@ -20,16 +20,38 @@ MINECRAFT_COMMAND_FIELDS = frozenset({
 
 
 def build_minecraft_message(body: Mapping[str, Any], request_id: str) -> dict[str, Any]:
-    """Preserve every supported field, reject unknowns, and add transport ID."""
+    """Project the Windows transport envelope into a child-protocol message."""
     if not isinstance(body, Mapping) or isinstance(body, (str, bytes)):
         raise ValueError("Minecraft command must be a mapping")
+    if body.get("operation") != "minecraft_command":
+        raise ValueError("Unexpected Windows companion operation")
     if not isinstance(request_id, str) or not re.fullmatch(r"[a-f0-9]{16}", request_id):
         raise ValueError("Invalid Minecraft transport correlation ID")
-    if "id" in body or any(not isinstance(key, str) or key not in MINECRAFT_COMMAND_FIELDS
-                           for key in body):
+
+    # bridge.ts sends DesktopPrepared plus taskId. The outer operation and
+    # task ID are transport metadata, not Mineflayer command arguments.
+    envelope_fields = {"operation", "operationDirection", "taskId"}
+    if any(not isinstance(key, str) or
+           (key not in MINECRAFT_COMMAND_FIELDS and key not in envelope_fields)
+           for key in body):
         raise ValueError("Unexpected Minecraft command field")
-    if not isinstance(body.get("command"), str) or not body["command"]:
+    if "taskId" in body and body["taskId"] is not None and (
+        not isinstance(body["taskId"], str) or not 1 <= len(body["taskId"]) <= 128
+    ):
+        raise ValueError("Invalid Core task correlation ID")
+    command = body.get("command")
+    if not isinstance(command, str) or not command:
         raise ValueError("Minecraft command name required")
-    message = dict(body)
+
+    message = {key: value for key, value in body.items()
+               if key in MINECRAFT_COMMAND_FIELDS and key != "operation"}
+    if "operationDirection" in body:
+        direction = body["operationDirection"]
+        is_transfer = command == "transfer_container" or (
+            command == "auto_goal" and body.get("goal") == "transfer"
+        )
+        if not is_transfer or direction not in ("deposit", "withdraw"):
+            raise ValueError("Transfer direction is valid only for a transfer goal")
+        message["operation"] = direction
     message["id"] = request_id
     return message

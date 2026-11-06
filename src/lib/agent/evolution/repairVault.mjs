@@ -8,6 +8,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import {constants as FS} from "node:fs";
+import {createRequire} from "node:module";
+
+const require=createRequire(import.meta.url);
 
 export class RepairError extends Error {
   constructor(message,status=400){super(message);this.name="RepairError";this.status=status;}
@@ -45,7 +48,12 @@ const allowedPath=p=>{
     "tsconfig.json","next.config.ts","next.config.js"]);
   if(parts.some(part=>part.startsWith(".")||blocked.has(part)) ||
      ["src/lib/agent/guardian/","src/lib/agent/auth/",
-      "src/lib/agent/evolution/","src/app/api/jarvis/"].some(prefix=>
+      "src/lib/agent/evolution/","src/app/api/jarvis/",
+      "src/lib/agent/core/loop.ts","src/lib/agent/core/effects.ts",
+      "src/lib/agent/core/taskState.ts","src/lib/agent/core/verifier.ts",
+      "src/lib/agent/core/autonomyPolicy.ts","src/lib/agent/core/approvedSkillQueue.ts",
+      "src/lib/agent/core/skillIntent.ts","src/lib/agent/core/modelProvider.ts",
+      "src/lib/agent/tools/","src/lib/agent/windows/"].some(prefix=>
         p.toLowerCase().startsWith(prefix)))
     throw new RepairError("JARVIS protected configuration/security file is immune to self-repair");
   return p;
@@ -140,7 +148,8 @@ async function serialized(owner,fn){
 const summary=r=>({id:r.id,path:r.path,state:r.state,diagnosis:r.diagnosis,
   beforeSha256:r.beforeSha256,afterSha256:r.afterSha256,createdAt:r.createdAt,
   approvedAt:r.approvedAt||null,appliedAt:r.appliedAt||null,
-  rolledBackAt:r.rolledBackAt||null});
+  rolledBackAt:r.rolledBackAt||null,approvalMode:r.approvalMode||"owner",
+  autoApplyTaskId:r.autoApplyTaskId||null,verification:r.verification||null});
 export async function listRepairs(owner){
   return (await load(owner)).map(summary);
 }
@@ -196,7 +205,7 @@ export async function approveRepair(owner,id){
     const existing=await boundedFile(item.path);
     if(existing.hash!==item.beforeSha256)
       throw new RepairError("Repair source changed before approval",409);
-    item.state="approved";item.approvedAt=new Date().toISOString();
+    item.state="approved";item.approvedAt=new Date().toISOString();item.approvalMode="owner";
     await save(owner,items);return summary(item);
   });
 }
@@ -261,11 +270,141 @@ export async function applyRepair(owner,id){
     }
   });
 }
+
+function syntaxCheck(rel,text){
+  const ext=path.extname(rel).toLowerCase();
+  if(ext===".json"){
+    try{JSON.parse(text);return {available:true,passed:true,kind:"json_parse",diagnostics:[]};}
+    catch(e){return {available:true,passed:false,kind:"json_parse",
+      diagnostics:[String(e instanceof Error?e.message:"invalid JSON").slice(0,240)]};}
+  }
+  const kinds={".ts":"TS",".tsx":"TSX",".js":"JS",".jsx":"JSX",".mjs":"JS",
+    ".cjs":"JS"};
+  const kindName=kinds[ext];
+  if(!kindName)return {available:false,passed:false,kind:"unsupported",
+    diagnostics:["No static syntax verifier is configured for this file type"]};
+  try{
+    const ts=require("typescript");
+    const kind=ts.ScriptKind[kindName];
+    const source=ts.createSourceFile(rel,text,ts.ScriptTarget.Latest,true,kind);
+    const diagnostics=(source.parseDiagnostics||[]).slice(0,8).map(d=>
+      String(ts.flattenDiagnosticMessageText(d.messageText," ")).slice(0,240));
+    return {available:true,passed:diagnostics.length===0,kind:"typescript_parser",
+      diagnostics};
+  }catch{
+    return {available:false,passed:false,kind:"unavailable",
+      diagnostics:["TypeScript parser is not installed in this runtime"]};
+  }
+}
+
+/**
+ * Static post-apply verification. This parses source; it does NOT execute code,
+ * run the project's test suite, or certify runtime behaviour. Syntax failure
+ * triggers rollback only while the target still exactly matches our patch.
+ */
+export async function verifyRepair(owner,id){
+  validId(id);
+  const initial=(await load(owner)).find(r=>r.id===id);
+  if(!initial)throw new RepairError("Repair candidate not found",404);
+  if(!["applied","verified"].includes(initial.state))
+    throw new RepairError("Only an applied repair can be verified",409);
+  const current=await boundedFile(initial.path);
+  if(current.hash!==initial.afterSha256)
+    return {...summary(initial),verified:false,verification:{
+      available:true,passed:false,kind:"readback",diagnostics:["Current file no longer matches the exact repair SHA"]},
+      rollbackAvailable:false,requiresOwnerReview:true};
+  const checked=syntaxCheck(initial.path,current.bytes.toString("utf8"));
+  if(!checked.available)
+    return {...summary(initial),verified:false,verification:{
+      available:false,passed:false,kind:checked.kind,diagnostics:checked.diagnostics},
+      rollbackAvailable:true,requiresOwnerReview:true};
+  if(checked.passed){
+    return serialized(owner,async()=>{
+      const items=await load(owner),item=items.find(r=>r.id===id);
+      if(!item||!["applied","verified"].includes(item.state))
+        throw new RepairError("Repair state changed before verification",409);
+      const observed=await boundedFile(item.path);
+      if(observed.hash!==item.afterSha256)
+        throw new RepairError("Repair target changed during verification",409);
+      item.state="verified";
+      item.verification={kind:checked.kind,passed:true,checkedAt:new Date().toISOString(),
+        sourceSha256:observed.hash,diagnostics:[]};
+      await save(owner,items);
+      return {...summary(item),verified:true,verificationLevel:"static_syntax_only",
+        runtimeTestsExecuted:false};
+    });
+  }
+  await serialized(owner,async()=>{
+    const items=await load(owner),item=items.find(r=>r.id===id);
+    if(!item||!["applied","verified"].includes(item.state))
+      throw new RepairError("Repair state changed before failed verification was recorded",409);
+    const observed=await boundedFile(item.path);
+    if(observed.hash!==item.afterSha256)
+      throw new RepairError("Repair target changed; refusing automatic rollback",409);
+    item.state="verification_failed";
+    item.verification={kind:checked.kind,passed:false,checkedAt:new Date().toISOString(),
+      sourceSha256:observed.hash,diagnostics:checked.diagnostics};
+    await save(owner,items);
+  });
+  try{
+    const rolled=await rollbackRepair(owner,id);
+    return {...rolled,verified:false,verification:{
+      kind:checked.kind,passed:false,diagnostics:checked.diagnostics},
+      automaticRollback:true,runtimeTestsExecuted:false};
+  }catch(e){
+    const latest=(await load(owner)).find(r=>r.id===id);
+    return {...summary(latest||initial),verified:false,verification:{
+      kind:checked.kind,passed:false,diagnostics:checked.diagnostics},
+      automaticRollback:false,rollbackError:e instanceof Error?e.message:"rollback failed"};
+  }
+}
+
+/**
+ * Bounded autonomous repair. It is disabled unless the trusted server operator
+ * sets JARVIS_SELF_REPAIR_AUTO_APPLY=1. The task ID is supplied by Core, not
+ * model arguments. At most one repair is auto-applied per task, only inside
+ * the configured workspace and only for statically parseable safe files.
+ */
+export async function autoApplyRepair(owner,id,taskId){
+  validId(id);
+  if(process.env.JARVIS_SELF_REPAIR_AUTO_APPLY!=="1")
+    throw new RepairError("Bounded automatic repair is disabled by owner policy",403);
+  if(typeof taskId!=="string"||!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(taskId))
+    throw new RepairError("Core task identity required for bounded automatic repair",403);
+  await serialized(owner,async()=>{
+    const items=await load(owner),item=items.find(r=>r.id===id);
+    if(!item||item.state!=="staged")
+      throw new RepairError("Only a fresh staged repair can enter bounded auto-apply",409);
+    if(items.some(r=>r.autoApplyTaskId===taskId))
+      throw new RepairError("One automatic repair per task is the configured limit",409);
+    const original=await boundedFile(item.path);
+    if(original.hash!==item.beforeSha256)
+      throw new RepairError("Repair source SHA changed; automatic apply refused",409);
+    const candidate=replaceExact(original.bytes.toString("utf8"),item.oldText,item.newText);
+    const preflight=syntaxCheck(item.path,candidate);
+    if(!preflight.available||!preflight.passed)
+      throw new RepairError("Automatic repair requires a passing static syntax preflight",409);
+    item.state="approved";
+    item.approvedAt=new Date().toISOString();
+    item.approvalMode="bounded_auto_policy";
+    item.autoApplyTaskId=taskId;
+    item.verification={kind:preflight.kind,passed:true,checkedAt:new Date().toISOString(),
+      sourceSha256:item.afterSha256,diagnostics:[],phase:"preflight"};
+    await save(owner,items);
+  });
+  const applied=await applyRepair(owner,id);
+  if(applied.state!=="applied")
+    return {...applied,automaticApproval:true,verified:false};
+  const verified=await verifyRepair(owner,id);
+  return {...verified,automaticApproval:true,verificationLevel:
+    verified.verified?"static_syntax_only":"not_verified",runtimeTestsExecuted:false};
+}
+
 export async function rollbackRepair(owner,id){
   validId(id);
   return serialized(owner,async()=>{
     const items=await load(owner),item=items.find(r=>r.id===id);
-    if(!item||!["applied","applying","effect_unknown","rolling_back"].includes(item.state))
+    if(!item||!["applied","verified","verification_failed","applying","effect_unknown","rolling_back"].includes(item.state))
       throw new RepairError("Only an applied or ambiguous patch can be rolled back",409);
     const before=await fs.readFile(path.join(dir(owner),item.id+".original")).catch(()=>null);
     if(!before||digest(before)!==item.beforeSha256)

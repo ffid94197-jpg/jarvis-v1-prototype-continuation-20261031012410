@@ -409,6 +409,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let parseRetries = 0;
   let actionNudges = 0;
   let inventoryDraftCorrections = 0;
+  let selfDiagnosisInjected = false;
   let inventorySource = parseInventorySource(objective);
   const inventoryDeliverables=/\b(?:inventory|stock)\b/i.test(objective)
     &&/\b(?:csv|spreadsheet)\b/i.test(objective)
@@ -1454,6 +1455,22 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       if (!settled) {
         effectJournalDegraded = true;
         console.error(`[journal] effect settlement failed for task ${taskId} seq ${seq}`);
+      }
+    }
+    // First real tool failure triggers one automatic, read-only diagnosis.
+    // This consumes no model/provider call and grants no repair authority.
+    if(!result.ok && !selfDiagnosisInjected){
+      selfDiagnosisInjected=true;
+      try{
+        const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
+        const diagnosis=await diagnoseOwnerRuntime(opts.ownerId,db);
+        messages.push({role:"assistant",content:
+          "CORE SELF-DIAGNOSIS (read-only classification; not root-cause proof): "+
+          JSON.stringify(diagnosis).slice(0,5000)+
+          ". Treat Guardian denials, provider faults and uncertain effects as non-code issues. Inspect exact source evidence before proposing any repair."});
+      }catch{
+        messages.push({role:"assistant",content:
+          "CORE SELF-DIAGNOSIS unavailable. Do not guess a root cause, weaken Guardian, or retry an uncertain effect."});
       }
     }
 

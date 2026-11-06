@@ -5,6 +5,7 @@ import ipaddress
 import os
 import re
 import urllib.parse
+from minecraft_supervisor import ReconnectBudget, auto_reconnect_enabled
 source=Path(__file__).with_name('companion.py').read_text()
 parsed=ast.parse(source)
 policy=next(n for n in parsed.body if isinstance(n,ast.FunctionDef) and n.name=='validate_action')
@@ -34,4 +35,25 @@ run(check({'operation':'youtube_oldest','channel':'MrBeast'}) is None,'YouTube w
 run(check({'operation':'youtube_oldest','channel':'x;rm -rf'}) is not None,'malicious channel rejected')
 run(check({'operation':'windows_shell','command':'whoami'}) is not None,'unknown action denied')
 run(check({'operation':'open_url','url':None}) is not None,'null URL denied')
+# Bounded Minecraft reconnect policy: explicit opt-in, finite retries, no task replay.
+run(not auto_reconnect_enabled('jarvis',{}),'Minecraft reconnect disabled by default')
+run(not auto_reconnect_enabled('mine-ai-mcp',{'JARVIS_MINECRAFT_AUTO_RECONNECT':'1'}),
+    'external Mine AI MCP engine excluded from local reconnect')
+run(auto_reconnect_enabled('jarvis',{'JARVIS_MINECRAFT_AUTO_RECONNECT':'1'}),
+    'native JarvisBuddy reconnect requires exact explicit opt-in')
+class _ReconnectClock:
+    def __init__(self): self.now=1000.0
+    def __call__(self): return self.now
+    def advance(self,seconds): self.now+=seconds
+clock=_ReconnectClock(); budget=ReconnectBudget(clock)
+for delay in (2,4,8,16,30):
+    run(budget.reserve()==delay,'bounded reconnect backoff '+str(delay)+'s')
+run(budget.reserve() is None,'reconnect stops after five attempts per ten minutes')
+clock.advance(600)
+run(budget.reserve()==2,'reconnect budget expires after rolling ten-minute window')
+source_text=source
+run("missionAutoResume':False" in source_text,
+    'reconnect result explicitly reports that mission auto-resume is disabled')
+run("MINECRAFT_SESSION_TERMINAL" in source_text,
+    'server-kick sentinel is observed before retry decision')
 print(f'WINDOWS_COMPANION_POLICY {count}/{count} PASS (offline only, no Windows execution)')

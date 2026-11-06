@@ -476,7 +476,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   const minecraftFirstJoinRequired=minecraftAiTask && opts.replay===undefined &&
     !minecraftSafetyStop && !isMinecraftObservationOnlyObjective(objective,true);
   const minecraftAiGate = minecraftAiTask ?
-    new MinecraftAiGate(objective,minecraftFirstJoinRequired) : null;
+    new MinecraftAiGate(objective,minecraftFirstJoinRequired,true) : null;
   let minecraftAiDenied = 0;
   let minecraftFirstJoinPending=minecraftFirstJoinRequired;
   let minecraftFirstObservePending=minecraftAiTask&&!minecraftSafetyStop;

@@ -520,7 +520,6 @@ export async function runGuardianApprovedPlayerEngine(
           torso:["leather_chestplate","iron_chestplate","golden_chestplate","diamond_chestplate","netherite_chestplate","elytra"],
           legs:["leather_leggings","iron_leggings","golden_leggings","diamond_leggings","netherite_leggings"],
           feet:["leather_boots","iron_boots","golden_boots","diamond_boots","netherite_boots"],
-          "off-hand":["shield","torch","totem_of_undying"]
         };
         if(typeof spec.item!=="string"||!Object.hasOwn(slots,slot)||!slots[slot].includes(spec.item))
           throw Error("Native equip item and destination are not in the owner-safe equipment catalogue");

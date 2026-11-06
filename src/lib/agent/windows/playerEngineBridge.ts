@@ -8,7 +8,7 @@ import {db} from "@/lib/db";
 import type {GuardianDecision} from "../guardian/guardian";
 import type {DesktopPrepared} from "./policy";
 import {verifyNativeCraftReceipt} from "../core/minecraftCraftProof";
-import {MINECRAFT_SAFE_GATHER_RESOURCES} from "../core/minecraftResources";
+import {MINECRAFT_SAFE_BUILD_MATERIALS,MINECRAFT_SAFE_GATHER_RESOURCES} from "../core/minecraftResources";
 type Packet = {version:number;taskId:string;idempotencyKey:string;nonce:string;worldId:string;
   observedAt:number;status:string;observations?:Record<string,unknown>};
 type SendRequest={taskId:string;idempotencyKey:string;operation:string;worldId:string;
@@ -526,8 +526,7 @@ export async function runGuardianApprovedPlayerEngine(
           details={goal,width,depth,durationSeconds:seconds};
         }else {
           const shapes=new Set(["floor","roof","walls","solid"]);
-          const materials=new Set(["cobblestone","oak_planks","spruce_planks",
-            "birch_planks","stone_bricks","dirt","netherrack"]);
+          const materials=new Set<string>(MINECRAFT_SAFE_BUILD_MATERIALS);
           if(!authorizedCoords(spec.position) ||
              !Number.isInteger(spec.height) || Number(spec.height)<1 ||
              Number(spec.height)>3 || !shapes.has(String(spec.shape)) ||

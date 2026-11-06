@@ -634,7 +634,7 @@ export async function runGuardianApprovedPlayerEngine(
            Number(spec.targetCount)<1||Number(spec.targetCount)>16)
           throw Error("Native farm requires exact owner field and bounded target");
         const crop=goal==="farm_wheat"?"wheat":String(spec.crop);
-        if(!["wheat","carrots","potatoes"].includes(crop)||
+        if(!["wheat","carrots","potatoes","beetroot"].includes(crop)||
            (goal==="farm_crop"&&crop==="wheat"))throw Error("Invalid owner crop");
         op="farm";
         details={goal,durationSeconds:seconds,crop,...spec.position,

@@ -548,7 +548,7 @@ export async function runGuardianApprovedPlayerEngine(
       }
       if(sequenced.has(goal)){
         const spec=desktop as unknown as Record<string,unknown>;
-        if(!Array.isArray(spec.steps) || spec.steps.length<1 || spec.steps.length>8 ||
+        if(!Array.isArray(spec.steps) || spec.steps.length<1 || spec.steps.length>16 ||
            spec.steps.some(step=>!step||typeof step!=="object"||Array.isArray(step)||
              !["gather","craft","smelt","equip","travel","tools","stone_age","iron_age","build","farm_wheat","farm_crop","build_volume","shelter","defeat_hostile","transfer","trade","enchant"].includes(String(
                (step as Record<string,unknown>).goal||""))))

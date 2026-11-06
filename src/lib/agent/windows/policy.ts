@@ -372,7 +372,9 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       defeat_hostile:["mob","entityId"],
       smelt:["item","targetCount"],shelter:["width","depth"],
       build_volume:["position","block","width","depth","height","shape"],
-      transfer:["position","item","targetCount","operation"],sequence:["steps"]
+      transfer:["position","item","targetCount","operation"],
+      trade:["entityId","offerIndex","times","expectedFirstItem","expectedFirstCount","expectedSecondItem","expectedSecondCount","expectedOutputItem","expectedOutputCount","expectedUses"],
+      enchant:["position","item","choice","ownerXpConsent"],sequence:["steps"]
     };
     const g=r.goal,extra=fixed.has(g)?[]:(Object.hasOwn(params,g)?params[g]:undefined);
     if(!extra || (step && (g==="sequence" || (fixed.has(g)&&!["tools","stone_age","iron_age"].includes(g)))))
@@ -387,6 +389,19 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       ["x","y","z"].every(k=>integer((v as Record<string,unknown>)[k],-30000000,30000000));
     if(!step && r.durationSeconds!==undefined && !integer(r.durationSeconds,10,43200))return false;
     if(fixed.has(g))return true;
+    if(g==="trade"){
+      const itemId=(v:unknown,allowEmpty=false)=>typeof v==="string"&&
+        (allowEmpty?v==="":/^minecraft:[a-z0-9_]{1,64}$/.test(v));
+      return step&&integer(r.entityId,0,200000)&&integer(r.offerIndex,0,7)&&
+        integer(r.times,1,4)&&itemId(r.expectedFirstItem)&&
+        integer(r.expectedFirstCount,1,64)&&itemId(r.expectedSecondItem,true)&&
+        integer(r.expectedSecondCount,0,64)&&itemId(r.expectedOutputItem)&&
+        integer(r.expectedOutputCount,1,64)&&integer(r.expectedUses,0,10000);
+    }
+    if(g==="enchant")return step&&at(r.position)&&
+      typeof r.item==="string"&&/^[a-z][a-z0-9_]{0,63}$/.test(r.item)&&
+      integer(r.choice,0,2)&&r.ownerXpConsent===true&&
+      process.env.JARVIS_MC_BRIDGE_OWNER_XP_ENCHANT_ENABLE==="1";
     if(g==="defeat_hostile")return ["zombie","husk","drowned","skeleton","stray","spider","cave_spider",
       "witch","pillager","blaze","endermite","silverfish","slime","magma_cube",
       "zoglin","hoglin","phantom","wither_skeleton"].includes(String(r.mob))&&

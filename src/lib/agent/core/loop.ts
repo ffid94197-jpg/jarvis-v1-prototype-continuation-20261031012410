@@ -465,7 +465,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   const nativeSpawnIntent=!opts.replay?directNativeCompanionSpawn(objective):null;
   const minecraftAiTask = !nativeSpawnIntent &&
     process.env.JARVIS_MINECRAFT_LAN_ENABLED === "1" &&
-    process.env.JARVIS_MINECRAFT_AI_PLANNER_ENABLED === "1" && isMinecraftAiObjective(objective);
+    process.env.JARVIS_MINECRAFT_AI_PLANNER_ENABLED === "1" && isMinecraftAiObjective(objective,true);
   // Model-assisted gameplay cannot observe an unjoined Mineflayer companion.
   // Bootstrap exactly one owner-authorized join BEFORE the first read-only
   // game observation. Only this Core-authored step may join; the model is
@@ -474,7 +474,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   const minecraftSafetyStop=/^(?:(?:hey\s+)?jarvis(?:buddy)?[,:!\s]+)?(?:please\s+)?(?:stop|pause|cancel|halt)\b/i
     .test(objective.trim());
   const minecraftFirstJoinRequired=minecraftAiTask && opts.replay===undefined &&
-    !minecraftSafetyStop && !isMinecraftObservationOnlyObjective(objective);
+    !minecraftSafetyStop && !isMinecraftObservationOnlyObjective(objective,true);
   const minecraftAiGate = minecraftAiTask ?
     new MinecraftAiGate(objective,minecraftFirstJoinRequired) : null;
   let minecraftAiDenied = 0;

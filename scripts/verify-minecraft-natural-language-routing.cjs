@@ -46,6 +46,22 @@ for(const s of [
 ])no(isMinecraftAiObjective(s),'do not dispatch: '+s);
 ok(isMinecraftObservationOnlyObjective('Observe my Minecraft inventory'),'read-only observation objective');
 no(isMinecraftObservationOnlyObjective('Observe and follow me in Minecraft'),'follow is an effect');
+ok(isMinecraftAiObjective('Build me a small house',true),
+ 'opted-in Minecraft mode routes ordinary small-house language without requiring a Minecraft keyword');
+ok(isMinecraftAiObjective('Build a small shelter using the blocks I have',true),
+ 'opted-in Minecraft mode routes ordinary shelter language');
+ok(isMinecraftAiObjective('Farm wheat in a 2 by 2 field at 2 64 2',true),
+ 'opted-in Minecraft mode routes ordinary farming language');
+no(isMinecraftAiObjective('Build me a website',true),
+ 'opted-in Minecraft mode does not capture unrelated web development');
+no(isMinecraftAiObjective('Open the chest in Chrome',true),
+ 'explicit browser context prevents Minecraft inference');
+ok(isMinecraftObservationOnlyObjective("What's in your inventory?",true),
+ 'inventory readback is read-only in opted-in Minecraft context');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('Build a small house using the blocks I have'),
+ 'Minecraft system prompt demonstrates natural house-building language');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('shelter, hut or house'),
+ 'bounded shelter goal documents house as a supported alias');
 no(isMinecraftObservationOnlyObjective('Observe Minecraft and mine diamonds'),'mining is an effect');
 const {singleInventoryResourceGoal}=out;
 const expected=[
@@ -238,6 +254,16 @@ house.record('minecraft_companion_command',{command:'observe'},
 no(house.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
  block:'cobblestone',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,
  'One short line may not be reported as a complete castle');
+const smallHouse=new MinecraftAiGate('Build me a small house');
+smallHouse.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(smallHouse.check('minecraft_companion_command',{command:'auto_goal',goal:'shelter'}).ok,
+ 'owner-requested small house maps to the bounded shelter controller');
+const unspecifiedHouse=new MinecraftAiGate('Build me a house');
+unspecifiedHouse.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+no(unspecifiedHouse.check('minecraft_companion_command',{command:'auto_goal',goal:'shelter'}).ok,
+ 'an unspecified house is not silently reduced to a small shelter');
 
 // Independent Core goal/target integrity: one accepted action is not a
 // substitute for the user's entire ordered Dragon + Netherite mission.

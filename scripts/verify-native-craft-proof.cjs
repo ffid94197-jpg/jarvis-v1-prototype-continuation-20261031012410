@@ -51,6 +51,7 @@ assert.match(java,/milestones\.addProperty\("craftProofCount",candidate\.craftPr
 assert.match(java,/Run statusRun=tasks\.get\(taskId\)/);
 assert.match(java,/java\.util\.Collections\.singletonList\(statusRun\)/);
 assert.match(bridge,/verifyNativeCraftReceipt\(nativeCraft/);
-assert.doesNotMatch(bridge,/crafting-method proof not yet available/);
-checks+=14;
+assert.match(bridge,/Native craft lacks same-task craft-task output witness/);
+assert.doesNotMatch(bridge,/Stats\.CRAFTED/);
+checks+=15;
 console.log('Native PlayerEngine craft method proof: '+checks+'/'+checks+' PASS (source-isolated; no Fabric/game acceptance)');

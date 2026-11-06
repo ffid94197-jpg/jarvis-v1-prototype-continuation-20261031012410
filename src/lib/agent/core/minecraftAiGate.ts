@@ -81,7 +81,8 @@ function minecraftReadbackQuestion(objective:string):boolean {
   .replace(/^jarvis(?:buddy)?[, :]+/,'')
   .replace(/^please\s+/,'')
   .replace(/^in minecraft[, :]+/,'')
-  .replace(/\s+in minecraft$/,'');
+  .replace(/\s+in minecraft$/,'')
+  .replace(/[?!.,;:]+$/,'');
  return /^(?:what(?:'s| is) in your inventory|what items (?:do you have|are you carrying)|which items (?:do you have|are you carrying)|how many [a-z0-9_ ]{2,50} (?:do you have|are you carrying)|what do you see|what(?:'s| is) around you|where are you|where are you standing|what(?:'s| is) your position|how much health do you have|how is your health|how is the mission going|how far along are you|what(?:'s| is) your mission status|what(?:'s| is) your progress)$/.test(s);
 }
 

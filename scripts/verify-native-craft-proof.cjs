@@ -40,6 +40,7 @@ const java=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/over
 const bridge=fs.readFileSync(path.join(root,'src/lib/agent/windows/playerEngineBridge.ts'),'utf8');
 assert.match(java,/new JarvisCraftInInventoryTask\(/);
 assert.match(java,/new JarvisCraftInTableTask\(/);
+assert.match(java,/verified-craft-task-not-supported/);
 assert.match(java,/int before=countItem\(run\.entity,run\.item\)/);
 assert.match(java,/int after=countItem\(run\.entity,run\.item\)/);
 assert.doesNotMatch(java,/Stats\.CRAFTED/);
@@ -51,5 +52,5 @@ assert.match(java,/Run statusRun=tasks\.get\(taskId\)/);
 assert.match(java,/java\.util\.Collections\.singletonList\(statusRun\)/);
 assert.match(bridge,/verifyNativeCraftReceipt\(nativeCraft/);
 assert.doesNotMatch(bridge,/crafting-method proof not yet available/);
-checks+=13;
+checks+=14;
 console.log('Native PlayerEngine craft method proof: '+checks+'/'+checks+' PASS (source-isolated; no Fabric/game acceptance)');

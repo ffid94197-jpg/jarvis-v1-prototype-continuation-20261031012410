@@ -62,7 +62,7 @@ const crypto=require("node:crypto");
       path:"src/feature.js",expectedSha256:sha,oldText:"const value = 1;",
       newText:"const value = 2;",
       diagnosis:"Repeated runtime failure was reproduced and the exact safe source span was inspected.",
-    });
+    },{taskId:taskA});
     assert.equal(staged.state,"staged");
     await assert.rejects(repair.autoApplyRepair(owner,staged.id,taskA),/disabled by owner policy/);
     assert.equal(await fs.readFile(file,"utf8"),original);
@@ -84,7 +84,7 @@ const crypto=require("node:crypto");
       path:"src/second.js",expectedSha256:secondSha,oldText:"const second = 1;",
       newText:"const second = 2;",
       diagnosis:"A second independently observed source issue requires a bounded correction.",
-    });
+    },{taskId:taskA});
     await assert.rejects(repair.autoApplyRepair(owner,second.id,taskA),/one automatic repair per task/i);
     assert.equal(await fs.readFile(secondFile,"utf8"),"const second = 1;\n");
 

@@ -149,7 +149,8 @@ const summary=r=>({id:r.id,path:r.path,state:r.state,diagnosis:r.diagnosis,
   beforeSha256:r.beforeSha256,afterSha256:r.afterSha256,createdAt:r.createdAt,
   approvedAt:r.approvedAt||null,appliedAt:r.appliedAt||null,
   rolledBackAt:r.rolledBackAt||null,approvalMode:r.approvalMode||"owner",
-  autoApplyTaskId:r.autoApplyTaskId||null,verification:r.verification||null});
+  autoApplyTaskId:r.autoApplyTaskId||null,stagedByTaskId:r.stagedByTaskId||null,
+  verification:r.verification||null});
 export async function listRepairs(owner){
   return (await load(owner)).map(summary);
 }
@@ -179,7 +180,11 @@ export async function getRepair(owner,id){
   // diff to the planner without an explicit owner disclosure decision.
   return {...summary(item),oldText:item.oldText,newText:item.newText};
 }
-export async function stageRepair(owner,raw){
+export async function stageRepair(owner,raw,metadata={}){
+  const stagedByTaskId=metadata?.taskId;
+  if(stagedByTaskId!==undefined&&(typeof stagedByTaskId!=="string"||
+      !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(stagedByTaskId)))
+    throw new RepairError("Invalid Core task provenance",403);
   const spec=proposedPatch(raw);
   return serialized(owner,async()=>{
     const {bytes,hash}=await boundedFile(spec.path);
@@ -191,7 +196,7 @@ export async function stageRepair(owner,raw){
     if(items.length>=MAX_REPAIRS)throw new RepairError("Repair vault capacity reached",409);
     const candidate={id:"rp_"+crypto.randomBytes(16).toString("hex"),
       ...spec,beforeSha256:hash,afterSha256:afterHash,state:"staged",
-      createdAt:new Date().toISOString()};
+      stagedByTaskId:stagedByTaskId||null,createdAt:new Date().toISOString()};
     items.push(candidate);await save(owner,items);
     return summary(candidate);
   });
@@ -375,6 +380,8 @@ export async function autoApplyRepair(owner,id,taskId){
     const items=await load(owner),item=items.find(r=>r.id===id);
     if(!item||item.state!=="staged")
       throw new RepairError("Only a fresh staged repair can enter bounded auto-apply",409);
+    if(item.stagedByTaskId!==taskId)
+      throw new RepairError("Automatic repair must use a candidate staged by this exact Core task",403);
     if(items.some(r=>r.autoApplyTaskId===taskId))
       throw new RepairError("One automatic repair per task is the configured limit",409);
     const original=await boundedFile(item.path);

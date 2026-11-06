@@ -727,7 +727,7 @@ public final class JarvisBridgeServer {
                     if(!"sequence".equals(goal))
                         throw new IllegalArgumentException("not-owner-sequence");
                     JarvisNativeSequenceTask sequenceTask=new JarvisNativeSequenceTask(
-                        companion,args.getAsJsonArray("steps"));
+                        companion,owner,args.getAsJsonArray("steps"));
                     run.sequence=sequenceTask;
                     task=sequenceTask;
                 } else if ("smelt".equals(op)) {

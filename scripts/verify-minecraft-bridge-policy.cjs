@@ -16,6 +16,8 @@ assert.equal(new Set(safeGatherResources).size,safeGatherResources.length,'resou
 const coreGateSource=fs.readFileSync(path.join(root,'src/lib/agent/core/minecraftAiGate.ts'),'utf8');
 for(const resource of safeGatherResources)assert.ok(coreGateSource.includes(resource+':'),
   'Core AI gate knows the safe resource '+resource);
+assert.ok(coreGateSource.includes('shared safe vanilla resource catalog'),
+  'Core Minecraft instructions describe the shared safe resource catalog');
 const playerEngineSource=fs.readFileSync(path.join(root,'src/lib/agent/windows/playerEngineBridge.ts'),'utf8');
 assert.ok(playerEngineSource.includes('new Set<string>(MINECRAFT_SAFE_GATHER_RESOURCES)'),
   'PlayerEngine uses the shared resource catalog');

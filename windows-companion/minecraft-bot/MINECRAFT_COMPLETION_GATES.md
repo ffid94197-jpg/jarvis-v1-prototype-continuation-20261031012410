@@ -191,3 +191,33 @@ Separately, the Internet-corpus validator's Node.js 22.16.0 regression harness p
 - The sidecar now uses a 30-second ACK window for local-model `natural_goal` interpretation and real inventory/window transactions (`craft_item`, villager inspection/trading, container transfer, enchanting and bounded hostile attacks). Short status, observation, goal-admission and dig commands retain an 8-second window.
 - This remains bounded below the existing 79-second HTTP companion deadline. The bot lock is not held during the ACK wait, so the longer transaction window does not delay explicit stop.
 - Local typed-command/timeout harness: 10/10 tests passed, including protocol parity and command-specific deadlines. Offline contracts do not prove a particular server operation finishes within its deadline or certify real Minecraft transactions.
+
+## 2026-11-06: repair owner-grounded wheat natural-language routing
+
+- The November 5 wheat-language edit left a malformed `wheatRequest` expression and duplicated the remainder of `language_goal.cjs`. The companion imports that module at startup, so the malformed source was a blocking integration regression.
+- Restored the last clean parser baseline and reapplied the wheat intent as one bounded typed goal. Natural requests must name the wheat count, 1x1–4x4 field dimensions and exact origin; the existing `friend_protocol.cjs` and `wheat_goal.cjs` validators enforce target count 1–16 and world-coordinate bounds. No field origin is inferred.
+- Executed the actual `verify_language_goal.cjs` suite in a source-isolated V8/CommonJS harness: **33/33 PASS**, including all five new wheat-intent cases. The harness loaded the actual current language, protocol, resource, recipe, smelt, crop, sequence, structure, combat, container and wheat modules; only Node's assert/process boundary was shimmed. The test file also syntax-compiles after stripping its Node shebang.
+- This remains source-isolated regression evidence, not a full installed Node/Mineflayer runtime. The full Minecraft offline gate runner, Windows companion/Node startup, Java server and real wheat farming were **not run**. No GitHub Actions were used. Live Minecraft acceptance remains separate.
+
+## 2026-11-06: align Core AI farm instructions with native goal schemas
+
+- The Core Minecraft system prompt incorrectly directed wheat farming to `farm_crop`, even though the native schema has a separate `farm_wheat` goal and `farm_crop` accepts carrots/potatoes only. This mismatch could cause an otherwise valid owner wheat request to be rejected by the Core goal gate.
+- Corrected the model instructions: wheat maps to `farm_wheat` with owner-supplied origin, 1–4 width/depth and targetCount 1–16; carrots/potatoes map to `farm_crop` with exact crop, origin, dimensions and count.
+- Added six assertions to `scripts/verify-minecraft-natural-language-routing.cjs`: explicit prompt routing, removal of the old mismatch, carrot admission and crop/wheat substitution denials. A source-contract check passed **7/7**, and the modified CJS test script syntax-compiles.
+- The full TypeScript transpile/Guardian natural-language test, full Minecraft offline gate runner, Windows companion, and live crop farming were **not run**. No GitHub Actions were used.
+
+## 2026-11-06: contextual natural-language routing for opted-in Minecraft mode
+
+- Previously, the Core Minecraft classifier required an explicit Minecraft reference or a narrow resource term. Ordinary in-game phrases such as “build me a small house” or “farm wheat” were not routed to the AI planner even when the owner had explicitly enabled both the Minecraft LAN companion and AI planner. This contradicted the natural-language prompt.
+- Added an explicit context parameter to the classifier. The Core supplies it only when both `JARVIS_MINECRAFT_LAN_ENABLED=1` and `JARVIS_MINECRAFT_AI_PLANNER_ENABLED=1`; without that opt-in, generic house/farm language remains outside the Minecraft route. Contextual routing requires a known Minecraft gameplay noun plus an action intent, and explicit browser/workspace terms block the contextual match. Exact “stop/pause/cancel/halt” and inventory readback questions are recognized in the opted-in context; punctuation is normalized for readback questions.
+- The bounded native shelter goal now accepts “small/simple/basic house” as an alias for shelter/hut. An unqualified “build me a house” is still not silently reduced to a small shelter; the owner must specify a bounded size/shape.
+- Added twelve regression assertions to `scripts/verify-minecraft-natural-language-routing.cjs` covering contextual routing, browser/workspace/media false positives (including resource words in a spreadsheet), read-only inventory questions, small-house admission and unbounded-house denial. Executed the actual extracted classifier source in a source-isolated V8 harness: **11/11 PASS**; separately exercised the exact shelter/house regexes extracted from Core source: **5/5 PASS**. The updated CJS test script syntax-compiles.
+- The complete TypeScript transpile/Guardian natural-language suite, full Minecraft offline gate runner, Windows companion and live house build were **not run**. No GitHub Actions were used.
+
+## 2026-11-06: align PlayerEngine gather coverage with the native resource catalog
+
+- Found a cross-layer mismatch: the Core gate and native companion accepted 33 safe vanilla gather resources, while the Windows Guardian policy and PlayerEngine executor each hard-coded only ten. Valid owner requests for sand, gravel, coal, copper, redstone, lapis, emerald, quartz, and other supported resources could therefore be rejected before reaching AltoClef.
+- Added `src/lib/agent/core/minecraftResources.ts` as the shared 33-item safe vanilla catalog and wired both the Guardian policy and PlayerEngine executor to it. The Core prompt now describes the same catalog. The Java bridge still independently requires `TaskCatalogue.taskExists(item)`; the companion protocol remains authoritative and unchanged.
+- Extended `scripts/verify-minecraft-bridge-policy.cjs` to enforce exact catalog parity with `resource_goal.cjs`, verify all 33 resources across Core/Guardian/companion, and reject bedrock, barrier, command blocks and TNT.
+- Source-isolated validation: **8/8 cross-layer contract checks passed**; actual companion `friend_protocol.cjs` accepted **33/33** safe resource goals and denied all four unsafe examples. The updated CJS policy test syntax-compiles.
+- Full TypeScript transpilation, Windows PlayerEngine IPC, Java/Fabric build and live resource gathering were **not run**. No GitHub Actions were used.

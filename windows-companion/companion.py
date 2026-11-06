@@ -999,7 +999,10 @@ def minecraft_command(body):
         pending={'event':threading.Event(),'result':None,'process':bot_proc}
         with bot_ack_lock:bot_ack_waiters[request_id]=pending
         try:
-            message=build_minecraft_message(body,request_id)
+            try:
+                message=build_minecraft_message(body,request_id)
+            except ValueError as contract_error:
+                return {'ok':False,'error':'Minecraft command contract rejected: '+str(contract_error)}
             bot_proc.stdin.write(json.dumps(message)+'\n')
             bot_proc.stdin.flush()
             if not pending['event'].wait(16 if body.get('command') == 'natural_goal' else 8):

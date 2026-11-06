@@ -15,7 +15,7 @@
     "test:evolution-native": "node scripts/verify-evolution-native.cjs",
     "test:evolution-core-offline": "node scripts/verify-evolution-core-offline.cjs",
     "test:evolution-learn-offline": "node scripts/verify-evolution-learn-offline.cjs",
-    "test:minecraft-playerengine-ipc": "node integrations/ai-companion-bridge/verify-guardian-ipc-client.cjs && node integrations/ai-companion-bridge/verify-native-loopback.cjs",
+    "test:minecraft-playerengine-ipc": "node integrations/ai-companion-bridge/verify-guardian-ipc-client.cjs && node integrations/ai-companion-bridge/verify-native-loopback.cjs && node scripts/verify-native-craft-proof.cjs",
     "test:memory-contracts": "node scripts/verify-memory-contracts.cjs",
     "test:memory-route": "node scripts/verify-memory-route.cjs",
     "test:local-fallback": "node scripts/verify-local-fallback.cjs",

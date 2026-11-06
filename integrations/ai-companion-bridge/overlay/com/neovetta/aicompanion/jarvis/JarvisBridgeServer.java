@@ -2,6 +2,10 @@ package com.neovetta.aicompanion.jarvis;
 
 import adris.altoclef.AltoClefController;
 import adris.altoclef.TaskCatalogue;
+import adris.altoclef.tasks.CraftInInventoryTask;
+import adris.altoclef.tasks.container.CraftInTableTask;
+import adris.altoclef.tasksystem.Task;
+import adris.altoclef.util.RecipeTarget;
 import adris.altoclef.tasks.InteractWithBlockTask;
 import adris.altoclef.tasks.movement.GetToBlockTask;
 import adris.altoclef.tasks.misc.EquipArmorTask;
@@ -13,7 +17,6 @@ import adris.altoclef.tasks.resources.CollectCropTask;
 import adris.altoclef.tasks.container.SmeltInFurnaceTask;
 import adris.altoclef.util.SmeltTarget;
 import adris.altoclef.util.ItemTarget;
-import adris.altoclef.tasksystem.Task;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -81,6 +84,37 @@ public final class JarvisBridgeServer {
 
     private JarvisBridgeServer() {}
 
+    private static final class JarvisCraftInInventoryTask extends CraftInInventoryTask {
+        private final Run run;
+        JarvisCraftInInventoryTask(RecipeTarget target,Run run) {
+            super(target);
+            this.run=run;
+        }
+        @Override protected Task onResourceTick(AltoClefController controller) {
+            int before=countItem(run.entity,run.item);
+            Task next=super.onResourceTick(controller);
+            int after=countItem(run.entity,run.item);
+            if(after>before) run.craftProofCount+=after-before;
+            return next;
+        }
+    }
+
+    private static final class JarvisCraftInTableTask extends CraftInTableTask {
+        private final Run run;
+        JarvisCraftInTableTask(RecipeTarget[] targets,Run run) {
+            super(targets);
+            if(targets.length!=1) throw new IllegalArgumentException("single-output-craft-required");
+            this.run=run;
+        }
+        @Override protected Task onResourceTick(AltoClefController controller) {
+            int before=countItem(run.entity,run.item);
+            Task next=super.onResourceTick(controller);
+            int after=countItem(run.entity,run.item);
+            if(after>before) run.craftProofCount+=after-before;
+            return next;
+        }
+    }
+
     private static final class Run {
         final UUID companion;
         final UUID coreTaskId;
@@ -100,6 +134,9 @@ public final class JarvisBridgeServer {
         int transferPlayerAfter;
         int transferContainerBefore;
         int transferContainerAfter;
+        String craftGoal;
+        int craftTargetCount;
+        int craftProofCount;
         String gatherGoal;
         String gatherResource;
         int gatherTargetCount;
@@ -792,7 +829,21 @@ public final class JarvisBridgeServer {
                     run.item = item;
                     run.initialCount = current;
                     run.addedCount = count;
-                    task = TaskCatalogue.getItemTask(item, current + count);
+                    if ("craft".equals(op)) {
+                        run.craftGoal="craft";
+                        run.craftTargetCount=count;
+                        run.craftProofCount=0;
+                        Task craftTask=TaskCatalogue.getItemTask(item,current+count);
+                        if(craftTask instanceof CraftInInventoryTask inventoryTask) {
+                            task=new JarvisCraftInInventoryTask(inventoryTask.getRecipeTarget(),run);
+                        } else if(craftTask instanceof CraftInTableTask tableTask) {
+                            task=new JarvisCraftInTableTask(tableTask.getRecipeTargets(),run);
+                        } else {
+                            throw new IllegalArgumentException("verified-craft-task-not-supported");
+                        }
+                    } else {
+                        task = TaskCatalogue.getItemTask(item, current + count);
+                    }
                 } else if ("equip".equals(op)) {
                     String itemName=field(args,"item"), destination=field(args,"destination");
                     if (!itemName.matches("[a-z0-9_]{1,64}") ||
@@ -879,6 +930,9 @@ public final class JarvisBridgeServer {
                     if (!"running".equals(run.state)) return;
                     boolean added = run.item != null &&
                             countItem(run.entity,run.item)>=run.initialCount+run.addedCount;
+                    boolean crafted=run.craftGoal!=null && added &&
+                        run.craftProofCount>=run.craftTargetCount;
+                    boolean itemProved=run.craftGoal!=null?crafted:added;
                     boolean arrived = run.arrival != null &&
                             run.entity.getBlockPos().isWithinDistance(run.arrival,2.5);
                     boolean equipped = run.equipItem != null && isEquipped(run.entity,
@@ -897,7 +951,7 @@ public final class JarvisBridgeServer {
                     boolean farmProved=run.cropGoal!=null &&
                             run.harvestedCells>=run.cropTargetCount &&
                             countItem(run.entity,run.cropItem)>=run.cropInitialCount+run.cropTargetCount;
-                    boolean proved = added||arrived||equipped||changedBlock||interacted||killed ||farmProved||
+                    boolean proved = itemProved||arrived||equipped||changedBlock||interacted||killed ||farmProved||
                             (run.endgame != null && run.endgame.completed()) ||
                             (run.sequence != null && run.sequence.isFinished()) ||
                             (run.volume != null && run.volume.complete());
@@ -934,14 +988,41 @@ public final class JarvisBridgeServer {
         }
         snapshot.addProperty("safetyStopped",safetyStopped.contains(companionId));
         snapshot.addProperty("recoveryRequired",journal.hasUnresolved(companionId));
-        for (Run candidate : tasks.values()) {
+        Run statusRun=tasks.get(taskId);
+        // Status evidence is task-bound: never return another task from the
+        // same Core request merely because HashMap iteration found it first.
+        for (Run candidate : statusRun==null ? java.util.Collections.<Run>emptyList() :
+                java.util.Collections.singletonList(statusRun)) {
             if (!candidate.companion.equals(companionId) ||
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
                     (candidate.endgame == null && candidate.cropGoal == null &&
                      candidate.smeltGoal == null && candidate.sequence == null &&
-                     candidate.gatherGoal == null && candidate.volume == null &&
+                     candidate.gatherGoal == null && candidate.craftGoal == null && candidate.volume == null &&
                      candidate.transferItem == null && candidate.trade == null &&
                      candidate.enchant == null)) continue;
+            if(candidate.craftGoal!=null) {
+                int current=countItem(companion,candidate.item);
+                int craftedCount=Math.max(0,candidate.craftProofCount);
+                boolean complete=candidate.state.equals("observed") &&
+                    current>=candidate.initialCount+candidate.craftTargetCount &&
+                    craftedCount>=candidate.craftTargetCount;
+                snapshot.addProperty("nativeGoal","craft");
+                JsonObject summary=new JsonObject();
+                summary.addProperty("goal","craft");
+                summary.addProperty("status",complete?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("item",candidate.item);
+                summary.addProperty("targetCount",candidate.craftTargetCount);
+                JsonObject milestones=new JsonObject();
+                milestones.addProperty("craftDone",complete);
+                milestones.addProperty("initialCount",candidate.initialCount);
+                milestones.addProperty("currentCount",current);
+                milestones.addProperty("craftProofCount",candidate.craftProofCount);
+                milestones.addProperty("craftedCount",craftedCount);
+                summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
             if(candidate.enchant!=null) {
                 JarvisNativeOwnerEnchant.Result result=candidate.enchant;
                 snapshot.addProperty("nativeGoal","enchant");

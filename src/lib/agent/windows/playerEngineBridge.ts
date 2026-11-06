@@ -7,6 +7,7 @@ import {randomUUID} from "node:crypto";
 import {db} from "@/lib/db";
 import type {GuardianDecision} from "../guardian/guardian";
 import type {DesktopPrepared} from "./policy";
+import {verifyNativeCraftReceipt} from "../core/minecraftCraftProof";
 type Packet = {version:number;taskId:string;idempotencyKey:string;nonce:string;worldId:string;
   observedAt:number;status:string;observations?:Record<string,unknown>};
 type SendRequest={taskId:string;idempotencyKey:string;operation:string;worldId:string;
@@ -691,7 +692,7 @@ export async function runGuardianApprovedPlayerEngine(
         observedEquipment(polled,item,equipDestination) : false;
       const defeated=op==="combat" && polled.observations?.targetAlive===false;
       const nativeTransfer=polled.observations?.missionStatus as Record<string,unknown>|undefined;
-      const transferProof=op==="transfer" && nativeTransfer &&
+      const transferProof=Boolean(op==="transfer" && nativeTransfer &&
         nativeTransfer.goal==="transfer" && nativeTransfer.status==="complete" &&
         nativeTransfer.item===item &&
         nativeTransfer.targetCount===requestedCount &&
@@ -699,22 +700,28 @@ export async function runGuardianApprovedPlayerEngine(
         (nativeTransfer.milestones as Record<string,unknown>|undefined)?.transferDone===true &&
         (String((desktop as unknown as Record<string,unknown>).operationDirection)==="deposit"?
           physicallyAdded===Number(before)-requestedCount:
-          physicallyAdded===Number(before)+requestedCount);
+          physicallyAdded===Number(before)+requestedCount));
+      const nativeCraft=polled.observations?.missionStatus;
+      const craftVerified=op==="craft" && typeof item==="string" &&
+        Number.isSafeInteger(before) &&
+        verifyNativeCraftReceipt(nativeCraft,{
+          item,count:requestedCount,inventoryBefore:Number(before),
+          inventoryAfter:physicallyAdded});
       const physicalProof=op==="travel"?arrived:
         op==="transfer"?transferProof:
         op==="dig"||op==="build"||op==="interact"?blockedResult:
         op==="equip"?equipped:
         op==="combat"?defeated:
+        op==="craft"?craftVerified:
         Boolean(item && physicallyAdded>=Number(before)+requestedCount);
       const proved=polled.status==="observed" && physicalProof;
-      if(op==="craft" && proved) {
-        // An inventory increase alone is not evidence that the item was crafted.
-        return {ok:false,error:"Item acquired but crafting-method proof not yet available",
-          evidence:{backend:"playerengine",physicalAcquisitionObserved:true,craftVerified:false}};
-      }
       return {ok:proved,evidence:{backend:"playerengine",status:polled.status,
-          observed:proved,inventory:after.items,position:after.position},
-        error:proved?undefined:"Native completion was not verified from actual game state"};
+          observed:proved,inventory:after.items,position:after.position,
+          craftVerified:op==="craft"?craftVerified:undefined,
+          missionStatus:op==="craft"?nativeCraft:undefined},
+        error:proved?undefined:(op==="craft"?
+          "Native craft lacks same-task craft-task output witness and inventory-delta proof":
+          "Native completion was not verified from actual game state")};
     }
     // Deliberately leave active until a later authenticated status query settles it.
     return {ok:false,error:"Native task timed out; effect outcome unknown, do not retry"};

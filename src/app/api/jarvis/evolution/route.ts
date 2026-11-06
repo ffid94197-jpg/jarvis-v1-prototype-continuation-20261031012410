@@ -51,7 +51,8 @@ export async function GET(req:NextRequest){
         enabled:process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1",
         scope:"JARVIS_AGENT_WORKSPACE safe non-protected files",maxAutomaticRepairsPerTask:1,
         verification:"static syntax only; project tests/runtime acceptance remain separate"},
-      autoExecution:false,ownerApprovalRequired:true},{headers});
+      automaticSkillExecution:false,automaticRepairExecutionEnabled:process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1",
+      ownerApprovalRequiredForSkills:true},{headers});
   }catch(e){return error(e);}
 }
 export async function POST(req:NextRequest){

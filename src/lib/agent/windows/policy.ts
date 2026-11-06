@@ -554,7 +554,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       prepared.goal=args.goal as string;
       if(args.durationSeconds!==undefined)prepared.durationSeconds=args.durationSeconds as number;
       const fields=["resource","targetCount","destination","arrivalRange","steps","position","block","axis",
-        "length","width","depth","height","shape","item","destinationSlot","crop","operation"];
+        "length","width","depth","height","shape","item","destinationSlot","crop","operation","mob","entityId"];
       for(const key of fields)if(args[key]!==undefined) {
         // "operation" in the original goal means deposit/withdraw; do not
         // override the Windows companion's transport operation discriminator.

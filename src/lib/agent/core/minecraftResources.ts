@@ -9,3 +9,12 @@ export const MINECRAFT_SAFE_GATHER_RESOURCES = Object.freeze([
 ] as const);
 
 export type MinecraftSafeGatherResource = typeof MINECRAFT_SAFE_GATHER_RESOURCES[number];
+
+/** Bounded vanilla construction materials shared by Core, Guardian, PlayerEngine and the native companion. */
+export const MINECRAFT_SAFE_BUILD_MATERIALS = Object.freeze([
+  "cobblestone", "cobbled_deepslate", "stone", "dirt",
+  "oak_planks", "spruce_planks", "birch_planks", "stone_bricks",
+  "oak_log", "glass", "sandstone", "netherrack"
+] as const);
+
+export type MinecraftSafeBuildMaterial = typeof MINECRAFT_SAFE_BUILD_MATERIALS[number];

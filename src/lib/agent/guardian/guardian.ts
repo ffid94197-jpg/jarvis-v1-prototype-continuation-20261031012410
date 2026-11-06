@@ -39,7 +39,7 @@ export interface PreparedArgs {
   integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;operation?:string;arguments?:Record<string,unknown>};
   memory?: {ownerId:string;query:string;limit:number};
   world?: {ownerId:string;query:string;limit:number};
-  evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill";
+  evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill"|"diagnose"|"auto_apply_repair"|"verify_repair";
     id?:string;sourceTaskId?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
 }
 
@@ -96,7 +96,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "minecraft_companion_stop",
   "adoption_stage_github", "adoption_list", "adoption_skill", "adoption_mcp_list", "adoption_mcp_call",
   "evolution_skill_stage", "evolution_skill_list", "evolution_skill_expand", "evolution_skill_run",
-  "evolution_repair_stage", "evolution_repair_list", "evolution_skill_learn", "evolution_owner_control",
+  "evolution_repair_stage", "evolution_repair_list", "evolution_skill_learn", "evolution_diagnose", "evolution_repair_apply", "evolution_owner_control",
 ] as const;
 
 export type GuardianTool = (typeof GUARDIAN_KNOWN_TOOLS)[number];
@@ -156,7 +156,7 @@ export async function authorizeToolCall(
           decision=deny("Owner-only trusted control plane authorization required");break;
         }
         const permitted=new Set(["stage_skill","approve_skill","disable_skill","learn_skill",
-          "stage_repair","approve_repair","apply_repair","rollback_repair"]);
+          "stage_repair","approve_repair","apply_repair","rollback_repair","verify_repair"]);
         const action=rawArgs.action;
         if(typeof action!=="string"||!permitted.has(action) ||
            Object.keys(rawArgs).some(k=>!["action","id","sourceTaskId"].includes(k))){
@@ -178,7 +178,7 @@ export async function authorizeToolCall(
           decision=deny("Exact type-matching candidate ID required");break;
         }
         decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
-          action:action as "stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill",
+          action:action as "stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill"|"verify_repair",
           id:typeof rawArgs.id==="string"?rawArgs.id:undefined,
           sourceTaskId:typeof rawArgs.sourceTaskId==="string"?rawArgs.sourceTaskId:undefined}}};
         break;
@@ -225,6 +225,23 @@ export async function authorizeToolCall(
         }
         decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
           action:"expand_skill",id:rawArgs.id,inputs:inputs as Record<string,unknown>}}};break;
+      }
+      case "evolution_diagnose": {
+        if(!ctx.ownerId || Object.keys(rawArgs).length!==0){
+          decision=deny("Read-only runtime diagnosis requires an authenticated owner and no arguments");break;
+        }
+        decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,action:"diagnose"}}};break;
+      }
+      case "evolution_repair_apply": {
+        if(process.env.JARVIS_SELF_REPAIR_AUTO_APPLY!=="1"){
+          decision=deny("Bounded automatic repair is disabled by owner policy");break;
+        }
+        if(!ctx.ownerId || Object.keys(rawArgs).some(k=>k!=="id") ||
+           typeof rawArgs.id!=="string" || !/^rp_[0-9a-f]{32}$/.test(rawArgs.id)){
+          decision=deny("A fresh staged repair ID and authenticated owner are required");break;
+        }
+        decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
+          action:"auto_apply_repair",id:rawArgs.id}}};break;
       }
       case "evolution_repair_stage": {
         if(!ctx.ownerId || Object.keys(rawArgs).some(k=>k!=="candidate") ||

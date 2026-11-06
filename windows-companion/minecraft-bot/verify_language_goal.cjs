@@ -13,6 +13,20 @@ ok(L.directIntent('please protect me').command.goal==='guard','natural protect')
 ok(L.directIntent('Can you please protect me?').command.goal==='guard','polite voice protect');
 ok(L.directIntent('Could you craft 2 chests?').command.item==='chest','polite natural craft');
 ok(L.directIntent('mine 6 diamonds').command.resource==='diamond','natural gather');
+const wheat=L.directIntent('farm 4 wheat in a field 2 by 2 at 100 64 100');
+ok(wheat?.ok===true&&wheat.command.goal==='farm_wheat'&&
+  wheat.command.targetCount===4&&wheat.command.width===2&&wheat.command.depth===2&&
+  wheat.command.position.x===100&&wheat.command.position.y===64&&wheat.command.position.z===100,
+  'natural wheat field preserves exact owner quantity, dimensions and origin');
+const wheatX=L.directIntent('grow three wheat in my farm 2x3 from 100 64 100');
+ok(wheatX?.ok===true&&wheatX.command.goal==='farm_wheat'&&wheatX.command.targetCount===3&&
+  wheatX.command.width===2&&wheatX.command.depth===3,'natural wheat accepts x dimensions and word counts');
+ok(L.directIntent('farm 17 wheat in a field 2 by 2 at 100 64 100')?.ok===false,
+  'wheat target above native limit denied');
+ok(L.directIntent('farm 4 wheat in a field 5 by 2 at 100 64 100')?.ok===false,
+  'wheat field above native dimension limit denied');
+ok(L.directIntent('farm 4 wheat in a field 2 by 2')===null,
+  'wheat field without owner-supplied origin is not authorized');
 ok(L.directIntent('make 2 chests').command.item==='chest','natural craft');
 ok(L.directIntent('do not gather wood').ok===false,'negation fail closed');
 ok(L.canonicalIntent({command:'auto_goal',goal:'craft',item:'chest',targetCount:2}).ok,'typed craft');

@@ -37,10 +37,13 @@ run(check({'operation':'windows_shell','command':'whoami'}) is not None,'unknown
 run(check({'operation':'open_url','url':None}) is not None,'null URL denied')
 # Bounded Minecraft reconnect policy: explicit opt-in, finite retries, no task replay.
 run(not auto_reconnect_enabled('jarvis',{}),'Minecraft reconnect disabled by default')
-run(not auto_reconnect_enabled('mine-ai-mcp',{'JARVIS_MINECRAFT_AUTO_RECONNECT':'1'}),
-    'external Mine AI MCP engine excluded from local reconnect')
-run(auto_reconnect_enabled('jarvis',{'JARVIS_MINECRAFT_AUTO_RECONNECT':'1'}),
-    'native JarvisBuddy reconnect requires exact explicit opt-in')
+run(not auto_reconnect_enabled('jarvis',{'JARVIS_MINECRAFT_AUTO_RECONNECT':'1'}),
+    'reconnect requires the existing LAN integration opt-in too')
+run(not auto_reconnect_enabled('mine-ai-mcp',{'JARVIS_MINECRAFT_LAN_ENABLED':'1',
+    'JARVIS_MINECRAFT_AUTO_RECONNECT':'1'}),'external Mine AI MCP engine excluded from local reconnect')
+run(auto_reconnect_enabled('jarvis',{'JARVIS_MINECRAFT_LAN_ENABLED':'1',
+    'JARVIS_MINECRAFT_AUTO_RECONNECT':'1'}),
+    'native JarvisBuddy reconnect requires both explicit local opt-ins')
 class _ReconnectClock:
     def __init__(self): self.now=1000.0
     def __call__(self): return self.now

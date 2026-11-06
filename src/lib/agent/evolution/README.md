@@ -186,6 +186,10 @@ all of these limits:
 
 - The target remains inside JARVIS_AGENT_WORKSPACE; paths are relative,
   bounded UTF-8 regular files with no symlink escape.
+- To repair project source, the trusted operator must configure
+  JARVIS_AGENT_WORKSPACE to a dedicated working checkout that JARVIS is
+  authorized to edit. The vault cannot reach outside that root; do not point it
+  at the original production PC Work checkout without a deliberate owner decision.
 - Guardian/auth/evolution/API, tool executor, Windows execution bridge,
   Core loop, effect journal, task state, verifier, autonomy policy and other
   protected control-plane files are immune to self-patching.

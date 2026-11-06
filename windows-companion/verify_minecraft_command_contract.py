@@ -5,7 +5,7 @@ import unittest
 import re
 from pathlib import Path
 
-from minecraft_command_contract import MINECRAFT_COMMAND_FIELDS, build_minecraft_message
+from minecraft_command_contract import MINECRAFT_COMMAND_FIELDS, build_minecraft_message, minecraft_ack_timeout_seconds
 
 
 class MinecraftCommandForwardingTests(unittest.TestCase):
@@ -91,6 +91,16 @@ class MinecraftCommandForwardingTests(unittest.TestCase):
                 "operation": "minecraft_command", "command": "status",
                 "operationDirection": "deposit",
             }, "0123456789abcdef")
+
+    def test_ack_deadlines_match_slow_transactions(self):
+        for command in ("natural_goal", "craft_item", "inspect_villager",
+                        "trade_villager", "transfer_container", "enchant_item",
+                        "attack_hostile"):
+            self.assertEqual(minecraft_ack_timeout_seconds(command), 30)
+        for command in ("observe", "auto_goal", "auto_status", "dig_block"):
+            self.assertEqual(minecraft_ack_timeout_seconds(command), 8)
+        self.assertLessEqual(max(minecraft_ack_timeout_seconds(c) for c in
+            ("natural_goal", "trade_villager", "transfer_container", "enchant_item")), 30)
 
     def test_invalid_transport_ids_fail_closed(self):
         with self.assertRaises(ValueError):

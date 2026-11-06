@@ -27,7 +27,7 @@ from native_uia import validate_request as validate_native_request, run_native
 from browser_net_guard import is_public_http_url
 from desktop_control import check_input as validate_desktop_input, run_action as run_desktop_action, discover_installed, start_emergency_monitor
 from minecraft_supervisor import ReconnectBudget, auto_reconnect_enabled
-from minecraft_command_contract import build_minecraft_message
+from minecraft_command_contract import build_minecraft_message, minecraft_ack_timeout_seconds
 
 HOST = '127.0.0.1'
 PORT = 20189
@@ -1013,7 +1013,7 @@ def minecraft_command(body):
 
         # Deliberately outside bot_lock: minecraft_stop and service shutdown can
         # terminate the exact child while a natural-language model is thinking.
-        if not pending['event'].wait(16 if body.get('command') == 'natural_goal' else 8):
+        if not pending['event'].wait(minecraft_ack_timeout_seconds(body.get('command'))):
             return {'ok':False,'error':'Minecraft bot did not acknowledge action within deadline; outcome unknown.'}
         ack = pending.get('result')
         if not isinstance(ack, dict):

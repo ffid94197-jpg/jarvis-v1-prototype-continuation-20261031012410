@@ -136,3 +136,84 @@ Registry/backup directories are created with owner-only filesystem mode requests
 \`npm run test:evolution-native\` executes only a disposable local workspace fixture. It checks stage/approve/expand, Crucible validation, source SHA pinning, patch apply/rollback and traversal rejection, without running arbitrary code or GitHub Actions.
 
 This command is **provided but has not been executed here**. Full TypeScript/Next.js build, real Windows tests, live error-driven repair behavior and independent security acceptance are still not certified. Do not report them as complete.
+
+## Autonomous self-evolution continuation (2026-11-06)
+
+The prototype now adds a first native, bounded diagnosis → repair → verification
+path on top of Skill Forge and Repair Vault.
+
+### Self-diagnosis
+
+- **evolution_diagnose** reads only the authenticated owner's durable task, step,
+  effect and Guardian audit records.
+- It classifies observed signals such as provider quota/auth/network faults,
+  Guardian denials, planner/syntax errors, runtime type failures, missing
+  resources and unsettled effects.
+- It returns bounded task references, categories, recurrence counts and
+  recommended next actions. It does **not** return raw objectives, tool
+  arguments, file contents, provider payloads or credentials.
+- A classification is not proof of a source-level root cause. Code repair
+  still requires a fresh source inspection and exact SHA-bound patch.
+
+### Continuous bounded learning
+
+After a task is durably settled as **completed**, Core checks whether its trace
+contains 1–8 fully paired successful receipts from the existing safe learning
+allowlist (read_file, list_dir, create_folder, app discovery and
+capability discovery). Eligible traces are passed through the existing
+learnFromCompletedTask and Forge/Crucible pipeline.
+
+- The learning action is admitted through the durable effect journal before
+  the registry write.
+- The learned candidate stores same-owner source task provenance, allowing
+  crash reconciliation without blindly replaying the learning operation.
+- Learning only stages a declarative skill. It never approves or runs it.
+- Failed, partial, denied, effect-uncertain, oversized or unsupported traces
+  are not learned.
+
+### Bounded autonomous code repair
+
+Automatic repair remains **OFF by default**. A trusted server operator must
+explicitly set:
+
+**JARVIS_SELF_REPAIR_AUTO_APPLY=1**
+
+When enabled, Core may call **evolution_repair_apply** for a staged repair, subject to
+all of these limits:
+
+- The target remains inside JARVIS_AGENT_WORKSPACE; paths are relative,
+  bounded UTF-8 regular files with no symlink escape.
+- Guardian/auth/evolution/API, tool executor, Windows execution bridge,
+  Core loop, effect journal, task state, verifier, autonomy policy and other
+  protected control-plane files are immune to self-patching.
+- The patch must match the full current SHA-256 and exactly one old-text span.
+- At most one automatic repair may be applied in a Core task.
+- A static syntax preflight must pass before the write. The write is journaled
+  before effect, backed up, atomically replaced and checked by exact readback.
+- A post-apply static syntax check must pass. Syntax failure triggers rollback
+  only while the target still exactly matches the candidate SHA. If another
+  writer changed it, rollback refuses to overwrite that change.
+- Crash recovery reconciles the repair ledger; ambiguous outcomes remain
+  effect_unknown and are never blindly retried.
+
+The current verifier parses JSON and JavaScript/TypeScript syntax only. It does
+**not** execute the patched program, run the project's unit tests, perform a
+full TypeScript typecheck, build Next.js/Fabric, or certify Windows runtime
+behaviour. Those remain separate acceptance gates. The normal owner API
+approval/apply/rollback path remains available when automatic repair is off.
+
+### Interfaces and local contract
+
+- GET /api/jarvis/evolution now includes owner-scoped runtime diagnostics and
+  the active repair policy summary.
+- Owner-only POST actions include verify_repair; apply_repair performs
+  static syntax verification after a successful write and reports rollback
+  when syntax validation fails.
+- Model-facing evolution_diagnose is read-only. Model-facing
+  evolution_repair_apply is denied unless the trusted server flag is enabled.
+- Run npm run test:self-evolution-offline for the disposable offline contract.
+
+This is a bounded self-evolution implementation, not unrestricted autonomous
+modification of JARVIS itself. Full repository build, full test suites,
+Windows field verification and independent security acceptance are still
+required before calling the subsystem production-complete.

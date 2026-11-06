@@ -191,8 +191,9 @@ all of these limits:
   authorized to edit. The vault cannot reach outside that root; do not point it
   at the original production PC Work checkout without a deliberate owner decision.
 - Guardian/auth/evolution/API, tool executor, Windows execution bridge,
-  Core loop, effect journal, task state, verifier, autonomy policy and other
-  protected control-plane files are immune to self-patching.
+  Core loop, effect journal, task state, verifier, autonomy policy, database,
+  credentials, security infrastructure and other protected control-plane
+  files are immune to self-patching.
 - The patch must match the full current SHA-256 and exactly one old-text span.
 - At most one automatic repair may be applied in a Core task.
 - A static syntax preflight must pass before the write. The write is journaled

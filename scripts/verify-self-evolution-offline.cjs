@@ -105,6 +105,25 @@ const crypto=require("node:crypto");
     assert.equal(verification.automaticRollback,true);
     assert.equal(await fs.readFile(brokenFile,"utf8"),brokenOriginal);
 
+    // A corrupt backup must quarantine the repair rather than claim rollback.
+    const backupRiskFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","backup-risk.js");
+    const backupRiskOriginal="const backupRisk = true;\n";
+    await fs.writeFile(backupRiskFile,backupRiskOriginal,"utf8");
+    const backupRiskSha=crypto.createHash("sha256").update(backupRiskOriginal).digest("hex");
+    const backupRisk=await repair.stageRepair(owner,{
+      path:"src/backup-risk.js",expectedSha256:backupRiskSha,oldText:"true",newText:";",
+      diagnosis:"A deliberately invalid edit verifies backup-integrity quarantine.",
+    });
+    await repair.approveRepair(owner,backupRisk.id);
+    await repair.applyRepair(owner,backupRisk.id);
+    const backupOwnerKey=crypto.createHash("sha256").update(owner).digest("hex").slice(0,40);
+    const backupPath=path.join(process.env.JARVIS_EVOLUTION_ROOT,backupOwnerKey,backupRisk.id+".original");
+    await fs.writeFile(backupPath,"corrupt backup","utf8");
+    const backupRiskResult=await repair.verifyRepair(owner,backupRisk.id);
+    assert.equal(backupRiskResult.state,"effect_unknown");
+    assert.equal(backupRiskResult.effectUnknown,true);
+    assert.equal(await fs.readFile(backupRiskFile,"utf8"),"const backupRisk = ;\n");
+
     // Simulate a process crash after the file replacement but before the
     // repair ledger advances from "applying" to "applied".
     const crashFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","crash.js");

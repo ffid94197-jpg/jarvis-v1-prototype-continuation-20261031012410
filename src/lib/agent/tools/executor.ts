@@ -340,7 +340,7 @@ export async function executeTool(
         }
         if(request.action==="stage_repair"){
           const {stageRepair}=await import("../evolution/repairVault.mjs");
-          const candidate=await stageRepair(ownerId,request.candidate);
+          const candidate=await stageRepair(ownerId,request.candidate,{taskId});
           return {ok:true,tool,evidence:"Repair candidate STAGED, no file modified; owner approval required",
             detail:{...candidate,applied:false,executed:false,ownerApprovalRequired:true}};
         }

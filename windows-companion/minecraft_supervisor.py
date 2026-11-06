@@ -19,7 +19,9 @@ _DELAYS_SECONDS = (2, 4, 8, 16, 30)
 
 def auto_reconnect_enabled(engine: str, env: Mapping[str, str]) -> bool:
     """Only the native Jarvis Mineflayer client supports opt-in reconnection."""
-    return engine == "jarvis" and env.get("JARVIS_MINECRAFT_AUTO_RECONNECT") == "1"
+    return (engine == "jarvis" and
+            env.get("JARVIS_MINECRAFT_LAN_ENABLED") == "1" and
+            env.get("JARVIS_MINECRAFT_AUTO_RECONNECT") == "1")
 
 
 class ReconnectBudget:

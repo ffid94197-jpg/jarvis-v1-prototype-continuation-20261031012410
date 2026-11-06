@@ -8,6 +8,7 @@ import {db} from "@/lib/db";
 import type {GuardianDecision} from "../guardian/guardian";
 import type {DesktopPrepared} from "./policy";
 import {verifyNativeCraftReceipt} from "../core/minecraftCraftProof";
+import {MINECRAFT_SAFE_GATHER_RESOURCES} from "../core/minecraftResources";
 type Packet = {version:number;taskId:string;idempotencyKey:string;nonce:string;worldId:string;
   observedAt:number;status:string;observations?:Record<string,unknown>};
 type SendRequest={taskId:string;idempotencyKey:string;operation:string;worldId:string;
@@ -543,8 +544,7 @@ export async function runGuardianApprovedPlayerEngine(
       }
       if(gathered.has(goal)){
         const spec=desktop as unknown as Record<string,unknown>;
-        const allow=new Set(["logs","planks","sticks","cobblestone",
-          "raw_iron","iron_ingot","diamond","obsidian","flint","netherrack"]);
+        const allow=new Set<string>(MINECRAFT_SAFE_GATHER_RESOURCES);
         if(typeof spec.resource!=="string" || !allow.has(spec.resource) ||
            typeof spec.targetCount!=="number" ||
            !Number.isInteger(spec.targetCount) || spec.targetCount<1 ||

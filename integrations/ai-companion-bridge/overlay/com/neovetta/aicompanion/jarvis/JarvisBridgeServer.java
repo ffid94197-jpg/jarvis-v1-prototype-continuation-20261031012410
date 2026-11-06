@@ -163,6 +163,9 @@ public final class JarvisBridgeServer {
         boolean expectAir;
         String equipDestination;
         String equipItem;
+        String nativeGoal;
+        double arrivalRange=2.5;
+        String combatMob;
         Entity combatTarget;
         volatile long settledAt;
         volatile String state = "running";
@@ -697,13 +700,15 @@ public final class JarvisBridgeServer {
                 long runtimeBudget = budget;
                 if ("endgame".equals(op) || "farm".equals(op) || "smelt".equals(op) || "sequence".equals(op) ||
                     ("gather".equals(op) && args.has("goal")) ||
-                    "shelter".equals(op) || "build_volume".equals(op)) {
+                    "shelter".equals(op) || "build_volume".equals(op) ||
+                    (args.has("goal") && Set.of("craft","equip","travel","defeat_hostile").contains(field(args,"goal")))) {
                     int duration = args.get("durationSeconds").getAsInt();
                     if (duration < 10 || duration > 43200)
                         throw new IllegalArgumentException("mission-duration-out-of-range");
                     runtimeBudget = duration * 1000L;
                 }
                 Run run = new Run(companionId, authorizedCoreTask, ctrl, companion, runtimeBudget);
+                if(args.has("goal"))run.nativeGoal=field(args,"goal");
                 Task task;
                 if ("endgame".equals(op)) {
                     String goal=field(args,"goal");
@@ -818,6 +823,9 @@ public final class JarvisBridgeServer {
                     BlockPos pos = position(args);
                     if (companion.getBlockPos().getSquaredDistance(pos) > 160.0 * 160.0)
                         throw new IllegalArgumentException("travel-range");
+                    double range=args.has("arrivalRange")?args.get("arrivalRange").getAsDouble():2.5;
+                    if(range<1||range>8)throw new IllegalArgumentException("travel-arrival-range");
+                    run.arrivalRange=range;
                     run.arrival = pos;
                     task = new GetToBlockTask(pos);
                 } else if ("gather".equals(op) || "mine".equals(op) || "craft".equals(op)) {
@@ -920,6 +928,13 @@ public final class JarvisBridgeServer {
                             target.getPos().squaredDistanceTo(companion.getPos()) > 12*12 ||
                             !COMBAT_MOBS.contains(Registries.ENTITY_TYPE.getId(target.getType()).getPath()))
                         throw new IllegalArgumentException("combat-target-denied");
+                    if(args.has("goal")){
+                        String requested=field(args,"mob");
+                        if(!"defeat_hostile".equals(run.nativeGoal) ||
+                           !Registries.ENTITY_TYPE.getId(target.getType()).getPath().equals(requested))
+                            throw new IllegalArgumentException("owner-hostile-identity-mismatch");
+                        run.combatMob=requested;
+                    }
                     run.combatTarget=target;
                     task=new KillEntityTask(target);
                 }
@@ -937,7 +952,7 @@ public final class JarvisBridgeServer {
                         run.craftProofCount>=run.craftTargetCount;
                     boolean itemProved=run.craftGoal!=null?crafted:added;
                     boolean arrived = run.arrival != null &&
-                            run.entity.getBlockPos().isWithinDistance(run.arrival,2.5);
+                            run.entity.getBlockPos().isWithinDistance(run.arrival,run.arrivalRange);
                     boolean equipped = run.equipItem != null && isEquipped(run.entity,
                             run.equipItem, run.equipDestination);
                     boolean changedBlock = run.interactiveBefore == null && run.blockPos != null &&
@@ -1002,7 +1017,7 @@ public final class JarvisBridgeServer {
                      candidate.smeltGoal == null && candidate.sequence == null &&
                      candidate.gatherGoal == null && candidate.craftGoal == null && candidate.volume == null &&
                      candidate.transferItem == null && candidate.trade == null &&
-                     candidate.enchant == null)) continue;
+                     candidate.enchant == null && candidate.nativeGoal == null)) continue;
             if(candidate.craftGoal!=null) {
                 int current=countItem(companion,candidate.item);
                 int craftedCount=Math.max(0,candidate.craftProofCount);
@@ -1102,6 +1117,58 @@ public final class JarvisBridgeServer {
                 milestones.addProperty("playerAfter",candidate.transferPlayerAfter);
                 milestones.addProperty("containerBefore",candidate.transferContainerBefore);
                 milestones.addProperty("containerAfter",candidate.transferContainerAfter);
+                summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
+            if("travel".equals(candidate.nativeGoal)) {
+                snapshot.addProperty("nativeGoal","travel");
+                JsonObject summary=new JsonObject();
+                boolean arrived=candidate.state.equals("observed") && candidate.arrival!=null &&
+                    candidate.entity.getBlockPos().isWithinDistance(candidate.arrival,candidate.arrivalRange);
+                summary.addProperty("goal","travel");
+                summary.addProperty("status",arrived?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("arrivalRange",candidate.arrivalRange);
+                JsonObject milestones=new JsonObject();
+                milestones.addProperty("arrived",arrived);
+                if(candidate.arrival!=null){
+                    milestones.addProperty("x",candidate.arrival.getX());
+                    milestones.addProperty("y",candidate.arrival.getY());
+                    milestones.addProperty("z",candidate.arrival.getZ());
+                }
+                summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
+            if("equip".equals(candidate.nativeGoal)) {
+                snapshot.addProperty("nativeGoal","equip");
+                JsonObject summary=new JsonObject();
+                boolean equipped=candidate.state.equals("observed") && candidate.equipItem!=null &&
+                    isEquipped(candidate.entity,candidate.equipItem,candidate.equipDestination);
+                summary.addProperty("goal","equip");
+                summary.addProperty("status",equipped?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("item",candidate.equipItem);
+                summary.addProperty("destination",candidate.equipDestination);
+                JsonObject milestones=new JsonObject();
+                milestones.addProperty("equipped",equipped);
+                summary.add("milestones",milestones);
+                snapshot.add("missionStatus",summary);
+                break;
+            }
+            if("defeat_hostile".equals(candidate.nativeGoal)) {
+                snapshot.addProperty("nativeGoal","defeat_hostile");
+                JsonObject summary=new JsonObject();
+                boolean dead=candidate.state.equals("observed") && candidate.combatTarget!=null &&
+                    !candidate.combatTarget.isAlive();
+                summary.addProperty("goal","defeat_hostile");
+                summary.addProperty("status",dead?"complete":candidate.state);
+                summary.addProperty("since",candidate.since);
+                summary.addProperty("mob",candidate.combatMob);
+                if(candidate.combatTarget!=null)summary.addProperty("entityId",candidate.combatTarget.getId());
+                JsonObject milestones=new JsonObject();
+                milestones.addProperty("targetDead",dead);
                 summary.add("milestones",milestones);
                 snapshot.add("missionStatus",summary);
                 break;

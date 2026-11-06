@@ -144,6 +144,12 @@ ok(MINECRAFT_AI_INSTRUCTIONS.includes('ordinary language'),'main JARVIS natural-
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('same main JARVIS model'),'single JARVIS brain');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('single Minecraft planning capability'),'one native JARVIS capability');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('NEVER start a second bot'),'no second bot');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('wheat farms may use auto_goal farm_wheat'),
+ 'wheat natural-language instructions select the native farm_wheat goal');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('carrot/potato farms may use auto_goal farm_crop'),
+ 'carrot/potato natural-language instructions select the native farm_crop goal');
+no(MINECRAFT_AI_INSTRUCTIONS.includes('wheat and 1x1 to 4x4 carrot/potato farms may use farm_crop'),
+ 'wheat is not routed to the carrot/potato farm_crop goal');
 
 // Persistent native mission may start only after a REAL fresh observation,
 // when the goal matches the owner instruction and both contract gates agree.
@@ -231,6 +237,18 @@ ok(wheat.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_whe
 no(wheat.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_wheat',
  position:{x:3000,y:64,z:3000},width:2,depth:2,targetCount:2}).ok,
  'Remote wheat field cannot be invented by model');
+const carrots=new MinecraftAiGate('In Minecraft, farm 3 carrots in a 2 by 2 field at 2 64 2');
+carrots.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(carrots.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_crop',
+ crop:'carrots',position:{x:2,y:64,z:2},width:2,depth:2,targetCount:3}).ok,
+ 'owner-requested carrot field maps to farm_crop with exact crop/count/dimensions/origin');
+no(carrots.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_crop',
+ crop:'potatoes',position:{x:2,y:64,z:2},width:2,depth:2,targetCount:3}).ok,
+ 'model cannot substitute potatoes for requested carrots');
+no(carrots.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_wheat',
+ position:{x:2,y:64,z:2},width:2,depth:2,targetCount:3}).ok,
+ 'carrot objective cannot be converted to wheat farming');
 
 const house=new MinecraftAiGate('In Minecraft, build me a complete castle');
 house.record('minecraft_companion_command',{command:'observe'},

@@ -46,6 +46,26 @@ for(const s of [
 ])no(isMinecraftAiObjective(s),'do not dispatch: '+s);
 ok(isMinecraftObservationOnlyObjective('Observe my Minecraft inventory'),'read-only observation objective');
 no(isMinecraftObservationOnlyObjective('Observe and follow me in Minecraft'),'follow is an effect');
+ok(isMinecraftAiObjective('Build me a small house',true),
+ 'opted-in Minecraft mode routes ordinary small-house language without requiring a Minecraft keyword');
+ok(isMinecraftAiObjective('Build a small shelter using the blocks I have',true),
+ 'opted-in Minecraft mode routes ordinary shelter language');
+ok(isMinecraftAiObjective('Farm wheat in a 2 by 2 field at 2 64 2',true),
+ 'opted-in Minecraft mode routes ordinary farming language');
+no(isMinecraftAiObjective('Build me a website',true),
+ 'opted-in Minecraft mode does not capture unrelated web development');
+no(isMinecraftAiObjective('Open the chest in Chrome',true),
+ 'explicit browser context prevents Minecraft inference');
+no(isMinecraftAiObjective('Collect 3 diamonds in my spreadsheet',true),
+ 'explicit spreadsheet context prevents even resource-based Minecraft inference');
+no(isMinecraftAiObjective('Pause the video',true),
+ 'media controls are not misrouted to the Minecraft emergency stop');
+ok(isMinecraftObservationOnlyObjective("What's in your inventory?",true),
+ 'inventory readback is read-only in opted-in Minecraft context');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('Build a small house using the blocks I have'),
+ 'Minecraft system prompt demonstrates natural house-building language');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('shelter, hut or house'),
+ 'bounded shelter goal documents house as a supported alias');
 no(isMinecraftObservationOnlyObjective('Observe Minecraft and mine diamonds'),'mining is an effect');
 const {singleInventoryResourceGoal}=out;
 const expected=[
@@ -144,6 +164,12 @@ ok(MINECRAFT_AI_INSTRUCTIONS.includes('ordinary language'),'main JARVIS natural-
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('same main JARVIS model'),'single JARVIS brain');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('single Minecraft planning capability'),'one native JARVIS capability');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('NEVER start a second bot'),'no second bot');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('wheat farms may use auto_goal farm_wheat'),
+ 'wheat natural-language instructions select the native farm_wheat goal');
+ok(MINECRAFT_AI_INSTRUCTIONS.includes('carrot/potato farms may use auto_goal farm_crop'),
+ 'carrot/potato natural-language instructions select the native farm_crop goal');
+no(MINECRAFT_AI_INSTRUCTIONS.includes('wheat and 1x1 to 4x4 carrot/potato farms may use farm_crop'),
+ 'wheat is not routed to the carrot/potato farm_crop goal');
 
 // Persistent native mission may start only after a REAL fresh observation,
 // when the goal matches the owner instruction and both contract gates agree.
@@ -231,6 +257,18 @@ ok(wheat.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_whe
 no(wheat.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_wheat',
  position:{x:3000,y:64,z:3000},width:2,depth:2,targetCount:2}).ok,
  'Remote wheat field cannot be invented by model');
+const carrots=new MinecraftAiGate('In Minecraft, farm 3 carrots in a 2 by 2 field at 2 64 2');
+carrots.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(carrots.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_crop',
+ crop:'carrots',position:{x:2,y:64,z:2},width:2,depth:2,targetCount:3}).ok,
+ 'owner-requested carrot field maps to farm_crop with exact crop/count/dimensions/origin');
+no(carrots.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_crop',
+ crop:'potatoes',position:{x:2,y:64,z:2},width:2,depth:2,targetCount:3}).ok,
+ 'model cannot substitute potatoes for requested carrots');
+no(carrots.check('minecraft_companion_command',{command:'auto_goal',goal:'farm_wheat',
+ position:{x:2,y:64,z:2},width:2,depth:2,targetCount:3}).ok,
+ 'carrot objective cannot be converted to wheat farming');
 
 const house=new MinecraftAiGate('In Minecraft, build me a complete castle');
 house.record('minecraft_companion_command',{command:'observe'},
@@ -238,6 +276,16 @@ house.record('minecraft_companion_command',{command:'observe'},
 no(house.check('minecraft_companion_command',{command:'auto_goal',goal:'build',
  block:'cobblestone',axis:'x+',length:3,position:{x:1,y:64,z:1}}).ok,
  'One short line may not be reported as a complete castle');
+const smallHouse=new MinecraftAiGate('Build me a small house');
+smallHouse.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+ok(smallHouse.check('minecraft_companion_command',{command:'auto_goal',goal:'shelter'}).ok,
+ 'owner-requested small house maps to the bounded shelter controller');
+const unspecifiedHouse=new MinecraftAiGate('Build me a house');
+unspecifiedHouse.record('minecraft_companion_command',{command:'observe'},
+ {ok:true,detail:{botAcknowledged:true,command:'observe',status:JSON.stringify(nativeWorld)}});
+no(unspecifiedHouse.check('minecraft_companion_command',{command:'auto_goal',goal:'shelter'}).ok,
+ 'an unspecified house is not silently reduced to a small shelter');
 
 // Independent Core goal/target integrity: one accepted action is not a
 // substitute for the user's entire ordered Dragon + Netherite mission.

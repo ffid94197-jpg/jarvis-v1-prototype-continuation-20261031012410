@@ -306,14 +306,14 @@ async function settleTaskAndReport(
         type: "final",
         taskId,
         status: "effect_unknown",
-        text: \`⚠ DURABILITY WARNING: the settlement could not be persisted; at least one real effect occurred but the durable task state remains RUNNING. This report is honest about that uncertainty.\\n\\n\${finalText}\`,
+        text: `⚠ DURABILITY WARNING: the settlement could not be persisted; at least one real effect occurred but the durable task state remains RUNNING. This report is honest about that uncertainty.\n\n${finalText}`,
       });
     } else {
       emit({
         type: "final",
         taskId,
         status: "failed",
-        text: \`⚠ DURABILITY WARNING: the settlement could not be persisted; the durable task state may be stale. Report follows.\\n\\n\${finalText}\`,
+        text: `⚠ DURABILITY WARNING: the settlement could not be persisted; the durable task state may be stale. Report follows.\n\n${finalText}`,
       });
     }
     return false;
@@ -323,7 +323,7 @@ async function settleTaskAndReport(
     type: "final",
     taskId,
     status: "failed",
-    text: \`Task state conflict (durable state: \${r.from ?? "unknown"}). Nothing was double-settled. Report: \${finalText}\`,
+    text: `Task state conflict (durable state: ${r.from ?? "unknown"}). Nothing was double-settled. Report: ${finalText}`,
   });
   return false;
 }

@@ -55,3 +55,16 @@ def build_minecraft_message(body: Mapping[str, Any], request_id: str) -> dict[st
         message["operation"] = direction
     message["id"] = request_id
     return message
+
+# Commands that may legitimately await local-model interpretation or a real
+# inventory/window transaction. Keep bounded; STOP is independently responsive.
+_SLOW_ACK_COMMANDS = frozenset({
+    "natural_goal", "craft_item", "inspect_villager", "trade_villager",
+    "transfer_container", "enchant_item", "attack_hostile",
+})
+
+
+def minecraft_ack_timeout_seconds(command: Any) -> int:
+    """Return a bounded child ACK deadline aligned to the command's work."""
+    return 30 if command in _SLOW_ACK_COMMANDS else 8
+

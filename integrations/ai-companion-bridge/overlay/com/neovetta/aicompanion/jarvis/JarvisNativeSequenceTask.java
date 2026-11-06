@@ -93,7 +93,7 @@ public final class JarvisNativeSequenceTask extends Task {
     public JarvisNativeSequenceTask(CompanionEntity entity,ServerPlayerEntity owner,JsonArray input){
         this.entity=entity;
         this.owner=owner;
-        if(input==null||input.size()<1||input.size()>8)
+        if(input==null||input.size()<1||input.size()>16)
             throw new IllegalArgumentException("stage-count");
         for(JsonElement element:input){
             if(!element.isJsonObject())throw new IllegalArgumentException("stage-shape");

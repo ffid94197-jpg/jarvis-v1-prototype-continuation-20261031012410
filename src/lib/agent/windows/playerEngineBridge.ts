@@ -483,10 +483,12 @@ export async function runGuardianApprovedPlayerEngine(
       const transfers=new Set(["transfer"]);
       const gathered=new Set(["gather"]);
       const construction=new Set(["shelter","build_volume"]);
+      const crafts=new Set(["craft"]),equips=new Set(["equip"]),travels=new Set(["travel"]),
+        hostile=new Set(["defeat_hostile"]);
       const goal=String(desktop.goal||"");
       const seconds=desktop.durationSeconds===undefined?
         (endgames.has(goal)?21600:3600):desktop.durationSeconds;
-      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal)&&!transfers.has(goal)&&!gathered.has(goal)&&!construction.has(goal))||!Number.isInteger(seconds) ||
+      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal)&&!transfers.has(goal)&&!gathered.has(goal)&&!construction.has(goal)&&!crafts.has(goal)&&!equips.has(goal)&&!travels.has(goal)&&!hostile.has(goal))||!Number.isInteger(seconds) ||
          (seconds as number)<10||(seconds as number)>43200)
         throw Error("Unsupported or unbounded owner mission");
       if(current)throw Error("Active native mission unresolved; inspect before any new mission");
@@ -499,6 +501,52 @@ export async function runGuardianApprovedPlayerEngine(
       if(isCancelled())throw Error("Owner cancellation before native mission admission");
       let op="endgame";
       let details:Record<string,unknown>={goal,durationSeconds:seconds};
+      if(crafts.has(goal)) {
+        const spec=desktop as unknown as Record<string,unknown>;
+        const safe=new Set(["stick","crafting_table","chest","furnace","ladder","bread","shield","torch"]);
+        if(typeof spec.item!=="string"||!safe.has(spec.item)||
+           !Number.isInteger(spec.targetCount)||Number(spec.targetCount)<1||Number(spec.targetCount)>16)
+          throw Error("Native craft requires an explicitly requested safe item and count 1-16");
+        op="craft";
+        details={goal,item:spec.item,count:spec.targetCount,durationSeconds:seconds};
+      }
+      if(equips.has(goal)) {
+        const spec=desktop as unknown as Record<string,unknown>;
+        const slot=String(spec.destinationSlot||"");
+        const slots:Record<string,string[]>={
+          hand:["wooden_pickaxe","stone_pickaxe","iron_pickaxe","diamond_pickaxe","netherite_pickaxe",
+            "wooden_sword","stone_sword","iron_sword","diamond_sword","netherite_sword","bow","crossbow","trident","shield","torch"],
+          head:["leather_helmet","iron_helmet","golden_helmet","diamond_helmet","netherite_helmet","turtle_helmet"],
+          torso:["leather_chestplate","iron_chestplate","golden_chestplate","diamond_chestplate","netherite_chestplate","elytra"],
+          legs:["leather_leggings","iron_leggings","golden_leggings","diamond_leggings","netherite_leggings"],
+          feet:["leather_boots","iron_boots","golden_boots","diamond_boots","netherite_boots"],
+          "off-hand":["shield","torch","totem_of_undying"]
+        };
+        if(typeof spec.item!=="string"||!Object.hasOwn(slots,slot)||!slots[slot].includes(spec.item))
+          throw Error("Native equip item and destination are not in the owner-safe equipment catalogue");
+        op="equip";
+        details={goal,item:spec.item,destination:slot,durationSeconds:seconds};
+      }
+      if(travels.has(goal)) {
+        const spec=desktop as unknown as Record<string,unknown>;
+        if(!authorizedCoords(spec.destination)||!Number.isInteger(spec.arrivalRange)||
+           Number(spec.arrivalRange)<1||Number(spec.arrivalRange)>8)
+          throw Error("Native travel requires an exact bounded owner destination and arrival range");
+        op="travel";
+        details={goal,...(spec.destination as Record<string,number>),
+          arrivalRange:spec.arrivalRange,durationSeconds:seconds};
+      }
+      if(hostile.has(goal)) {
+        const spec=desktop as unknown as Record<string,unknown>;
+        const allowed=new Set(["zombie","husk","drowned","skeleton","stray","spider","cave_spider",
+          "witch","pillager","blaze","endermite","silverfish","slime","magma_cube",
+          "zoglin","hoglin","phantom","wither_skeleton"]);
+        if(typeof spec.mob!=="string"||!allowed.has(spec.mob)||
+           !Number.isInteger(spec.entityId)||Number(spec.entityId)<0||Number(spec.entityId)>200000)
+          throw Error("Native combat requires one exact freshly observed allowlisted hostile target");
+        op="combat";
+        details={goal,mob:spec.mob,entityId:spec.entityId,durationSeconds:seconds};
+      }
       if(sequenced.has(goal)){
         const spec=desktop as unknown as Record<string,unknown>;
         if(!Array.isArray(spec.steps) || spec.steps.length<1 || spec.steps.length>8 ||

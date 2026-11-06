@@ -1,6 +1,6 @@
 import {readFileSync} from "node:fs";
 import {join} from "node:path";
-import {MINECRAFT_SAFE_GATHER_RESOURCES} from "../core/minecraftResources";
+import {MINECRAFT_SAFE_BUILD_MATERIALS,MINECRAFT_SAFE_GATHER_RESOURCES} from "../core/minecraftResources";
 /** Operator opt-in Windows capabilities. Never infer privileges from model output. */
 export interface DesktopPrepared {
   operation: "open_url" | "open_app" | "open_settings" | "discover_apps" | "find_capability" | "youtube_oldest" | "screen_watch" | "minecraft_join" | "minecraft_spawn" | "minecraft_stop" | "browser_search" | "browser_inspect" | "browser_read_page" | "browser_click_link" | "browser_fill_search" | "browser_scroll" | "list_windows" | "focus_app" | "desktop_state" | "desktop_windows" | "desktop_focus" | "desktop_click" | "desktop_move" | "desktop_type" | "desktop_keys" | "desktop_scroll" | "launch_installed" | "minecraft_command" | "minecraft_input" | "native_open_url" | "native_inspect" | "native_action" | "native_verify" | "desktop_observe";
@@ -404,7 +404,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     if(g==="build"){
       if(!at(r.position)||!integer(r.length,1,8)||
           !["x+","x-","z+","z-"].includes(String(r.axis))||
-          !["cobblestone","dirt","oak_planks","spruce_planks","birch_planks","stone_bricks","netherrack"].includes(String(r.block)))
+          !MINECRAFT_SAFE_BUILD_MATERIALS.includes(
+            String(r.block) as typeof MINECRAFT_SAFE_BUILD_MATERIALS[number]))
         return false;
       const p=r.position as {x:number;y:number;z:number};
       const n=r.length as number;
@@ -429,8 +430,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
           !integer(r.height,1,3) ||
           Number(r.width)*Number(r.depth)*Number(r.height)>64 ||
           !["floor","walls","solid","roof"].includes(String(r.shape)) ||
-          !["cobblestone","dirt","oak_planks","spruce_planks",
-            "birch_planks","stone_bricks","netherrack"].includes(String(r.block)))
+          !MINECRAFT_SAFE_BUILD_MATERIALS.includes(
+            String(r.block) as typeof MINECRAFT_SAFE_BUILD_MATERIALS[number]))
         return false;
       return !["floor","roof"].includes(String(r.shape)) || r.height===1;
     }

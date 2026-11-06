@@ -934,7 +934,11 @@ public final class JarvisBridgeServer {
         }
         snapshot.addProperty("safetyStopped",safetyStopped.contains(companionId));
         snapshot.addProperty("recoveryRequired",journal.hasUnresolved(companionId));
-        for (Run candidate : tasks.values()) {
+        Run statusRun=tasks.get(taskId);
+        // Status evidence is task-bound: never return another task from the
+        // same Core request merely because HashMap iteration found it first.
+        for (Run candidate : statusRun==null ? java.util.Collections.<Run>emptyList() :
+                java.util.Collections.singletonList(statusRun)) {
             if (!candidate.companion.equals(companionId) ||
                     !candidate.coreTaskId.equals(authorizedCoreTask) ||
                     (candidate.endgame == null && candidate.cropGoal == null &&

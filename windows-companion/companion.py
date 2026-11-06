@@ -779,7 +779,9 @@ def _minecraft_supervisor_loop(generation):
             if not bot_supervisor_enabled or generation != bot_supervisor_generation:
                 return
         result = minecraft_action("minecraft_join")
-        if not result.get("ok"):
+        if result.get("ok"):
+            print("[companion] Minecraft LAN session rejoined; saved mission intent still requires owner-authorized auto_resume.", flush=True)
+        else:
             print("[companion] Minecraft reconnect attempt did not establish a live spawn; bounded retry remains.", flush=True)
             # A failed join leaves bot_reconnecting true and bot_proc empty.
             # The next loop consumes another finite retry-budget slot.

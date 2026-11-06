@@ -19,7 +19,7 @@ assert.equal(typeof verify,'function');
 const expected={item:'oak_planks',count:4,inventoryBefore:2,inventoryAfter:6};
 const valid={goal:'craft',status:'complete',item:'oak_planks',targetCount:4,
   milestones:{craftDone:true,initialCount:2,currentCount:6,
-    craftStatBefore:10,craftStatAfter:14,craftedCount:4}};
+    craftProofCount:4,craftedCount:4}};
 let checks=0;
 function yes(value,label){assert.equal(value,true,label);checks++}
 function no(value,label){assert.equal(value,false,label);checks++}
@@ -30,22 +30,23 @@ no(verify({...valid,item:'spruce_planks'},expected),'wrong item denied');
 no(verify({...valid,targetCount:3},expected),'wrong requested quantity denied');
 no(verify({...valid,milestones:{...valid.milestones,initialCount:1}},expected),'wrong initial inventory denied');
 no(verify({...valid,milestones:{...valid.milestones,currentCount:7}},expected),'wrong current inventory denied');
-no(verify({...valid,milestones:{...valid.milestones,craftStatAfter:13,craftedCount:3}},expected),'insufficient crafted-stat delta denied');
-no(verify({...valid,milestones:{...valid.milestones,craftedCount:5}},expected),'crafted count inconsistent with stat delta denied');
+no(verify({...valid,milestones:{...valid.milestones,craftProofCount:3,craftedCount:3}},expected),'insufficient craft-task output proof denied');
+no(verify({...valid,milestones:{...valid.milestones,craftedCount:5}},expected),'crafted count inconsistent with task-witness delta denied');
 no(verify({...valid,milestones:{...valid.milestones,currentCount:5}},expected),'inventory delta below target denied');
 no(verify({goal:'craft',status:'complete',item:'oak_planks',targetCount:4},expected),'missing milestones denied');
 no(verify(valid,{...expected,count:0}),'invalid target count denied');
 no(verify(null,expected),'missing receipt denied');
 const java=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/overlay/com/neovetta/aicompanion/jarvis/JarvisBridgeServer.java'),'utf8');
 const bridge=fs.readFileSync(path.join(root,'src/lib/agent/windows/playerEngineBridge.ts'),'utf8');
-assert.match(java,/Stats\.CRAFTED\.getOrCreateStat\(craftTarget\)/);
+assert.match(java,/new JarvisCraftInInventoryTask\(/);
+assert.match(java,/new JarvisCraftInTableTask\(/);
 assert.match(java,/run\.craftGoal="craft"/);
-assert.match(java,/crafted=added &&/);
+assert.match(java,/boolean crafted=run\.craftGoal!=null && added &&/);
 assert.match(java,/summary\.addProperty\("craftedCount",craftedCount\)/);
+assert.match(java,/milestones\.addProperty\("craftProofCount",candidate\.craftProofCount\)/);
 assert.match(java,/Run statusRun=tasks\.get\(taskId\)/);
 assert.match(java,/java\.util\.Collections\.singletonList\(statusRun\)/);
-assert.match(java,/summary\.addProperty\("craftStatBefore",candidate\.craftStatBefore\)/);
 assert.match(bridge,/verifyNativeCraftReceipt\(nativeCraft/);
 assert.doesNotMatch(bridge,/crafting-method proof not yet available/);
-checks+=9;
+checks+=10;
 console.log('Native PlayerEngine craft method proof: '+checks+'/'+checks+' PASS (source-isolated; no Fabric/game acceptance)');

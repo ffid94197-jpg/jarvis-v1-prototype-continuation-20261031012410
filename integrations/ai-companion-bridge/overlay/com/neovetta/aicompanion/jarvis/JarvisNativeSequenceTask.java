@@ -93,7 +93,8 @@ public final class JarvisNativeSequenceTask extends Task {
             if(row.size()<1||row.size()>7)
                 throw new IllegalArgumentException("stage-width");
             String goal=row.get("goal").getAsString();
-            if(!Set.of("gather","craft","smelt","equip","travel","tools","stone_age","iron_age","build").contains(goal))
+            if(!Set.of("gather","craft","smelt","equip","travel","tools","stone_age","iron_age","build",
+                "farm_wheat","farm_crop","build_volume","shelter","defeat_hostile").contains(goal))
                 throw new IllegalArgumentException("unsupported-native-stage");
             // Validate the ENTIRE owner's declared sequence before admitting
             // the first effect; no partially executed surprise operations.
@@ -127,6 +128,54 @@ public final class JarvisNativeSequenceTask extends Task {
             int length=row.get("length").getAsInt();
             if(!Set.of("x+","x-","z+","z-").contains(axis)||length<1||length>8)
                 throw new IllegalArgumentException("build-stage-size");
+        } else if(Set.of("farm_wheat","farm_crop").contains(goal)) {
+            String crop=goal.equals("farm_wheat")?"wheat":row.get("crop").getAsString();
+            if((goal.equals("farm_wheat") && row.size()!=5) ||
+               (goal.equals("farm_crop") && row.size()!=6) ||
+               !Set.of("wheat","carrots","potatoes").contains(crop) ||
+               (goal.equals("farm_crop") && crop.equals("wheat")))
+                throw new IllegalArgumentException("farm-stage-fields-or-crop");
+            int width=row.get("width").getAsInt(),depth=row.get("depth").getAsInt();
+            int target=row.get("targetCount").getAsInt();
+            JsonObject point=row.getAsJsonObject("position");
+            if(width<1||width>4||depth<1||depth>4||target<1||target>16||
+               point==null||point.size()!=3)
+                throw new IllegalArgumentException("farm-stage-bounds");
+            for(String k:List.of("x","y","z"))
+                if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999984)
+                    throw new IllegalArgumentException("farm-stage-coordinate");
+        } else if(goal.equals("build_volume")) {
+            if(row.size()!=7)throw new IllegalArgumentException("volume-stage-fields");
+            JsonObject point=row.getAsJsonObject("position");
+            if(point==null||point.size()!=3)throw new IllegalArgumentException("volume-stage-position");
+            for(String k:List.of("x","y","z"))
+                if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999984)
+                    throw new IllegalArgumentException("volume-stage-coordinate");
+            String material=row.get("block").getAsString();
+            int width=row.get("width").getAsInt(),depth=row.get("depth").getAsInt(),
+                height=row.get("height").getAsInt();
+            String shape=row.get("shape").getAsString();
+            if(!Set.of("cobblestone","dirt","oak_planks","spruce_planks","birch_planks",
+                    "stone_bricks","netherrack").contains(material)||
+               width<1||width>4||depth<1||depth>4||height<1||height>3||
+               width*depth*height>64||
+               !Set.of("floor","walls","solid","roof").contains(shape)||
+               ((shape.equals("floor")||shape.equals("roof"))&&height!=1))
+                throw new IllegalArgumentException("volume-stage-bounds");
+        } else if(goal.equals("shelter")) {
+            if(row.size()!=1&&row.size()!=3)throw new IllegalArgumentException("shelter-stage-fields");
+            if(row.has("width")&&(row.get("width").getAsInt()<3||row.get("width").getAsInt()>4 ||
+               row.get("depth").getAsInt()<3||row.get("depth").getAsInt()>4))
+                throw new IllegalArgumentException("shelter-stage-bounds");
+        } else if(goal.equals("defeat_hostile")) {
+            if(row.size()!=3)throw new IllegalArgumentException("combat-stage-fields");
+            String mob=row.get("mob").getAsString();
+            int id=row.get("entityId").getAsInt();
+            if(!Set.of("zombie","husk","drowned","skeleton","stray","spider","cave_spider",
+                    "witch","pillager","blaze","endermite","silverfish","slime","magma_cube",
+                    "zoglin","hoglin","phantom","wither_skeleton").contains(mob) ||
+               id<0||id>200000)
+                throw new IllegalArgumentException("combat-stage-target");
         } else if(goal.equals("equip")){
             String item=row.get("item").getAsString();
             String slot=row.get("destination").getAsString();

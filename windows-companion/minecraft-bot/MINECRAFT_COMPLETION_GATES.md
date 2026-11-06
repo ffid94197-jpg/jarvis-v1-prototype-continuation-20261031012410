@@ -185,3 +185,9 @@ Separately, the Internet-corpus validator's Node.js 22.16.0 regression harness p
 - The sidecar now holds the lock only while binding the exact child, registering the correlated ACK waiter and writing the bounded request. It releases the lock before waiting; `minecraft_stop` and service shutdown can terminate the child while interpretation/action is in flight.
 - ACK waiters remain bound to the exact child process, and the existing child-reader EOF path resolves pending calls as outcome-unknown rather than routing stale ACKs to a replacement process.
 - The Windows companion offline verifier now includes an AST contract that fails if an ACK wait is moved back inside the global process lock. The updated command handler passed local AST syntax parsing. No Windows stop-latency or live game test was run.
+
+## 2026-11-06: command-specific bounded Minecraft ACK deadlines
+
+- The sidecar now uses a 30-second ACK window for local-model `natural_goal` interpretation and real inventory/window transactions (`craft_item`, villager inspection/trading, container transfer, enchanting and bounded hostile attacks). Short status, observation, goal-admission and dig commands retain an 8-second window.
+- This remains bounded below the existing 79-second HTTP companion deadline. The bot lock is not held during the ACK wait, so the longer transaction window does not delay explicit stop.
+- Offline contracts cover the per-command timeout table. They do not prove a particular server operation finishes within its deadline or certify real Minecraft transactions.

@@ -61,36 +61,36 @@ run("missionAutoResume':False" in source_text,
 run("MINECRAFT_SESSION_TERMINAL" in source_text,
     'server-kick sentinel is observed before retry decision')
 # Core-to-Mineflayer transport must preserve every typed field supported by friend_protocol.cjs.
-trade=build_minecraft_message({'command':'trade_villager','entityId':7,'tradeIndex':2,'times':3},
+trade=build_minecraft_message({'operation':'minecraft_command','command':'trade_villager','entityId':7,'tradeIndex':2,'times':3},
                               '0123456789abcdef')
 run(trade.get('tradeIndex')==2 and trade.get('times')==3 and trade.get('entityId')==7,
     'villager offer index/repetition/ID preserved through sidecar')
-enchant=build_minecraft_message({'command':'enchant_item','position':{'x':1,'y':64,'z':2},
+enchant=build_minecraft_message({'operation':'minecraft_command','command':'enchant_item','position':{'x':1,'y':64,'z':2},
                                  'item':'diamond_sword','choice':1},'0123456789abcdef')
 run(enchant.get('choice')==1 and enchant.get('position',{}).get('y')==64,
     'enchant choice and table coordinates preserved')
-transfer=build_minecraft_message({'command':'transfer_container','position':{'x':1,'y':64,'z':2},
-                                  'item':'iron_ingot','count':12,'operation':'deposit'},
+transfer=build_minecraft_message({'operation':'minecraft_command','command':'transfer_container','position':{'x':1,'y':64,'z':2},
+                                  'item':'iron_ingot','count':12,'operationDirection':'deposit'},
                                  '0123456789abcdef')
 run(transfer.get('operation')=='deposit' and transfer.get('count')==12,
     'container direction and count preserved')
-crop=build_minecraft_message({'command':'auto_goal','goal':'farm_crop','crop':'carrots',
+crop=build_minecraft_message({'operation':'minecraft_command','command':'auto_goal','goal':'farm_crop','crop':'carrots',
                                'position':{'x':1,'y':64,'z':2},'width':2,'depth':3,
                                'targetCount':6},'0123456789abcdef')
 run(crop.get('crop')=='carrots' and crop.get('targetCount')==6,
     'crop kind and field dimensions preserved')
-volume=build_minecraft_message({'command':'auto_goal','goal':'build_volume',
+volume=build_minecraft_message({'operation':'minecraft_command','command':'auto_goal','goal':'build_volume',
                                  'position':{'x':1,'y':64,'z':2},'block':'cobblestone',
                                  'width':3,'depth':3,'height':2,'shape':'walls'},
                                 '0123456789abcdef')
 run(volume.get('height')==2 and volume.get('shape')=='walls',
     'volume height and shape preserved')
-hostile=build_minecraft_message({'command':'attack_hostile','entityId':42,'maxSwings':4},
+hostile=build_minecraft_message({'operation':'minecraft_command','command':'attack_hostile','entityId':42,'maxSwings':4},
                                 '0123456789abcdef')
 run(hostile.get('maxSwings')==4,'bounded hostile attempt count preserved')
 rejected=False
 try:
-    build_minecraft_message({'command':'status','shell':'bad'},'0123456789abcdef')
+    build_minecraft_message({'operation':'minecraft_command','command':'status','shell':'bad'},'0123456789abcdef')
 except ValueError:
     rejected=True
 run(rejected,'unknown companion fields rejected rather than silently stripped')

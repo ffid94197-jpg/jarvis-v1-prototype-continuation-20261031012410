@@ -86,16 +86,14 @@ public final class JarvisBridgeServer {
 
     private static final class JarvisCraftInInventoryTask extends CraftInInventoryTask {
         private final Run run;
-        private final Item output;
         JarvisCraftInInventoryTask(RecipeTarget target,Run run) {
             super(target);
             this.run=run;
-            this.output=target.getOutputItem();
         }
         @Override protected Task onResourceTick(AltoClefController controller) {
-            int before=controller.getItemStorage().getItemCount(output);
+            int before=countItem(run.entity,run.item);
             Task next=super.onResourceTick(controller);
-            int after=controller.getItemStorage().getItemCount(output);
+            int after=countItem(run.entity,run.item);
             if(after>before) run.craftProofCount+=after-before;
             return next;
         }
@@ -103,17 +101,15 @@ public final class JarvisBridgeServer {
 
     private static final class JarvisCraftInTableTask extends CraftInTableTask {
         private final Run run;
-        private final Item output;
         JarvisCraftInTableTask(RecipeTarget[] targets,Run run) {
             super(targets);
             if(targets.length!=1) throw new IllegalArgumentException("single-output-craft-required");
             this.run=run;
-            this.output=targets[0].getOutputItem();
         }
         @Override protected Task onResourceTick(AltoClefController controller) {
-            int before=controller.getItemStorage().getItemCount(output);
+            int before=countItem(run.entity,run.item);
             Task next=super.onResourceTick(controller);
-            int after=controller.getItemStorage().getItemCount(output);
+            int after=countItem(run.entity,run.item);
             if(after>before) run.craftProofCount+=after-before;
             return next;
         }

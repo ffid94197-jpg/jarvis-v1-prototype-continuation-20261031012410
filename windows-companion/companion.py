@@ -27,6 +27,7 @@ from native_uia import validate_request as validate_native_request, run_native
 from browser_net_guard import is_public_http_url
 from desktop_control import check_input as validate_desktop_input, run_action as run_desktop_action, discover_installed, start_emergency_monitor
 from minecraft_supervisor import ReconnectBudget, auto_reconnect_enabled
+from minecraft_command_contract import build_minecraft_message
 
 HOST = '127.0.0.1'
 PORT = 20189
@@ -998,11 +999,7 @@ def minecraft_command(body):
         pending={'event':threading.Event(),'result':None,'process':bot_proc}
         with bot_ack_lock:bot_ack_waiters[request_id]=pending
         try:
-            message={k:v for k,v in body.items() if k in ('command','directionInput','durationMs','text','goal','durationSeconds',
-                                                       'position','range','item','destination','count','reference','face','entityId','hand',
-                                                       'resource','targetCount','arrivalRange','steps','block','axis','length',
-                                                       'width','depth','destinationSlot')}
-            message['id']=request_id
+            message=build_minecraft_message(body,request_id)
             bot_proc.stdin.write(json.dumps(message)+'\n')
             bot_proc.stdin.flush()
             if not pending['event'].wait(16 if body.get('command') == 'natural_goal' else 8):

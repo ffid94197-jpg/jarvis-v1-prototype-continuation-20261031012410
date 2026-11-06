@@ -899,10 +899,10 @@ def minecraft_action(op):
                          terminal_event=reconnect_allowed, done_event=reader_done):
                 try:
                     for line in process.stdout:
-                    stripped = line.strip()
-                    if (engine_name == 'jarvis' and stripped == 'MINECRAFT_COMPANION_JOINED (spawn observed)') or \
-                       (engine_name == 'mine-ai-mcp' and stripped == 'MINECRAFT_MCP_JOINED (live connected status observed)'):
-                        joined_event.set()
+                        stripped = line.strip()
+                        if (engine_name == 'jarvis' and stripped == 'MINECRAFT_COMPANION_JOINED (spawn observed)') or \
+                           (engine_name == 'mine-ai-mcp' and stripped == 'MINECRAFT_MCP_JOINED (live connected status observed)'):
+                            joined_event.set()
                         if stripped == 'MINECRAFT_SESSION_TERMINAL':
                             terminal_event.clear()
                         if line.startswith('BOT_ACK '):

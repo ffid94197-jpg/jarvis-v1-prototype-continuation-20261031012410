@@ -471,7 +471,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return integer(p.y,-62,319)&&p.x>=-29999984&&p.z>=-29999984&&
         p.x+(r.width as number)-1<=29999984&&p.z+(r.depth as number)-1<=29999984;
     }
-    if(g==="sequence")return !step && Array.isArray(r.steps)&&r.steps.length>=1&&r.steps.length<=8&&
+    if(g==="sequence")return !step && Array.isArray(r.steps)&&r.steps.length>=1&&r.steps.length<=16&&
       r.steps.every(x=>validMinecraftGoal(x as Record<string,unknown>,true));
     return false;
   };

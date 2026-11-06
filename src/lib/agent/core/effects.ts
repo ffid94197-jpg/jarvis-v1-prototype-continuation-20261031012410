@@ -332,6 +332,28 @@ export async function reconcileCrashedTasks(): Promise<void> {
       }).catch(() => {});
       console.error(`[reconcile] task ${t.id} → ${status} (crash recovery)`);
     }
+
+    // Post-settlement self-learning is journaled after the owner task is
+    // completed. Recover those narrow owner-scoped evolution effects too;
+    // never downgrade the already-settled owner task because a learning
+    // candidate is optional and owner-reviewable.
+    const completedWithEvolutionResidue=await db.agentTask.findMany({
+      where:{
+        status:"completed",
+        effects:{some:{status:"ADMITTED",tool:{in:["evolution_skill_learn","evolution_repair_apply"]}}},
+      },
+      include:{effects:{where:{status:"ADMITTED",tool:{in:["evolution_skill_learn","evolution_repair_apply"]}}}},
+      orderBy:{updatedAt:"desc"},take:100,
+    });
+    for(const task of completedWithEvolutionResidue){
+      for(const effect of task.effects){
+        const args=(()=>{
+          try{return JSON.parse(effect.argsJson??"{}") as Record<string,unknown>;}
+          catch{return {};}
+        })();
+        await reconcileEffect(effect.id,{tool:effect.tool,args,ownerId:task.ownerId??undefined});
+      }
+    }
   } catch {
     // Reconciliation itself must never take the app down.
   }

@@ -366,6 +366,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       build:["position","block","axis","length"],
       farm_wheat:["position","width","depth","targetCount"],
       farm_crop:["crop","position","width","depth","targetCount"],
+      defeat_hostile:["mob","entityId"],
       smelt:["item","targetCount"],shelter:["width","depth"],
       build_volume:["position","block","width","depth","height","shape"],
       transfer:["position","item","targetCount","operation"],sequence:["steps"]
@@ -383,6 +384,10 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       ["x","y","z"].every(k=>integer((v as Record<string,unknown>)[k],-30000000,30000000));
     if(!step && r.durationSeconds!==undefined && !integer(r.durationSeconds,10,43200))return false;
     if(fixed.has(g))return true;
+    if(g==="defeat_hostile")return ["zombie","husk","drowned","skeleton","stray","spider","cave_spider",
+      "witch","pillager","blaze","endermite","silverfish","slime","magma_cube",
+      "zoglin","hoglin","phantom","wither_skeleton"].includes(String(r.mob))&&
+      integer(r.entityId,0,200000);
     if(g==="gather")return MINECRAFT_SAFE_GATHER_RESOURCES.includes(
       String(r.resource) as typeof MINECRAFT_SAFE_GATHER_RESOURCES[number])&&integer(r.targetCount,1,64);
     if(g==="travel")return at(r.destination)&&integer(r.arrivalRange,1,8);

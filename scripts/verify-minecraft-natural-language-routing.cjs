@@ -56,6 +56,10 @@ no(isMinecraftAiObjective('Build me a website',true),
  'opted-in Minecraft mode does not capture unrelated web development');
 no(isMinecraftAiObjective('Open the chest in Chrome',true),
  'explicit browser context prevents Minecraft inference');
+no(isMinecraftAiObjective('Collect 3 diamonds in my spreadsheet',true),
+ 'explicit spreadsheet context prevents even resource-based Minecraft inference');
+no(isMinecraftAiObjective('Pause the video',true),
+ 'media controls are not misrouted to the Minecraft emergency stop');
 ok(isMinecraftObservationOnlyObjective("What's in your inventory?",true),
  'inventory readback is read-only in opted-in Minecraft context');
 ok(MINECRAFT_AI_INSTRUCTIONS.includes('Build a small house using the blocks I have'),

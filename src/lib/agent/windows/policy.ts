@@ -1,5 +1,6 @@
 import {readFileSync} from "node:fs";
 import {join} from "node:path";
+import {MINECRAFT_SAFE_BUILD_MATERIALS,MINECRAFT_SAFE_GATHER_RESOURCES} from "../core/minecraftResources";
 /** Operator opt-in Windows capabilities. Never infer privileges from model output. */
 export interface DesktopPrepared {
   operation: "open_url" | "open_app" | "open_settings" | "discover_apps" | "find_capability" | "youtube_oldest" | "screen_watch" | "minecraft_join" | "minecraft_spawn" | "minecraft_stop" | "browser_search" | "browser_inspect" | "browser_read_page" | "browser_click_link" | "browser_fill_search" | "browser_scroll" | "list_windows" | "focus_app" | "desktop_state" | "desktop_windows" | "desktop_focus" | "desktop_click" | "desktop_move" | "desktop_type" | "desktop_keys" | "desktop_scroll" | "launch_installed" | "minecraft_command" | "minecraft_input" | "native_open_url" | "native_inspect" | "native_action" | "native_verify" | "desktop_observe";
@@ -34,7 +35,10 @@ export interface DesktopPrepared {
   face?: {x:number;y:number;z:number};
   range?: number;
   item?: string;
-  destination?: string;
+  destination?: string | {x:number;y:number;z:number};
+  destinationSlot?: string;
+  arrivalRange?: number;
+  mob?: string;
   count?: number;
   entityId?: number;
   maxSwings?: number;
@@ -365,9 +369,12 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       build:["position","block","axis","length"],
       farm_wheat:["position","width","depth","targetCount"],
       farm_crop:["crop","position","width","depth","targetCount"],
+      defeat_hostile:["mob","entityId"],
       smelt:["item","targetCount"],shelter:["width","depth"],
       build_volume:["position","block","width","depth","height","shape"],
-      transfer:["position","item","targetCount","operation"],sequence:["steps"]
+      transfer:["position","item","targetCount","operation"],
+      trade:["entityId","offerIndex","times","expectedFirstItem","expectedFirstCount","expectedSecondItem","expectedSecondCount","expectedOutputItem","expectedOutputCount","expectedUses"],
+      enchant:["position","item","choice","ownerXpConsent"],sequence:["steps"]
     };
     const g=r.goal,extra=fixed.has(g)?[]:(Object.hasOwn(params,g)?params[g]:undefined);
     if(!extra || (step && (g==="sequence" || (fixed.has(g)&&!["tools","stone_age","iron_age"].includes(g)))))
@@ -382,8 +389,25 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       ["x","y","z"].every(k=>integer((v as Record<string,unknown>)[k],-30000000,30000000));
     if(!step && r.durationSeconds!==undefined && !integer(r.durationSeconds,10,43200))return false;
     if(fixed.has(g))return true;
-    if(g==="gather")return ["logs","planks","sticks","cobblestone","raw_iron","iron_ingot",
-      "diamond","obsidian","flint","netherrack"].includes(String(r.resource))&&integer(r.targetCount,1,64);
+    if(g==="trade"){
+      const itemId=(v:unknown,allowEmpty=false)=>typeof v==="string"&&
+        (allowEmpty?v==="":/^minecraft:[a-z0-9_]{1,64}$/.test(v));
+      return step&&integer(r.entityId,0,200000)&&integer(r.offerIndex,0,7)&&
+        integer(r.times,1,4)&&itemId(r.expectedFirstItem)&&
+        integer(r.expectedFirstCount,1,64)&&itemId(r.expectedSecondItem,true)&&
+        integer(r.expectedSecondCount,0,64)&&itemId(r.expectedOutputItem)&&
+        integer(r.expectedOutputCount,1,64)&&integer(r.expectedUses,0,10000);
+    }
+    if(g==="enchant")return step&&at(r.position)&&
+      typeof r.item==="string"&&/^[a-z][a-z0-9_]{0,63}$/.test(r.item)&&
+      integer(r.choice,0,2)&&r.ownerXpConsent===true&&
+      process.env.JARVIS_MC_BRIDGE_OWNER_XP_ENCHANT_ENABLE==="1";
+    if(g==="defeat_hostile")return ["zombie","husk","drowned","skeleton","stray","spider","cave_spider",
+      "witch","pillager","blaze","endermite","silverfish","slime","magma_cube",
+      "zoglin","hoglin","phantom","wither_skeleton"].includes(String(r.mob))&&
+      integer(r.entityId,0,200000);
+    if(g==="gather")return MINECRAFT_SAFE_GATHER_RESOURCES.includes(
+      String(r.resource) as typeof MINECRAFT_SAFE_GATHER_RESOURCES[number])&&integer(r.targetCount,1,64);
     if(g==="travel")return at(r.destination)&&integer(r.arrivalRange,1,8);
     if(g==="craft")return ["stick","crafting_table","chest","furnace","ladder","bread","shield","torch"]
       .includes(String(r.item))&&integer(r.targetCount,1,16);
@@ -395,7 +419,6 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
         torso:["leather_chestplate","iron_chestplate","golden_chestplate","diamond_chestplate","netherite_chestplate","elytra"],
         legs:["leather_leggings","iron_leggings","golden_leggings","diamond_leggings","netherite_leggings"],
         feet:["leather_boots","iron_boots","golden_boots","diamond_boots","netherite_boots"],
-        "off-hand":["shield","torch","totem_of_undying"]
       };
       const slot=step?r.destination:r.destinationSlot;
       return typeof slot==="string" && Object.hasOwn(slots,slot) && slots[slot].includes(String(r.item));
@@ -403,7 +426,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     if(g==="build"){
       if(!at(r.position)||!integer(r.length,1,8)||
           !["x+","x-","z+","z-"].includes(String(r.axis))||
-          !["cobblestone","dirt","oak_planks","spruce_planks","birch_planks","stone_bricks","netherrack"].includes(String(r.block)))
+          !MINECRAFT_SAFE_BUILD_MATERIALS.includes(
+            String(r.block) as typeof MINECRAFT_SAFE_BUILD_MATERIALS[number]))
         return false;
       const p=r.position as {x:number;y:number;z:number};
       const n=r.length as number;
@@ -428,13 +452,13 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
           !integer(r.height,1,3) ||
           Number(r.width)*Number(r.depth)*Number(r.height)>64 ||
           !["floor","walls","solid","roof"].includes(String(r.shape)) ||
-          !["cobblestone","dirt","oak_planks","spruce_planks",
-            "birch_planks","stone_bricks","netherrack"].includes(String(r.block)))
+          !MINECRAFT_SAFE_BUILD_MATERIALS.includes(
+            String(r.block) as typeof MINECRAFT_SAFE_BUILD_MATERIALS[number]))
         return false;
       return !["floor","roof"].includes(String(r.shape)) || r.height===1;
     }
     if(g==="farm_crop") {
-      if(!["carrots","potatoes"].includes(String(r.crop))||!at(r.position)||
+      if(!["carrots","potatoes","beetroot"].includes(String(r.crop))||!at(r.position)||
          !integer(r.width,1,4)||!integer(r.depth,1,4)||
          !integer(r.targetCount,1,16))return false;
       const p=r.position as {x:number;y:number;z:number};
@@ -447,7 +471,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return integer(p.y,-62,319)&&p.x>=-29999984&&p.z>=-29999984&&
         p.x+(r.width as number)-1<=29999984&&p.z+(r.depth as number)-1<=29999984;
     }
-    if(g==="sequence")return !step && Array.isArray(r.steps)&&r.steps.length>=1&&r.steps.length<=8&&
+    if(g==="sequence")return !step && Array.isArray(r.steps)&&r.steps.length>=1&&r.steps.length<=16&&
       r.steps.every(x=>validMinecraftGoal(x as Record<string,unknown>,true));
     return false;
   };
@@ -495,7 +519,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:'Bounded navigation requires integer target coordinates.'};
     if (['dig_block','inspect_block','interact_block'].includes(command) && !pos(args.position))
       return {ok:false,reason:'Block operation requires safe integer coordinates.'};
-    if (command==='equip_item' && (!name(args.item)||!['hand','head','torso','legs','feet','off-hand'].includes(String(args.destination||'hand'))))
+    if (command==='equip_item' && (!name(args.item)||!['hand','head','torso','legs','feet'].includes(String(args.destination||'hand'))))
       return {ok:false,reason:'Invalid equipment item/destination.'};
     if (command==='craft_item' && (!name(args.item)||!Number.isInteger(args.count)||(args.count as number)<1||(args.count as number)>16))
       return {ok:false,reason:'Craft count must be 1–16 for a valid item.'};
@@ -544,7 +568,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       prepared.goal=args.goal as string;
       if(args.durationSeconds!==undefined)prepared.durationSeconds=args.durationSeconds as number;
       const fields=["resource","targetCount","destination","arrivalRange","steps","position","block","axis",
-        "length","width","depth","height","shape","item","destinationSlot","crop","operation"];
+        "length","width","depth","height","shape","item","destinationSlot","crop","operation","mob","entityId"];
       for(const key of fields)if(args[key]!==undefined) {
         // "operation" in the original goal means deposit/withdraw; do not
         // override the Windows companion's transport operation discriminator.

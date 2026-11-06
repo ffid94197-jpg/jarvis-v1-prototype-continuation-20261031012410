@@ -2,6 +2,8 @@ package com.neovetta.aicompanion.jarvis;
 
 import adris.altoclef.TaskCatalogue;
 import adris.altoclef.tasks.container.SmeltInFurnaceTask;
+import adris.altoclef.tasks.resources.CollectCropTask;
+import adris.altoclef.tasks.entity.KillEntityTask;
 import adris.altoclef.tasks.misc.EquipArmorTask;
 import adris.altoclef.tasks.misc.HoldItemTask;
 import adris.altoclef.tasks.movement.GetToBlockTask;
@@ -15,7 +17,12 @@ import com.google.gson.JsonObject;
 import com.neovetta.aicompanion.entity.CompanionEntity;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.CropBlock;
+import net.minecraft.block.BlockState;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -24,6 +31,8 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,8 +43,15 @@ import java.util.Set;
  * postcondition and never repeats after an ambiguous result.
  */
 public final class JarvisNativeSequenceTask extends Task {
-    private static final Set<String> GATHER=Set.of("logs","planks","sticks","cobblestone",
-        "raw_iron","iron_ingot","diamond","obsidian","flint","netherrack");
+    private static final Set<String> GATHER=Set.of("logs","planks","sticks","cobblestone","raw_iron","iron_ingot",
+        "diamond","obsidian","flint","netherrack","dirt","sand","red_sand","gravel","mud",
+        "soul_sand","soul_soil","moss_block","andesite","diorite","granite","tuff","calcite",
+        "cobbled_deepslate","blackstone","basalt","coal","raw_copper","raw_gold","redstone",
+        "lapis_lazuli","emerald","quartz");
+    private static final Set<String> BUILD_BLOCKS=Set.of(
+        "cobblestone","cobbled_deepslate","stone","dirt",
+        "oak_planks","spruce_planks","birch_planks","stone_bricks",
+        "oak_log","glass","sandstone","netherrack");
     private static final Set<String> CRAFT=Set.of("stick","crafting_table","chest",
         "furnace","ladder","bread","shield","torch");
     private static final Map<String,String> SMELT=Map.of(
@@ -44,6 +60,8 @@ public final class JarvisNativeSequenceTask extends Task {
         "cooked_beef","beef","cooked_porkchop","porkchop",
         "cooked_chicken","chicken");
     private final CompanionEntity entity;
+    private final ServerPlayerEntity owner;
+    private boolean transferVerified,tradeVerified,enchantVerified;
     private final List<JsonObject> steps=new ArrayList<>();
     private int index;
     private Task current;
@@ -60,19 +78,31 @@ public final class JarvisNativeSequenceTask extends Task {
     private BlockPos[] construction;
     private String constructionMaterial;
     private int constructionIndex;
+    private JarvisNativeVolumeTask volumeStage;
+    private Block cropBlock;
+    private String cropItem;
+    private int cropInitialCount;
+    private int cropTargetCount;
+    private int harvestedCropCount;
+    private final Set<BlockPos> cropCells=new HashSet<>();
+    private final Map<BlockPos,Integer> lastCropAge=new HashMap<>();
+    private Entity combatTarget;
+    private String combatMob;
     private final long since=System.currentTimeMillis();
 
-    public JarvisNativeSequenceTask(CompanionEntity entity,JsonArray input){
+    public JarvisNativeSequenceTask(CompanionEntity entity,ServerPlayerEntity owner,JsonArray input){
         this.entity=entity;
-        if(input==null||input.size()<1||input.size()>8)
+        this.owner=owner;
+        if(input==null||input.size()<1||input.size()>16)
             throw new IllegalArgumentException("stage-count");
         for(JsonElement element:input){
             if(!element.isJsonObject())throw new IllegalArgumentException("stage-shape");
             JsonObject row=element.getAsJsonObject();
-            if(row.size()<1||row.size()>7)
+            if(row.size()<1||row.size()>11)
                 throw new IllegalArgumentException("stage-width");
             String goal=row.get("goal").getAsString();
-            if(!Set.of("gather","craft","smelt","equip","travel","tools","stone_age","iron_age","build").contains(goal))
+            if(!Set.of("gather","craft","smelt","equip","travel","tools","stone_age","iron_age","build",
+                "farm_wheat","farm_crop","build_volume","shelter","defeat_hostile","transfer","trade","enchant").contains(goal))
                 throw new IllegalArgumentException("unsupported-native-stage");
             // Validate the ENTIRE owner's declared sequence before admitting
             // the first effect; no partially executed surprise operations.
@@ -83,6 +113,7 @@ public final class JarvisNativeSequenceTask extends Task {
     private static void validateStage(JsonObject row,String goal) {
         int count;
         if(Set.of("gather","craft","smelt").contains(goal)){
+            if(row.size()!=3)throw new IllegalArgumentException("item-stage-fields");
             String item=goal.equals("gather")?row.get("resource").getAsString():
                 row.get("item").getAsString();
             count=row.get("targetCount").getAsInt();
@@ -100,13 +131,99 @@ public final class JarvisNativeSequenceTask extends Task {
                 if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999980)
                     throw new IllegalArgumentException("build-stage-coordinate");
             String material=row.get("block").getAsString();
-            if(!Set.of("cobblestone","oak_planks","dirt","spruce_planks","birch_planks","stone_bricks","netherrack").contains(material))
+            if(!BUILD_BLOCKS.contains(material))
                 throw new IllegalArgumentException("build-stage-material");
             String axis=row.get("axis").getAsString();
             int length=row.get("length").getAsInt();
             if(!Set.of("x+","x-","z+","z-").contains(axis)||length<1||length>8)
                 throw new IllegalArgumentException("build-stage-size");
+        } else if(goal.equals("transfer")) {
+            if(row.size()!=5)throw new IllegalArgumentException("transfer-stage-fields");
+            JsonObject point=row.getAsJsonObject("position");
+            if(point==null||point.size()!=3)throw new IllegalArgumentException("transfer-stage-position");
+            for(String k:List.of("x","y","z"))
+                if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999984)
+                    throw new IllegalArgumentException("transfer-stage-coordinate");
+            if(!row.get("item").getAsString().matches("[a-z0-9_]{1,64}")||
+               row.get("targetCount").getAsInt()<1||row.get("targetCount").getAsInt()>64||
+               !Set.of("deposit","withdraw").contains(row.get("operation").getAsString()))
+                throw new IllegalArgumentException("transfer-stage-bounds");
+        } else if(goal.equals("trade")) {
+            if(row.size()!=11)throw new IllegalArgumentException("trade-stage-fields");
+            int id=row.get("entityId").getAsInt(),offer=row.get("offerIndex").getAsInt(),
+                times=row.get("times").getAsInt(),uses=row.get("expectedUses").getAsInt();
+            String first=row.get("expectedFirstItem").getAsString();
+            String second=row.get("expectedSecondItem").getAsString();
+            String output=row.get("expectedOutputItem").getAsString();
+            if(id<0||id>200000||offer<0||offer>7||times<1||times>4||
+               uses<0||uses>10000||
+               !first.matches("minecraft:[a-z0-9_]{1,64}")||
+               !(second.isEmpty()||second.matches("minecraft:[a-z0-9_]{1,64}"))||
+               !output.matches("minecraft:[a-z0-9_]{1,64}")||
+               row.get("expectedFirstCount").getAsInt()<1||row.get("expectedFirstCount").getAsInt()>64||
+               row.get("expectedSecondCount").getAsInt()<0||row.get("expectedSecondCount").getAsInt()>64||
+               row.get("expectedOutputCount").getAsInt()<1||row.get("expectedOutputCount").getAsInt()>64)
+                throw new IllegalArgumentException("trade-stage-bounds");
+        } else if(goal.equals("enchant")) {
+            if(row.size()!=5||!row.get("ownerXpConsent").getAsBoolean())
+                throw new IllegalArgumentException("enchant-stage-owner-consent");
+            JsonObject point=row.getAsJsonObject("position");
+            if(point==null||point.size()!=3)throw new IllegalArgumentException("enchant-stage-position");
+            for(String k:List.of("x","y","z"))
+                if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999984)
+                    throw new IllegalArgumentException("enchant-stage-coordinate");
+            if(!row.get("item").getAsString().matches("[a-z0-9_]{1,64}")||
+               row.get("choice").getAsInt()<0||row.get("choice").getAsInt()>2)
+                throw new IllegalArgumentException("enchant-stage-bounds");
+        } else if(Set.of("farm_wheat","farm_crop").contains(goal)) {
+            String crop=goal.equals("farm_wheat")?"wheat":row.get("crop").getAsString();
+            if((goal.equals("farm_wheat") && row.size()!=5) ||
+               (goal.equals("farm_crop") && row.size()!=6) ||
+               !Set.of("wheat","carrots","potatoes","beetroot").contains(crop) ||
+               (goal.equals("farm_crop") && crop.equals("wheat")))
+                throw new IllegalArgumentException("farm-stage-fields-or-crop");
+            int width=row.get("width").getAsInt(),depth=row.get("depth").getAsInt();
+            int target=row.get("targetCount").getAsInt();
+            JsonObject point=row.getAsJsonObject("position");
+            if(width<1||width>4||depth<1||depth>4||target<1||target>16||
+               point==null||point.size()!=3)
+                throw new IllegalArgumentException("farm-stage-bounds");
+            for(String k:List.of("x","y","z"))
+                if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999984)
+                    throw new IllegalArgumentException("farm-stage-coordinate");
+        } else if(goal.equals("build_volume")) {
+            if(row.size()!=7)throw new IllegalArgumentException("volume-stage-fields");
+            JsonObject point=row.getAsJsonObject("position");
+            if(point==null||point.size()!=3)throw new IllegalArgumentException("volume-stage-position");
+            for(String k:List.of("x","y","z"))
+                if(!point.has(k)||Math.abs(point.get(k).getAsInt())>29999984)
+                    throw new IllegalArgumentException("volume-stage-coordinate");
+            String material=row.get("block").getAsString();
+            int width=row.get("width").getAsInt(),depth=row.get("depth").getAsInt(),
+                height=row.get("height").getAsInt();
+            String shape=row.get("shape").getAsString();
+            if(!BUILD_BLOCKS.contains(material)||
+               width<1||width>4||depth<1||depth>4||height<1||height>3||
+               width*depth*height>64||
+               !Set.of("floor","walls","solid","roof").contains(shape)||
+               ((shape.equals("floor")||shape.equals("roof"))&&height!=1))
+                throw new IllegalArgumentException("volume-stage-bounds");
+        } else if(goal.equals("shelter")) {
+            if(row.size()!=1&&row.size()!=3)throw new IllegalArgumentException("shelter-stage-fields");
+            if(row.has("width")&&(row.get("width").getAsInt()<3||row.get("width").getAsInt()>4 ||
+               row.get("depth").getAsInt()<3||row.get("depth").getAsInt()>4))
+                throw new IllegalArgumentException("shelter-stage-bounds");
+        } else if(goal.equals("defeat_hostile")) {
+            if(row.size()!=3)throw new IllegalArgumentException("combat-stage-fields");
+            String mob=row.get("mob").getAsString();
+            int id=row.get("entityId").getAsInt();
+            if(!Set.of("zombie","husk","drowned","skeleton","stray","spider","cave_spider",
+                    "witch","pillager","blaze","endermite","silverfish","slime","magma_cube",
+                    "zoglin","hoglin","phantom","wither_skeleton").contains(mob) ||
+               id<0||id>200000)
+                throw new IllegalArgumentException("combat-stage-target");
         } else if(goal.equals("equip")){
+            if(row.size()!=3)throw new IllegalArgumentException("equip-stage-fields");
             String item=row.get("item").getAsString();
             String slot=row.get("destination").getAsString();
             if(!item.matches("[a-z0-9_]{1,64}") ||
@@ -117,7 +234,8 @@ public final class JarvisNativeSequenceTask extends Task {
                 item.endsWith("_leggings") && slot.equals("legs") ||
                 item.endsWith("_boots") && slot.equals("feet")))
                 throw new IllegalArgumentException("stage-armor-slot");
-        } else {
+        } else if(goal.equals("travel")) {
+            if(row.size()!=3)throw new IllegalArgumentException("travel-stage-fields");
             JsonObject p=row.getAsJsonObject("destination");
             if(p==null || p.size()!=3)throw new IllegalArgumentException("stage-position");
             for(String key:List.of("x","y","z")){
@@ -159,6 +277,9 @@ public final class JarvisNativeSequenceTask extends Task {
         equipmentSlot=null;destination=null;
         equipmentTargets=null;equipmentProgress=0;
         construction=null;constructionMaterial=null;constructionIndex=0;
+        volumeStage=null;cropBlock=null;cropItem=null;cropCells.clear();lastCropAge.clear();
+        cropInitialCount=0;cropTargetCount=0;harvestedCropCount=0;combatTarget=null;combatMob=null;
+        transferVerified=false;tradeVerified=false;enchantVerified=false;
         stage=goal+"["+index+"]";
         if(Set.of("gather","craft","smelt").contains(goal)){
             currentItem=goal.equals("gather")?row.get("resource").getAsString():row.get("item").getAsString();
@@ -183,6 +304,60 @@ public final class JarvisNativeSequenceTask extends Task {
                 new String[]{"iron_pickaxe","iron_sword"}:
                 new String[]{"stone_pickaxe","stone_sword"};
             return nextEquipmentTarget();
+        }
+        if(Set.of("farm_wheat","farm_crop").contains(goal)) {
+            String crop=goal.equals("farm_wheat")?"wheat":row.get("crop").getAsString();
+            cropBlock=crop.equals("wheat")?Blocks.WHEAT:
+                crop.equals("carrots")?Blocks.CARROTS:
+                crop.equals("beetroot")?Blocks.BEETROOTS:Blocks.POTATOES;
+            Item item=crop.equals("wheat")?Items.WHEAT:
+                crop.equals("carrots")?Items.CARROT:
+                crop.equals("beetroot")?Items.BEETROOT:Items.POTATO;
+            Item seed=crop.equals("wheat")?Items.WHEAT_SEEDS:
+                crop.equals("beetroot")?Items.BEETROOT_SEEDS:item;
+            JsonObject p=row.getAsJsonObject("position");
+            BlockPos origin=new BlockPos(p.get("x").getAsInt(),p.get("y").getAsInt(),p.get("z").getAsInt());
+            int width=row.get("width").getAsInt(),depth=row.get("depth").getAsInt();
+            cropTargetCount=row.get("targetCount").getAsInt();
+            if(entity.getBlockPos().getSquaredDistance(origin)>12*12)
+                throw new IllegalArgumentException("farm-stage-origin-not-nearby");
+            ServerWorld world=(ServerWorld)entity.getWorld();
+            for(int dx=0;dx<width;dx++)for(int dz=0;dz<depth;dz++) {
+                BlockPos pos=origin.add(dx,0,dz);
+                if(!world.getChunkManager().isChunkLoaded(pos.getX()>>4,pos.getZ()>>4) ||
+                   !world.getBlockState(pos.down()).isOf(Blocks.FARMLAND))
+                    throw new IllegalArgumentException("farm-stage-field-not-loaded-farmland");
+                Block existing=world.getBlockState(pos).getBlock();
+                if(existing!=cropBlock && existing!=Blocks.AIR)
+                    throw new IllegalArgumentException("farm-stage-unrelated-crop-cell");
+                cropCells.add(pos);
+            }
+            cropItem=Registries.ITEM.getId(item).getPath();
+            cropInitialCount=count(cropItem);
+            if(cropInitialCount+cropTargetCount>256)
+                throw new IllegalArgumentException("farm-stage-output-budget");
+            return new CollectCropTask(new ItemTarget(item,cropInitialCount+cropTargetCount),
+                new Block[]{cropBlock},new Item[]{seed},cropCells::contains);
+        }
+        if(goal.equals("build_volume") || goal.equals("shelter")) {
+            volumeStage=new JarvisNativeVolumeTask(entity,row);
+            return volumeStage;
+        }
+        if(goal.equals("defeat_hostile")) {
+            int entityId=row.get("entityId").getAsInt();
+            combatMob=row.get("mob").getAsString();
+            ServerWorld world=(ServerWorld)entity.getWorld();
+            for(Entity candidate:world.iterateEntities()) {
+                if(candidate.getId()==entityId && candidate instanceof HostileEntity &&
+                   candidate.isAlive() &&
+                   candidate.getPos().squaredDistanceTo(entity.getPos())<=12*12 &&
+                   Registries.ENTITY_TYPE.getId(candidate.getType()).getPath().equals(combatMob)) {
+                    combatTarget=candidate;break;
+                }
+            }
+            if(combatTarget==null)
+                throw new IllegalArgumentException("combat-stage-target-not-currently-observed");
+            return new KillEntityTask(combatTarget);
         }
         if(goal.equals("build")) {
             JsonObject p=row.getAsJsonObject("position");
@@ -238,7 +413,64 @@ public final class JarvisNativeSequenceTask extends Task {
         if(!TaskCatalogue.taskExists(currentItem))throw new IllegalArgumentException("catalogue-equipment-missing");
         return TaskCatalogue.getItemTask(currentItem,Math.max(1,currentBefore));
     }
+    private void sampleFarmCells() {
+        if(cropCells.isEmpty() || cropBlock==null)return;
+        ServerWorld world=(ServerWorld)entity.getWorld();
+        for(BlockPos pos:cropCells) {
+            if(!world.getChunkManager().isChunkLoaded(pos.getX()>>4,pos.getZ()>>4))continue;
+            BlockState state=world.getBlockState(pos);
+            int age=-1;
+            if(state.isOf(cropBlock) && cropBlock instanceof CropBlock crop)
+                age=crop.getAge(state);
+            else if(!state.isAir())age=-2;
+            Integer previous=lastCropAge.put(pos,age);
+            if(previous!=null && previous==7 && age>=-1 && age<7 && harvestedCropCount<256)
+                harvestedCropCount++;
+        }
+    }
+    private void executeImmediate(JsonObject row) {
+        String goal=row.get("goal").getAsString();
+        if(goal.equals("transfer")) {
+            JsonObject p=row.getAsJsonObject("position");
+            BlockPos pos=new BlockPos(p.get("x").getAsInt(),p.get("y").getAsInt(),p.get("z").getAsInt());
+            String item=row.get("item").getAsString(),direction=row.get("operation").getAsString();
+            int amount=row.get("targetCount").getAsInt();
+            JarvisNativeInventoryTransfer.Result moved=
+                JarvisNativeInventoryTransfer.move(entity,pos,item,amount,direction);
+            transferVerified=moved.moved==amount &&
+                moved.afterPlayer==(direction.equals("deposit")?moved.beforePlayer-amount:moved.beforePlayer+amount) &&
+                moved.afterContainer==(direction.equals("deposit")?moved.beforeContainer+amount:moved.beforeContainer-amount);
+            if(!transferVerified)throw new IllegalStateException("sequence-transfer-receipt-mismatch");
+            return;
+        }
+        if(goal.equals("trade")) {
+            JarvisNativeVillagerTrade.Result traded=JarvisNativeVillagerTrade.execute(entity,row);
+            tradeVerified=traded.verified;
+            if(!tradeVerified)throw new IllegalStateException("sequence-trade-receipt-mismatch");
+            return;
+        }
+        if(goal.equals("enchant")) {
+            if(!"1".equals(System.getenv("JARVIS_MC_BRIDGE_OWNER_XP_ENCHANT_ENABLE"))||
+               owner==null||!row.get("ownerXpConsent").getAsBoolean())
+                throw new IllegalArgumentException("sequence-enchant-owner-xp-opt-in-required");
+            JsonObject p=row.getAsJsonObject("position");
+            BlockPos table=new BlockPos(p.get("x").getAsInt(),p.get("y").getAsInt(),p.get("z").getAsInt());
+            JarvisNativeOwnerEnchant.Result enchanted=JarvisNativeOwnerEnchant.enchant(
+                entity,owner,table,row.get("item").getAsString(),row.get("choice").getAsInt());
+            enchantVerified=enchanted.verified;
+            if(!enchantVerified)throw new IllegalStateException("sequence-enchant-receipt-mismatch");
+            return;
+        }
+        throw new IllegalArgumentException("unknown-immediate-sequence-stage");
+    }
+
     private boolean physicallyDone(){
+        if(transferVerified||tradeVerified||enchantVerified)return true;
+        if(volumeStage!=null)return volumeStage.complete();
+        if(cropBlock!=null)
+            return harvestedCropCount>=cropTargetCount &&
+                count(cropItem)>=cropInitialCount+cropTargetCount;
+        if(combatTarget!=null)return !combatTarget.isAlive();
         if(construction!=null){
             BlockPos pos=construction[constructionIndex];
             ServerWorld world=(ServerWorld)entity.getWorld();
@@ -252,11 +484,34 @@ public final class JarvisNativeSequenceTask extends Task {
             return count(currentItem)>=currentBefore+currentQuantity;
         return destination!=null && entity.getBlockPos().isWithinDistance(destination,arrivalRange);
     }
+    private static final class ReceiptTickTask extends Task {
+        private boolean done;
+        @Override protected void onStart(){}
+        @Override protected Task onTick(){done=true;return null;}
+        @Override protected void onStop(Task interruptTask){done=true;}
+        @Override public boolean isFinished(){return done;}
+        @Override protected boolean isEqual(Task other){return other instanceof ReceiptTickTask;}
+        @Override protected String toDebugString(){return "JARVIS native transaction receipt";}
+    }
+
     @Override protected void onStart(){stage="running";}
     @Override protected Task onTick(){
         if(failed || index>=steps.size())return null;
+        sampleFarmCells();
         if(current==null){
-            try {current=prepare(steps.get(index));}
+            JsonObject row=steps.get(index);
+            String goal=row.get("goal").getAsString();
+            try {
+                if(Set.of("transfer","trade","enchant").contains(goal)) {
+                    transferVerified=false;tradeVerified=false;enchantVerified=false;
+                    stage=goal+"["+index+"]";
+                    executeImmediate(row);
+                    if(!physicallyDone())throw new IllegalStateException("sequence-transaction-postcondition-unverified");
+                    current=new ReceiptTickTask();
+                    return current;
+                }
+                current=prepare(row);
+            }
             catch(Exception ex){failed=true;stage="blocked:"+ex.getClass().getSimpleName();return null;}
             return current;
         }

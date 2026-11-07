@@ -61,12 +61,17 @@ For setup, supported models, privacy limitations and acceptance, start with [FAC
 
 ## 2026-11-06: Native autonomous self-evolution
 
-The prototype's self-evolution subsystem now includes owner-scoped runtime
-diagnosis, bounded post-completion skill learning, and an opt-in source-repair
-path with exact-SHA admission, protected-file exclusions, static syntax
-verification and rollback. Automatic repair is disabled by default and requires
-the trusted server setting JARVIS_SELF_REPAIR_AUTO_APPLY=1. This is not a claim
-of unrestricted self-modification or full test/runtime acceptance.
+The prototype's self-evolution subsystem includes owner-scoped runtime
+diagnosis, bounded strategy rework after repeated failures, post-completion
+skill learning, measured baseline-versus-candidate performance evaluation, and
+an opt-in source-repair path with exact-SHA admission, protected-file exclusions,
+static syntax verification, rollback and crash recovery. Automatic repair is
+disabled by default and requires the trusted server setting
+JARVIS_SELF_REPAIR_AUTO_APPLY=1. Performance gains are observational signals,
+not proof of causation. This is not a claim of unrestricted self-modification
+or full test/runtime acceptance.
 
-See [Native Evolution](src/lib/agent/evolution/README.md) and run
-`npm run test:self-evolution-offline` for the disposable offline contract.
+See [Native Evolution](src/lib/agent/evolution/README.md). Offline contracts:
+`npm run test:self-evolution-offline`,
+`npm run test:self-improvement-offline`, and
+`npm run test:goal-loop-integration`.

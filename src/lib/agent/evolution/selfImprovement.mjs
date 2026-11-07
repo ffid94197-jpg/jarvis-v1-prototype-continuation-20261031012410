@@ -210,19 +210,35 @@ export async function recordTaskPerformanceFromJournal(owner,taskId,db,settledSt
   const uncertainEffects=effects.filter(x=>x.status==="ADMITTED"||x.status==="EFFECT_UNKNOWN").length;
   const skillRuns=calls.filter(x=>x.tool==="evolution_skill_run");
   if(skillRuns.length>1)return {recorded:false,reason:"multiple_skill_runs_not_attributable"};
-  let skillId=null;
+  let skillId=null,skillRunVerified=true;
   if(skillRuns.length===1){
     try{
-      const args=JSON.parse(skillRuns[0].argsJson||"{}");
+      const run=skillRuns[0],args=JSON.parse(run.argsJson||"{}");
       if(typeof args.id!=="string"||!SKILL.test(args.id))
         return {recorded:false,reason:"skill_run_id_unverifiable"};
       skillId=args.id;
-    }catch{return {recorded:false,reason:"skill_run_arguments_unreadable"};}
+      const runReceipt=results.get(run.seq);
+      const parsedRun=JSON.parse(runReceipt?.resultJson||"{}");
+      const detail=parsedRun.detail;
+      const expected=detail?.steps;
+      const stageCount=detail?.stageCount;
+      const following=calls.filter(call=>call.seq>run.seq).slice(0,stageCount);
+      skillRunVerified=parsedRun.ok===true&&detail?.queueRequested===true&&
+        detail?.skillId===skillId&&Array.isArray(expected)&&Number.isInteger(stageCount)&&
+        stageCount>=1&&stageCount<=8&&expected.length===stageCount&&
+        following.length===stageCount&&following.every((call,index)=>{
+          if(call.tool!==expected[index]?.tool)return false;
+          const receipt=results.get(call.seq);
+          if(!receipt||receipt.tool!==call.tool)return false;
+          try{return JSON.parse(receipt.resultJson||"{}").ok===true;}
+          catch{return false;}
+        });
+    }catch{return {recorded:false,reason:"skill_run_receipt_unreadable"};}
   }
   const created=task.createdAt instanceof Date?task.createdAt.getTime():Date.parse(task.createdAt);
   const updated=task.updatedAt instanceof Date?task.updatedAt.getTime():Date.parse(task.updatedAt);
   const elapsedMs=Number.isFinite(created)&&Number.isFinite(updated)?Math.max(0,Math.min(7*24*60*60*1000,updated-created)):0;
-  const verified=settledStatus==="completed"&&completeReceipts&&uncertainEffects===0;
+  const verified=settledStatus==="completed"&&completeReceipts&&uncertainEffects===0&&skillRunVerified;
   const outcome=await recordTaskOutcome(owner,{
     taskId,objective:task.objective,skillId,status:settledStatus,stepCount:calls.length,
     elapsedMs,failureCount,uncertainEffects,verified,

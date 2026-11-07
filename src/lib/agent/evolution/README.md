@@ -207,6 +207,10 @@ all of these limits:
 - Crash recovery reconciles the repair ledger; ambiguous outcomes remain
   effect_unknown and are never blindly retried.
 
+The TypeScript parser is a production dependency (not dev-only), because the bounded repair verifier runs inside the deployed server as well as during development. The offline contract asserts that this parser is present before testing repair.
+
+Validate the production dependency set with `npm ci --omit=dev` followed by `npm run test:self-evolution-offline`; use a normal `npm ci` for the full development typecheck and build.
+
 The current verifier parses JSON and JavaScript/TypeScript syntax only. It does
 **not** execute the patched program, run the project's unit tests, perform a
 full TypeScript typecheck, build Next.js/Fabric, or certify Windows runtime

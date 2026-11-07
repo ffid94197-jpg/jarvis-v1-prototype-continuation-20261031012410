@@ -381,8 +381,19 @@ export async function executeTool(
         }
         return {ok:false,tool,evidence:"",error:"Unknown guarded evolution operation"};
       }catch(e){
-        const status=(e&&typeof e==="object")?(e as {status?:unknown}).status:undefined;
-        const effectUnknown=tool==="evolution_repair_apply"&&status===503;
+        let effectUnknown=false;
+        if(tool==="evolution_repair_apply"&&typeof request.id==="string"){
+          try{
+            const {getRepair}=await import("../evolution/repairVault.mjs");
+            const latest=await getRepair(ownerId,request.id);
+            const safeNoMutationOrSettled=["staged","approved","verified","rolled_back"].includes(latest.state);
+            effectUnknown=!safeNoMutationOrSettled;
+          }catch{
+            // If the repair ledger cannot establish whether a write occurred,
+            // preserve quarantine rather than assume the target is unchanged.
+            effectUnknown=true;
+          }
+        }
         return {ok:false,tool,evidence:"",error:e instanceof Error?e.message:"Evolution registry unavailable",
           detail:effectUnknown?{effectUnknown:true}:undefined};
       }

@@ -158,6 +158,27 @@ path on top of Skill Forge and Repair Vault.
 - A classification is not proof of a source-level root cause. Code repair
   still requires a fresh source inspection and exact SHA-bound patch.
 
+### Self-rework — bounded goal strategy revision
+
+- The Core's `GoalProgressWatchdog` fingerprints the canonical tool + arguments,
+  not volatile error wording. Repeated identical failed actions therefore
+  cannot reset the retry counter by changing their error text or JSON key order.
+- After three identical failed actions, the Core requests a fresh advisory
+  milestone plan. The default budget allows two revisions; owner autonomy
+  profiles may select a lower or higher budget, clamped by the hard maximum of
+  four. The revision count and pending-replan state are durably checkpointed.
+- A revised plan must preserve independently verified milestones, replace the
+  failed approach with a materially different safe strategy, and state what
+  evidence will prove the next step. It cannot grant tool permission.
+- After the revision budget is exhausted, the Core stops and reports the task
+  as blocked/partial rather than retrying indefinitely. Uncertain external
+  effects are reconciled, never blindly replayed.
+- This is strategy-level self-rework. Source-level code changes remain governed
+  by the separate Repair Vault and protected-file boundaries.
+- `verify-goal-loop-integration-offline.cjs` now exercises the real Core loop
+  through repeated failures, a persisted replan, and a different next tool;
+  it also checks the watchdog's restart and revision limits.
+
 ### Continuous bounded learning
 
 After a task is durably settled as **completed**, Core checks whether its trace

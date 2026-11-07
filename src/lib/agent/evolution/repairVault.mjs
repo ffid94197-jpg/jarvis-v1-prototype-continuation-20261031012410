@@ -415,8 +415,12 @@ export async function autoApplyRepair(owner,id,taskId){
       throw new RepairError("Repair source SHA changed; automatic apply refused",409);
     const candidate=replaceExact(original.bytes.toString("utf8"),item.oldText,item.newText);
     const preflight=syntaxCheck(item.path,candidate);
-    if(!preflight.available||!preflight.passed)
-      throw new RepairError("Automatic repair requires a passing static syntax preflight",409);
+    if(!preflight.available)
+      throw new RepairError("Automatic repair syntax preflight unavailable ("+
+        preflight.kind+"): "+(preflight.diagnostics||[]).join("; "),503);
+    if(!preflight.passed)
+      throw new RepairError("Automatic repair candidate failed static syntax preflight: "+
+        (preflight.diagnostics||[]).join("; "),409);
     item.state="approved";
     item.approvedAt=new Date().toISOString();
     item.approvalMode="bounded_auto_policy";

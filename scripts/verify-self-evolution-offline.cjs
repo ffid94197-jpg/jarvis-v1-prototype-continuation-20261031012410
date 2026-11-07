@@ -275,6 +275,8 @@ assert.equal(typeof typescript.createSourceFile,"function",
     assert.ok(executor.includes('getRepairState(ownerId,request.id)'));
     assert.ok(repairSource.includes("Automatic repair syntax preflight unavailable"));
     assert.ok(repairSource.includes("candidate failed static syntax preflight"));
+    assert.ok(repairSource.includes('"verification_failed"'));
+    assert.ok(effects.includes('"verification_failed"'));
     assert.ok(effects.includes('"evolution_repair_apply"'));
     assert.ok(effects.includes('eff.tool === "evolution_skill_learn"'));
     assert.ok(effects.includes("recoverRepair"));

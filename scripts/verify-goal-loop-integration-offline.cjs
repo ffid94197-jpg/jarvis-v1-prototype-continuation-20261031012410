@@ -113,5 +113,5 @@ loaded.runTask({taskId:'t',ownerId:'owner',objective:'Autonomously complete full
  assert.equal(data.filter(x=>x.kind==='goal_replan').length,1,'reworked advisory plan durably persisted');
  assert.equal(task.status,'partial','no Minecraft victory fabricated');
  assert.ok(events.some(x=>x.type==='final'&&x.status==='partial'));
- console.log('GOAL_LOOP_INTEGRATION_OFFLINE PASS (8 Core integration + 18 self-rework assertions; mock DB/model/Guardian, no real OS or Minecraft)');
+ console.log('GOAL_LOOP_INTEGRATION_OFFLINE PASS (8 Core integration + 21 self-rework assertions; mock DB/model/Guardian, no real OS or Minecraft)');
 }).catch(err=>{console.error(err.stack||err);process.exitCode=1;});

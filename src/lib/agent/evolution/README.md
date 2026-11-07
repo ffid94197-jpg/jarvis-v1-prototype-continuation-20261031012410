@@ -168,9 +168,13 @@ path on top of Skill Forge and Repair Vault.
   milestone plan. The default budget allows two revisions; owner autonomy
   profiles may select a lower or higher budget, clamped by the hard maximum of
   four. The revision count and pending-replan state are durably checkpointed.
-- A revised plan must preserve independently verified milestones, replace the
-  failed approach with a materially different safe strategy, and state what
-  evidence will prove the next step. It cannot grant tool permission.
+- The replan request includes at most three recent Core observations, bounded
+  and explicitly labelled untrusted tool data. The planner is instructed to
+  preserve only milestones supported by checkable evidence, replace the failed
+  approach with a materially different safe strategy, and state what will prove
+  the next step. Per-milestone completion is not independently certified by this
+  advisory planner; the separate final Core verifier remains authoritative.
+  A revised plan cannot grant tool permission.
 - After the revision budget is exhausted, the Core stops and reports the task
   as blocked/partial rather than retrying indefinitely. Uncertain external
   effects are reconciled, never blindly replayed.

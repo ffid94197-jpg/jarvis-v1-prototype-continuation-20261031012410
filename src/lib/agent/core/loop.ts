@@ -340,7 +340,22 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     emitEvent: (ev: TaskEvent) => void, settleOptions: { effectsHappened: boolean },
   ): Promise<void> => {
     const settled = await settleTaskAndReport(id,to,used,report,emitEvent,settleOptions);
-    if(!settled || to!=="completed" || used<=opts.stepsUsedOffset) return;
+    if(!settled || used<=opts.stepsUsedOffset) return;
+    if(["completed","failed","partial","denied","effect_unknown"].includes(to)){
+      try{
+        const {recordTaskPerformanceFromJournal}=await import("../evolution/selfImprovement.mjs");
+        const performance=await recordTaskPerformanceFromJournal(opts.ownerId,id,db,to);
+        if(performance.evaluation&&performance.evaluation.status!=="insufficient_evidence"){
+          await db.agentStep.create({data:{
+            taskId:id,seq:used*10+8,kind:"self_improvement_evaluation",
+            note:JSON.stringify(performance.evaluation).slice(0,1000),
+          }});
+        }
+      }catch{
+        console.warn("[self-improvement] outcome evaluation unavailable; task settlement is unchanged");
+      }
+    }
+    if(to!=="completed") return;
     try {
       const [rejected,trace] = await Promise.all([
         db.agentStep.count({where:{taskId:id,kind:{in:["guardian_deny","error"]}}}),

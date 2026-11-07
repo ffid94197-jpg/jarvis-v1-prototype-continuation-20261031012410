@@ -152,6 +152,13 @@ const crypto=require("node:crypto");
     assert.equal(ledger.includes(objective),false);
     assert.equal(ledger.includes("reports/q4.txt"),false);
 
+    const corruptOwner="corrupt-owner-"+crypto.randomUUID();
+    const corruptFolder=crypto.createHash("sha256").update(corruptOwner).digest("hex").slice(0,40);
+    await fs.mkdir(path.join(root,corruptFolder),{recursive:true});
+    await fs.writeFile(path.join(root,corruptFolder,"performance.json"),
+      JSON.stringify({version:1,samples:[{taskId:"bad",objectiveHash:"untrusted",verified:true}]}),"utf8");
+    await assert.rejects(improvement.getPerformanceSummary(corruptOwner),/Performance ledger corrupt/);
+
     await assert.rejects(improvement.recordTaskOutcome(owner,{
       taskId:"00000000-0000-4000-8000-000000000301",objective,skillId,
       status:"completed",stepCount:1,elapsedMs:1,failureCount:0,

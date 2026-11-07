@@ -46,7 +46,10 @@ export async function GET(req:NextRequest){
     const [skills,repairs,recovery,diagnostics,performance]=await Promise.all([
       listSkills(session.ownerId,{includeDrafts:true}),listRepairs(session.ownerId),
       inspectRecovery(session.ownerId),diagnoseOwnerRuntime(session.ownerId,db),
-      getPerformanceSummary(session.ownerId)
+      getPerformanceSummary(session.ownerId).catch(()=>({
+        status:"unavailable",sampleCount:0,skills:[],
+        privacy:{rawObjectivesStored:false,rawArgumentsStored:false,secretsStored:false}
+      }))
     ]);
     return Response.json({skills,repairs,recovery,diagnostics,performance,mode:"native_guardian_controlled",
       repairPolicy:{mode:process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1"?"bounded_auto":"owner_approval_required",

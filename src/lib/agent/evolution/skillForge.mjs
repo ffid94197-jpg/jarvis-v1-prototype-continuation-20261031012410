@@ -140,7 +140,7 @@ const summary=item=>({id:item.id,name:item.manifest.name,
   description:item.manifest.description,status:item.status,
   version:item.manifest.schemaVersion,digest:item.digest,createdAt:item.createdAt,
   approvedAt:item.approvedAt||null,stageCount:item.manifest.steps.length,
-  crucible:item.crucible||null});
+  crucible:item.crucible||null,sourceTaskIds:Array.isArray(item.sourceTaskIds)?item.sourceTaskIds.slice(0,16):[]});
 export async function listSkills(owner,{includeDrafts=false}={}){
   const items=await read(owner);
   return items.filter(x=>includeDrafts||x.status==="approved").map(summary);
@@ -151,16 +151,30 @@ export async function getSkill(owner,id){
   if(!item)throw new EvolutionError("Skill not found",404);
   return {...summary(item),manifest:item.manifest};
 }
-export async function stageSkill(owner,raw){
+export async function stageSkill(owner,raw,metadata={}){
+  const sourceTaskId=metadata?.sourceTaskId;
+  if(sourceTaskId!==undefined&&(typeof sourceTaskId!=="string"||
+      !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(sourceTaskId)))
+    throw new EvolutionError("Invalid source task provenance",409);
   const manifest=normalizeSkillDraft(raw),crucible=assessSkill(manifest),
     digest=hash(JSON.stringify(manifest));
   return serialized(owner,async()=>{
     const items=await read(owner);
     const existing=items.find(x=>x.digest===digest&&x.status!=="disabled");
-    if(existing)return {...summary(existing),alreadyExists:true};
+    if(existing){
+      if(sourceTaskId){
+        existing.sourceTaskIds=Array.isArray(existing.sourceTaskIds)?existing.sourceTaskIds:[];
+        if(!existing.sourceTaskIds.includes(sourceTaskId)){
+          existing.sourceTaskIds=[...existing.sourceTaskIds,sourceTaskId].slice(-16);
+          await write(owner,items);
+        }
+      }
+      return {...summary(existing),alreadyExists:true};
+    }
     if(items.length>=MAX_SKILLS)throw new EvolutionError("Skill capacity reached",409);
     const item={id:"sk_"+crypto.randomBytes(16).toString("hex"),
-      status:"staged",manifest,digest,crucible,createdAt:new Date().toISOString()};
+      status:"staged",manifest,digest,crucible,
+      sourceTaskIds:sourceTaskId?[sourceTaskId]:[],createdAt:new Date().toISOString()};
     items.push(item);await write(owner,items);
     return summary(item);
   });

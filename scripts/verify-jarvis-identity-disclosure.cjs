@@ -266,8 +266,12 @@ ok(!/function normalizeCompatibleMessages/.test(compatSrc),
 ok(/const system = messages\.filter\(m => m\.role === "assistant"\)/.test(bridgeSrc) &&
    /system,messages:dialogue|system,\s*messages:\s*dialogue/.test(bridgeSrc),
   'the Anthropic adapter still hoists instructions into the top-level system field');
-ok(/const messages: Msg\[\] = \[\s*\{ role: "assistant", content: PLANNER_SYSTEM_PROMPT \}/.test(loopSrc),
-  'the planner system prompt is the FIRST message Core sends');
+const promptsSrc = fs.readFileSync(path.join(root, 'src/lib/agent/core/prompts.ts'), 'utf8');
+ok(/const messages: Msg\[\] = \[\s*\{ role: "assistant", content: (?:selectPlannerSystemPrompt\?\.\(objective\) \?\? )?PLANNER_SYSTEM_PROMPT \}/.test(loopSrc) &&
+   /return PLANNER_SYSTEM_PROMPT;/.test(promptsSrc) &&
+   /return PLANNER_SYSTEM_PROMPT\.replace\(TOOL_CATALOG_JSON, FILE_ONLY_TOOLS\);/.test(promptsSrc) &&
+   /PLANNER_SYSTEM_PROMPT = `[\s\S]*\$\{JARVIS_IDENTITY_CONTRACT\}/.test(promptsSrc),
+  'the planner system prompt (or its contract-preserving selector, which only ever returns PLANNER_SYSTEM_PROMPT-derived text) is the FIRST message Core sends');
 ok(/messages\.splice\(1, 0, \{ role: "assistant", content: modelIdentityContext\(model\?\.identity\) \}\)/.test(loopSrc),
   'provider metadata is injected into the instruction preface, so it lands in the system message');
 

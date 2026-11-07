@@ -1,13 +1,16 @@
 /**
  * JARVIS native repair vault: prepare -> owner approve -> apply -> rollback.
  * Original implementation of Brahma-inspired self-heal/boot-sentry concepts.
- * NO Brahma Evo/Echo source is embedded. No autonomous executable code or
- * changes outside JARVIS_AGENT_WORKSPACE. Failure => effect_unknown/quarantine.
+ * NO Brahma Evo/Echo source is embedded; no arbitrary generated code is executed.
+ * File changes stay inside JARVIS_AGENT_WORKSPACE and bounded policy. Failure => quarantine.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import {constants as FS} from "node:fs";
+import {createRequire} from "node:module";
+
+const require=createRequire(import.meta.url);
 
 export class RepairError extends Error {
   constructor(message,status=400){super(message);this.name="RepairError";this.status=status;}
@@ -45,7 +48,20 @@ const allowedPath=p=>{
     "tsconfig.json","next.config.ts","next.config.js"]);
   if(parts.some(part=>part.startsWith(".")||blocked.has(part)) ||
      ["src/lib/agent/guardian/","src/lib/agent/auth/",
-      "src/lib/agent/evolution/","src/app/api/jarvis/"].some(prefix=>
+      "src/lib/agent/evolution/","src/app/api/jarvis/",
+      "src/lib/agent/core/loop.ts","src/lib/agent/core/effects.ts",
+      "src/lib/agent/core/taskState.ts","src/lib/agent/core/verifier.ts",
+      "src/lib/agent/core/autonomyPolicy.ts","src/lib/agent/core/approvedSkillQueue.ts",
+      "src/lib/agent/core/skillIntent.ts","src/lib/agent/core/modelProvider.ts",
+      "src/lib/agent/core/prompts.ts","src/lib/agent/core/autonomyGate.ts",
+      "src/lib/agent/core/goalPlanner.ts","src/lib/agent/core/minecraftAiGate.ts",
+      "src/lib/agent/core/observation.ts","src/lib/agent/core/inventoryIntegrity.ts",
+      "src/lib/agent/core/modelErrors.ts","src/lib/agent/core/priorTaskContext.ts",
+      "src/lib/agent/core/minecraftIntent.ts","src/lib/agent/core/capabilityIntent.ts",
+      "src/lib/agent/tools/","src/lib/agent/windows/","src/lib/agent/adoption/",
+      "src/lib/agent/scheduler/","src/lib/agent/routines/","src/app/api/","prisma/",
+      "src/lib/db/","src/lib/db.ts","src/lib/auth/","src/lib/security/",
+      "src/lib/secrets/","src/lib/crypto/","src/lib/credentials/"].some(prefix=>
         p.toLowerCase().startsWith(prefix)))
     throw new RepairError("JARVIS protected configuration/security file is immune to self-repair");
   return p;
@@ -140,7 +156,10 @@ async function serialized(owner,fn){
 const summary=r=>({id:r.id,path:r.path,state:r.state,diagnosis:r.diagnosis,
   beforeSha256:r.beforeSha256,afterSha256:r.afterSha256,createdAt:r.createdAt,
   approvedAt:r.approvedAt||null,appliedAt:r.appliedAt||null,
-  rolledBackAt:r.rolledBackAt||null});
+  rolledBackAt:r.rolledBackAt||null,approvalMode:r.approvalMode||"owner",
+  autoApplyTaskId:r.autoApplyTaskId||null,stagedByTaskId:r.stagedByTaskId||null,
+  diagnosisPatternId:r.diagnosisPatternId||null,verification:r.verification||null,
+  recovery:r.recovery||null});
 export async function listRepairs(owner){
   return (await load(owner)).map(summary);
 }
@@ -170,7 +189,26 @@ export async function getRepair(owner,id){
   // diff to the planner without an explicit owner disclosure decision.
   return {...summary(item),oldText:item.oldText,newText:item.newText};
 }
-export async function stageRepair(owner,raw){
+export async function getRepairState(owner,id){
+  validId(id);
+  const item=(await load(owner)).find(r=>r.id===id);
+  if(!item)throw new RepairError("Repair candidate not found",404);
+  return {state:item.state};
+}
+const SAFE_REPAIR_OUTCOME_STATES=new Set(["staged","approved","verified","rolled_back"]);
+/** A thrown apply call is uncertain unless the durable ledger proves no write or a settled outcome. */
+export function isRepairOutcomeUncertain(state){
+  return typeof state!=="string"||!SAFE_REPAIR_OUTCOME_STATES.has(state);
+}
+export async function stageRepair(owner,raw,metadata={}){
+  const stagedByTaskId=metadata?.taskId;
+  const diagnosisPatternId=metadata?.diagnosisPatternId;
+  if(stagedByTaskId!==undefined&&(typeof stagedByTaskId!=="string"||
+      !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(stagedByTaskId)))
+    throw new RepairError("Invalid Core task provenance",403);
+  if(diagnosisPatternId!==undefined&&(typeof diagnosisPatternId!=="string"||
+      !/^diag_[0-9a-f]{20}$/.test(diagnosisPatternId)))
+    throw new RepairError("Invalid diagnostic pattern provenance",403);
   const spec=proposedPatch(raw);
   return serialized(owner,async()=>{
     const {bytes,hash}=await boundedFile(spec.path);
@@ -182,6 +220,7 @@ export async function stageRepair(owner,raw){
     if(items.length>=MAX_REPAIRS)throw new RepairError("Repair vault capacity reached",409);
     const candidate={id:"rp_"+crypto.randomBytes(16).toString("hex"),
       ...spec,beforeSha256:hash,afterSha256:afterHash,state:"staged",
+      stagedByTaskId:stagedByTaskId||null,diagnosisPatternId:diagnosisPatternId||null,
       createdAt:new Date().toISOString()};
     items.push(candidate);await save(owner,items);
     return summary(candidate);
@@ -196,7 +235,7 @@ export async function approveRepair(owner,id){
     const existing=await boundedFile(item.path);
     if(existing.hash!==item.beforeSha256)
       throw new RepairError("Repair source changed before approval",409);
-    item.state="approved";item.approvedAt=new Date().toISOString();
+    item.state="approved";item.approvedAt=new Date().toISOString();item.approvalMode="owner";
     await save(owner,items);return summary(item);
   });
 }
@@ -261,11 +300,204 @@ export async function applyRepair(owner,id){
     }
   });
 }
+
+function syntaxCheck(rel,text){
+  const ext=path.extname(rel).toLowerCase();
+  if(ext===".json"){
+    try{JSON.parse(text);return {available:true,passed:true,kind:"json_parse",diagnostics:[]};}
+    catch(e){return {available:true,passed:false,kind:"json_parse",
+      diagnostics:[String(e instanceof Error?e.message:"invalid JSON").slice(0,240)]};}
+  }
+  const kinds={".ts":"TS",".tsx":"TSX",".js":"JS",".jsx":"JSX",".mjs":"JS",
+    ".cjs":"JS"};
+  const kindName=kinds[ext];
+  if(!kindName)return {available:false,passed:false,kind:"unsupported",
+    diagnostics:["No static syntax verifier is configured for this file type"]};
+  try{
+    const ts=require("typescript");
+    const kind=ts.ScriptKind[kindName];
+    const source=ts.createSourceFile(rel,text,ts.ScriptTarget.Latest,true,kind);
+    const diagnostics=(source.parseDiagnostics||[]).slice(0,8).map(d=>
+      String(ts.flattenDiagnosticMessageText(d.messageText," ")).slice(0,240));
+    return {available:true,passed:diagnostics.length===0,kind:"typescript_parser",
+      diagnostics};
+  }catch{
+    return {available:false,passed:false,kind:"unavailable",
+      diagnostics:["TypeScript parser is not installed in this runtime"]};
+  }
+}
+
+/**
+ * Static post-apply verification. This parses source; it does NOT execute code,
+ * run the project's test suite, or certify runtime behaviour. Syntax failure
+ * triggers rollback only while the target still exactly matches our patch.
+ */
+export async function verifyRepair(owner,id){
+  validId(id);
+  const initial=(await load(owner)).find(r=>r.id===id);
+  if(!initial)throw new RepairError("Repair candidate not found",404);
+  if(!["applied","verified"].includes(initial.state))
+    throw new RepairError("Only an applied repair can be verified",409);
+  const current=await boundedFile(initial.path);
+  if(current.hash!==initial.afterSha256)
+    return {...summary(initial),verified:false,verification:{
+      available:true,passed:false,kind:"readback",diagnostics:["Current file no longer matches the exact repair SHA"]},
+      rollbackAvailable:false,requiresOwnerReview:true};
+  const checked=syntaxCheck(initial.path,current.bytes.toString("utf8"));
+  if(!checked.available)
+    return {...summary(initial),verified:false,verification:{
+      available:false,passed:false,kind:checked.kind,diagnostics:checked.diagnostics},
+      rollbackAvailable:true,requiresOwnerReview:true};
+  if(checked.passed){
+    return serialized(owner,async()=>{
+      const items=await load(owner),item=items.find(r=>r.id===id);
+      if(!item||!["applied","verified"].includes(item.state))
+        throw new RepairError("Repair state changed before verification",409);
+      const observed=await boundedFile(item.path);
+      if(observed.hash!==item.afterSha256)
+        throw new RepairError("Repair target changed during verification",409);
+      item.state="verified";
+      item.verification={kind:checked.kind,passed:true,checkedAt:new Date().toISOString(),
+        sourceSha256:observed.hash,diagnostics:[]};
+      await save(owner,items);
+      return {...summary(item),verified:true,verificationLevel:"static_syntax_only",
+        runtimeTestsExecuted:false};
+    });
+  }
+  await serialized(owner,async()=>{
+    const items=await load(owner),item=items.find(r=>r.id===id);
+    if(!item||!["applied","verified"].includes(item.state))
+      throw new RepairError("Repair state changed before failed verification was recorded",409);
+    const observed=await boundedFile(item.path);
+    if(observed.hash!==item.afterSha256)
+      throw new RepairError("Repair target changed; refusing automatic rollback",409);
+    item.state="verification_failed";
+    item.verification={kind:checked.kind,passed:false,checkedAt:new Date().toISOString(),
+      sourceSha256:observed.hash,diagnostics:checked.diagnostics};
+    await save(owner,items);
+  });
+  try{
+    const rolled=await rollbackRepair(owner,id);
+    return {...rolled,verified:false,verification:{
+      kind:checked.kind,passed:false,diagnostics:checked.diagnostics},
+      automaticRollback:true,runtimeTestsExecuted:false};
+  }catch(e){
+    await serialized(owner,async()=>{
+      const items=await load(owner),item=items.find(r=>r.id===id);
+      if(item&&item.state==="verification_failed"){
+        item.state="effect_unknown";
+        item.recovery={observed:"rollback_failed",recoveredAt:new Date().toISOString(),
+          outcome:"verification failed and rollback could not be confirmed"};
+        await save(owner,items);
+      }
+    }).catch(()=>{});
+    const latest=(await load(owner)).find(r=>r.id===id);
+    return {...summary(latest||initial),verified:false,verification:{
+      kind:checked.kind,passed:false,diagnostics:checked.diagnostics},
+      automaticRollback:false,effectUnknown:true,
+      rollbackError:e instanceof Error?e.message:"rollback failed"};
+  }
+}
+
+/**
+ * Bounded autonomous repair. It is disabled unless the trusted server operator
+ * sets JARVIS_SELF_REPAIR_AUTO_APPLY=1. The task ID is supplied by Core, not
+ * model arguments. At most one repair is auto-applied per task, only inside
+ * the configured workspace and only for statically parseable safe files.
+ */
+export async function autoApplyRepair(owner,id,taskId){
+  validId(id);
+  if(process.env.JARVIS_SELF_REPAIR_AUTO_APPLY!=="1")
+    throw new RepairError("Bounded automatic repair is disabled by owner policy",403);
+  if(typeof taskId!=="string"||!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(taskId))
+    throw new RepairError("Core task identity required for bounded automatic repair",403);
+  await serialized(owner,async()=>{
+    const items=await load(owner),item=items.find(r=>r.id===id);
+    if(!item||item.state!=="staged")
+      throw new RepairError("Only a fresh staged repair can enter bounded auto-apply",409);
+    if(item.stagedByTaskId!==taskId)
+      throw new RepairError("Automatic repair must use a candidate staged by this exact Core task",403);
+    if(!/^diag_[0-9a-f]{20}$/.test(item.diagnosisPatternId||""))
+      throw new RepairError("Automatic repair requires a current repairable diagnosis pattern",403);
+    if(items.some(r=>r.autoApplyTaskId===taskId))
+      throw new RepairError("One automatic repair per task is the configured limit",409);
+    const original=await boundedFile(item.path);
+    if(original.hash!==item.beforeSha256)
+      throw new RepairError("Repair source SHA changed; automatic apply refused",409);
+    const candidate=replaceExact(original.bytes.toString("utf8"),item.oldText,item.newText);
+    const preflight=syntaxCheck(item.path,candidate);
+    if(!preflight.available)
+      throw new RepairError("Automatic repair syntax preflight unavailable ("+
+        preflight.kind+"): "+(preflight.diagnostics||[]).join("; "),503);
+    if(!preflight.passed)
+      throw new RepairError("Automatic repair candidate failed static syntax preflight: "+
+        (preflight.diagnostics||[]).join("; "),409);
+    item.state="approved";
+    item.approvedAt=new Date().toISOString();
+    item.approvalMode="bounded_auto_policy";
+    item.autoApplyTaskId=taskId;
+    item.verification={kind:preflight.kind,passed:true,checkedAt:new Date().toISOString(),
+      sourceSha256:item.afterSha256,diagnostics:[],phase:"preflight"};
+    await save(owner,items);
+  });
+  const applied=await applyRepair(owner,id);
+  if(applied.state!=="applied")
+    return {...applied,automaticApproval:true,verified:false};
+  const verified=await verifyRepair(owner,id);
+  return {...verified,automaticApproval:true,verificationLevel:
+    verified.verified?"static_syntax_only":"not_verified",runtimeTestsExecuted:false};
+}
+
+/**
+ * Deterministically recover an interrupted repair from the exact before/after
+ * SHA values. This never guesses and never overwrites a third-party edit.
+ */
+export async function recoverRepair(owner,id){
+  validId(id);
+  const decision=await serialized(owner,async()=>{
+    const items=await load(owner),item=items.find(r=>r.id===id);
+    if(!item)throw new RepairError("Repair candidate not found",404);
+    if(!["applying","rolling_back","effect_unknown","verification_failed"].includes(item.state))
+      return {kind:"stable",repair:summary(item)};
+    const observed=await boundedFile(item.path);
+    const now=new Date().toISOString();
+    if(observed.hash===item.beforeSha256){
+      item.state="rolled_back";
+      item.rolledBackAt=item.rolledBackAt||now;
+      item.recovery={observed:"original",recoveredAt:now,
+        outcome:"candidate is not present; no patch replayed"};
+      await save(owner,items);
+      return {kind:"rolled_back",repair:summary(item)};
+    }
+    if(observed.hash===item.afterSha256){
+      if(item.state==="rolling_back" || item.verification?.passed===false)
+        return {kind:"finish_rollback",repair:summary(item)};
+      item.state="applied";
+      item.appliedAt=item.appliedAt||now;
+      item.recovery={observed:"candidate",recoveredAt:now,
+        outcome:"exact candidate readback recovered; static verification required"};
+      await save(owner,items);
+      return {kind:"verify",repair:summary(item)};
+    }
+    return {kind:"external_change",repair:summary(item)};
+  });
+  if(decision.kind==="finish_rollback"){
+    const rolled=await rollbackRepair(owner,id);
+    return {kind:"rolled_back",repair:rolled};
+  }
+  if(decision.kind==="verify"){
+    const checked=await verifyRepair(owner,id);
+    return {kind:checked.state==="verified"?"verified":
+      checked.state==="rolled_back"?"rolled_back":"unresolved",repair:checked};
+  }
+  return decision;
+}
+
 export async function rollbackRepair(owner,id){
   validId(id);
   return serialized(owner,async()=>{
     const items=await load(owner),item=items.find(r=>r.id===id);
-    if(!item||!["applied","applying","effect_unknown","rolling_back"].includes(item.state))
+    if(!item||!["applied","verified","verification_failed","applying","effect_unknown","rolling_back"].includes(item.state))
       throw new RepairError("Only an applied or ambiguous patch can be rolled back",409);
     const before=await fs.readFile(path.join(dir(owner),item.id+".original")).catch(()=>null);
     if(!before||digest(before)!==item.beforeSha256)

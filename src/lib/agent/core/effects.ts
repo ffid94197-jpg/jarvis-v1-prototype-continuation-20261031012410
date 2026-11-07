@@ -19,7 +19,7 @@ import { db } from "@/lib/db";
 import { resolveScopedPath, assertWithinRoot } from "../guardian/policy";
 import { injectedFault } from "./faults";
 
-export const EFFECTFUL_TOOLS = new Set(["create_folder", "write_file", "windows_open_url", "windows_open_app", "windows_open_settings", "windows_youtube_oldest", "minecraft_companion_join", "minecraft_companion_spawn", "minecraft_companion_stop", "windows_browser_search", "windows_browser_click_link", "windows_browser_fill_search", "windows_browser_scroll", "windows_focus_app", "windows_launch_installed", "windows_native_open_url", "windows_native_action", "windows_desktop_focus", "windows_desktop_click", "windows_desktop_move", "windows_desktop_type", "windows_desktop_keys", "windows_desktop_scroll", "minecraft_companion_command", "windows_minecraft_input", "adoption_stage_github", "adoption_mcp_call", "local_project_build", "evolution_skill_stage", "evolution_skill_learn", "evolution_repair_stage"]);
+export const EFFECTFUL_TOOLS = new Set(["create_folder", "write_file", "windows_open_url", "windows_open_app", "windows_open_settings", "windows_youtube_oldest", "minecraft_companion_join", "minecraft_companion_spawn", "minecraft_companion_stop", "windows_browser_search", "windows_browser_click_link", "windows_browser_fill_search", "windows_browser_scroll", "windows_focus_app", "windows_launch_installed", "windows_native_open_url", "windows_native_action", "windows_desktop_focus", "windows_desktop_click", "windows_desktop_move", "windows_desktop_type", "windows_desktop_keys", "windows_desktop_scroll", "minecraft_companion_command", "windows_minecraft_input", "adoption_stage_github", "adoption_mcp_call", "local_project_build", "evolution_skill_stage", "evolution_skill_learn", "evolution_repair_stage", "evolution_repair_apply"]);
 
 /** Read-only Minecraft observations must be executed again on each request.
  * Treating `status`/`auto_status` as a durable effect previously returned stale
@@ -40,6 +40,8 @@ export interface EffectArgs {
   args: Record<string, unknown>;
   /** Real desktop input may legitimately repeat at distinct durable step ids. */
   stepSeq?: number;
+  /** Server-derived owner identity used only for owner-scoped crash reconciliation. */
+  ownerId?: string;
 }
 
 export const STEP_SCOPED_EFFECTS = new Set([
@@ -153,6 +155,73 @@ export async function reconcileEffect(
   | { kind: "verified"; detail: Record<string, unknown> }
   | { kind: "effect_unknown"; reason: string }
 > {
+  // Evolution effects have their own owner-scoped durable ledgers. Reconcile
+  // them from those ledgers; never replay a model-proposed repair or learning run.
+  if (eff.tool === "evolution_skill_learn") {
+    const sourceTaskId=typeof eff.args.sourceTaskId==="string"?eff.args.sourceTaskId:"";
+    if(!eff.ownerId || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(sourceTaskId)){
+      await settleEffect(effectId,{reconciled:false,reason:"owner or source task identity missing"},"EFFECT_UNKNOWN");
+      return {kind:"effect_unknown",reason:"learned-skill provenance cannot be reconciled"};
+    }
+    try{
+      const {listSkills}=await import("../evolution/skillForge.mjs");
+      const skills=await listSkills(eff.ownerId,{includeDrafts:true});
+      const found=skills.some(item=>Array.isArray(item.sourceTaskIds)&&item.sourceTaskIds.includes(sourceTaskId));
+      if(!found){
+        await settleEffect(effectId,{reconciled:false,reason:"no staged skill receipt for source task"},"EFFECT_UNKNOWN");
+        return {kind:"effect_unknown",reason:"skill staging receipt not found; no automatic replay"};
+      }
+      const ok=await settleEffect(effectId,{reconciled:true,sourceTaskId,skillStaged:true},"SETTLED");
+      return ok?{kind:"verified",detail:{skillStaged:true,sourceTaskId}}:
+        {kind:"effect_unknown",reason:"learning settlement write failed"};
+    }catch{
+      await settleEffect(effectId,{reconciled:false,reason:"skill registry unavailable"},"EFFECT_UNKNOWN");
+      return {kind:"effect_unknown",reason:"skill registry unavailable during reconciliation"};
+    }
+  }
+  if (eff.tool === "evolution_repair_apply") {
+    const repairId=typeof eff.args.id==="string"?eff.args.id:"";
+    if(!eff.ownerId || !/^rp_[0-9a-f]{32}$/.test(repairId)){
+      await settleEffect(effectId,{reconciled:false,reason:"owner or repair identity missing"},"EFFECT_UNKNOWN");
+      return {kind:"effect_unknown",reason:"repair identity cannot be reconciled"};
+    }
+    try{
+      const {getRepair,verifyRepair,recoverRepair}=await import("../evolution/repairVault.mjs");
+      let repair=await getRepair(eff.ownerId,repairId);
+      if(["applying","rolling_back","effect_unknown","verification_failed"].includes(repair.state)){
+        const recovered=await recoverRepair(eff.ownerId,repairId);
+        if(recovered.repair)repair={...repair,...recovered.repair};
+      }
+      if(repair.state==="applied"){
+        const checked=await verifyRepair(eff.ownerId,repairId);
+        repair={...repair,...checked};
+      }
+      if(repair.state==="verified"){
+        const ok=await settleEffect(effectId,{reconciled:true,repairId,state:"verified",
+          verificationLevel:"static_syntax_only",runtimeTestsExecuted:false},"SETTLED");
+        return ok?{kind:"verified",detail:{repairId,state:"verified"}}:
+          {kind:"effect_unknown",reason:"repair settlement write failed"};
+      }
+      if(repair.state==="rolled_back"){
+        const ok=await settleEffect(effectId,{reconciled:true,repairId,state:"rolled_back",
+          repairSucceeded:false},"FAILED");
+        return ok?{kind:"verified",detail:{repairId,state:"rolled_back",repairSucceeded:false}}:
+          {kind:"effect_unknown",reason:"repair rollback settlement write failed"};
+      }
+      if(repair.state==="staged"||repair.state==="approved"){
+        const ok=await settleEffect(effectId,{reconciled:true,repairId,state:repair.state,
+          repairSucceeded:false,noFileMutation:true},"FAILED");
+        return ok?{kind:"verified",detail:{repairId,state:repair.state,noFileMutation:true}}:
+          {kind:"effect_unknown",reason:"no-write repair settlement failed"};
+      }
+      await settleEffect(effectId,{reconciled:false,repairId,state:repair.state,
+        reason:"repair remains ambiguous or lacks static verification"},"EFFECT_UNKNOWN");
+      return {kind:"effect_unknown",reason:"repair requires owner reconciliation; no blind replay"};
+    }catch{
+      await settleEffect(effectId,{reconciled:false,repairId,reason:"repair ledger unavailable"},"EFFECT_UNKNOWN");
+      return {kind:"effect_unknown",reason:"repair ledger unavailable during reconciliation"};
+    }
+  }
   // Anything without a deterministic observation mechanism is permanently
   // uncertain. Do not reinterpret arbitrary external tool arguments as paths.
   if (eff.tool !== "create_folder" && eff.tool !== "write_file") {
@@ -253,7 +322,7 @@ export async function reconcileCrashedTasks(): Promise<void> {
             return {};
           }
         })();
-        const rec = await reconcileEffect(e.id, { tool: e.tool, args });
+        const rec = await reconcileEffect(e.id, { tool: e.tool, args, ownerId: t.ownerId ?? undefined });
         if (rec.kind === "verified") verifiedCount++;
         else unknown = true;
       }
@@ -272,6 +341,28 @@ export async function reconcileCrashedTasks(): Promise<void> {
         data: { status, finalText: text, version: { increment: 1 } },
       }).catch(() => {});
       console.error(`[reconcile] task ${t.id} → ${status} (crash recovery)`);
+    }
+
+    // Post-settlement self-learning is journaled after the owner task is
+    // completed. Recover those narrow owner-scoped evolution effects too;
+    // never downgrade the already-settled owner task because a learning
+    // candidate is optional and owner-reviewable.
+    const completedWithEvolutionResidue=await db.agentTask.findMany({
+      where:{
+        status:"completed",
+        effects:{some:{status:"ADMITTED",tool:{in:["evolution_skill_learn","evolution_repair_apply"]}}},
+      },
+      include:{effects:{where:{status:"ADMITTED",tool:{in:["evolution_skill_learn","evolution_repair_apply"]}}}},
+      orderBy:{updatedAt:"desc"},take:100,
+    });
+    for(const task of completedWithEvolutionResidue){
+      for(const effect of task.effects){
+        const args=(()=>{
+          try{return JSON.parse(effect.argsJson??"{}") as Record<string,unknown>;}
+          catch{return {};}
+        })();
+        await reconcileEffect(effect.id,{tool:effect.tool,args,ownerId:task.ownerId??undefined});
+      }
     }
   } catch {
     // Reconciliation itself must never take the app down.

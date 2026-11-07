@@ -132,7 +132,7 @@ export async function learnFromCompletedTask(owner,db,sourceTaskId=undefined){
       " fully receipted, bounded JARVIS tool stages from a completed owned task.",
     steps
   };
-  const staged=await stageSkill(owner,manifest);
+  const staged=await stageSkill(owner,manifest,{sourceTaskId:task.id});
   return {...staged,sourceTaskId:task.id,sourceStatus:"completed",
     fromActualToolReceipts:true,codeExecuted:false,
     ownerApprovalRequired:true,futureCompletionNotProven:true};

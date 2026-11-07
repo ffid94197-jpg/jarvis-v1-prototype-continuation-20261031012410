@@ -151,6 +151,8 @@ export async function evaluateSkillPerformance(owner,skillId,objective){
     candidateMedianSteps:median(candidate.filter(x=>x.verified).map(x=>x.stepCount)),
     baselineMedianElapsedMs:median(baseline.filter(x=>x.verified).map(x=>x.elapsedMs)),
     candidateMedianElapsedMs:median(candidate.filter(x=>x.verified).map(x=>x.elapsedMs)),
+    baselineMedianFailures:median(baseline.map(x=>x.failureCount)),
+    candidateMedianFailures:median(candidate.map(x=>x.failureCount)),
     approvalChanged:false,skillModified:false,
   };
   if(baseline.length<3||candidate.length<3)
@@ -164,7 +166,10 @@ export async function evaluateSkillPerformance(owner,skillId,objective){
     summary.candidateMedianSteps<=summary.baselineMedianSteps*0.9;
   const timeImproved=summary.baselineMedianElapsedMs!==null&&summary.candidateMedianElapsedMs!==null&&
     summary.candidateMedianElapsedMs<=summary.baselineMedianElapsedMs*0.9;
-  if(summary.candidateSuccessRate>summary.baselineSuccessRate||stepsImproved||timeImproved)
+  const failuresImproved=summary.baselineMedianFailures!==null&&summary.candidateMedianFailures!==null&&
+    summary.candidateMedianFailures<summary.baselineMedianFailures&&
+    summary.candidateMedianFailures<=summary.baselineMedianFailures*0.9;
+  if(summary.candidateSuccessRate>summary.baselineSuccessRate||stepsImproved||timeImproved||failuresImproved)
     return {...summary,status:"improved",
       recommendation:"Candidate shows measured improvement on matched owner task outcomes. Retain only subject to owner review; no approval or permission changed."};
   return {...summary,status:"no_material_improvement",

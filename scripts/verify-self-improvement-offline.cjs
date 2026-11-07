@@ -42,6 +42,8 @@ const crypto=require("node:crypto");
     assert.equal(evaluated.status,"improved");
     assert.equal(evaluated.baselineRuns,3);
     assert.equal(evaluated.candidateRuns,3);
+    assert.equal(evaluated.baselineMedianFailures,1);
+    assert.equal(evaluated.candidateMedianFailures,0);
     assert.equal(evaluated.approvalChanged,false);
     assert.equal(evaluated.skillModified,false);
 
@@ -77,6 +79,23 @@ const crypto=require("node:crypto");
     const insufficient=await improvement.evaluateSkillPerformance(owner,
       "sk_fedcba9876543210fedcba9876543210","A task with no matched baseline");
     assert.equal(insufficient.status,"insufficient_evidence");
+
+    const neutralSkill="sk_22222222222222222222222222222222";
+    const neutralObjective="Check the same stable service health";
+    for(let i=0;i<3;i++){
+      await improvement.recordTaskOutcome(owner,{
+        taskId:"00000000-0000-4000-8000-00000000014"+i,
+        objective:neutralObjective,skillId:null,status:"completed",stepCount:5,
+        elapsedMs:5000,failureCount:0,uncertainEffects:0,verified:true
+      });
+      await improvement.recordTaskOutcome(owner,{
+        taskId:"00000000-0000-4000-8000-00000000015"+i,
+        objective:neutralObjective,skillId:neutralSkill,status:"completed",
+        stepCount:5,elapsedMs:5000,failureCount:0,uncertainEffects:0,verified:true
+      });
+    }
+    const neutral=await improvement.evaluateSkillPerformance(owner,neutralSkill,neutralObjective);
+    assert.equal(neutral.status,"no_material_improvement");
 
     const journalObjective="Read a report and summarize it";
     const journalSkill="sk_11111111111111111111111111111111";
@@ -124,7 +143,7 @@ const crypto=require("node:crypto");
     assert.equal((await improvement.getPerformanceSummary(otherOwner)).sampleCount,2);
 
     const summary=await improvement.getPerformanceSummary(owner);
-    assert.equal(summary.sampleCount,12);
+    assert.equal(summary.sampleCount,18);
     assert.equal(summary.privacy.rawObjectivesStored,false);
     const ownerFolder=crypto.createHash("sha256").update(owner).digest("hex").slice(0,40);
     const ledger=await fs.readFile(path.join(root,ownerFolder,"performance.json"),"utf8");

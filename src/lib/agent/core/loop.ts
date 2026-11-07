@@ -341,7 +341,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   ): Promise<void> => {
     const settled = await settleTaskAndReport(id,to,used,report,emitEvent,settleOptions);
     if(!settled || used<=opts.stepsUsedOffset) return;
-    if(["completed","failed","partial","denied","effect_unknown"].includes(to)){
+    if(new Set<TaskState>(["completed","failed","partial","denied","effect_unknown"]).has(to)){
       try{
         const {recordTaskPerformanceFromJournal}=await import("../evolution/selfImprovement.mjs");
         const performance=await recordTaskPerformanceFromJournal(opts.ownerId,id,db,to);

@@ -39,7 +39,8 @@ const crypto=require("node:crypto");
       });
     }
     const evaluated=await improvement.evaluateSkillPerformance(owner,skillId,objective);
-    assert.equal(evaluated.status,"improved");
+    assert.equal(evaluated.status,"observed_improvement");
+    assert.equal(evaluated.causalClaim,false);
     assert.equal(evaluated.baselineRuns,3);
     assert.equal(evaluated.candidateRuns,3);
     assert.equal(evaluated.baselineMedianFailures,1);

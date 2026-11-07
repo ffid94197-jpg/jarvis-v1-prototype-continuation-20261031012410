@@ -237,7 +237,7 @@ assert.equal(typeof typescript.createSourceFile,"function",
     const effects=await fs.readFile(path.join(__dirname,"../src/lib/agent/core/effects.ts"),"utf8");
     const loop=await fs.readFile(path.join(__dirname,"../src/lib/agent/core/loop.ts"),"utf8");
     const prompts=await fs.readFile(path.join(__dirname,"../src/lib/agent/core/prompts.ts"),"utf8");
-    const repair=await fs.readFile(path.join(__dirname,"../src/lib/agent/evolution/repairVault.mjs"),"utf8");
+    const repairSource=await fs.readFile(path.join(__dirname,"../src/lib/agent/evolution/repairVault.mjs"),"utf8");
     assert.ok(guardian.includes('"evolution_diagnose"'));
     assert.ok(guardian.includes('"evolution_repair_apply"'));
     assert.ok(executor.includes('request.action==="diagnose"'));
@@ -247,8 +247,8 @@ assert.equal(typeof typescript.createSourceFile,"function",
     assert.ok(executor.includes("taskRefs.includes(taskRef)"));
     assert.ok(executor.includes("safeNoMutationOrSettled"));
     assert.ok(executor.includes('getRepair(ownerId,request.id)'));
-    assert.ok(repair.includes("Automatic repair syntax preflight unavailable"));
-    assert.ok(repair.includes("candidate failed static syntax preflight"));
+    assert.ok(repairSource.includes("Automatic repair syntax preflight unavailable"));
+    assert.ok(repairSource.includes("candidate failed static syntax preflight"));
     assert.ok(effects.includes('"evolution_repair_apply"'));
     assert.ok(effects.includes('eff.tool === "evolution_skill_learn"'));
     assert.ok(effects.includes("recoverRepair"));

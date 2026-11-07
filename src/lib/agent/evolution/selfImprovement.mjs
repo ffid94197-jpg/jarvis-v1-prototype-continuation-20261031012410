@@ -58,6 +58,26 @@ async function read(owner){
     const doc=JSON.parse(raw);
     if(doc.version!==1||!Array.isArray(doc.samples)||doc.samples.length>MAX_SAMPLES)
       throw new ImprovementError("Performance ledger corrupt",503);
+    const seen=new Set();
+    for(const sample of doc.samples){
+      const fields=["taskId","objectiveHash","skillId","status","stepCount","elapsedMs",
+        "failureCount","uncertainEffects","verified","recordedAt"];
+      if(!sample||typeof sample!=="object"||Array.isArray(sample)||
+         Object.keys(sample).some(k=>!fields.includes(k))||fields.some(k=>!(k in sample))||
+         typeof sample.taskId!=="string"||!UUID.test(sample.taskId)||seen.has(sample.taskId)||
+         typeof sample.objectiveHash!=="string"||!/^[0-9a-f]{64}$/.test(sample.objectiveHash)||
+         (sample.skillId!==null&&(typeof sample.skillId!=="string"||!SKILL.test(sample.skillId)))||
+         !STATUSES.has(sample.status)||
+         !Number.isInteger(sample.stepCount)||sample.stepCount<0||sample.stepCount>10000||
+         !Number.isInteger(sample.elapsedMs)||sample.elapsedMs<0||sample.elapsedMs>7*24*60*60*1000||
+         !Number.isInteger(sample.failureCount)||sample.failureCount<0||sample.failureCount>10000||
+         !Number.isInteger(sample.uncertainEffects)||sample.uncertainEffects<0||sample.uncertainEffects>10000||
+         typeof sample.verified!=="boolean"||
+         (sample.verified&&(sample.status!=="completed"||sample.uncertainEffects>0))||
+         typeof sample.recordedAt!=="string"||!Number.isFinite(Date.parse(sample.recordedAt)))
+        throw new ImprovementError("Performance ledger corrupt",503);
+      seen.add(sample.taskId);
+    }
     return doc.samples;
   }catch(error){
     if(error?.code==="ENOENT")return [];

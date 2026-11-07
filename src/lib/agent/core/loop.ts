@@ -421,17 +421,29 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let actionNudges = 0;
   let inventoryDraftCorrections = 0;
   let selfDiagnosisInjected = false;
-  const injectSelfDiagnosis=async(trigger:"tool_failure"|"planner_invalid_json")=>{
+  const injectSelfDiagnosis=async(trigger:"tool_failure"|"planner_invalid_json"|"provider_failure")=>{
     if(selfDiagnosisInjected)return;
     selfDiagnosisInjected=true;
     try{
       const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
       const diagnosis=await diagnoseOwnerRuntime(opts.ownerId,db);
+      const patterns=Array.isArray(diagnosis.patterns)?diagnosis.patterns.slice(0,8).map((p:{id?:string;code?:string;category?:string;repairable?:boolean;requiresSourceInspection?:boolean;taskRefs?:string[]})=>({
+        id:p.id,code:p.code,category:p.category,repairable:p.repairable,
+        requiresSourceInspection:p.requiresSourceInspection,taskRefs:p.taskRefs
+      })):[];
+      await db.agentStep.create({data:{
+        taskId,seq:stepsUsed*10+6,kind:"self_diagnosis",
+        note:JSON.stringify({trigger,summary:diagnosis.summary,patterns}).slice(0,2000)
+      }}).catch(()=>{});
       messages.push({role:"assistant",content:
         "CORE SELF-DIAGNOSIS ("+trigger+", read-only classification; not root-cause proof): "+
-        JSON.stringify(diagnosis).slice(0,5000)+
+        JSON.stringify({summary:diagnosis.summary,patterns}).slice(0,5000)+
         ". Treat Guardian denials, provider faults and uncertain effects as non-code issues. Inspect exact source evidence before proposing any repair."});
     }catch{
+      await db.agentStep.create({data:{
+        taskId,seq:stepsUsed*10+6,kind:"self_diagnosis",
+        note:JSON.stringify({trigger,status:"unavailable"})
+      }}).catch(()=>{});
       messages.push({role:"assistant",content:
         "CORE SELF-DIAGNOSIS unavailable after "+trigger+". Do not guess a root cause, weaken Guardian, or retry an uncertain effect."});
     }
@@ -860,6 +872,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         ? ` STAGE_${boundaryStage}` : "";
       console.warn(`[model-task] ${failure.code}${typeof providerStatus === "number" ? ` HTTP_${providerStatus}` : ""}${safeStageTag}; task stopped before any additional tool action.`);
       await persistStep(taskId, seq + 1, "error", { note: failure.code });
+      await injectSelfDiagnosis("provider_failure");
       await settleAndReport(
         taskId,
         "failed",

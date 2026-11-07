@@ -257,6 +257,9 @@ all of these limits:
   writer changed it, rollback refuses to overwrite that change.
 - Crash recovery reconciles the repair ledger; ambiguous outcomes remain
   effect_unknown and are never blindly retried.
+- A syntax-preflight dependency error is a known no-write failure while the
+  durable candidate remains staged/approved. Only applying, applied-but-unverified,
+  rolling-back, unknown or unreadable-ledger states are quarantined as uncertain.
 
 The TypeScript parser is a production dependency (not dev-only), because the bounded repair verifier runs inside the deployed server as well as during development. The offline contract asserts that this parser is present before testing repair.
 

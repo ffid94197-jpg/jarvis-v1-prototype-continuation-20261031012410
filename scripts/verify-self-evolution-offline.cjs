@@ -65,6 +65,10 @@ assert.equal(typeof typescript.createSourceFile,"function",
     assert.equal(JSON.stringify(diagnosis).includes("Guardian denied"),false);
 
     const repair=await import("../src/lib/agent/evolution/repairVault.mjs");
+    for(const safe of ["staged","approved","verified","rolled_back"])
+      assert.equal(repair.isRepairOutcomeUncertain(safe),false,`safe repair state ${safe}`);
+    for(const uncertain of ["applying","applied","rolling_back","effect_unknown","unknown",null])
+      assert.equal(repair.isRepairOutcomeUncertain(uncertain),true,`uncertain repair state ${uncertain}`);
     const file=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","feature.js");
     const original="const value = 1;\n";
     await fs.writeFile(file,original,"utf8");
@@ -245,8 +249,8 @@ assert.equal(typeof typescript.createSourceFile,"function",
     assert.ok(executor.includes("currentPattern"));
     assert.ok(executor.includes("requiresSourceInspection"));
     assert.ok(executor.includes("taskRefs.includes(taskRef)"));
-    assert.ok(executor.includes("safeNoMutationOrSettled"));
-    assert.ok(executor.includes('getRepair(ownerId,request.id)'));
+    assert.ok(executor.includes("isRepairOutcomeUncertain"));
+    assert.ok(executor.includes('getRepairState(ownerId,request.id)'));
     assert.ok(repairSource.includes("Automatic repair syntax preflight unavailable"));
     assert.ok(repairSource.includes("candidate failed static syntax preflight"));
     assert.ok(effects.includes('"evolution_repair_apply"'));

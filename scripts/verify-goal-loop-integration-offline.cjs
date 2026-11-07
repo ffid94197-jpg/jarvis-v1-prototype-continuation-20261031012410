@@ -62,7 +62,7 @@ const mocks={
  './effects':{admitEffect:async()=>{throw Error('unexpected effect')},canonicalKey:()=>'',EFFECTFUL_TOOLS:new Set(),STEP_SCOPED_EFFECTS:new Set(),isEffectfulToolInvocation:()=>false},
  './verifier':{arbitrateCompletion:async()=>({verdict:'partial',predicateLines:['No live Minecraft win proof']})},
  './autonomyGate':{AutonomyGate:class {completionWarning(){return null}observe(){return {stalled:false,guidance:''}}},REPEATABLE_INPUT_TOOLS:new Set(),desktopObjectiveRequiresActions:()=>false},
- './observation':{compactToolObservation:()=>'{"ok":true}'},'./goalPlanner':planModule,
+ './observation':{compactToolObservation:result=>JSON.stringify(result)},'./goalPlanner':planModule,
  '../models/layaRouter':{selectTaskModel:async()=>({pinnedId:'local-test',source:'unit',privacy:'local',category:'game',modelId:'fixture'})},
  '../adoption/registry.mjs':{list:async()=>[]},
 };

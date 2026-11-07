@@ -74,6 +74,7 @@ const crypto=require("node:crypto");
     }
     const regression=await improvement.evaluateSkillPerformance(owner,regressionSkill,regressionObjective);
     assert.equal(regression.status,"regression");
+    assert.ok(regression.candidateMedianFailures>regression.baselineMedianFailures);
     assert.equal(regression.approvalChanged,false);
 
     const insufficient=await improvement.evaluateSkillPerformance(owner,

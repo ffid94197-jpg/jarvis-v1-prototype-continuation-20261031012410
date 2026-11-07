@@ -153,7 +153,7 @@ export async function evaluateSkillPerformance(owner,skillId,objective){
     candidateMedianElapsedMs:median(candidate.filter(x=>x.verified).map(x=>x.elapsedMs)),
     baselineMedianFailures:median(baseline.map(x=>x.failureCount)),
     candidateMedianFailures:median(candidate.map(x=>x.failureCount)),
-    approvalChanged:false,skillModified:false,
+    approvalChanged:false,skillModified:false,causalClaim:false,
   };
   if(baseline.length<3||candidate.length<3)
     return {...summary,recommendation:"Collect at least three matched baseline runs and three candidate runs; no improvement is claimed."};
@@ -173,8 +173,8 @@ export async function evaluateSkillPerformance(owner,skillId,objective){
     summary.candidateMedianFailures<summary.baselineMedianFailures&&
     summary.candidateMedianFailures<=summary.baselineMedianFailures*0.9;
   if(summary.candidateSuccessRate>summary.baselineSuccessRate||stepsImproved||timeImproved||failuresImproved)
-    return {...summary,status:"improved",
-      recommendation:"Candidate shows measured improvement on matched owner task outcomes. Retain only subject to owner review; no approval or permission changed."};
+    return {...summary,status:"observed_improvement",
+      recommendation:"Candidate shows an observational improvement signal on matched owner task outcomes, not proof of causation. Retain only subject to owner review; no approval or permission changed."};
   return {...summary,status:"no_material_improvement",
     recommendation:"Candidate has not demonstrated a material improvement over baseline. Keep the baseline strategy; no automatic change was made."};
 }

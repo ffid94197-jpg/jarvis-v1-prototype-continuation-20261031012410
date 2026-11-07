@@ -33,8 +33,9 @@ The Crucible is static and **not** an isolated runtime test of arbitrary code. T
 
 1. The existing Core can read a file inside \`JARVIS_AGENT_WORKSPACE\`, observe the entire content SHA-256 and propose one precise edit using \`evolution_repair_stage\`.
 2. The vault checks exact SHA, one unique old-text occurrence, allowed scope, non-symlink regular files, UTF-8 and bounded sizes (64 KiB file, 4 KiB replacement spans). Hidden paths, dependencies, core Guardian/auth, evolution implementation, API routes and deployment configuration are immune to this automatic-repair proposal mechanism.
-3. The candidate is **staged**, not applied. The owner reviews the old/new text and must separately approve.
-4. A second explicit owner action **applies** the approved repair, after saving an owner-private original file and durably marking the operation as \`applying\` **before touching the target**.
+3. The candidate is **staged**, not applied. In the default/manual path the owner reviews the old/new text and separately approves it. In bounded-auto mode, the candidate must instead be staged by the active Core task and carry a current repairable diagnosis pattern from that same task.
+4. The default/manual path requires a second explicit owner action to **apply** the approved repair. The separate opt-in auto path may apply at most one same-task candidate only after the strict diagnosis, workspace, protected-path and exact-SHA gates described below. Both paths save an owner-private original file and durably mark the operation as `applying` **before touching the target**.
+
 5. Exact readback determines \`applied\`; ambiguity becomes \`effect_unknown\`.
 6. Explicit rollback restores **only if** the current file SHA matches the applied candidate SHA, or recognizes the file was already restored. If another editor changed it, rollback refuses to overwrite.
 7. \`inspectRecovery\` provides a read-only boot-sentry report of \`applying\`, \`rolling_back\` and \`effect_unknown\` records. It never silently retries an uncertain patch.
@@ -115,15 +116,15 @@ receipt acceptance. It is **not** a live runtime or Windows field acceptance.
 
 **Existing UI:** Settings → Agent Skills & Integrations → Native Skill Forge & Repair Vault.
 
-**Owner API:** \`GET /api/jarvis/evolution\` lists owner-scoped skill/repair summaries and read-only recovery state. \`POST /api/jarvis/evolution\` accepts:
+**Owner API:** `GET /api/jarvis/evolution` lists owner-scoped skill/repair summaries, read-only recovery state, runtime diagnostics and privacy-minimized self-improvement metrics. `POST /api/jarvis/evolution` accepts:
 
 - \`stage_skill\` (\`manifest\`), \`skill_details\` (\`id\`), \`approve_skill\` (\`id\`), \`disable_skill\` (\`id\`), \`expand_skill\` (\`id\`, optional \`inputs\`).
 - \`stage_repair\` (\`candidate\`), \`repair_details\` (\`id\`), \`approve_repair\` (\`id\`), \`apply_repair\` (\`id\`), \`rollback_repair\` (\`id\`).
 
-All API endpoints derive the owner from the active authenticated JARVIS session and require the OWNER role. Mutations use the existing same-origin policy **and** a separate mandatory Guardian audit through the trusted `evolution_owner_control` gate; if audit storage is unavailable, no mutation occurs. Model tool calls cannot assert the trusted owner-control flag, approve, apply or roll back a patch.
+All API endpoints derive the owner from the active authenticated JARVIS session and require the OWNER role. Mutations use the existing same-origin policy **and** a separate mandatory Guardian audit through the trusted `evolution_owner_control` gate; if audit storage is unavailable, no mutation occurs. Model tool calls cannot assert the trusted owner-control flag or invoke manual owner approval/apply/rollback actions. The distinct bounded `evolution_repair_apply` model tool is denied unless the trusted server flag is enabled and the same-task diagnosis gates pass.
 
-**Model-facing tools:** \`evolution_skill_stage\`, \`evolution_skill_list\`,
-\`evolution_skill_expand\`, \`evolution_repair_stage\`, \`evolution_repair_list\`. All pass through JARVIS Guardian and durable audit; staging writes also use the Core effect journal. No backdoor executable skill runner exists.
+**Model-facing tools:** `evolution_diagnose`, `evolution_skill_stage`, `evolution_skill_list`, `evolution_skill_expand`, `evolution_repair_stage`, `evolution_repair_list`, and the strictly gated `evolution_repair_apply`. All pass through JARVIS Guardian and durable audit; effectful staging/apply operations use the Core effect journal. No backdoor executable skill runner exists.
+
 
 ## Configuration and deployment
 

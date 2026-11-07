@@ -211,8 +211,7 @@ learnFromCompletedTask and Forge/Crucible pipeline.
   steps, median elapsed time, median failure count and uncertain-effect rate.
 - A candidate is marked improved only when it improves verified success rate
   or achieves at least a 10% reduction in median steps or elapsed time without
-  lowering success rate or increasing uncertain effects. Regressions and
-  insufficient evidence are reported explicitly.
+  lowering success rate or increasing uncertain effects. A lower success rate, higher median failure count or higher uncertain-effect rate is classified as regression; insufficient evidence is reported explicitly.
 - Evaluation never approves, disables, executes or edits a skill. Owner and
   Guardian controls remain authoritative. The owner-only evolution GET endpoint
   exposes the privacy-minimized performance summary.

@@ -201,7 +201,10 @@ learnFromCompletedTask and Forge/Crucible pipeline.
   step and effect journals. It does not trust model-reported scores.
 - The performance ledger stores only a normalized objective SHA-256, task ID,
   optional approved skill ID, terminal status, tool-step count, elapsed time,
-  failure count, uncertain-effect count and verification result. Raw objectives,
+  failure count, uncertain-effect count and verification result.
+- Samples are immutable/idempotent by task UUID, schema-validated on every read,
+  owner-hashed, atomically written with owner-only mode requests, and fail closed
+  if the ledger is malformed or a writer lock is busy. Raw objectives,
   prompts, tool arguments, file contents and credentials are not stored.
 - Approved-skill runs are attributed only when the durable skill expansion
   receipt and every expected queued stage receipt match the same skill ID.

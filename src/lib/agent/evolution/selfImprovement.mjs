@@ -157,8 +157,11 @@ export async function evaluateSkillPerformance(owner,skillId,objective){
   };
   if(baseline.length<3||candidate.length<3)
     return {...summary,recommendation:"Collect at least three matched baseline runs and three candidate runs; no improvement is claimed."};
+  const failuresRegressed=summary.baselineMedianFailures!==null&&
+    summary.candidateMedianFailures!==null&&
+    summary.candidateMedianFailures>summary.baselineMedianFailures;
   if(summary.candidateSuccessRate<summary.baselineSuccessRate||
-     summary.candidateUncertainRate>summary.baselineUncertainRate){
+     summary.candidateUncertainRate>summary.baselineUncertainRate||failuresRegressed){
     return {...summary,status:"regression",
       recommendation:"Candidate underperformed or increased uncertain effects. Review the skill and consider owner-authorized disable; no automatic change was made."};
   }

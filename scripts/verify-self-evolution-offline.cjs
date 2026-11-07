@@ -260,6 +260,8 @@ assert.equal(typeof typescript.createSourceFile,"function",
     assert.ok(loop.includes("priorRuntimeDiagnosis"));
     assert.ok(loop.includes("Prior runtime self-diagnosis"));
     assert.ok(loop.includes('injectSelfDiagnosis("planner_invalid_json")'));
+    assert.ok(loop.includes('injectSelfDiagnosis("provider_failure")'));
+    assert.ok(loop.includes('kind:"self_diagnosis"'));
     assert.ok(loop.includes("planner invalid JSON; raw model output not persisted"));
     assert.ok(prompts.includes("JARVIS_SELF_REPAIR_AUTO_APPLY=1"));
 

@@ -104,7 +104,7 @@ const crypto=require("node:crypto");
     assert.equal(journalResult.evaluation.status,"insufficient_evidence");
 
     const summary=await improvement.getPerformanceSummary(owner);
-    assert.equal(summary.sampleCount,9);
+    assert.equal(summary.sampleCount,12);
     assert.equal(summary.privacy.rawObjectivesStored,false);
     const ownerFolder=crypto.createHash("sha256").update(owner).digest("hex").slice(0,40);
     const ledger=await fs.readFile(path.join(root,ownerFolder,"performance.json"),"utf8");

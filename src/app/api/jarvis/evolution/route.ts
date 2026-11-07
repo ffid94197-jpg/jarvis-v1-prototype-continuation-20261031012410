@@ -10,6 +10,7 @@ import {authorizeToolCall} from "@/lib/agent/guardian/guardian";
 import {db} from "@/lib/db";
 import {learnFromCompletedTask} from "@/lib/agent/evolution/learnFromTask.mjs";
 import {diagnoseOwnerRuntime} from "@/lib/agent/evolution/diagnostics.mjs";
+import {getPerformanceSummary} from "@/lib/agent/evolution/selfImprovement.mjs";
 import {
   listSkills,getSkill,stageSkill,changeSkill,expandSkill,EvolutionError
 } from "@/lib/agent/evolution/skillForge.mjs";
@@ -42,11 +43,12 @@ const headers={"Cache-Control":"no-store"};
 export async function GET(req:NextRequest){
   const session=await gate(req,false);if(!session.ok)return session.response;
   try{
-    const [skills,repairs,recovery,diagnostics]=await Promise.all([
+    const [skills,repairs,recovery,diagnostics,performance]=await Promise.all([
       listSkills(session.ownerId,{includeDrafts:true}),listRepairs(session.ownerId),
-      inspectRecovery(session.ownerId),diagnoseOwnerRuntime(session.ownerId,db)
+      inspectRecovery(session.ownerId),diagnoseOwnerRuntime(session.ownerId,db),
+      getPerformanceSummary(session.ownerId)
     ]);
-    return Response.json({skills,repairs,recovery,diagnostics,mode:"native_guardian_controlled",
+    return Response.json({skills,repairs,recovery,diagnostics,performance,mode:"native_guardian_controlled",
       repairPolicy:{mode:process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1"?"bounded_auto":"owner_approval_required",
         enabled:process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1",
         scope:"JARVIS_AGENT_WORKSPACE safe non-protected files",maxAutomaticRepairsPerTask:1,

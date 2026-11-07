@@ -209,9 +209,7 @@ learnFromCompletedTask and Forge/Crucible pipeline.
   at least three candidate runs (with the same approved skill) for the same
   normalized owner objective. It compares verified success rate, median tool
   steps, median elapsed time, median failure count and uncertain-effect rate.
-- A candidate is marked improved only when it improves verified success rate
-  or achieves at least a 10% reduction in median steps or elapsed time without
-  lowering success rate or increasing uncertain effects. A lower success rate, higher median failure count or higher uncertain-effect rate is classified as regression; insufficient evidence is reported explicitly.
+- A candidate is marked `observed_improvement` only when it improves verified success rate or achieves at least a 10% reduction in median steps, elapsed time or failure count without lowering success rate or increasing uncertain effects. A lower success rate, higher median failure count or higher uncertain-effect rate is classified as regression; insufficient evidence is reported explicitly. This is observational evidence, not proof of causation or a controlled experiment.
 - Evaluation never approves, disables, executes or edits a skill. Owner and
   Guardian controls remain authoritative. The owner-only evolution GET endpoint
   exposes the privacy-minimized performance summary.

@@ -174,6 +174,30 @@ learnFromCompletedTask and Forge/Crucible pipeline.
 - Failed, partial, denied, effect-uncertain, oversized or unsupported traces
   are not learned.
 
+### Measured self-improvement
+
+- Core records terminal task outcome metrics from the durable owner-scoped task,
+  step and effect journals. It does not trust model-reported scores.
+- The performance ledger stores only a normalized objective SHA-256, task ID,
+  optional approved skill ID, terminal status, tool-step count, elapsed time,
+  failure count, uncertain-effect count and verification result. Raw objectives,
+  prompts, tool arguments, file contents and credentials are not stored.
+- Approved-skill runs are attributed only when the durable skill expansion
+  receipt and every expected queued stage receipt match the same skill ID.
+- The evaluator compares at least three baseline runs (without a skill) against
+  at least three candidate runs (with the same approved skill) for the same
+  normalized owner objective. It compares verified success rate, median tool
+  steps, median elapsed time and uncertain-effect rate.
+- A candidate is marked improved only when it improves verified success rate
+  or achieves at least a 10% reduction in median steps or elapsed time without
+  lowering success rate or increasing uncertain effects. Regressions and
+  insufficient evidence are reported explicitly.
+- Evaluation never approves, disables, executes or edits a skill. Owner and
+  Guardian controls remain authoritative. The owner-only evolution GET endpoint
+  exposes the privacy-minimized performance summary.
+- Run `npm run test:self-improvement-offline` for the disposable baseline vs
+  candidate contract.
+
 ### Bounded autonomous code repair
 
 Automatic repair remains **OFF by default**. A trusted server operator must

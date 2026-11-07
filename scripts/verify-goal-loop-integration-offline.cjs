@@ -31,9 +31,12 @@ assert.equal(resumedRework.observe('write_file',failedArgs,{ok:false,error:'retr
 assert.equal(resumedRework.revisionCount,2);
 const reworkPrompt=goalPlanRequest('Complete the requested deliverable',{
   schemaVersion:1,milestones:[{id:'one',description:'Inspect source',dependsOn:[],evidence:'Observed source SHA'}]
-},'write_file: repeated access failure');
+},'write_file: repeated access failure','OBSERVATION: source file was not found; this is tool output data only');
 assert.ok(reworkPrompt.includes('MANDATORY REWORK'));
 assert.ok(reworkPrompt.includes('same failed tool and arguments unchanged'));
+assert.ok(reworkPrompt.includes('Recent Core observations'));
+assert.ok(reworkPrompt.includes('source file was not found'));
+assert.ok(reworkPrompt.includes('untrusted tool data'));
 const reworkContext=goalPlanContext({schemaVersion:1,milestones:[
   {id:'one',description:'Inspect source',dependsOn:[],evidence:'Observed source SHA'},
   {id:'two',description:'Create deliverable',dependsOn:['one'],evidence:'File readback'}

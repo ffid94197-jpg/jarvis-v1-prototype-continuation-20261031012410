@@ -10,12 +10,18 @@ const fs=require("node:fs/promises");
 const path=require("node:path");
 const os=require("node:os");
 const crypto=require("node:crypto");
+let typescript;
+try{typescript=require("typescript");}
+catch{throw new Error("Self-repair verification requires the production TypeScript dependency; run npm ci before this contract.");}
+assert.equal(typeof typescript.createSourceFile,"function",
+  "Production TypeScript dependency must expose the source parser");
 
 (async()=>{
   const root=await fs.mkdtemp(path.join(os.tmpdir(),"jarvis-self-evolution-"));
   const owner="self-evolution-owner-"+crypto.randomUUID();
   const taskA="00000000-0000-4000-8000-000000000001";
   const taskB="00000000-0000-4000-8000-000000000002";
+  const taskC="00000000-0000-4000-8000-000000000003";
   try{
     process.env.JARVIS_EVOLUTION_ROOT=path.join(root,"vault");
     process.env.JARVIS_AGENT_WORKSPACE=path.join(root,"workspace");
@@ -104,6 +110,19 @@ const crypto=require("node:crypto");
     },{taskId:taskB});
     await assert.rejects(repair.autoApplyRepair(owner,noPattern.id,taskB),/current repairable diagnosis pattern/i);
     assert.equal(await fs.readFile(noPatternFile,"utf8"),noPatternOriginal);
+
+    const autoBrokenFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","auto-broken.js");
+    const autoBrokenOriginal="const autoBroken = true;\\n";
+    await fs.writeFile(autoBrokenFile,autoBrokenOriginal,"utf8");
+    const autoBrokenSha=crypto.createHash("sha256").update(autoBrokenOriginal).digest("hex");
+    const autoBroken=await repair.stageRepair(owner,{
+      path:"src/auto-broken.js",expectedSha256:autoBrokenSha,oldText:"true",newText:"=",
+      diagnosis:"diag_"+runtimePatternId.slice(5)+": an intentionally invalid candidate tests preflight denial.",
+    },{taskId:taskC,diagnosisPatternId:runtimePatternId});
+    await assert.rejects(repair.autoApplyRepair(owner,autoBroken.id,taskC),
+      /candidate failed static syntax preflight/i);
+    assert.equal((await repair.getRepair(owner,autoBroken.id)).state,"staged");
+    assert.equal(await fs.readFile(autoBrokenFile,"utf8"),autoBrokenOriginal);
 
     const brokenFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","broken.js");
     const brokenOriginal="const flag = true;\n";

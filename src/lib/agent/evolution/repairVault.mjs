@@ -457,7 +457,7 @@ export async function recoverRepair(owner,id){
   const decision=await serialized(owner,async()=>{
     const items=await load(owner),item=items.find(r=>r.id===id);
     if(!item)throw new RepairError("Repair candidate not found",404);
-    if(!["applying","rolling_back","effect_unknown"].includes(item.state))
+    if(!["applying","rolling_back","effect_unknown","verification_failed"].includes(item.state))
       return {kind:"stable",repair:summary(item)};
     const observed=await boundedFile(item.path);
     const now=new Date().toISOString();

@@ -257,6 +257,8 @@ assert.equal(typeof typescript.createSourceFile,"function",
     assert.ok(effects.includes("completedWithEvolutionResidue"));
     assert.ok(loop.includes("learnFromCompletedTask"));
     assert.ok(loop.includes("selfDiagnosisInjected"));
+    assert.ok(loop.includes('injectSelfDiagnosis("planner_invalid_json")'));
+    assert.ok(loop.includes("planner invalid JSON; raw model output not persisted"));
     assert.ok(prompts.includes("JARVIS_SELF_REPAIR_AUTO_APPLY=1"));
 
     console.log("PASS: owner-scoped read-only diagnosis and redaction");

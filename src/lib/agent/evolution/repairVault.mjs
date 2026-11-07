@@ -189,6 +189,17 @@ export async function getRepair(owner,id){
   // diff to the planner without an explicit owner disclosure decision.
   return {...summary(item),oldText:item.oldText,newText:item.newText};
 }
+export async function getRepairState(owner,id){
+  validId(id);
+  const item=(await load(owner)).find(r=>r.id===id);
+  if(!item)throw new RepairError("Repair candidate not found",404);
+  return {state:item.state};
+}
+const SAFE_REPAIR_OUTCOME_STATES=new Set(["staged","approved","verified","rolled_back"]);
+/** A thrown apply call is uncertain unless the durable ledger proves no write or a settled outcome. */
+export function isRepairOutcomeUncertain(state){
+  return typeof state!=="string"||!SAFE_REPAIR_OUTCOME_STATES.has(state);
+}
 export async function stageRepair(owner,raw,metadata={}){
   const stagedByTaskId=metadata?.taskId;
   const diagnosisPatternId=metadata?.diagnosisPatternId;

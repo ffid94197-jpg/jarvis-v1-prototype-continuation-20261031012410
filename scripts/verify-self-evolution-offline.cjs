@@ -67,7 +67,7 @@ assert.equal(typeof typescript.createSourceFile,"function",
     const repair=await import("../src/lib/agent/evolution/repairVault.mjs");
     for(const safe of ["staged","approved","verified","rolled_back"])
       assert.equal(repair.isRepairOutcomeUncertain(safe),false,`safe repair state ${safe}`);
-    for(const uncertain of ["applying","applied","rolling_back","effect_unknown","unknown",null])
+    for(const uncertain of ["applying","applied","rolling_back","verification_failed","effect_unknown","unknown",null])
       assert.equal(repair.isRepairOutcomeUncertain(uncertain),true,`uncertain repair state ${uncertain}`);
     const file=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","feature.js");
     const original="const value = 1;\n";

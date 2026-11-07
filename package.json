@@ -85,6 +85,7 @@
     "test:cua-driver-offline": "node scripts/verify-cua-driver-offline.mjs",
     "test:local-project-build-offline": "node scripts/verify-local-project-build.cjs",
     "test:local-project-build-windows-live": "node scripts/verify-local-project-build-windows-live.cjs",
+    "test:self-improvement-offline": "node scripts/verify-self-improvement-offline.cjs",
     "test:self-evolution-offline": "node scripts/verify-self-evolution-offline.cjs"
   },
   "dependencies": {

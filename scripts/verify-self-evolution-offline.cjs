@@ -112,7 +112,7 @@ assert.equal(typeof typescript.createSourceFile,"function",
     assert.equal(await fs.readFile(noPatternFile,"utf8"),noPatternOriginal);
 
     const autoBrokenFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","auto-broken.js");
-    const autoBrokenOriginal="const autoBroken = true;\\n";
+    const autoBrokenOriginal="const autoBroken = true;\n";
     await fs.writeFile(autoBrokenFile,autoBrokenOriginal,"utf8");
     const autoBrokenSha=crypto.createHash("sha256").update(autoBrokenOriginal).digest("hex");
     const autoBroken=await repair.stageRepair(owner,{

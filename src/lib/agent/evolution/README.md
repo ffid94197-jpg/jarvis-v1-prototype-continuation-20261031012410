@@ -187,7 +187,7 @@ learnFromCompletedTask and Forge/Crucible pipeline.
 - The evaluator compares at least three baseline runs (without a skill) against
   at least three candidate runs (with the same approved skill) for the same
   normalized owner objective. It compares verified success rate, median tool
-  steps, median elapsed time and uncertain-effect rate.
+  steps, median elapsed time, median failure count and uncertain-effect rate.
 - A candidate is marked improved only when it improves verified success rate
   or achieves at least a 10% reduction in median steps or elapsed time without
   lowering success rate or increasing uncertain effects. Regressions and

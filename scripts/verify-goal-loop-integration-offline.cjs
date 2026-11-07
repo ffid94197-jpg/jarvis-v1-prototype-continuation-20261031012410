@@ -5,6 +5,42 @@ let ts;try{ts=require('typescript')}catch{ts=require(path.join(path.dirname(fs.r
 const root=path.resolve(__dirname,'..');
 function compile(p){const file=path.join(root,p);const r=ts.transpileModule(fs.readFileSync(file,'utf8'),{fileName:file,reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});assert.equal(r.diagnostics.filter(x=>x.category===ts.DiagnosticCategory.Error).length,0);return r.outputText}
 const planModule={};vm.runInNewContext(compile('src/lib/agent/core/goalPlanner.ts'),{exports:planModule,require},{timeout:3000});
+
+// Self-rework contract: canonical repeated failures trigger bounded replanning,
+// the durable snapshot survives restart, and exhausted revisions stop safely.
+const {GoalProgressWatchdog,goalPlanRequest,goalPlanContext}=planModule;
+const rework=new GoalProgressWatchdog(undefined,{replanBudget:2});
+const failedArgs={path:'report.txt',content:'draft'};
+assert.equal(rework.observe('write_file',failedArgs,{ok:false,error:'EACCES'}),'continue');
+assert.equal(rework.observe('write_file',{content:'draft',path:'report.txt'},{ok:false,error:'timeout'}),'continue');
+assert.equal(rework.observe('write_file',failedArgs,{ok:false,error:'different error wording'}),'replan');
+assert.equal(rework.revisionCount,1);
+assert.equal(rework.isReplanPending,true);
+const savedRework=rework.snapshot();
+const resumedRework=new GoalProgressWatchdog(savedRework,{replanBudget:2});
+assert.equal(resumedRework.revisionCount,1);
+resumedRework.acknowledgeReplan();
+assert.equal(resumedRework.observe('write_file',failedArgs,{ok:false,error:'retry 1'}),'continue');
+assert.equal(resumedRework.observe('write_file',failedArgs,{ok:false,error:'retry 2'}),'continue');
+assert.equal(resumedRework.observe('write_file',failedArgs,{ok:false,error:'retry 3'}),'replan');
+assert.equal(resumedRework.revisionCount,2);
+resumedRework.acknowledgeReplan();
+assert.equal(resumedRework.observe('write_file',failedArgs,{ok:false,error:'retry 4'}),'continue');
+assert.equal(resumedRework.observe('write_file',failedArgs,{ok:false,error:'retry 5'}),'continue');
+assert.equal(resumedRework.observe('write_file',failedArgs,{ok:false,error:'retry 6'}),'blocked');
+assert.equal(resumedRework.revisionCount,2);
+const reworkPrompt=goalPlanRequest('Complete the requested deliverable',{
+  schemaVersion:1,milestones:[{id:'one',description:'Inspect source',dependsOn:[],evidence:'Observed source SHA'}]
+},'write_file: repeated access failure');
+assert.ok(reworkPrompt.includes('MANDATORY REWORK'));
+assert.ok(reworkPrompt.includes('same failed tool and arguments unchanged'));
+const reworkContext=goalPlanContext({schemaVersion:1,milestones:[
+  {id:'one',description:'Inspect source',dependsOn:[],evidence:'Observed source SHA'},
+  {id:'two',description:'Create deliverable',dependsOn:['one'],evidence:'File readback'}
+]});
+assert.ok(reworkContext.includes('preserve independently verified milestones'));
+assert.ok(reworkContext.includes('materially different safe strategy'));
+
 const goal={schemaVersion:1,milestones:[{id:'one',description:'Check current game state',dependsOn:[],evidence:'Observed inventory and location'},{id:'two',description:'Progress toward game victory',dependsOn:['one'],evidence:'In-game equipment and dragon death'}]};
 const data=[],events=[],task={id:'t',status:'planned'};
 let toolCalls=0,modelCalls=0, authCalls=0;
@@ -68,5 +104,5 @@ loaded.runTask({taskId:'t',ownerId:'owner',objective:'Autonomously complete full
  assert.equal(data.filter(x=>x.kind==='goal_plan').length,1,'advisory goal plan persisted once');
  assert.equal(task.status,'partial','no Minecraft victory fabricated');
  assert.ok(events.some(x=>x.type==='final'&&x.status==='partial'));
- console.log('GOAL_LOOP_INTEGRATION_OFFLINE 5/5 PASS (mock DB/model/Guardian, no real OS or Minecraft)');
+ console.log('GOAL_LOOP_INTEGRATION_OFFLINE PASS (5 integration + 18 self-rework assertions; mock DB/model/Guardian, no real OS or Minecraft)');
 }).catch(err=>{console.error(err.stack||err);process.exitCode=1;});

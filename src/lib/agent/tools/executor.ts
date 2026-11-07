@@ -384,10 +384,9 @@ export async function executeTool(
         let effectUnknown=false;
         if(tool==="evolution_repair_apply"&&typeof request.id==="string"){
           try{
-            const {getRepair}=await import("../evolution/repairVault.mjs");
-            const latest=await getRepair(ownerId,request.id);
-            const safeNoMutationOrSettled=["staged","approved","verified","rolled_back"].includes(latest.state);
-            effectUnknown=!safeNoMutationOrSettled;
+            const {getRepairState,isRepairOutcomeUncertain}=await import("../evolution/repairVault.mjs");
+            const latest=await getRepairState(ownerId,request.id);
+            effectUnknown=isRepairOutcomeUncertain(latest.state);
           }catch{
             // If the repair ledger cannot establish whether a write occurred,
             // preserve quarantine rather than assume the target is unchanged.

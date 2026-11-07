@@ -43,16 +43,20 @@ assert.ok(reworkContext.includes('materially different safe strategy'));
 
 const goal={schemaVersion:1,milestones:[{id:'one',description:'Check current game state',dependsOn:[],evidence:'Observed inventory and location'},{id:'two',description:'Progress toward game victory',dependsOn:['one'],evidence:'In-game equipment and dragon death'}]};
 const data=[],events=[],task={id:'t',status:'planned'};
-let toolCalls=0,modelCalls=0, authCalls=0;
+let toolCalls=0,modelCalls=0,authCalls=0,replanCalls=0,plannerDecisions=0;
+const decisionTools=[],revisedGoal={schemaVersion:1,milestones:[
+  {id:'one',description:'Inspect the failed directory strategy',dependsOn:[],evidence:'Read-only file observation'},
+  {id:'two',description:'Use a different read-only file inspection strategy',dependsOn:['one'],evidence:'Actual file readback'}
+]};
 const db={agentStep:{findFirst:async({where})=>{if(where?.kind==='model_pin')return null;const kind=where?.kind;return data.filter(x=>typeof kind==='object'?kind.in.includes(x.kind):x.kind===kind).sort((a,b)=>(b.seq??0)-(a.seq??0))[0]??null},create:async({data:row})=>{data.push(row);return row;}},agentTask:{findUnique:async()=>task}};
 const mocks={
- './modelProvider':{modelIdentityContext:()=>'CURRENT ADVISORY PROVIDER: backend=test provider="fixture" (test metadata, NOT your identity)',createModelBridge:async()=>({identity:{backend:'test',provider:'fixture',modelId:'fixture',local:true},complete:async()=>{modelCalls++;return modelCalls===1?JSON.stringify(goal):modelCalls===2?JSON.stringify({action:'tool',tool:'list_dir',args:{path:'.'}}):JSON.stringify({action:'final',answer:'not yet won'});},report:async()=> 'Partial work; Dragon not defeated.'})},
+ './modelProvider':{modelIdentityContext:()=>'CURRENT ADVISORY PROVIDER: backend=test provider="fixture" (test metadata, NOT your identity)',createModelBridge:async()=>({identity:{backend:'test',provider:'fixture',modelId:'fixture',local:true},complete:async(messages)=>{modelCalls++;const joined=Array.isArray(messages)?messages.map(m=>String(m.content??'')).join('\\n'):String(messages??'');if(modelCalls===1)return JSON.stringify(goal);if(joined.includes('MANDATORY REWORK')){replanCalls++;return JSON.stringify(revisedGoal);}plannerDecisions++;if(plannerDecisions<=3){decisionTools.push('list_dir');return JSON.stringify({action:'tool',tool:'list_dir',args:{path:'.'}});}if(plannerDecisions===4){decisionTools.push('read_file');return JSON.stringify({action:'tool',tool:'read_file',args:{path:'report.txt'}});}return JSON.stringify({action:'final',answer:'not yet won'});},report:async()=> 'Partial work; Dragon not defeated.'})},
  './laya':{adviseTask:()=>({route:'test'})},
  './windowsIntent':{directWindowsLaunch:()=>null},'./minecraftIntent':{minecraftMissionFromObjective:()=>null,directMinecraftMission:()=>null},'./capabilityIntent':{directCapabilityDiscovery:()=>null},
  './modelErrors':{classifyModelFailure:()=>({code:'MODEL_ERROR',publicMessage:'model unavailable'})},
  '@/lib/db':{db},'../guardian/guardian':{authorizeToolCall:async()=>{authCalls++;return {verdict:'allow'}}},
  '../guardian/policy':{ensureWorkspace:async()=>{}},
- '../tools/executor':{executeTool:async()=>{toolCalls++;return {ok:true,detail:{entries:['hi']},evidence:'Read-only directory list'}}},
+ '../tools/executor':{executeTool:async()=>{toolCalls++;return toolCalls<=3?{ok:false,tool:'list_dir',error:'simulated read-only lookup failure'}:{ok:true,tool:'read_file',detail:{content:'actual report'},evidence:'Read-only file contents returned'}}},
  './prompts':{PLANNER_SYSTEM_PROMPT:'Only authorized tools',FINAL_REPORT_INSTRUCTION:'ground report',plannerUserPrompt:x=>x,sanitizeFinalReport:x=>x,enforceJarvisIdentity:t=>({text:t,corrected:false,detected:null}),JARVIS_IDENTITY_CONTRACT:'test contract'},
  './taskState':{transitionTask:async(id,to)=>{task.status=to;return {ok:true}}},
  './effects':{admitEffect:async()=>{throw Error('unexpected effect')},canonicalKey:()=>'',EFFECTFUL_TOOLS:new Set(),STEP_SCOPED_EFFECTS:new Set(),isEffectfulToolInvocation:()=>false},
@@ -98,11 +102,13 @@ function compileWith(rel,depth){
 }
 const loaded=compileWith('src/lib/agent/core/loop.ts',0);
 loaded.runTask({taskId:'t',ownerId:'owner',objective:'Autonomously complete full Netherite progression in Minecraft',budget:8,stepsUsedOffset:0,emit:x=>events.push(x),isCancelled:()=>false}).then(()=>{
- assert.equal(toolCalls,1,'exactly one authorized observation performed');
- assert.equal(authCalls,1,'every tool routed through Guardian');
- assert.equal(modelCalls,3,'plan + tool + final model calls');
- assert.equal(data.filter(x=>x.kind==='goal_plan').length,1,'advisory goal plan persisted once');
+ assert.equal(toolCalls,4,'three failed actions followed by one reworked action');
+ assert.equal(authCalls,4,'every failed and reworked action routed through Guardian');
+ assert.equal(replanCalls,1,'Core requested a revised plan after repeated identical failures');
+ assert.deepEqual(decisionTools,['list_dir','list_dir','list_dir','read_file'],'revised plan selected a materially different tool');
+ assert.equal(data.filter(x=>x.kind==='goal_plan').length,1,'initial advisory goal plan persisted once');
+ assert.equal(data.filter(x=>x.kind==='goal_replan').length,1,'reworked advisory plan durably persisted');
  assert.equal(task.status,'partial','no Minecraft victory fabricated');
  assert.ok(events.some(x=>x.type==='final'&&x.status==='partial'));
- console.log('GOAL_LOOP_INTEGRATION_OFFLINE PASS (5 integration + 18 self-rework assertions; mock DB/model/Guardian, no real OS or Minecraft)');
+ console.log('GOAL_LOOP_INTEGRATION_OFFLINE PASS (8 Core integration + 18 self-rework assertions; mock DB/model/Guardian, no real OS or Minecraft)');
 }).catch(err=>{console.error(err.stack||err);process.exitCode=1;});

@@ -1634,9 +1634,12 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
       if (watch === "replan") {
         try {
           if (!model) throw new Error("Goal replanning requires a valid model bridge. Refusing to continue automatically.");
+          const reworkEvidence=messages
+            .filter(message=>message.role==="user"&&typeof message.content==="string"&&message.content.startsWith("OBSERVATION"))
+            .slice(-3).map(message=>message.content.slice(0,1200)).join("\\n").slice(-3000);
           const changed = await llmJson(model,[
             {role:"assistant",content:"You are an advisory JARVIS recovery planner, not an executor. Strict JSON only; no tool permissions."},
-            {role:"user",content:goalPlanRequest(objective,goalPlan,`${tool}: ${result.error??"failed"}`)},
+            {role:"user",content:goalPlanRequest(objective,goalPlan,`${tool}: ${result.error??"failed"}`,reworkEvidence)},
           ]);
           const replacement = parseGoalPlan(changed);
           if (!replacement) throw new Error("Invalid revised milestone plan");

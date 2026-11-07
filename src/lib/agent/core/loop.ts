@@ -421,6 +421,21 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   let actionNudges = 0;
   let inventoryDraftCorrections = 0;
   let selfDiagnosisInjected = false;
+  const injectSelfDiagnosis=async(trigger:"tool_failure"|"planner_invalid_json")=>{
+    if(selfDiagnosisInjected)return;
+    selfDiagnosisInjected=true;
+    try{
+      const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
+      const diagnosis=await diagnoseOwnerRuntime(opts.ownerId,db);
+      messages.push({role:"assistant",content:
+        "CORE SELF-DIAGNOSIS ("+trigger+", read-only classification; not root-cause proof): "+
+        JSON.stringify(diagnosis).slice(0,5000)+
+        ". Treat Guardian denials, provider faults and uncertain effects as non-code issues. Inspect exact source evidence before proposing any repair."});
+    }catch{
+      messages.push({role:"assistant",content:
+        "CORE SELF-DIAGNOSIS unavailable after "+trigger+". Do not guess a root cause, weaken Guardian, or retry an uncertain effect."});
+    }
+  };
   let inventorySource = parseInventorySource(objective);
   const inventoryDeliverables=/\b(?:inventory|stock)\b/i.test(objective)
     &&/\b(?:csv|spreadsheet)\b/i.test(objective)
@@ -860,6 +875,11 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
 
     if (!decision) {
       parseRetries++;
+      if(!selfDiagnosisInjected){
+        try{await persistStep(taskId,stepsUsed*10+7,"error",{note:"planner invalid JSON; raw model output not persisted"});}
+        catch{}
+        await injectSelfDiagnosis("planner_invalid_json");
+      }
       if (parseRetries > MAX_PARSE_RETRIES) {
         await persistStep(taskId,seq+1,"error",{note:"planner invalid JSON after bounded retries"});
         await settleAndReport(taskId,effectsHappened?"partial":"failed",stepsUsed,
@@ -1483,20 +1503,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     }
     // First real tool failure triggers one automatic, read-only diagnosis.
     // This consumes no model/provider call and grants no repair authority.
-    if(!result.ok && !selfDiagnosisInjected){
-      selfDiagnosisInjected=true;
-      try{
-        const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
-        const diagnosis=await diagnoseOwnerRuntime(opts.ownerId,db);
-        messages.push({role:"assistant",content:
-          "CORE SELF-DIAGNOSIS (read-only classification; not root-cause proof): "+
-          JSON.stringify(diagnosis).slice(0,5000)+
-          ". Treat Guardian denials, provider faults and uncertain effects as non-code issues. Inspect exact source evidence before proposing any repair."});
-      }catch{
-        messages.push({role:"assistant",content:
-          "CORE SELF-DIAGNOSIS unavailable. Do not guess a root cause, weaken Guardian, or retry an uncertain effect."});
-      }
-    }
+    if(!result.ok)await injectSelfDiagnosis("tool_failure");
 
     // An explicit uncertain mutation outcome is a hard stop. Do not
     // continue planning or retry against an external state that is unknown.

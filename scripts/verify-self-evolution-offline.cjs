@@ -188,6 +188,28 @@ assert.equal(typeof typescript.createSourceFile,"function",
     assert.equal(recovered.repair.state,"verified");
     assert.equal(await fs.readFile(crashFile,"utf8"),"const crashValue = 3;\n");
 
+    // Simulate a crash after a failed static verification but before rollback.
+    const verifyCrashFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","verify-crash.js");
+    const verifyCrashOriginal="const verifyCrash = 1;\n";
+    await fs.writeFile(verifyCrashFile,verifyCrashOriginal,"utf8");
+    const verifyCrashSha=crypto.createHash("sha256").update(verifyCrashOriginal).digest("hex");
+    const verifyCrashCandidate=await repair.stageRepair(owner,{
+      path:"src/verify-crash.js",expectedSha256:verifyCrashSha,oldText:"const verifyCrash = 1;",
+      newText:"const verifyCrash = 2;",
+      diagnosis:"A valid patch is used to simulate interrupted failed-verification recovery.",
+    });
+    await repair.approveRepair(owner,verifyCrashCandidate.id);
+    await repair.applyRepair(owner,verifyCrashCandidate.id);
+    const verifyCrashLedger=JSON.parse(await fs.readFile(ledgerPath,"utf8"));
+    const verifyCrashRecord=verifyCrashLedger.repairs.find(x=>x.id===verifyCrashCandidate.id);
+    verifyCrashRecord.state="verification_failed";
+    verifyCrashRecord.verification={passed:false,kind:"syntax"};
+    await fs.writeFile(ledgerPath,JSON.stringify(verifyCrashLedger),"utf8");
+    const verifyCrashRecovery=await repair.recoverRepair(owner,verifyCrashCandidate.id);
+    assert.equal(verifyCrashRecovery.kind,"rolled_back");
+    assert.equal(verifyCrashRecovery.repair.state,"rolled_back");
+    assert.equal(await fs.readFile(verifyCrashFile,"utf8"),verifyCrashOriginal);
+
     // Simulate a crash after durable apply admission but before the file write.
     const noWriteFile=path.join(process.env.JARVIS_AGENT_WORKSPACE,"src","no-write.js");
     const noWriteOriginal="const noWrite = 1;\n";

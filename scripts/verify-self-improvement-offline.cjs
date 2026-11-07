@@ -103,6 +103,26 @@ const crypto=require("node:crypto");
     assert.equal(journalResult.evidence.verified,true);
     assert.equal(journalResult.evaluation.status,"insufficient_evidence");
 
+    const incompleteTask="00000000-0000-4000-8000-000000000202";
+    const incompleteDb={
+      agentTask:{findFirst:async()=>({
+        id:incompleteTask,ownerId:otherOwner,objective:journalObjective,status:"completed",
+        createdAt:new Date("2026-11-07T10:00:00Z"),updatedAt:new Date("2026-11-07T10:00:02Z")
+      })},
+      agentStep:{findMany:async()=>[
+        {seq:1,kind:"tool_call",tool:"evolution_skill_run",argsJson:JSON.stringify({id:journalSkill})},
+        {seq:1,kind:"tool_result",tool:"evolution_skill_run",resultJson:JSON.stringify({
+          ok:true,detail:{queueRequested:true,skillId:journalSkill,stageCount:1,steps:[{tool:"read_file"}]}
+        })}
+      ]},
+      effectRecord:{findMany:async()=>[]}
+    };
+    const incomplete=await improvement.recordTaskPerformanceFromJournal(
+      otherOwner,incompleteTask,incompleteDb,"completed");
+    assert.equal(incomplete.recorded,true);
+    assert.equal(incomplete.evidence.verified,false);
+    assert.equal((await improvement.getPerformanceSummary(otherOwner)).sampleCount,2);
+
     const summary=await improvement.getPerformanceSummary(owner);
     assert.equal(summary.sampleCount,12);
     assert.equal(summary.privacy.rawObjectivesStored,false);

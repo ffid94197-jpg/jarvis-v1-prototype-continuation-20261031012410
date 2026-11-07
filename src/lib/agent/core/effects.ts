@@ -188,7 +188,7 @@ export async function reconcileEffect(
     try{
       const {getRepair,verifyRepair,recoverRepair}=await import("../evolution/repairVault.mjs");
       let repair=await getRepair(eff.ownerId,repairId);
-      if(["applying","rolling_back","effect_unknown"].includes(repair.state)){
+      if(["applying","rolling_back","effect_unknown","verification_failed"].includes(repair.state)){
         const recovered=await recoverRepair(eff.ownerId,repairId);
         if(recovered.repair)repair={...repair,...recovered.repair};
       }

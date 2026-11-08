@@ -3,6 +3,7 @@
  * Only a genuine companion observation can unlock a bounded action.
  */
 import {minecraftMissionFromObjective, MINECRAFT_COUNT_TOKEN, MINECRAFT_COUNT_UNIT, parseMinecraftCount} from "./minecraftIntent";
+import {MINECRAFT_SAFE_GATHER_RESOURCES} from "./minecraftResources";
 
 export type MinecraftAiObservation = {
   position: {x:number;y:number;z:number};
@@ -43,6 +44,8 @@ type NativeMissionReceipt = {
 const READ_ONLY = new Set(['observe','status','inventory','auto_status','inspect_block']);
 const CONTROLLED_EFFECTS = new Set(['collect_wood','craft_item','equip_item','navigate','dig_block','place_block','interact_block','inspect_villager','trade_villager','transfer_container','enchant_item','attack_hostile','stay','follow','come','guard','auto_stop','auto_resume','auto_goal']);
 const MAX_TARGET_DISTANCE = 16;
+// Keep native receipt admission aligned with the Core/Guardian/PlayerEngine catalogue.
+const NATIVE_GATHER_RESOURCES = new Set<string>(MINECRAFT_SAFE_GATHER_RESOURCES);
 const point = (v:unknown):v is {x:number;y:number;z:number} => {
   if (!v || typeof v!=='object') return false;
   const p=v as Record<string,unknown>;
@@ -102,7 +105,10 @@ export function isMinecraftAiObjective(objective:string,minecraftModeEnabled=fal
   if(otherDomain&&!explicitMinecraftScope)return false;
   const contextualMinecraftScope=minecraftModeEnabled&&!otherDomain&&
     /\b(?:house|shelter|hut|wall|bridge|tower|castle|farm|wheat|carrots?|potatoes|villagers?|zombies?|skeletons?|spiders?|creepers?|dragon|nether|end|diamonds?|emeralds?|redstone|iron|gold|wood|planks|logs|pickaxes?|swords?|armor|armour|furnace|crafting table|chest|barrel|bed|boat|caves?|stronghold|ores?|blocks?|bucket|cake|portal|elytra|shulker|beacon|anvil|potions?|hunger|health)\b/.test(s);
-  const minecraftScope=explicitMinecraftScope||contextualMinecraftScope;
+  const contextualMinecraftResource=minecraftModeEnabled&&!otherDomain&&
+    MINECRAFT_SAFE_GATHER_RESOURCES.some(resource=>
+      new RegExp("\\b"+resource.replace(/_/g,"[ _]")+"\\b").test(s));
+  const minecraftScope=explicitMinecraftScope||contextualMinecraftScope||contextualMinecraftResource;
   const actionGoal=/\b(?:play|gather|collect|get|bring|fetch|acquire|craft|mine|dig|excavate|defeat|kill|attack|beat|slay|finish|complete|win|start|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|cook|bake|refine|enchant|explore|travel|find|place|equip|wear|wield|fight|repair|use|open|close|activate|press|toggle|stop|pause|cancel|halt)\b/.test(s);
   if ((minecraftScope||minecraftModeEnabled) && minecraftReadbackQuestion(objective)) return true;
   if (minecraftModeEnabled && /^(?:stop|pause|cancel|halt)$/.test(s)) return true;
@@ -396,7 +402,10 @@ export function mayStartNativeMinecraftGoal(
  if(goal==='gather'){
   if(/\b(?:hundred|thousand|dozen|seventy|eighty|ninety|stacks?|lots|many|several|some|enough)\b/.test(s))return false;
   const resource=args.resource;
-  if(resource==='sand' && /\bred sand\b/.test(s))return false;
+  if(resource==='sand' && /\b(?:red|soul) sand\b/.test(s))return false;
+  // An iron/gold/copper ingot request cannot be silently fulfilled as raw ore.
+  if(resource==='raw_gold'&&/\bgold ingots?\b/.test(s))return false;
+  if(resource==='raw_copper'&&/\bcopper ingots?\b/.test(s))return false;
   if(typeof resource!=='string'||!Object.hasOwn(resources,resource) ||
     !resources[resource].test(s) || !amount(args.targetCount,1,64) ||
     !/\b(?:collect|gather|mine|dig|obtain|find|get|bring|fetch|acquire)\b/.test(s))return false;
@@ -992,7 +1001,7 @@ export class MinecraftAiGate {
         {item:args.item,count:args.targetCount as number,
           operation:String(args.operation)}:null;
       this.nativeCrop=admitted&&args.goal==='farm_crop'&&
-        ['carrots','potatoes'].includes(String(args.crop))&&
+        ['carrots','potatoes','beetroot'].includes(String(args.crop))&&
         Number.isInteger(args.targetCount)?
         {crop:String(args.crop),count:args.targetCount as number}:null;
       this.nativeWheatCount=admitted&&args.goal==='farm_wheat'&&
@@ -1005,7 +1014,7 @@ export class MinecraftAiGate {
       this.nativeDefeat=admitted&&args.goal==='defeat_hostile'&&typeof args.mob==='string'&&
         Number.isInteger(args.entityId)?{mob:args.mob,entityId:args.entityId as number}:null;
       this.nativeStageCount=admitted&&args.goal==='sequence'&&
-        Array.isArray(args.steps)&&args.steps.length>=1&&args.steps.length<=8?
+        Array.isArray(args.steps)&&args.steps.length>=1&&args.steps.length<=16?
           args.steps.length:admitted&&args.goal==='shelter'?3:null;
       this.nativeStatus=null;
     }
@@ -1032,14 +1041,13 @@ export class MinecraftAiGate {
               ...(typeof parsed.item==='string'&&/^[a-z_]{2,64}$/.test(parsed.item)?
                  {item:parsed.item}:{}),
               ...(typeof parsed.resource==='string'&&
-                 ['logs','planks','sticks','cobblestone','raw_iron','iron_ingot',
-                  'diamond','obsidian','flint','netherrack'].includes(parsed.resource)?
+                 NATIVE_GATHER_RESOURCES.has(parsed.resource)?
                  {resource:parsed.resource}:{}),
               ...(typeof parsed.operation==='string'&&
                  ['deposit','withdraw'].includes(parsed.operation)?
                  {operation:parsed.operation}:{}),
               ...(typeof parsed.crop==='string'&&
-                 ['carrots','potatoes'].includes(parsed.crop)?
+                 ['carrots','potatoes','beetroot'].includes(parsed.crop)?
                  {crop:parsed.crop}:{}),
               ...(typeof parsed.destination==='string'?{destination:parsed.destination}:{}),
               ...(typeof parsed.mob==='string'&&/^[a-z_]{1,64}$/.test(parsed.mob)?{mob:parsed.mob}:{}),
@@ -1049,7 +1057,7 @@ export class MinecraftAiGate {
                  (parsed.targetCount as number)>=1&&(parsed.targetCount as number)<=64?
                  {targetCount:parsed.targetCount as number}:{}),
               ...(Number.isInteger(parsed.sequenceIndex)&&
-                 (parsed.sequenceIndex as number)>=0&&(parsed.sequenceIndex as number)<=8?
+                 (parsed.sequenceIndex as number)>=0&&(parsed.sequenceIndex as number)<=16?
                  {sequenceIndex:parsed.sequenceIndex as number}:{})};
           }
         }catch{/* A malformed or truncated status is never completion proof. */}
@@ -1187,7 +1195,8 @@ export class MinecraftAiGate {
     if(this.nativeGoalStarted==='farm_crop'){
       const status=this.nativeStatus,requested=this.nativeCrop,
         started=this.nativeGoalStartedAt;
-      const output=requested?.crop==='carrots'?'carrot':'potato';
+      const output=requested?.crop==='carrots'?'carrot':
+        requested?.crop==='potatoes'?'potato':'beetroot';
       const actual=Number(raw[output])||0;
       if(!status||!requested||started===null||
          !Number.isSafeInteger(status.since)||

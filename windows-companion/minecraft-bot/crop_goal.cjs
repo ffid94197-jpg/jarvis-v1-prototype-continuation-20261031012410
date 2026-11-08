@@ -48,9 +48,13 @@ function observeCrop(bot,s,Vec3){
  });
 }
 function cropPlan(world,progress){
- if(!validCropSpec({...progress,goal:'farm_crop'}))
+ // The running controller also carries status, milestones and durable receipts.
+ // Validate ONLY the exact owner-authorized goal fields, not task metadata.
+ const spec={goal:'farm_crop',crop:progress?.crop,position:progress?.position,
+   width:progress?.width,depth:progress?.depth,targetCount:progress?.targetCount};
+ if(!validCropSpec(spec))
    return {kind:'blocked',why:'Owner crop field not valid'};
- const expected=cropPositions({...progress,goal:'farm_crop'});
+ const expected=cropPositions(spec);
  const cells=world?.cropCells;
  if(!Array.isArray(cells)||cells.length!==expected.length)
   return {kind:'blocked',why:'Missing real loaded crop-field observation'};

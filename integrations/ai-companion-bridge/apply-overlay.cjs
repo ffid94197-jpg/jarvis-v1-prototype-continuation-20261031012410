@@ -8,17 +8,19 @@ const PIN="6bb1df1a06258ca712b66f1404dd05204f25b9c7";
 function fatal(message){ throw new Error("JARVIS overlay refused: "+message); }
 function run(cmd,args){return cp.execFileSync(cmd,args,{cwd:upstream,encoding:"utf8",stdio:["ignore","pipe","pipe"]}).trim();}
 function read(rel){return fs.readFileSync(path.join(upstream,rel),"utf8");}
+function repoShow(ref,rel){try{return cp.execFileSync("git",["show",ref+":"+rel],{cwd:path.resolve(bridge,"../.."),encoding:"utf8",stdio:["ignore","pipe","pipe"]});}catch{return null;}}
 function editOnce(text,from,to){if(text.includes(to))return text;if(!text.includes(from))fatal("upstream code seam missing: "+from);return text.replace(from,to);}
 if(!fs.existsSync(path.join(upstream,"aicompanion","build.gradle"))) fatal("initialize integrations/ai-companion submodule first");
 if(run("git",["rev-parse","HEAD"])!==PIN)fatal("upstream commit does not match pinned audited revision");
 const mainRel="aicompanion/src/main/java/com/neovetta/aicompanion/AiCompanion.java";
 const engRel="engine/src/autoclef/java/adris/altoclef/AltoClefController.java";
 const serviceRel="engine/src/autoclef/java/adris/altoclef/player2api/Player2APIService.java";
+const catalogueRel="engine/src/autoclef/java/adris/altoclef/TaskCatalogue.java";
 const commandRel="aicompanion/src/main/java/com/neovetta/aicompanion/CompanionCommands.java";
 const overlayNames=["JarvisBridgeServer.java","JarvisEndgameTask.java","JarvisNativeJournal.java","JarvisNativeSequenceTask.java","JarvisNativeInventoryTransfer.java","JarvisNativeVillagerTrade.java","JarvisNativeOwnerEnchant.java","JarvisNativeVolumeTask.java"];
 const overlayRoot="aicompanion/src/main/java/com/neovetta/aicompanion/jarvis";
 const originalMain=read(mainRel),originalEngine=read(engRel),
-      originalService=read(serviceRel),originalCommands=read(commandRel);
+      originalService=read(serviceRel),originalCommands=read(commandRel),originalCatalogue=read(catalogueRel);
 const guardedCommands=["goTo","skill","remember"];
 function guardOwnerBrainCommand(source,name){
  const marker="    private static int "+name+"(";
@@ -42,33 +44,49 @@ const idlePatch='if (!"1".equals(System.getenv("JARVIS_MC_BRIDGE_ENABLE")) && (!
 const engineCall="      ConversationManager.injectOnTick(server);";
 const serviceCall='   private Map<String, JsonElement> chatCompletion(JsonObject requestBody) throws Exception {';
 const servicePatch='   private Map<String, JsonElement> chatCompletion(JsonObject requestBody) throws Exception {\n      if ("1".equals(System.getenv("JARVIS_MC_BRIDGE_ENABLE"))) throw new SecurityException("JARVIS-only mode disables independent companion LLM requests");';
+const catalogueCall='      mine("dirt", MiningRequirement.HAND, new Block[]{Blocks.DIRT, Blocks.GRASS_BLOCK, Blocks.DIRT_PATH}, Items.DIRT);';
+const cataloguePatch=catalogueCall+'\n      mine("mud", MiningRequirement.HAND, Blocks.MUD, Items.MUD);\n      mine("moss_block", MiningRequirement.HAND, Blocks.MOSS_BLOCK, Items.MOSS_BLOCK);';
 const enginePatch='      if (!"1".equals(System.getenv("JARVIS_MC_BRIDGE_ENABLE"))) ConversationManager.injectOnTick(server);';
 if(!originalMain.includes(mainCall)&&!originalMain.includes(mainPatch))fatal("main source no longer matches pinned API");
 if(!originalMain.includes(brainCall)&&!originalMain.includes(brainPatch))fatal("brain packet receiver seam changed");
 if(!originalEngine.includes(engineCall)&&!originalEngine.includes(enginePatch))fatal("engine source no longer matches pinned API");
 if(!originalEngine.includes(idleCall)&&!originalEngine.includes(idlePatch))fatal("independent idle task source seam changed");
 if(!originalService.includes(serviceCall)&&!originalService.includes(servicePatch))fatal("LLM service source no longer matches pinned API");
+if(!originalCatalogue.includes(catalogueCall)&&!originalCatalogue.includes(cataloguePatch))fatal("resource catalogue source no longer matches pinned API");
 const clean=run("git",["status","--porcelain","--untracked-files=all"]);
-if(clean && !(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalService.includes(servicePatch)))fatal("submodule contains existing edits; preserve them before overlay");
+if(clean && !(originalMain.includes(mainPatch)&&originalEngine.includes(enginePatch)&&originalService.includes(servicePatch)&&
+    (originalCatalogue.includes(catalogueCall)||originalCatalogue.includes(cataloguePatch))))fatal("submodule contains existing edits; preserve them before overlay");
 const overlayFiles=overlayNames.map(name=>({
  target:path.join(upstream,overlayRoot,name),
+ sourceRel:"integrations/ai-companion-bridge/overlay/com/neovetta/aicompanion/jarvis/"+name,
  content:fs.readFileSync(path.join(bridge,"overlay/com/neovetta/aicompanion/jarvis",name),"utf8")
 }));
-if(originalMain.includes(mainPatch)&&originalMain.includes(brainPatch)&&originalEngine.includes(enginePatch)&&originalEngine.includes(idlePatch)&&originalService.includes(servicePatch)&&guardedCommands.every(name=>{
+if(originalMain.includes(mainPatch)&&originalMain.includes(brainPatch)&&originalEngine.includes(enginePatch)&&originalEngine.includes(idlePatch)&&originalService.includes(servicePatch)&&originalCatalogue.includes(cataloguePatch)&&guardedCommands.every(name=>{
  const marker="    private static int "+name+"(";
  const i=originalCommands.indexOf(marker), start=originalCommands.indexOf("{",i);
  return i>=0&&originalCommands.slice(start+1,start+220).includes("This companion is controlled by JARVIS Core;");
 })) {
- if(overlayFiles.some(file=>!fs.existsSync(file.target)||
-    fs.readFileSync(file.target,"utf8")!==file.content))
-     fatal("existing overlay differs; refusing overwrite");
- console.log("JARVIS AI Companion overlay already applied");
+ let updated=0;
+ for(const file of overlayFiles){
+  if(!fs.existsSync(file.target)){
+   fs.writeFileSync(file.target,file.content,"utf8");updated++;continue;
+  }
+  const existing=fs.readFileSync(file.target,"utf8");
+  if(existing===file.content)continue;
+  const mainVersion=repoShow("main",file.sourceRel);
+  const previousVersion=repoShow("HEAD^",file.sourceRel);
+  if(existing!==mainVersion && existing!==previousVersion)
+   fatal("existing overlay contains unrecognized edits; refusing overwrite: "+file.sourceRel);
+  fs.writeFileSync(file.target,file.content,"utf8");updated++;
+ }
+ console.log(updated?"JARVIS AI Companion overlay updated from the repository's known prior version":"JARVIS AI Companion overlay already applied");
  process.exit(0);
 }
 const nextCommands=guardedCommands.reduce(guardOwnerBrainCommand,originalCommands);
 const nextMain=editOnce(editOnce(originalMain,mainCall,mainPatch),brainCall,brainPatch),
       nextEngine=editOnce(editOnce(originalEngine,engineCall,enginePatch),idleCall,idlePatch),
-      nextService=editOnce(originalService,serviceCall,servicePatch);
+      nextService=editOnce(originalService,serviceCall,servicePatch),
+      nextCatalogue=editOnce(originalCatalogue,catalogueCall,cataloguePatch);
 const engProps=read("engine/gradle.properties"),appProps=read("aicompanion/gradle.properties");
 if(!/minecraft_version\s*=\s*1\.20\.1/.test(engProps) ||
    !/minecraft_version\s*=\s*1\.20\.1/.test(appProps) ||
@@ -80,6 +98,7 @@ fs.writeFileSync(path.join(upstream,engRel),nextEngine,"utf8");
 fs.writeFileSync(path.join(upstream,serviceRel),nextService,"utf8");
 fs.writeFileSync(path.join(upstream,mainRel),nextMain,"utf8");
 fs.writeFileSync(path.join(upstream,commandRel),nextCommands,"utf8");
+fs.writeFileSync(path.join(upstream,catalogueRel),nextCatalogue,"utf8");
 for(const file of overlayFiles)fs.writeFileSync(file.target,file.content,"utf8");
 console.log("Overlay applied to pinned 1.20.1 source; build with JDK 17.");
 console.log("No tests or game sessions were run. Do not mark gameplay accepted.");

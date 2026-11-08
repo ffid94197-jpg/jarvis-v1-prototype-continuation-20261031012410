@@ -35,4 +35,22 @@ check(cropPlan({cropCells:cells(),inventory:{raw:{beetroot_seeds:1}}},spec).kind
 const complete={...spec,milestones:{harvestedCropCount:2}};
 check(cropPlan({cropCells:cells(),inventory:{raw:{beetroot:2}}},complete).kind==='complete','Mission crop receipts and actual holding both required');
 check(cropPlan({cropCells:cells(),inventory:{raw:{beetroot:0}}},complete).kind==='blocked','Lost crop holdings cannot be falsely marked complete');
+const {createController}=require('./autonomy_engine.cjs');
+const stageWorld=raw=>({
+  joined:true,dimension:'minecraft:overworld',position:{x:4,y:65,z:7},
+  health:20,hunger:20,threats:[],inventory:{raw},
+  cropCellsByStage:[cropPositions(spec).map(position=>({position,state:'mature'}))]
+});
+const controller=createController({clock:()=>1000,maxSteps:40,maxSeconds:1000});
+controller.start('sequence',300,{steps:[spec]});
+const staged=controller.next(stageWorld({}));
+check(staged.kind==='harvest_crop'&&staged.crop==='beetroot','Sequence uses current stage and fresh crop observations');
+controller.record(staged,{ok:true,verified:true,proof:'crop_harvest',crop:'beetroot',count:2});
+check(controller.status().milestones.harvestedCropCount===2,'Stage-matched verified harvest receipt is accumulated');
+check(controller.next(stageWorld({beetroot:2})).kind==='complete','Sequence requires harvest receipt plus fresh crop inventory before completion');
+const wrong=createController({clock:()=>1000,maxSteps:40,maxSeconds:1000});
+wrong.start('sequence',300,{steps:[spec]});
+const pending=wrong.next(stageWorld({}));
+wrong.record(pending,{ok:true,verified:true,proof:'crop_harvest',crop:'potatoes',count:2});
+check((wrong.status().milestones.harvestedCropCount||0)===0,'Wrong-crop receipt cannot settle the requested stage');
 console.log('MINECRAFT_CROP_GOAL '+checks+'/'+checks+' PASS (offline only)');

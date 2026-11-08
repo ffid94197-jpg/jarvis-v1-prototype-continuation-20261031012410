@@ -6,6 +6,7 @@
 const {RESOURCES}=require('./resource_goal.cjs');
 const {validBuildSpec,validVolumeSpec}=require('./structure_goal.cjs');
 const {validFarmSpec}=require('./wheat_goal.cjs');
+const {validCropSpec}=require('./crop_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {validSmeltSpec}=require('./smelt_goal.cjs');
 const SIMPLE_STEPS=new Set(['tools','stone_age','iron_age']);
@@ -24,6 +25,7 @@ function validStep(s){
  if(s.goal==='build')return validBuildSpec(s);
  if(s.goal==='build_volume')return validVolumeSpec(s);
  if(s.goal==='farm_wheat')return validFarmSpec(s);
+ if(s.goal==='farm_crop')return validCropSpec(s);
  if(s.goal==='gather')
    return Object.keys(s).every(k=>['goal','resource','targetCount'].includes(k)) &&
      RESOURCES.has(s.resource)&&Number.isInteger(s.targetCount)&&

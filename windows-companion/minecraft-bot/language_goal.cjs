@@ -34,7 +34,7 @@ const SYSTEM=[
  'Allowed commands: follow, come, stay, guard, status, inventory, observe, auto_status, auto_stop, auto_resume (only for an explicit owner continuation of a saved mission).',
  'Allowed auto_goal values: survive, wood, tools, explore, follow, guard, stone_age, iron_age, companion, dragon_run, netherite_dragon_run, dragon_then_netherite_run, netherite_armor_run, netherite_gear_run, shelter, defeat_hostile, gather, craft, smelt, transfer, equip, travel, sequence, build, build_volume, farm_wheat, farm_crop. Defeat_hostile requires one explicitly owner-named, freshly observed allowed hostile ID. No players, creepers, bosses or passive mobs. Death requires a target-specific entityDead receipt; do not infer it from disappearance.',
  'Gather requires resource (logs,planks,sticks,cobblestone,raw_iron,iron_ingot,diamond,obsidian,flint,netherrack,dirt,sand,red_sand,gravel,mud,soul_sand,soul_soil,moss_block,andesite,diorite,granite,tuff,calcite,cobbled_deepslate,blackstone,basalt,coal,raw_copper,raw_gold,redstone,lapis_lazuli,emerald,quartz) and targetCount 1-64. A generic gather must verify actual inventory pickup and cannot use cheats or arbitrary blocks.',
- 'Long-horizon auto_goal farm_crop supports carrots or potatoes only on explicitly owner-named 1x1 to 4x4 previously tilled farmland. It requires real maturity age seven, physical crop inventory pickup and one-to-sixteen NEW harvested items; it cannot invent crop growth, field coordinates or creative items.',
+ 'Long-horizon auto_goal farm_crop supports carrots, potatoes and beetroot on explicitly owner-named 1x1 to 4x4 previously tilled farmland. It requires observed maturity (age seven for carrots/potatoes and age three for beetroot), physical crop inventory pickup and one-to-sixteen NEW harvested items. Beetroot planting requires actual beetroot seeds; no invented growth or field coordinates.',
  'Long-horizon auto_goal smelt supports output items only from the native audited furnace list (iron_ingot, gold_ingot, copper_ingot, netherite_scrap, glass, stone, cooked_beef, cooked_porkchop, cooked_mutton, cooked_chicken, cooked_rabbit, baked_potato). The raw input and fuel are selected by the native planner from real inventory; no invented furnace transformations. A smelting targetCount is 1-16 and must match owner wording with inventory readback.',
  'One-shot durable auto_goal transfer allows owner-specified exact chest/barrel coordinates, real item, 1-64 quantity and deposit/withdraw. It requires both actual player and chest inventory changes, never retries ambiguous mutations or resumes a transfer after disconnect.',
  'Long-horizon auto_goal craft supports selected recipes; craft_item supports any item found in the live Minecraft registry when the server-confirmed inventory contains ingredients, with bounded count 1-16.',
@@ -200,12 +200,12 @@ function directIntent(raw){
  // observer. The exact crop, target count and small field footprint are
  // owner-defined; no LLM may invent a field or substitute a crop.
  const cropRequest=new RegExp('^(?:farm|grow|harvest)(?: me)? ('+
-  COUNT_PATTERN+') (carrots|potatoes) (?:in|from) (?:a |the |my )?'+
+  COUNT_PATTERN+') (carrots|potatoes|beetroots?) (?:in|from) (?:a |the |my )?'+
   '(?:field|farm) (?:of |sized |size )?(\\d)\\s*(?:by|x|×)\\s*(\\d) '+
   '(?:at|starting at|from) (?:coordinates? )?(-?\\d{1,8})[\\s,]+'+
   '(-?\\d{1,8})[\\s,]+(-?\\d{1,8})(?: in minecraft)?$').exec(s);
  if(cropRequest){
-  const spec={goal:'farm_crop',crop:cropRequest[2],
+  const spec={goal:'farm_crop',crop:cropRequest[2].startsWith('beetroot')?'beetroot':cropRequest[2],
     targetCount:asCount(cropRequest[1]),width:Number(cropRequest[3]),
     depth:Number(cropRequest[4]),
     position:{x:Number(cropRequest[5]),y:Number(cropRequest[6]),

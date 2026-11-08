@@ -600,7 +600,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           stage.goal==='build_volume'?
           {...world,buildVolumeCells:world.buildVolumeCellsByStage?.[state.sequenceIndex]}:
           stage.goal==='farm_wheat'?
-          {...world,wheatCells:world.wheatCellsByStage?.[state.sequenceIndex]}:world;
+          {...world,wheatCells:world.wheatCellsByStage?.[state.sequenceIndex]}:
+          stage.goal==='farm_crop'?
+          {...world,cropCells:world.cropCellsByStage?.[state.sequenceIndex]}:world;
         d=decide(stage.goal,stageWorld,state.failures,{...state,...stage});
         if(d.kind!=='complete')break;
         state.sequenceIndex++;
@@ -609,6 +611,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         state.milestones.smeltedOutput=0;
         state.milestones.craftedOutput=0;
         state.milestones.wheatHarvested=0;
+        state.milestones.harvestedCropCount=0;
         state.failures={};
         // An arrival proof for a prior target must never prove the next one.
         state.milestones.travelArrivalVerified=false;
@@ -720,6 +723,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   }
   function record(decision, outcome){
     if(state.status!=='running' || !decision)return;
+    const activeCrop=state.goal==='farm_crop'?state.crop:
+      state.goal==='sequence'&&state.sequence?.[state.sequenceIndex]?.goal==='farm_crop'?
+        state.sequence[state.sequenceIndex].crop:null;
     const ok=outcome?.ok===true && outcome?.verified===true &&
       (decision.kind!=='survey_generic'||(
         SAFE_GENERIC_RESOURCES.has(decision.resource)&&
@@ -734,10 +740,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         (outcome.proof==='wheat_harvest'&&
           Number.isInteger(outcome.count)&&outcome.count>=1&&outcome.count<=64)) &&
       (decision.kind!=='harvest_crop' ||
-        (outcome.proof==='crop_harvest'&&outcome.crop===state.crop &&
+        (outcome.proof==='crop_harvest'&&activeCrop!==null&&outcome.crop===activeCrop &&
           Number.isInteger(outcome.count)&&outcome.count>=1&&outcome.count<=64)) &&
       (decision.kind!=='plant_crop' ||
-        (outcome.proof==='crop_planted'&&outcome.crop===state.crop)) &&
+        (outcome.proof==='crop_planted'&&activeCrop!==null&&outcome.crop===activeCrop)) &&
       (decision.kind!=='approach_container' ||
         outcome.proof==='container_approach') &&
       (decision.kind!=='transfer_inventory' ||
@@ -783,7 +789,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           (state.milestones.wheatHarvested||0)+outcome.count);
       }
       if(decision.kind==='harvest_crop'&&outcome.proof==='crop_harvest' &&
-         outcome.crop===state.crop)
+         activeCrop!==null&&outcome.crop===activeCrop)
         state.milestones.harvestedCropCount=Math.min(16,
           (state.milestones.harvestedCropCount||0)+outcome.count);
       if(decision.kind==='transfer_inventory'&&outcome.proof==='container_transfer')

@@ -416,11 +416,13 @@ async function autoExecute(plan,epoch){
     case 'harvest_wheat':case 'plant_wheat':
     case 'harvest_crop':case 'plant_crop':{
       const cropType=plan.kind.endsWith('_crop')?plan.crop:'wheat';
-      if(!['wheat','carrots','potatoes'].includes(cropType))
+      if(!['wheat','carrots','potatoes','beetroot'].includes(cropType))
         return {ok:false,verified:false,detail:'Unsupported crop identity'};
       const itemType=cropType==='wheat'?'wheat':
-        cropType==='carrots'?'carrot':'potato';
-      const seedType=cropType==='wheat'?'wheat_seeds':itemType;
+        cropType==='carrots'?'carrot':cropType==='potatoes'?'potato':'beetroot';
+      const seedType=cropType==='wheat'?'wheat_seeds':cropType==='beetroot'?'beetroot_seeds':itemType;
+      const cropBlock=cropType==='beetroot'?'beetroots':cropType;
+      const matureAge=cropType==='beetroot'?3:7;
       const harvesting=plan.kind.startsWith('harvest_');
       const p=plan.position;
       const target=new Vec3(p.x,p.y,p.z),prior=bot.blockAt(target);
@@ -449,13 +451,13 @@ async function autoExecute(plan,epoch){
       if(actualFloor?.name!=='farmland')return {ok:false,verified:false,detail:'Farmland changed during travel'};
       if(harvesting){
         const observedAge=Number(crop?.getProperties?.().age);
-        if(crop?.name!==cropType||!Number.isInteger(observedAge)||observedAge!==7 ||
+        if(crop?.name!==cropBlock||!Number.isInteger(observedAge)||observedAge!==matureAge ||
            !bot.canDigBlock?.(crop))
           return {ok:false,verified:false,detail:'Wheat is no longer mature and diggable'};
         const beforeCrop=rawCount(bot,itemType);
         await bot.dig(crop);
         if(epoch!==actionEpoch)throw Error('Owner cancelled wheat harvest');
-        if(bot.blockAt(target)?.name===cropType)
+        if(bot.blockAt(target)?.name===cropBlock)
           return {ok:false,verified:false,detail:'Mature crop removal not observed'};
         const result=await collectVerifiedDrop(target,beforeCrop,
           ()=>rawCount(bot,itemType),epoch,'Verified '+cropType+' harvest');
@@ -486,7 +488,7 @@ async function autoExecute(plan,epoch){
       await bot.placeBlock(actualFloor,new Vec3(0,1,0));
       for(let j=0;j<8;j++){
         if(epoch!==actionEpoch)throw Error('Owner cancelled wheat planting');
-        if(bot.blockAt(target)?.name===cropType&&rawCount(bot,seedType)<beforeSeed)
+        if(bot.blockAt(target)?.name===cropBlock&&rawCount(bot,seedType)<beforeSeed)
           return {ok:true,verified:true,
             ...(plan.kind==='plant_crop'?{proof:'crop_planted',crop:cropType}:{}),
             detail:'Real '+seedType+' consumed and '+cropType+' crop present on farmland'};
@@ -1289,6 +1291,8 @@ async function autoTick(){
       s.goal==='build_volume'?observeVolume(bot,s,Vec3):null);
     gameWorld.wheatCellsByStage=stages.map(s=>
       s.goal==='farm_wheat'?observeWheat(bot,s,Vec3):null);
+    gameWorld.cropCellsByStage=stages.map(s=>
+      s.goal==='farm_crop'?observeCrop(bot,s,Vec3):null);
   }
   // Only the active, owner-authorized craft target is indexed. No broad
   // repository searches, no third-party bot, no AI code execution.

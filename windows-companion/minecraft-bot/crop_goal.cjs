@@ -1,10 +1,12 @@
 'use strict';
-/** Native two-crop farmland goal.
+/** Native bounded farmland goal for carrots, potatoes and beetroot.
  * Actual loaded farmland, crop ages, newly harvested inventory deltas and
  * owner-specified tiny field bounds are mandatory. No growth acceleration,
  * creative inventory, bone-meal scripts or model-selected coordinates.
  */
-const CROPS=Object.freeze({carrots:'carrot',potatoes:'potato'});
+const CROPS=Object.freeze({carrots:'carrot',potatoes:'potato',beetroot:'beetroot'});
+const CROP_BLOCKS=Object.freeze({carrots:'carrots',potatoes:'potatoes',beetroot:'beetroots'});
+const MATURE_AGE=Object.freeze({carrots:7,potatoes:7,beetroot:3});
 const MAX=29999984;
 function validCropSpec(s){
  if(!s||typeof s!=='object'||Array.isArray(s) || s.goal!=='farm_crop'||
@@ -35,10 +37,10 @@ function observeCrop(bot,s,Vec3){
   let state='unloaded';
   if(block&&floor){
    if(floor.name!=='farmland')state='blocked';
-   else if(block.name===s.crop){
+   else if(block.name===CROP_BLOCKS[s.crop]){
     const age=Number(block.getProperties?.().age);
-    state=Number.isInteger(age)&&age>=0&&age<=7?
-      (age===7?'mature':'growing'):'unloaded';
+    state=Number.isInteger(age)&&age>=0&&age<=MATURE_AGE[s.crop]?
+      (age===MATURE_AGE[s.crop]?'mature':'growing'):'unloaded';
    }else if(['air','cave_air'].includes(block.name))state='empty';
    else state='blocked';
   }
@@ -73,10 +75,12 @@ function cropPlan(world,progress){
  if(ripe)return {kind:'harvest_crop',crop:progress.crop,position:ripe.position,
    why:'Harvest one mature owner-authorized crop; count only physical inventory increase'};
  const empty=cells.find(c=>c.state==='empty');
- if(empty&&count>0)return {kind:'plant_crop',crop:progress.crop,position:empty.position,
-   why:'Replant verified owned '+item+' on observed tilled farmland'};
+ const seedType=progress.crop==='beetroot'?'beetroot_seeds':item;
+ const seeds=Number.isSafeInteger(inventory[seedType])?inventory[seedType]:0;
+ if(empty&&seeds>0)return {kind:'plant_crop',crop:progress.crop,position:empty.position,
+   why:'Plant verified owned '+seedType+' on observed tilled farmland'};
  if(cells.some(c=>c.state==='growing'))
   return {kind:'wait',why:'Crop observed still growing; no instant harvest or cheat'};
  return {kind:'blocked',why:'No mature crop or owned seed vegetable on owner-approved farmland'};
 }
-module.exports={CROPS,validCropSpec,cropPositions,observeCrop,cropPlan};
+module.exports={CROPS,CROP_BLOCKS,MATURE_AGE,validCropSpec,cropPositions,observeCrop,cropPlan};

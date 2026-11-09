@@ -34,10 +34,11 @@ const {validBuildSpec,observeBuild,validVolumeSpec,observeVolume,
   placementReference}=require('./structure_goal.cjs');
 const {validFarmSpec,observeWheat}=require('./wheat_goal.cjs');
 const {observeCrop}=require('./crop_goal.cjs');
+const {validFeedPair}=require('./animal_feeding.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {safeSurveyFeet}=require('./wood_navigation.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
-const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
+const {loadedTargets,projectWorld,nativeItemForMission}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
 const {stoneProposal,excavationProposal}=require('./stone_access.cjs');
 const {findCraftingSite,findCarvableCraftingAlcove}=require('./crafting_site.cjs');
@@ -70,13 +71,11 @@ let spawned=false, mode='follow', actionEpoch=0, followTimer, moveTimer, lastAct
 const failedDigTargets=new Map();
 const autopilot=createController({maxSeconds:43200,maxSteps:20000});
 const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-mission.json'),{host,port,owner:leader});
-// Keep the exact crop output visible in compact game observations even when
-// the player carries dozens of unrelated stacks. No invented quantity.
+// Prefer the exact owner-authorized output in bounded observation receipts,
+// including a composed sequence's current verified stage.
+let recentFeedProofItem=null;
 function nativeObservationItem(){
-  const state=autopilot.status();
-  return state.goal==='farm_crop'?
-    (state.crop==='carrots'?'carrot':state.crop==='potatoes'?'potato':null):
-    state.goal==='farm_wheat'?'wheat':state.item;
+ return nativeItemForMission(autopilot.status())||recentFeedProofItem;
 }
 let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
 let advancedBusy=false;
@@ -416,11 +415,13 @@ async function autoExecute(plan,epoch){
     case 'harvest_wheat':case 'plant_wheat':
     case 'harvest_crop':case 'plant_crop':{
       const cropType=plan.kind.endsWith('_crop')?plan.crop:'wheat';
-      if(!['wheat','carrots','potatoes'].includes(cropType))
+      if(!['wheat','carrots','potatoes','beetroot'].includes(cropType))
         return {ok:false,verified:false,detail:'Unsupported crop identity'};
       const itemType=cropType==='wheat'?'wheat':
-        cropType==='carrots'?'carrot':'potato';
-      const seedType=cropType==='wheat'?'wheat_seeds':itemType;
+        cropType==='carrots'?'carrot':cropType==='potatoes'?'potato':'beetroot';
+      const seedType=cropType==='wheat'?'wheat_seeds':cropType==='beetroot'?'beetroot_seeds':itemType;
+      const cropBlock=cropType==='beetroot'?'beetroots':cropType;
+      const matureAge=cropType==='beetroot'?3:7;
       const harvesting=plan.kind.startsWith('harvest_');
       const p=plan.position;
       const target=new Vec3(p.x,p.y,p.z),prior=bot.blockAt(target);
@@ -449,13 +450,13 @@ async function autoExecute(plan,epoch){
       if(actualFloor?.name!=='farmland')return {ok:false,verified:false,detail:'Farmland changed during travel'};
       if(harvesting){
         const observedAge=Number(crop?.getProperties?.().age);
-        if(crop?.name!==cropType||!Number.isInteger(observedAge)||observedAge!==7 ||
+        if(crop?.name!==cropBlock||!Number.isInteger(observedAge)||observedAge!==matureAge ||
            !bot.canDigBlock?.(crop))
           return {ok:false,verified:false,detail:'Wheat is no longer mature and diggable'};
         const beforeCrop=rawCount(bot,itemType);
         await bot.dig(crop);
         if(epoch!==actionEpoch)throw Error('Owner cancelled wheat harvest');
-        if(bot.blockAt(target)?.name===cropType)
+        if(bot.blockAt(target)?.name===cropBlock)
           return {ok:false,verified:false,detail:'Mature crop removal not observed'};
         const result=await collectVerifiedDrop(target,beforeCrop,
           ()=>rawCount(bot,itemType),epoch,'Verified '+cropType+' harvest');
@@ -486,7 +487,7 @@ async function autoExecute(plan,epoch){
       await bot.placeBlock(actualFloor,new Vec3(0,1,0));
       for(let j=0;j<8;j++){
         if(epoch!==actionEpoch)throw Error('Owner cancelled wheat planting');
-        if(bot.blockAt(target)?.name===cropType&&rawCount(bot,seedType)<beforeSeed)
+        if(bot.blockAt(target)?.name===cropBlock&&rawCount(bot,seedType)<beforeSeed)
           return {ok:true,verified:true,
             ...(plan.kind==='plant_crop'?{proof:'crop_planted',crop:cropType}:{}),
             detail:'Real '+seedType+' consumed and '+cropType+' crop present on farmland'};
@@ -1289,6 +1290,8 @@ async function autoTick(){
       s.goal==='build_volume'?observeVolume(bot,s,Vec3):null);
     gameWorld.wheatCellsByStage=stages.map(s=>
       s.goal==='farm_wheat'?observeWheat(bot,s,Vec3):null);
+    gameWorld.cropCellsByStage=stages.map(s=>
+      s.goal==='farm_crop'?observeCrop(bot,s,Vec3):null);
   }
   // Only the active, owner-authorized craft target is indexed. No broad
   // repository searches, no third-party bot, no AI code execution.
@@ -1373,7 +1376,7 @@ async function action(q){
         // the older status blob without grounded block coordinates.
         const observation=projectWorld(
           digest(bot,leader,{dragonDead:lateSkills.session.dragonDied}),
-          loadedTargets(bot,{includeGeneral:true}),lastAction,mode,
+          loadedTargets(bot,{includeGeneral:true}),lastAction,advancedBusy?'auto':mode,
           autopilot.status().goal,nativeObservationItem());
         const parsed=await interpretOwnerInstruction(q.text,{env:process.env,context:observation});
         if(before!==actionEpoch)return {ok:false,error:'Superseded owner command cancelled stale language result'};
@@ -1392,7 +1395,7 @@ async function action(q){
       const snapshot=digest(bot,leader,{dragonDead:lateSkills.session.dragonDied});
       // Compact, valid JSON (<1900 chars) so the managed companion cannot
       // silently truncate a late-game observation and mislead the planner.
-      return {ok:true,status:projectWorld(snapshot,loadedTargets(bot,{includeGeneral:true}),lastAction,mode,
+      return {ok:true,status:projectWorld(snapshot,loadedTargets(bot,{includeGeneral:true}),lastAction,advancedBusy?'auto':mode,
         autopilot.status().goal,nativeObservationItem())};
     }
     case 'auto_status':return {ok:true,status:compactAutonomyStatus(autopilot.status())};
@@ -1492,6 +1495,148 @@ async function action(q){
           status:String(result.detail||'Outcome unverified').slice(0,1600)};
       }catch(err){
         return {ok:false,verified:false,error:'Transaction not verified: '+String(err.message||err).slice(0,160)};
+      }finally{advancedBusy=false;}
+    }
+    case 'row_boat':{
+      if(mode==='auto'||autoBusy||advancedBusy)
+        return {ok:false,error:'Boat movement requires an idle gameplay session'};
+      const vehicle=bot.entities[q.entityId],initial=bot.entity?.position?.clone?.();
+      if(bot.game?.gameMode!=='survival'||!spawned||!vehicle?.position||
+         !/^(?:[a-z_]+_)?(?:boat|raft)$/.test(String(vehicle.name||''))||
+         !initial||initial.distanceTo(vehicle.position)>3.5||
+         typeof bot.mount!=='function'||typeof bot.moveVehicle!=='function'||
+         typeof bot.dismount!=='function')
+        return {ok:false,error:'No nearby observed boat with available vehicle controls'};
+      if(bot.vehicle)return {ok:false,error:'Dismount the existing vehicle first'};
+      setMode('stay');const epoch=actionEpoch;advancedBusy=true;
+      try{
+        await bot.mount(vehicle);
+        await pause(230);
+        if(bot.vehicle?.id!==q.entityId||epoch!==actionEpoch||!spawned)
+          return {ok:false,verified:false,error:'Boat mounting not confirmed or owner cancelled'};
+        const from=bot.entity.position.clone(),deadline=Date.now()+q.durationMs;
+        while(Date.now()<deadline){
+          if(epoch!==actionEpoch||!spawned||bot.vehicle?.id!==q.entityId)
+            return {ok:false,verified:false,error:'Boat control cancelled or vehicle changed'};
+          bot.moveVehicle(0,1);
+          await pause(90);
+        }
+        const distance=Math.hypot(bot.entity.position.x-from.x,bot.entity.position.z-from.z);
+        if(!Number.isFinite(distance)||distance<0.5||distance>12)
+          return {ok:false,verified:false,error:'Boat control was issued but actual bounded travel is unproven'};
+        return {ok:true,verified:true,status:'Owner-observed boat #'+q.entityId+
+          ' moved '+distance.toFixed(2)+' blocks in '+q.durationMs+
+          ' milliseconds; destination arrival not implied'};
+      }catch(err){
+        return {ok:false,verified:false,
+          error:'Boat outcome unknown: '+String(err?.message||err).slice(0,150)};
+      }finally{
+        try{bot.moveVehicle(0,0);}catch{}
+        try{if(bot.vehicle?.id===q.entityId)await bot.dismount();}catch{}
+        advancedBusy=false;
+      }
+    }
+    case 'feed_animal':{
+      if(mode==='auto'||autoBusy||advancedBusy)
+        return {ok:false,error:'Animal feeding requires an idle gameplay session'};
+      const entity=bot.entities[q.entityId];
+      if(bot.game?.gameMode!=='survival'||!spawned||
+         !entity?.position||!Number.isInteger(entity.id)||entity.id!==q.entityId||
+         !validFeedPair(entity.name,q.item)||!bot.entity?.position||
+         bot.entity.position.distanceTo(entity.position)>4.3)
+        return {ok:false,error:'No approved nearby live passive animal with requested food'};
+      const item=bot.inventory?.items?.().find(x=>x.name===q.item&&x.count>0);
+      if(!item||typeof bot.activateEntity!=='function')
+        return {ok:false,error:'Physical food or Mineflayer entity-interaction API missing'};
+      setMode('stay');const epoch=actionEpoch;advancedBusy=true;
+      try{
+        await bot.equip(item,'hand');
+        if(epoch!==actionEpoch||!spawned||bot.heldItem?.name!==q.item)
+          return {ok:false,verified:false,error:'Owner stopped feeding or food was not equipped'};
+        const before=rawCount(bot,q.item);
+        if(before<1)return {ok:false,verified:false,error:'No server-observed food in inventory'};
+        await bot.activateEntity(entity);
+        const deadline=Date.now()+2800;
+        while(Date.now()<deadline && rawCount(bot,q.item)>=before){
+          if(epoch!==actionEpoch||!spawned)
+            return {ok:false,verified:false,error:'Owner cancelled feeding'};
+          await pause(160);
+        }
+        const current=bot.entities[q.entityId],after=rawCount(bot,q.item);
+        if(epoch!==actionEpoch||!spawned||after!==before-1||
+           !current||current.name!==entity.name||!current.position||
+           bot.entity.position.distanceTo(current.position)>6)
+          return {ok:false,verified:false,error:'Feed consumption or target identity not verified'};
+        recentFeedProofItem=q.item;
+        return {ok:true,verified:true,status:'One '+q.item+
+          ' consumed by interacting with observed '+entity.name+
+          ' #'+entity.id+'; breeding/taming NOT verified'};
+      }catch(err){return {ok:false,verified:false,
+        error:'Animal feeding outcome unknown: '+String(err?.message||err).slice(0,140)};
+      }finally{advancedBusy=false;}
+    }
+    case 'fish_once':{
+      if(mode==='auto'||autoBusy||advancedBusy)
+        return {ok:false,error:'Another gameplay transaction must finish first'};
+      const p=q.position,water=bot.blockAt(new Vec3(p.x,p.y,p.z));
+      if(bot.game?.gameMode!=='survival'||!bot.entity?.position||
+         !water||water.name!=='water'||
+         bot.entity.position.distanceTo(water.position)>6)
+        return {ok:false,error:'No reachable loaded water in survival mode at owner coordinates'};
+      const rod=bot.inventory?.items?.().find(i=>i.name==='fishing_rod'&&i.count>0);
+      if(!rod||typeof bot.fish!=='function')
+        return {ok:false,error:'Verified fishing rod or Mineflayer fishing API unavailable'};
+      const fishCount=()=>bot.inventory?.items?.().filter(i=>
+        ['cod','salmon','tropical_fish','pufferfish'].includes(i.name))
+          .reduce((n,i)=>n+i.count,0)||0;
+      const before=fishCount();
+      setMode('stay');const epoch=actionEpoch;advancedBusy=true;
+      try{
+        await bot.equip(rod,'hand');
+        if(epoch!==actionEpoch||!spawned||bot.heldItem?.name!=='fishing_rod')
+          return {ok:false,verified:false,error:'Fishing rod equip or owner authority was not confirmed'};
+        await bot.lookAt(water.position.offset(.5,.5,.5),true);
+        if(epoch!==actionEpoch||!spawned)
+          return {ok:false,verified:false,error:'Fishing cancelled before casting'};
+        await bot.fish();
+        const settled=await waitForInventoryIncrease({
+          before,read:fishCount,check:()=>{
+            if(epoch!==actionEpoch||!spawned)throw Error('Owner cancelled fishing');
+          },wait:pause,deadline:Date.now()+3500
+        });
+        if(!settled.ok)
+          return {ok:false,verified:false,error:'Fishing ended without server-verified NEW fish inventory'};
+        return {ok:true,verified:true,
+          status:'Fishing completed: '+(settled.after-before)+' new fish physically observed'};
+      }catch(err){
+        return {ok:false,verified:false,error:'Fishing result unverified: '+String(err?.message||err).slice(0,140)};
+      }finally{advancedBusy=false;}
+    }
+    case 'sleep_in_bed':{
+      if(mode==='auto'||autoBusy||advancedBusy)
+        return {ok:false,error:'Another gameplay mission or transaction is in progress'};
+      if(bot.game?.gameMode!=='survival'||bot.time?.isDay!==false)
+        return {ok:false,error:'Sleeping requires a real survival world at night'};
+      const p=q.position,bed=bot.blockAt(new Vec3(p.x,p.y,p.z));
+      if(!bed||!/^[a-z_]+_bed$/.test(String(bed.name||''))||
+         !bot.entity?.position||bot.entity.position.distanceTo(bed.position)>4.5)
+        return {ok:false,error:'No directly reachable loaded bed at owner-approved coordinates'};
+      if(bed.getProperties?.().occupied===true)
+        return {ok:false,error:'Observed bed is occupied'};
+      if(typeof bot.sleep!=='function')
+        return {ok:false,error:'Mineflayer sleep API unavailable'};
+      setMode('stay');const epoch=actionEpoch;advancedBusy=true;
+      try{
+        await bot.sleep(bed);
+        if(epoch!==actionEpoch||!spawned)
+          return {ok:false,verified:false,error:'Sleep cancelled or disconnected'};
+        const entered=bot.isSleeping===true,daytime=bot.time?.isDay===true;
+        if(!entered&&!daytime)
+          return {ok:false,verified:false,error:'Sleep attempted, but entry/daylight not observed'};
+        return {ok:true,verified:true,status:daytime?
+          'Observed daylight after owner-authorized sleep':
+          'Observed bot sleeping in owner-approved bed; night skip NOT yet proven'};
+      }catch(e){return {ok:false,verified:false,error:'Sleep failed: '+String(e?.message||e).slice(0,160)};
       }finally{advancedBusy=false;}
     }
     case 'inspect_block':{

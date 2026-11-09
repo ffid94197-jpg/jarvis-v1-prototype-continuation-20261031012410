@@ -22,6 +22,7 @@ import fs from "fs/promises";
 import { resolveScopedPath, assertWithinRoot } from "../guardian/policy";
 import { db } from "@/lib/db";
 import { inventoryArtifactKind, verifyInventoryCsv, verifyInventoryReport, type InventorySource } from "./inventoryIntegrity";
+import { unsupportedFileDestination } from "./taskInputGate";
 
 export interface Predicate {
   kind: "folder" | "file";
@@ -379,6 +380,14 @@ export async function arbitrateCompletion(input: ArbitrationInput): Promise<Arbi
       predicates: [],
     };
   }
+
+  // Defense-in-depth for older tasks and alternate callers that bypass the
+  // new-task input gate: a workspace receipt can NEVER prove an explicit
+  // Windows path or Desktop destination. No basename-only success.
+  const unsupported=unsupportedFileDestination(objective);
+  if(unsupported)
+    return {verdict:"partial",predicates:[],
+      predicateLines:["FILE_TARGET_OUTSIDE_WORKSPACE — the requested OS/desktop location was not independently verified. Workspace-relative executor receipts do not satisfy that destination."]};
 
   const inventoryDeliverables=/\b(?:inventory|stock)\b/i.test(objective)
     && /\b(?:csv|spreadsheet)\b/i.test(objective)

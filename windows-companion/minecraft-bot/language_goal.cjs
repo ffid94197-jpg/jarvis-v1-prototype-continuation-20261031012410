@@ -8,7 +8,8 @@ const {normalizeResource}=require('./resource_goal.cjs');
 const {RECIPES,EQUIPMENT}=require('./general_goal.cjs');
 const {SMELT_RECIPES}=require('./smelt_goal.cjs');
 const {validCropSpec}=require('./crop_goal.cjs');
-const {validStep}=require('./mission_sequence.cjs');
+const {validFeedPair}=require('./animal_feeding.cjs');
+const {validStep,MAX_SEQUENCE_STEPS}=require('./mission_sequence.cjs');
 const {roofedRoomSteps}=require('./structure_goal.cjs');
 const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName,armorEquipSteps}=require('./general_play_intent.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
@@ -34,15 +35,15 @@ const SYSTEM=[
  'Allowed commands: follow, come, stay, guard, status, inventory, observe, auto_status, auto_stop, auto_resume (only for an explicit owner continuation of a saved mission).',
  'Allowed auto_goal values: survive, wood, tools, explore, follow, guard, stone_age, iron_age, companion, dragon_run, netherite_dragon_run, dragon_then_netherite_run, netherite_armor_run, netherite_gear_run, shelter, defeat_hostile, gather, craft, smelt, transfer, equip, travel, sequence, build, build_volume, farm_wheat, farm_crop. Defeat_hostile requires one explicitly owner-named, freshly observed allowed hostile ID. No players, creepers, bosses or passive mobs. Death requires a target-specific entityDead receipt; do not infer it from disappearance.',
  'Gather requires resource (logs,planks,sticks,cobblestone,raw_iron,iron_ingot,diamond,obsidian,flint,netherrack,dirt,sand,red_sand,gravel,mud,soul_sand,soul_soil,moss_block,andesite,diorite,granite,tuff,calcite,cobbled_deepslate,blackstone,basalt,coal,raw_copper,raw_gold,redstone,lapis_lazuli,emerald,quartz) and targetCount 1-64. A generic gather must verify actual inventory pickup and cannot use cheats or arbitrary blocks.',
- 'Long-horizon auto_goal farm_crop supports carrots or potatoes only on explicitly owner-named 1x1 to 4x4 previously tilled farmland. It requires real maturity age seven, physical crop inventory pickup and one-to-sixteen NEW harvested items; it cannot invent crop growth, field coordinates or creative items.',
+ 'Long-horizon auto_goal farm_crop supports carrots, potatoes and beetroot on explicitly owner-named 1x1 to 4x4 previously tilled farmland. It requires observed maturity (age seven for carrots/potatoes and age three for beetroot), physical crop inventory pickup and one-to-sixteen NEW harvested items. Beetroot planting requires actual beetroot seeds; no invented growth or field coordinates.',
  'Long-horizon auto_goal smelt supports output items only from the native audited furnace list (iron_ingot, gold_ingot, copper_ingot, netherite_scrap, glass, stone, cooked_beef, cooked_porkchop, cooked_mutton, cooked_chicken, cooked_rabbit, baked_potato). The raw input and fuel are selected by the native planner from real inventory; no invented furnace transformations. A smelting targetCount is 1-16 and must match owner wording with inventory readback.',
  'One-shot durable auto_goal transfer allows owner-specified exact chest/barrel coordinates, real item, 1-64 quantity and deposit/withdraw. It requires both actual player and chest inventory changes, never retries ambiguous mutations or resumes a transfer after disconnect.',
  'Long-horizon auto_goal craft supports selected recipes; craft_item supports any item found in the live Minecraft registry when the server-confirmed inventory contains ingredients, with bounded count 1-16.',
- 'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
+ 'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, row_boat {entityId,durationMs} (one freshly observed owner-named boat, forward for 300–1200 ms, verify real displacement), feed_animal {entityId,item} (one freshly observed owner-named cow/sheep/pig/chicken and exact approved food; verify one consumed item; never claim breeding), fish_once {position} (one freshly observed nearby water block and real fishing rod, inventory proof of new fish), sleep_in_bed {position} (one freshly observed reachable bed; only at night; check game readback), inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
  'One action is never a whole mission. An action STARTED or DISPATCHED is not success; JARVIS must observe state and replan before any further effect.',
  'Other bounded native skills: inspect_villager {entityId}, trade_villager {entityId,tradeIndex,times}, transfer_container {position,item,count,operation}, enchant_item {position,item,choice}, attack_hostile {entityId,maxSwings}. Attack only a freshly observed owner-named allowed hostile, never a player, villager, passive mob, boss or creeper. An attack input is not proof of damage or death. The owner must explicitly request the exact target, offer, direction, item, and count. Only use freshly observed villagers/blocks; NEVER invent an ID or location, consume materials without owner approval, or claim success from a dispatch.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
- 'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
+ 'Sequence requires 1-16 validated typed goals. Never invent a Minecraft coordinate.',
  'Shelter is a standalone owner-approved goal only for a small/simple/basic shelter or hut, optionally explicitly sized 3 by 3 to 4 by 4. JARVIS autonomously selects a 3x3x2 to 4x4x2 cobblestone site ONLY from fresh hazard-free nearby server observations. This goal may gather real cobblestone and must prove every physical floor, doorway and roof block. Never invent a site or claim completion from a plan.',
  'build_volume requires exactly position{x,y,z}, one supported survival block, width 1-5, depth 1-5, height 1-3 and shape floor, walls, entrance_walls, roof or solid, maximum 64 cells. The owner must explicitly request the block and actual 2D/3D dimensions and a real origin. Floors have height 1. Do not claim arbitrary houses/roofs supported.',
  'Example: {"command":"auto_goal","goal":"gather","resource":"diamond","targetCount":3}.',
@@ -184,277 +185,28 @@ function directIntent(raw){
      item,targetCount:asCount(transfer[2]),operation,
      position:{x:Number(transfer[5]),y:Number(transfer[6]),z:Number(transfer[7])}});
  }
+ // Coordinate-grounded wheat uses an owner-named field, count and origin.
+ // The same canonical command validator enforces dimensions, world bounds and
+ // the native one-to-sixteen newly harvested item limit.
+ const wheatRequest=new RegExp('^(?:farm|grow|harvest)(?: me)? ('+
+  COUNT_PATTERN+') wheat (?:in|from) (?:a |the |my )?'+
+  '(?:field|farm) (?:of |sized |size )?(\\d)\\s*(?:by|x|×)\\s*(\\d) '+
+  '(?:at|starting at|from) (?:coordinates? )?(-?\\d{1,8})[\\s,]+'+
+  '(-?\\d{1,8})[\\s,]+(-?\\d{1,8})(?: in minecraft)?$').exec(s);
+ if(wheatRequest)return canonicalIntent({command:'auto_goal',goal:'farm_wheat',
+  targetCount:asCount(wheatRequest[1]),width:Number(wheatRequest[2]),
+  depth:Number(wheatRequest[3]),position:{x:Number(wheatRequest[4]),
+   y:Number(wheatRequest[5]),z:Number(wheatRequest[6])}});
  // Coordinate-grounded carrots/potatoes use the existing farmland
  // observer. The exact crop, target count and small field footprint are
  // owner-defined; no LLM may invent a field or substitute a crop.
- // New wheat harvesting uses the same exact owner field contract as
- // vegetable harvesting; preexisting inventory is never mission progress.
- const wheatRequest=new RegExp('^(?:farm|grow|harvest)(?: me)? ('+
-   COUNT_PATTERN+') wheat (?:in|from) (?:a |the |my )?'+
-   '(?:field|farm) (?:of |sized |size )?(\\d)\\s*(?:by|x|×)\\s*(\\d) '+
-   '(?:at|starting at|from) (?:coordinates? )?(-?\\d{1,8})[\\s,]+'+
-   '(-?\\d{1,8})[\\s,]+(-?\\d{1,8})(?: in minecraft)?'^(?:farm|grow|harvest)(?: me)? ('+
-  COUNT_PATTERN+') (carrots|potatoes) (?:in|from) (?:a |the |my )?'+
-  '(?:field|farm) (?:of |sized |size )?(\\d)\\s*(?:by|x|×)\\s*(\\d) '+
-  '(?:at|starting at|from) (?:coordinates? )?(-?\\d{1,8})[\\s,]+'+
-  '(-?\\d{1,8})[\\s,]+(-?\\d{1,8})(?: in minecraft)?$').exec(s);
- if(cropRequest){
-  const spec={goal:'farm_crop',crop:cropRequest[2],
-    targetCount:asCount(cropRequest[1]),width:Number(cropRequest[3]),
-    depth:Number(cropRequest[4]),
-    position:{x:Number(cropRequest[5]),y:Number(cropRequest[6]),
-      z:Number(cropRequest[7])}};
-  return validCropSpec(spec)?
-    canonicalIntent({command:'auto_goal',...spec}):
-    fail('Carrot/potato crop field must be exact, loaded and 1x1 to 4x4');
- }
- const armorSteps=armorEquipSteps(s);
- if(armorSteps)return canonicalIntent({command:'auto_goal',goal:'sequence',steps:armorSteps});
- // A single explicitly dimensioned roofed-room request expands ONLY into
- // three existing validated durable build_volume stages: floor, front
- // doorway walls, then roof. The world origin is owner-provided, never
- // invented by an LLM or an untrusted game sign.
- const room=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2}) by (\d{1,2}) ([a-z_ ]{2,35}?) (?:roofed room|roofed shelter|shelter) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(s);
- if(room){
-  const item=itemName(room[4]);
-  const steps=roofedRoomSteps({position:{
-    x:Number(room[5]),y:Number(room[6]),z:Number(room[7])},
-    block:item,width:Number(room[1]),depth:Number(room[2]),wallHeight:Number(room[3])});
-  return steps?canonicalIntent({command:'auto_goal',goal:'sequence',steps}):
-    fail('Room dimensions, material, site or total survival block budget unsupported');
- }
- // Compose small independent, verifiable subgoals using the existing
- // goal-controller sequence. Generic one-off primitives are NOT silently
- // promoted to an open-ended mission, and all stage parameters are validated.
- const parts=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|smelt|cook|refine|bake|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
- if(parts.length>1){
-  if(parts.length>8||parts.some(p=>!p.trim()))
-   return fail('Sequence must contain two to eight clear gameplay objectives');
-  const steps=[];
-  for(const part of parts){
-   let candidate=directIntent(part);
-   if((!candidate||candidate.ok!==true) &&
-      /^(?:smelt|cook|bake|refine) (?:it|them)$/.test(part.trim()) &&
-      steps.length>0){
-     const prior=steps[steps.length-1];
-     // A pronoun only inherits the immediately previous explicit gather
-     // source and quantity. An unknown resource or an earlier ambiguous
-     // owner clause NEVER authorizes an inferred furnace recipe.
-     if(prior.goal==='gather'&&Number.isInteger(prior.targetCount)&&
-        prior.targetCount>=1&&prior.targetCount<=16){
-       const recipe=Object.entries(SMELT_RECIPES).find(([,v])=>v.source===prior.resource);
-       if(recipe)candidate=canonicalIntent({command:'auto_goal',goal:'smelt',
-         item:recipe[0],targetCount:prior.targetCount});
-     }
-   }
-   // A single-item request like "craft a chest" uses the immediate
-   // craft_item primitive; inside a longer owner mission only promote
-   // validated known recipe goals to the durable stage controller.
-   if(candidate?.ok && candidate.command?.command==='craft_item' &&
-      Object.hasOwn(RECIPES,candidate.command.item))
-     candidate=canonicalIntent({command:'auto_goal',goal:'craft',
-       item:candidate.command.item,targetCount:candidate.command.count});
-   if(!candidate?.ok || candidate.command?.command!=='auto_goal')
-    return null; // Give a configured JARVIS model a chance; its proposal is still owner-grounded and strictly validated.
-   const {command,durationSeconds,destinationSlot,...step}=candidate.command;
-   if(destinationSlot!==undefined)step.destination=destinationSlot;
-   if(!validStep(step))
-    return null; // Unsupported deterministic stage is never dispatched; model must prove an authorized whole goal.
-   steps.push(step);
-  }
-  return canonicalIntent({command:'auto_goal',goal:'sequence',steps});
- }
- const g=new RegExp('^(?:mine|gather|collect|get|find|bring)(?: me)? ('+COUNT_PATTERN+') ([a-z_ ]{2,35})$').exec(s);
- if(g){
-  const resource=normalizeResource(g[2].trim().replace(/ blocks?$/,''));
-  if(resource)return canonicalIntent({command:'auto_goal',goal:'gather',resource,targetCount:asCount(g[1])});
- }
- const structure=/^(?:build|construct|make)(?: me)? (?:a )?(\d{1,2}) by (\d{1,2})(?: by (\d{1,2}))? ([a-z_ ]{2,35}) (floor|wall|walls|solid|roof) (?:at|starting at|from) (?:coordinates? )?(-?\d{1,8})[\s,]+(-?\d{1,8})[\s,]+(-?\d{1,8})$/.exec(s);
- if(structure){
-  const block=itemName(structure[4]);
-  const shape=structure[5]==='wall'?'walls':structure[5];
-  if(!block)return fail('Unknown requested building material');
-  return canonicalIntent({command:'auto_goal',goal:'build_volume',
-   block,width:Number(structure[1]),depth:Number(structure[2]),
-   height:structure[3]?Number(structure[3]):1,shape,
-   position:{x:Number(structure[6]),y:Number(structure[7]),z:Number(structure[8])}});
- }
- const primitive=parseOwnerPrimitive(s);
- if(primitive?.command==='craft_item')
-  return canonicalIntent({command:'auto_goal',goal:'craft',item:primitive.item,
-    targetCount:primitive.count}); // Durable resource planning, not immediate failure.
- // Authorized vanilla equipment goals should use the existing survival
- // recipe/resource planner when the named item is not yet owned. Generic
- // handheld items retain the bounded immediate equip action.
- if(primitive?.command==='equip_item' &&
-    Object.hasOwn(EQUIPMENT,primitive.destination) &&
-    EQUIPMENT[primitive.destination].has(primitive.item))
-  return canonicalIntent({command:'auto_goal',goal:'equip',
-    item:primitive.item,destinationSlot:primitive.destination});
- return primitive?canonicalIntent(primitive):null; // Otherwise use configured owner model.
-}
-/**
- * Common owner requests can refer to a single observed object by name.
- * Never invent coordinates, resolve ambiguous objects, or run effects from
- * untrusted signs/chat. The caller already authorizes the owner and the
- * game executor independently verifies the fresh live block before effect.
- */
-function contextualIntent(text,context){
- if(typeof text!=='string')return null;
- const instruction=text.toLowerCase().trim()
-   .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
-   .replace(/\s+(?:please|for me)$/,'');
- const request=/^(?:open|close|activate|press|toggle|interact with|use) (?:the |a |an |that |this |my )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table)$/.exec(instruction);
- const travel=/^(?:go|walk|move|navigate|travel|head)(?: over)? to (?:the |a |that |this )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table|enchanting table)$/.exec(instruction);
- const inspect=/^(?:inspect|examine|look at|check) (?:the |a |that |this )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table|enchanting table)$/.exec(instruction);
- const villagerInspect=/^(?:show|list|inspect|view|check)(?: me)?(?: the)? (?:trades|offers) (?:for|from|of) (?:the |a |that )?villager$/.exec(instruction);
- const villageDeal=/^(?:trade|buy|purchase) (?:offer|deal|trade|option) (?:number |#)?(\d{1,2})(?: (?:from|with) (?:the )?villager)?(?: (once|twice|three times|four times))?$/.exec(instruction);
- const storage=new RegExp('^(store|deposit|put|withdraw|take|retrieve) ('+COUNT_PATTERN+') ([a-z_ ]{2,56}) (?:in|into|from) (?:the |a |that )?(chest|barrel)$').exec(instruction);
- const enchanting=/^enchant (?:my |the |a |an )?([a-z_ ]{2,56}) (?:with |using )?(?:the )?(first|second|third) (?:choice|option)$/.exec(instruction);
- const fight=/^(?:attack|fight|defeat|kill|slay|eliminate|take out) (?:the |that |a |an )?(?:nearby )?([a-z_]+(?: [a-z_]+)?)(?: (?:up to )?(\d{1,2}) (?:hits|swings|times))?$/.exec(instruction);
- if(!request&&!travel&&!inspect&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight)return null;
- let scene;
- try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve nearby objects without a fresh game observation');}
- if(!scene||scene.joined!==true||scene.busy!==false||!Array.isArray(scene.nearbyBlocks))
-   return fail('A fresh idle joined-game observation is required for object actions');
- if(villagerInspect||villageDeal){
-  const villagers=(Array.isArray(scene.villagers)?scene.villagers:[]).filter(v=>
-   v?.name==='villager' && Number.isInteger(v.id) &&
-   Number.isFinite(v.distance)&&v.distance<=4.3);
-  if(villagers.length!==1)
-   return fail(villagers.length?'Multiple villagers visible; specify which one':'No reachable villager in latest observation');
-  const entityId=villagers[0].id;
-  if(villagerInspect)return canonicalIntent({command:'inspect_villager',entityId});
-  const times=({once:1,twice:2,'three times':3,'four times':4})[villageDeal[2]]||1;
-  return canonicalIntent({command:'trade_villager',entityId,
-   tradeIndex:Number(villageDeal[1])-1,times});
- }
- const findTarget=type=>{
-  const re=type==='chest'?/^(?:chest|trapped_chest)$/:type==='barrel'?/^barrel$/:
-   type==='enchanting_table'?/^enchanting_table$/:null;
-  return re?scene.nearbyBlocks.filter(b=>b&&typeof b.name==='string'&&re.test(b.name)&&
-   ['x','y','z'].every(k=>Number.isInteger(b[k]))) :[];
- };
- if(fight){
-  const mob=fight[1].replace(/ /g,'_');
-  if(!ALLOWED_HOSTILES.has(mob))return fail('Requested entity is not an approved hostile target');
-  const durable=!fight[2]&&/^(?:defeat|kill|slay|eliminate|take out)\b/.test(instruction);
-  const radius=durable?12:3.4;
-  const targets=Array.isArray(scene.threats)?scene.threats.filter(t=>
-    t?.name===mob&&Number.isInteger(t.id)&&Number.isFinite(t.distance)&&
-    t.distance<=radius):[];
-  if(targets.length!==1)return fail(targets.length?
-    'Several matching hostiles are observed; specify the exact target':
-    'No single named hostile server-observed in authorized range');
-  if(durable)
-   return canonicalIntent({command:'auto_goal',goal:'defeat_hostile',
-     mob,entityId:targets[0].id});
-  return canonicalIntent({command:'attack_hostile',entityId:targets[0].id,
-    maxSwings:fight[2]?Number(fight[2]):4});
- }
- if(storage||enchanting){
-  const type=storage?storage[4]:'enchanting_table',matches=findTarget(type);
-  if(matches.length!==1)return fail(matches.length?'Multiple matching workstations or containers; specify coordinates':
-    'Requested workstation or container not observed');
-  const {x,y,z}=matches[0],position={x,y,z};
-  if(storage){
-   const item=itemName(storage[3]),count=asCount(storage[2]);
-   const verb=storage[1],operation=/^(?:store|deposit|put)$/.test(verb)?'deposit':'withdraw';
-   // "put from" or "take into" is contradictory and not authorized.
-   if((operation==='deposit'&&/\bfrom\b/.test(instruction))||
-      (operation==='withdraw'&&/\b(?:in|into)\b/.test(instruction)))
-    return fail('Contradictory container transfer direction');
-   return canonicalIntent({command:'transfer_container',position,item,count,operation});
-  }
-  const item=itemName(enchanting[1]),choice={first:0,second:1,third:2}[enchanting[2]];
-  return canonicalIntent({command:'enchant_item',position,item,choice});
- }
-
- const types={
-  chest:/^(?:chest|trapped_chest)$/,
-  barrel:/^barrel$/,
-  door:/^[a-z_]+_door$/,
-  trapdoor:/^[a-z_]+_trapdoor$/,
-  lever:/^lever$/,
-  button:/^[a-z_]+_button$/,
-  furnace:/^furnace$/,
-  'crafting table':/^crafting_table$/,
-  'smithing table':/^smithing_table$/,
-  'enchanting table':/^enchanting_table$/
- };
- const targetType=request?.[1]||travel?.[1]||inspect?.[1];
- const candidates=scene.nearbyBlocks.filter(b=>b && typeof b.name==='string' &&
-   types[targetType]?.test(b.name) &&
-   ['x','y','z'].every(k=>Number.isInteger(b[k]) && Math.abs(b[k])<=30000000) &&
-   scene.position && ['x','y','z'].every(k=>Number.isFinite(scene.position[k])) &&
-   Math.hypot(b.x-scene.position.x,b.y-scene.position.y,b.z-scene.position.z)<=14);
- if(candidates.length!==1)
-  return fail(candidates.length===0?
-    'No matching nearby block present in the fresh observed world':
-    'Multiple matching blocks are visible; specify its exact coordinates');
- const {x,y,z}=candidates[0],position={x,y,z};
- if(travel)return canonicalIntent({command:'navigate',position,range:2});
- if(inspect)return canonicalIntent({command:'inspect_block',position});
- return canonicalIntent({command:'interact_block',position});
-}
-function modelConfig(env){
- if(env?.JARVIS_MODEL_BACKEND!=='ollama'||!env.JARVIS_OLLAMA_MODEL)return null;
- const base=env.JARVIS_OLLAMA_BASE_URL||'http://127.0.0.1:11434';
- const m=/^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::([0-9]{1,5}))?\/?$/.exec(base);
- if(!m||(m[2]&&(Number(m[2])<1||Number(m[2])>65535)))
-  throw Error('Ollama must use a loopback-only HTTP origin');
- if(!/^[\w.:-]{1,128}$/.test(env.JARVIS_OLLAMA_MODEL))throw Error('Invalid local model ID');
- return {url:base.replace(/\/$/,'')+'/api/chat',model:env.JARVIS_OLLAMA_MODEL};
-}
-async function interpretOwnerInstruction(input,{env=process.env,context='',fetchImpl}={}){
- const text=clean(input);if(!text)return fail('Owner text must be 1-600 printable characters');
- const direct=directIntent(text);if(direct)return direct;
- const contextual=contextualIntent(text,context);
- if(contextual)return contextual;
- // An information question cannot become a game effect through model JSON.
- if(/^(?:how(?: do| can| to)|what|why|when|where|which|explain|tell me about)\b/i.test(text))
-  return fail('Information request is not a gameplay instruction; no action taken');
- let config;
- try{config=modelConfig(env);}catch(e){return fail(String(e.message||e));}
- if(!config)return fail('Natural goal requires a configured JARVIS-owned Ollama model or a supported typed instruction');
- const send=fetchImpl||globalThis.fetch;
- if(typeof send!=='function')return fail('Model transport unavailable');
- const messages=[{role:'system',content:SYSTEM},...strictFormat([{role:'user',content:JSON.stringify({
-  ownerInstruction:text,observedMinecraftStatus:String(context).slice(0,1750)})}])];
- try{
-  const response=await send(config.url,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({model:config.model,messages,stream:false,format:'json',options:{num_predict:650}}),
-   ...(typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function'?{signal:AbortSignal.timeout(12000)}:{})});
-  if(!response?.ok)return fail('JARVIS local model request failed');
-  const raw=await response.text();
-  if(raw.length>32768)return fail('Oversized model response denied');
-  const result=JSON.parse(raw),content=result?.message?.content;
-  if(typeof content!=='string'||content.length>8192)return fail('Malformed model content');
-  const proposed=canonicalIntent(JSON.parse(content));
-  if(!proposed.ok)return proposed;
-  if(Object.hasOwn(PRIMITIVE_FIELDS,proposed.command.command) &&
-     !modelPrimitiveGrounded(proposed.command,text,context))
-    return fail('Model proposed an unrelated or ungrounded Minecraft action; no effect taken');
-  if(proposed.command.command==='auto_goal' && !modelGoalGrounded(proposed.command,text,context))
-    return fail('Model proposed an autonomous goal not authorized by the owner request');
-  if(SIMPLE.has(proposed.command.command) && !modelSimpleGrounded(proposed.command.command,text))
-    return fail('Model proposed a control action unrelated to the owner request');
-  return proposed;
- }catch{return fail('JARVIS model did not return an authorized JSON goal; no action taken');}
-}
-module.exports={strictFormat,canonicalIntent,directIntent,modelConfig,interpretOwnerInstruction};
-).exec(s);
- if(wheatRequest)return canonicalIntent({command:'auto_goal',goal:'farm_wheat',
-    targetCount:asCount(wheatRequest[1]),width:Number(wheatRequest[2]),
-    depth:Number(wheatRequest[3]),position:{x:Number(wheatRequest[4]),
-      y:Number(wheatRequest[5]),z:Number(wheatRequest[6])}});
  const cropRequest=new RegExp('^(?:farm|grow|harvest)(?: me)? ('+
-  COUNT_PATTERN+') (carrots|potatoes) (?:in|from) (?:a |the |my )?'+
+  COUNT_PATTERN+') (carrots|potatoes|beetroots?) (?:in|from) (?:a |the |my )?'+
   '(?:field|farm) (?:of |sized |size )?(\\d)\\s*(?:by|x|×)\\s*(\\d) '+
   '(?:at|starting at|from) (?:coordinates? )?(-?\\d{1,8})[\\s,]+'+
   '(-?\\d{1,8})[\\s,]+(-?\\d{1,8})(?: in minecraft)?$').exec(s);
  if(cropRequest){
-  const spec={goal:'farm_crop',crop:cropRequest[2],
+  const spec={goal:'farm_crop',crop:cropRequest[2].startsWith('beetroot')?'beetroot':cropRequest[2],
     targetCount:asCount(cropRequest[1]),width:Number(cropRequest[3]),
     depth:Number(cropRequest[4]),
     position:{x:Number(cropRequest[5]),y:Number(cropRequest[6]),
@@ -483,8 +235,8 @@ module.exports={strictFormat,canonicalIntent,directIntent,modelConfig,interpretO
  // promoted to an open-ended mission, and all stage parameters are validated.
  const parts=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|smelt|cook|refine|bake|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
  if(parts.length>1){
-  if(parts.length>8||parts.some(p=>!p.trim()))
-   return fail('Sequence must contain two to eight clear gameplay objectives');
+  if(parts.length>MAX_SEQUENCE_STEPS||parts.some(p=>!p.trim()))
+   return fail('Sequence must contain two to sixteen clear gameplay objectives');
   const steps=[];
   for(const part of parts){
    let candidate=directIntent(part);
@@ -559,6 +311,10 @@ function contextualIntent(text,context){
  const instruction=text.toLowerCase().trim()
    .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
    .replace(/\s+(?:please|for me)$/,'');
+ const boating=/^(?:row|paddle|move) (?:the |a |that |this |my )?(?:nearby )?boat forward(?: for (\d{3,4}) (?:ms|milliseconds))?$/.exec(instruction);
+ const feeding=/^feed (?:the |a |that |this )?(cow|sheep|pig|chicken) (?:with |some )?(wheat|carrot|potato|beetroot|wheat seeds|beetroot seeds|pumpkin seeds|melon seeds)$/.exec(instruction);
+ const fishing=/^(?:fish|catch(?: a| one)? fish)(?: once)? (?:in|from) (?:the |a |nearby )?(?:nearby )?(?:water|pond|river|lake)$/.exec(instruction);
+ const sleeping=/^(?:sleep|rest)(?: through the night)? (?:in|on) (?:the |a |that |this |my )?(?:nearby )?bed$/.exec(instruction);
  const request=/^(?:open|close|activate|press|toggle|interact with|use) (?:the |a |an |that |this |my )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table)$/.exec(instruction);
  const travel=/^(?:go|walk|move|navigate|travel|head)(?: over)? to (?:the |a |that |this )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table|enchanting table)$/.exec(instruction);
  const inspect=/^(?:inspect|examine|look at|check) (?:the |a |that |this )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table|enchanting table)$/.exec(instruction);
@@ -567,11 +323,33 @@ function contextualIntent(text,context){
  const storage=new RegExp('^(store|deposit|put|withdraw|take|retrieve) ('+COUNT_PATTERN+') ([a-z_ ]{2,56}) (?:in|into|from) (?:the |a |that )?(chest|barrel)$').exec(instruction);
  const enchanting=/^enchant (?:my |the |a |an )?([a-z_ ]{2,56}) (?:with |using )?(?:the )?(first|second|third) (?:choice|option)$/.exec(instruction);
  const fight=/^(?:attack|fight|defeat|kill|slay|eliminate|take out) (?:the |that |a |an )?(?:nearby )?([a-z_]+(?: [a-z_]+)?)(?: (?:up to )?(\d{1,2}) (?:hits|swings|times))?$/.exec(instruction);
- if(!request&&!travel&&!inspect&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight)return null;
+ if(!request&&!travel&&!inspect&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight&&!sleeping&&!fishing&&!feeding&&!boating)return null;
  let scene;
  try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve nearby objects without a fresh game observation');}
  if(!scene||scene.joined!==true||scene.busy!==false||!Array.isArray(scene.nearbyBlocks))
    return fail('A fresh idle joined-game observation is required for object actions');
+ if(boating){
+  const durationMs=boating[1]?Number(boating[1]):600;
+  if(!Number.isSafeInteger(durationMs)||durationMs<300||durationMs>1200)
+    return fail('Boat movement must be 300–1200 milliseconds');
+  const boats=(Array.isArray(scene.boats)?scene.boats:[]).filter(b=>
+    Number.isSafeInteger(b?.id)&&b.id>=0&&b.id<=200000&&
+    /^(?:[a-z_]+_)?(?:boat|raft)$/.test(String(b.name||''))&&
+    Number.isFinite(b.distance)&&b.distance<=3.5);
+  if(boats.length!==1)return fail('Need exactly one nearby observed boat to row');
+  return canonicalIntent({command:'row_boat',entityId:boats[0].id,durationMs});
+ }
+ if(feeding){
+  const animal=feeding[1],item=feeding[2].replace(/ /g,'_');
+  if(!validFeedPair(animal,item))return fail('Selected food cannot feed the named animal');
+  const targets=(Array.isArray(scene.animals)?scene.animals:[]).filter(a=>
+    a?.name===animal&&Number.isInteger(a.id)&&
+    Number.isFinite(a.distance)&&a.distance<=4.3);
+  if(targets.length!==1)return fail(targets.length?
+    'Multiple matching nearby animals; specify one unambiguous target':
+    'No single reachable server-observed '+animal+' to feed');
+  return canonicalIntent({command:'feed_animal',entityId:targets[0].id,item});
+ }
  if(villagerInspect||villageDeal){
   const villagers=(Array.isArray(scene.villagers)?scene.villagers:[]).filter(v=>
    v?.name==='villager' && Number.isInteger(v.id) &&
@@ -635,9 +413,11 @@ function contextualIntent(text,context){
   furnace:/^furnace$/,
   'crafting table':/^crafting_table$/,
   'smithing table':/^smithing_table$/,
-  'enchanting table':/^enchanting_table$/
+  'enchanting table':/^enchanting_table$/,
+  bed:/^[a-z_]+_bed$/,
+  water:/^water$/
  };
- const targetType=request?.[1]||travel?.[1]||inspect?.[1];
+ const targetType=request?.[1]||travel?.[1]||inspect?.[1]||(sleeping?'bed':fishing?'water':null);
  const candidates=scene.nearbyBlocks.filter(b=>b && typeof b.name==='string' &&
    types[targetType]?.test(b.name) &&
    ['x','y','z'].every(k=>Number.isInteger(b[k]) && Math.abs(b[k])<=30000000) &&
@@ -648,6 +428,8 @@ function contextualIntent(text,context){
     'No matching nearby block present in the fresh observed world':
     'Multiple matching blocks are visible; specify its exact coordinates');
  const {x,y,z}=candidates[0],position={x,y,z};
+ if(fishing)return canonicalIntent({command:'fish_once',position});
+ if(sleeping)return canonicalIntent({command:'sleep_in_bed',position});
  if(travel)return canonicalIntent({command:'navigate',position,range:2});
  if(inspect)return canonicalIntent({command:'inspect_block',position});
  return canonicalIntent({command:'interact_block',position});

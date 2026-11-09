@@ -60,6 +60,16 @@ const good={ok:true,detail:{
 }};
 assert.equal(queue.acceptedSkillQueue(id,good).next,0);
 assert.equal(queue.acceptedSkillQueue(id,good).steps[0].tool,"read_file");
+const forgeSource=fs.readFileSync(path.join(root,"src/lib/agent/evolution/skillForge.mjs"),"utf8");
+const forgeMatch=/const SAFE_TOOLS=new Set\(\[([\s\S]*?)\]\)/.exec(forgeSource);
+assert.ok(forgeMatch,"Forge stage tool review catalogue must exist");
+const forgeReviewed=[...forgeMatch[1].matchAll(/"([a-z_]+)"/g)].map(m=>m[1]);
+assert.deepEqual([...queue.FORGE_STAGE_TOOLS].sort(),forgeReviewed.sort(),
+  "Core's stage catalogue must remain identical to Forge's");
+const extraTool="evolution_skill_run";
+assert.equal(queue.acceptedSkillQueue(id,{...good,detail:{...good.detail,
+  steps:[{tool:extraTool,args:{id},why:"not a reviewable Forge stage"}]}}),null);
+
 assert.equal(queue.acceptedSkillQueue("sk_"+"0".repeat(32),good),null);
 assert.equal(queue.acceptedSkillQueue(id,{...good,detail:{...good.detail,digest:"wrong"}}),null);
 assert.equal(queue.acceptedSkillQueue(id,{...good,detail:{...good.detail,

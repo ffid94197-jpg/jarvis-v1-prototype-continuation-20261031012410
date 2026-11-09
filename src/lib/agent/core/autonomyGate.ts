@@ -19,6 +19,23 @@ export const REPEATABLE_INPUT_TOOLS = new Set([
   "windows_minecraft_input", "windows_native_action", "windows_browser_scroll",
 ]);
 
+/** Canonical args fingerprint for an already-authorized GUI effect.
+ * JSON property order, extra error wording and irrelevant object construction
+ * order must not bypass the same-action failure cap.
+ */
+function canonicalActionArgs(value:unknown,depth=0):unknown {
+  if(depth>=10)return '[depth]';
+  if(Array.isArray(value))return value.slice(0,64).map(v=>canonicalActionArgs(v,depth+1));
+  if(value&&typeof value==='object'){
+    const source=value as Record<string,unknown>;
+    return Object.fromEntries(Object.keys(source).sort().slice(0,64)
+      .map(k=>[k,canonicalActionArgs(source[k],depth+1)]));
+  }
+  if(typeof value==='string')return value.slice(0,1024);
+  if(value===null||typeof value==='boolean'||
+     (typeof value==='number'&&Number.isFinite(value)))return value;
+  return '[nonjson]';
+}
 const VERIFY_TOOLS = new Set(["windows_native_verify"]);
 const PROVEN_FLAGS = ["textVerifiedByUIA", "focusVerified", "playbackConfirmed", "uiEffectVerified"];
 
@@ -61,7 +78,7 @@ export class AutonomyGate {
     const action = DESKTOP_GUI_EFFECTS.has(tool);
     const proof = VERIFY_TOOLS.has(tool) && hasDirectProof(receipt);
     if (action) {
-      const signature=tool+"|"+JSON.stringify(args);
+      const signature=tool+"|"+JSON.stringify(canonicalActionArgs(args));
       if (signature===this.lastFingerprint) this.repeated++;
       else {this.lastFingerprint=signature;this.repeated=1;}
       if (!hasDirectProof(receipt)) {this.pending++;this.lastTool=tool;}

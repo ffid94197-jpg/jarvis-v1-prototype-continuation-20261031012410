@@ -18,12 +18,19 @@ function fingerprint(identity){
    identity.host.toLowerCase(),identity.port,identity.owner.toLowerCase()
  ])).digest('hex');
 }
+// A replayed sequence starts from stage zero. After a crash, its old
+// gathering, crafting, smelting or farming receipts are unavailable, so
+// re-executing those stages would risk duplicate consumption/acquisition.
+// Only replay a whole sequence when every stage rechecks an idempotent
+// visible postcondition (travel, building or equipped item). Otherwise
+// require a fresh owner-authored mission, not auto_resume.
+const RESTART_SAFE_SEQUENCE_GOALS=new Set(['travel','build','build_volume','equip']);
 function extractGoal(state){
  if(!state || state.status!=='running'||!Number.isSafeInteger(state.deadline))return null;
  const goal=state.goal;
  // Entity IDs are session-local and can be recycled after disconnect. Never
  // persist an old hostile identity across a fresh Minecraft process.
- if(['defeat_hostile','transfer','farm_crop'].includes(goal))return null;
+ if(['defeat_hostile','transfer'].includes(goal))return null;
  const spec={goal};
  if(goal==='gather'){
    spec.resource=state.resource;spec.targetCount=state.targetCount;
@@ -39,12 +46,18 @@ function extractGoal(state){
    spec.position=state.position;spec.block=state.block;
    spec.width=state.width;spec.depth=state.depth;
    spec.height=state.height;spec.shape=state.shape;
- }else if(goal==='farm_wheat'){
+ }else if(goal==='farm_wheat'||goal==='farm_crop'){
    spec.position=state.position;spec.width=state.width;spec.depth=state.depth;
    spec.targetCount=state.targetCount;
+   if(goal==='farm_crop')spec.crop=state.crop;
  }else if(goal==='shelter'){
    spec.width=state.width;spec.depth=state.depth;
- }else if(goal==='sequence')spec.steps=state.sequence;
+ }else if(goal==='sequence'){
+   if(!Array.isArray(state.sequence)||
+      !state.sequence.every(step=>step&&RESTART_SAFE_SEQUENCE_GOALS.has(step.goal)))
+     return null;
+   spec.steps=state.sequence;
+ }
  if(validateCommand({command:'auto_goal',...spec})!==null)return null;
  return JSON.parse(JSON.stringify(spec));
 }
@@ -61,7 +74,7 @@ function validateLease(data,identity,now=Date.now()){
     data.deadline-now>MAX_LEASE_MS)
    return {ok:false,reason:'Missing, expired or mismatched mission lease'};
  if(!data.spec||typeof data.spec!=='object'||Array.isArray(data.spec)||
-    Object.keys(data.spec).some(k=>!['goal','resource','targetCount','destination','arrivalRange','steps','position','block','axis','length','width','depth','height','shape','item','destinationSlot'].includes(k))||
+    Object.keys(data.spec).some(k=>!['goal','resource','targetCount','destination','arrivalRange','steps','position','block','axis','length','width','depth','height','shape','item','destinationSlot','crop'].includes(k))||
     validateCommand({command:'auto_goal',...data.spec})!==null)
    return {ok:false,reason:'Checkpoint contains unsupported goal parameters'};
  const remainingSeconds=Math.floor((data.deadline-now)/1000);
@@ -74,7 +87,7 @@ function createCheckpoint(filePath,identity,{clock=Date.now}={}){
  const connection=fingerprint(identity);
  function save(state){
    const lease=makeLease(state,identity,clock());
-   if(!lease)return false;
+   if(!lease){clear();return false;}
    const tmp=filePath+'.'+process.pid+'.'+crypto.randomBytes(6).toString('hex')+'.tmp';
    try{
      fs.writeFileSync(tmp,JSON.stringify(lease)+'\n',{flag:'wx',mode:0o600});

@@ -8,6 +8,7 @@ import {db} from "@/lib/db";
 import type {GuardianDecision} from "../guardian/guardian";
 import type {DesktopPrepared} from "./policy";
 import {verifyNativeCraftReceipt} from "../core/minecraftCraftProof";
+import {MINECRAFT_SAFE_BUILD_MATERIALS,MINECRAFT_SAFE_GATHER_RESOURCES} from "../core/minecraftResources";
 type Packet = {version:number;taskId:string;idempotencyKey:string;nonce:string;worldId:string;
   observedAt:number;status:string;observations?:Record<string,unknown>};
 type SendRequest={taskId:string;idempotencyKey:string;operation:string;worldId:string;
@@ -263,7 +264,7 @@ export async function runGuardianApprovedPlayerEngine(
            typeof state.status!=="string" ||
            !Number.isSafeInteger(state.since) ||
            !Number.isSafeInteger(current.missionSince) ||
-           Math.abs(Number(state.since)-current.missionSince)>60000 ||
+           Math.abs(Number(state.since)-Number(current.missionSince))>60000 ||
            !state.milestones || typeof state.milestones!=="object" ||
            Array.isArray(state.milestones))
           return {ok:false,error:"Native mission receipt does not belong to this Core task"};
@@ -482,10 +483,12 @@ export async function runGuardianApprovedPlayerEngine(
       const transfers=new Set(["transfer"]);
       const gathered=new Set(["gather"]);
       const construction=new Set(["shelter","build_volume"]);
+      const crafts=new Set(["craft"]),equips=new Set(["equip"]),travels=new Set(["travel"]),
+        hostile=new Set(["defeat_hostile"]);
       const goal=String(desktop.goal||"");
       const seconds=desktop.durationSeconds===undefined?
         (endgames.has(goal)?21600:3600):desktop.durationSeconds;
-      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal)&&!transfers.has(goal)&&!gathered.has(goal)&&!construction.has(goal))||!Number.isInteger(seconds) ||
+      if((!endgames.has(goal)&&!farms.has(goal)&&!smelts.has(goal)&&!sequenced.has(goal)&&!transfers.has(goal)&&!gathered.has(goal)&&!construction.has(goal)&&!crafts.has(goal)&&!equips.has(goal)&&!travels.has(goal)&&!hostile.has(goal))||!Number.isInteger(seconds) ||
          (seconds as number)<10||(seconds as number)>43200)
         throw Error("Unsupported or unbounded owner mission");
       if(current)throw Error("Active native mission unresolved; inspect before any new mission");
@@ -498,11 +501,56 @@ export async function runGuardianApprovedPlayerEngine(
       if(isCancelled())throw Error("Owner cancellation before native mission admission");
       let op="endgame";
       let details:Record<string,unknown>={goal,durationSeconds:seconds};
+      if(crafts.has(goal)) {
+        const spec=desktop as unknown as Record<string,unknown>;
+        const safe=new Set(["stick","crafting_table","chest","furnace","ladder","bread","shield","torch"]);
+        if(typeof spec.item!=="string"||!safe.has(spec.item)||
+           !Number.isInteger(spec.targetCount)||Number(spec.targetCount)<1||Number(spec.targetCount)>16)
+          throw Error("Native craft requires an explicitly requested safe item and count 1-16");
+        op="craft";
+        details={goal,item:spec.item,count:spec.targetCount,durationSeconds:seconds};
+      }
+      if(equips.has(goal)) {
+        const spec=desktop as unknown as Record<string,unknown>;
+        const slot=String(spec.destinationSlot||"");
+        const slots:Record<string,string[]>={
+          hand:["wooden_pickaxe","stone_pickaxe","iron_pickaxe","diamond_pickaxe","netherite_pickaxe",
+            "wooden_sword","stone_sword","iron_sword","diamond_sword","netherite_sword","bow","crossbow","trident","shield","torch"],
+          head:["leather_helmet","iron_helmet","golden_helmet","diamond_helmet","netherite_helmet","turtle_helmet"],
+          torso:["leather_chestplate","iron_chestplate","golden_chestplate","diamond_chestplate","netherite_chestplate","elytra"],
+          legs:["leather_leggings","iron_leggings","golden_leggings","diamond_leggings","netherite_leggings"],
+          feet:["leather_boots","iron_boots","golden_boots","diamond_boots","netherite_boots"],
+        };
+        if(typeof spec.item!=="string"||!Object.hasOwn(slots,slot)||!slots[slot].includes(spec.item))
+          throw Error("Native equip item and destination are not in the owner-safe equipment catalogue");
+        op="equip";
+        details={goal,item:spec.item,destination:slot,durationSeconds:seconds};
+      }
+      if(travels.has(goal)) {
+        const spec=desktop as unknown as Record<string,unknown>;
+        if(!authorizedCoords(spec.destination)||!Number.isInteger(spec.arrivalRange)||
+           Number(spec.arrivalRange)<1||Number(spec.arrivalRange)>8)
+          throw Error("Native travel requires an exact bounded owner destination and arrival range");
+        op="travel";
+        details={goal,...(spec.destination as Record<string,number>),
+          arrivalRange:spec.arrivalRange,durationSeconds:seconds};
+      }
+      if(hostile.has(goal)) {
+        const spec=desktop as unknown as Record<string,unknown>;
+        const allowed=new Set(["zombie","husk","drowned","skeleton","stray","spider","cave_spider",
+          "witch","pillager","blaze","endermite","silverfish","slime","magma_cube",
+          "zoglin","hoglin","phantom","wither_skeleton"]);
+        if(typeof spec.mob!=="string"||!allowed.has(spec.mob)||
+           !Number.isInteger(spec.entityId)||Number(spec.entityId)<0||Number(spec.entityId)>200000)
+          throw Error("Native combat requires one exact freshly observed allowlisted hostile target");
+        op="combat";
+        details={goal,mob:spec.mob,entityId:spec.entityId,durationSeconds:seconds};
+      }
       if(sequenced.has(goal)){
         const spec=desktop as unknown as Record<string,unknown>;
-        if(!Array.isArray(spec.steps) || spec.steps.length<1 || spec.steps.length>8 ||
+        if(!Array.isArray(spec.steps) || spec.steps.length<1 || spec.steps.length>16 ||
            spec.steps.some(step=>!step||typeof step!=="object"||Array.isArray(step)||
-             !["gather","craft","smelt","equip","travel","tools","stone_age","iron_age","build"].includes(String(
+             !["gather","craft","smelt","equip","travel","tools","stone_age","iron_age","build","farm_wheat","farm_crop","build_volume","shelter","defeat_hostile","transfer","trade","enchant"].includes(String(
                (step as Record<string,unknown>).goal||""))))
           throw Error("Unsupported native sequence stage or invalid owner-declared plan");
         op="sequence";
@@ -525,8 +573,7 @@ export async function runGuardianApprovedPlayerEngine(
           details={goal,width,depth,durationSeconds:seconds};
         }else {
           const shapes=new Set(["floor","roof","walls","solid"]);
-          const materials=new Set(["cobblestone","oak_planks","spruce_planks",
-            "birch_planks","stone_bricks","dirt","netherrack"]);
+          const materials=new Set<string>(MINECRAFT_SAFE_BUILD_MATERIALS);
           if(!authorizedCoords(spec.position) ||
              !Number.isInteger(spec.height) || Number(spec.height)<1 ||
              Number(spec.height)>3 || !shapes.has(String(spec.shape)) ||
@@ -543,8 +590,7 @@ export async function runGuardianApprovedPlayerEngine(
       }
       if(gathered.has(goal)){
         const spec=desktop as unknown as Record<string,unknown>;
-        const allow=new Set(["logs","planks","sticks","cobblestone",
-          "raw_iron","iron_ingot","diamond","obsidian","flint","netherrack"]);
+        const allow=new Set<string>(MINECRAFT_SAFE_GATHER_RESOURCES);
         if(typeof spec.resource!=="string" || !allow.has(spec.resource) ||
            typeof spec.targetCount!=="number" ||
            !Number.isInteger(spec.targetCount) || spec.targetCount<1 ||
@@ -588,7 +634,7 @@ export async function runGuardianApprovedPlayerEngine(
            Number(spec.targetCount)<1||Number(spec.targetCount)>16)
           throw Error("Native farm requires exact owner field and bounded target");
         const crop=goal==="farm_wheat"?"wheat":String(spec.crop);
-        if(!["wheat","carrots","potatoes"].includes(crop)||
+        if(!["wheat","carrots","potatoes","beetroot"].includes(crop)||
            (goal==="farm_crop"&&crop==="wheat"))throw Error("Invalid owner crop");
         op="farm";
         details={goal,durationSeconds:seconds,crop,...spec.position,

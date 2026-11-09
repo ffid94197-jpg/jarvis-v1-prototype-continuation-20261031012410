@@ -2,12 +2,67 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 const root=path.join(__dirname,'..');
+const catalogSource=fs.readFileSync(path.join(root,'src/lib/agent/core/minecraftResources.ts'),'utf8');
+const catalogCompiled=ts.transpileModule(catalogSource,{reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
+const catalogErrors=(catalogCompiled.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
+assert.equal(catalogErrors.length,0,'shared Minecraft resource catalog must parse');
+const catalogExports={};
+vm.runInNewContext(catalogCompiled.outputText,{exports:catalogExports,Object,Array,Set});
+const safeGatherResources=catalogExports.MINECRAFT_SAFE_GATHER_RESOURCES;
+const safeBuildMaterials=catalogExports.MINECRAFT_SAFE_BUILD_MATERIALS;
+const resourceGoal=require('../windows-companion/minecraft-bot/resource_goal.cjs');
+const structureGoal=require('../windows-companion/minecraft-bot/structure_goal.cjs');
+assert.deepEqual([...safeBuildMaterials].sort(),[...structureGoal.BLOCKS].sort(),
+  'Core/Guardian/PlayerEngine build catalog must exactly match the native companion structure allowlist');
+assert.equal(new Set(safeBuildMaterials).size,safeBuildMaterials.length,'build material catalog has no duplicates');
+assert.deepEqual([...safeGatherResources].sort(),[...resourceGoal.RESOURCES].sort(),
+  'Core/Guardian/PlayerEngine catalog must exactly match the native companion resource allowlist');
+assert.equal(new Set(safeGatherResources).size,safeGatherResources.length,'resource catalog has no duplicates');
+const coreGateSource=fs.readFileSync(path.join(root,'src/lib/agent/core/minecraftAiGate.ts'),'utf8');
+for(const resource of safeGatherResources)assert.ok(coreGateSource.includes(resource+':'),
+  'Core AI gate knows the safe resource '+resource);
+assert.ok(coreGateSource.includes('shared safe vanilla resource catalog'),
+  'Core Minecraft instructions describe the shared safe resource catalog');
+const playerEngineSource=fs.readFileSync(path.join(root,'src/lib/agent/windows/playerEngineBridge.ts'),'utf8');
+assert.ok(playerEngineSource.includes('new Set<string>(MINECRAFT_SAFE_GATHER_RESOURCES)'),
+  'PlayerEngine uses the shared resource catalog');
+assert.ok(playerEngineSource.includes('new Set<string>(MINECRAFT_SAFE_BUILD_MATERIALS)'),
+  'PlayerEngine uses the shared build-material catalog');
+assert.ok(coreGateSource.includes('!SAFE_BUILD_MATERIALS.has(String(args.block))'),
+  'Core AI goal gate enforces the safe build-material catalog');
+for(const block of safeBuildMaterials)assert.ok(coreGateSource.includes("'"+block+"'"),
+  'Core AI gate knows safe build material '+block);
+const javaBridgeSource=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/overlay/com/neovetta/aicompanion/jarvis/JarvisBridgeServer.java'),'utf8');
+const javaBuildMatch=javaBridgeSource.match(/BUILD_BLOCKS=java\.util\.Set\.of\(([\s\S]*?)\);/);
+assert.ok(javaBuildMatch,'Java PlayerEngine bridge has a bounded BUILD_BLOCKS allowlist');
+for(const block of safeBuildMaterials)assert.ok(javaBuildMatch[1].includes('"'+block+'"'),
+  'Java PlayerEngine bridge allows safe build material '+block);
+const sequenceSource=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/overlay/com/neovetta/aicompanion/jarvis/JarvisNativeSequenceTask.java'),'utf8');
+const volumeSource=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/overlay/com/neovetta/aicompanion/jarvis/JarvisNativeVolumeTask.java'),'utf8');
+const volumeMaterialMatch=volumeSource.match(/MATERIALS=Set\.of\(([\s\S]*?)\);/);
+assert.ok(volumeMaterialMatch,'native volume task has a bounded MATERIALS allowlist');
+for(const block of safeBuildMaterials)assert.ok(volumeMaterialMatch[1].includes('"'+block+'"'),
+  'native volume task allows safe build material '+block);
+const sequenceBuildMatch=sequenceSource.match(/BUILD_BLOCKS=Set\.of\(([\s\S]*?)\);/);
+const sequenceGatherMatch=sequenceSource.match(/GATHER=Set\.of\(([\s\S]*?)\);/);
+assert.ok(sequenceBuildMatch,'native sequence has a bounded BUILD_BLOCKS allowlist');
+assert.ok(sequenceGatherMatch,'native sequence has a bounded GATHER allowlist');
+for(const block of safeBuildMaterials)assert.ok(sequenceBuildMatch[1].includes('"'+block+'"'),
+  'native sequence allows safe build material '+block);
+for(const resource of safeGatherResources)assert.ok(sequenceGatherMatch[1].includes('"'+resource+'"'),
+  'native sequence allows safe gather resource '+resource);
+assert.ok(sequenceSource.includes('item-stage-fields')&&sequenceSource.includes('equip-stage-fields')&&sequenceSource.includes('travel-stage-fields'),
+  'native sequence rejects extra fields on item, equip and travel stages');
+const overlaySource=fs.readFileSync(path.join(root,'integrations/ai-companion-bridge/apply-overlay.cjs'),'utf8');
+assert.ok(overlaySource.includes('mud')&&overlaySource.includes('moss_block'),
+  'pinned AltoClef TaskCatalogue overlay registers the two additional native gather resources');
 const compiled=ts.transpileModule(fs.readFileSync(path.join(root,'src/lib/agent/windows/policy.ts'),'utf8'),{reportDiagnostics:true,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
 const errors=(compiled.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);
 assert.equal(errors.length,0,'Windows Guardian TypeScript must parse without syntax errors');
 const code=compiled.outputText;
 const outputs={};
-vm.runInNewContext(code,{exports:outputs,URL,process:{platform:'win32',env:{JARVIS_WINDOWS_AGENT_ENABLED:'1',JARVIS_LOCAL_DEV_NO_LOGIN:'1',JARVIS_LOCAL_DEV_BIND:'127.0.0.1',JARVIS_WINDOWS_COMPANION_TOKEN:'a'.repeat(64),JARVIS_MINECRAFT_LAN_ENABLED:'1'},cwd:()=>root},require});
+const policyRequire=id=>id==='../core/minecraftResources'?catalogExports:require(id);
+vm.runInNewContext(code,{exports:outputs,URL,process:{platform:'win32',env:{JARVIS_WINDOWS_AGENT_ENABLED:'1',JARVIS_LOCAL_DEV_NO_LOGIN:'1',JARVIS_LOCAL_DEV_BIND:'127.0.0.1',JARVIS_WINDOWS_COMPANION_TOKEN:'a'.repeat(64),JARVIS_MINECRAFT_LAN_ENABLED:'1'},cwd:()=>root},require:policyRequire});
 const validate=outputs.validateDesktopTool;let ok=0;
 const run=(args,accepted)=>{const r=validate('minecraft_companion_command',args);assert.equal(r.ok,accepted,JSON.stringify({args,r}));ok++;return r;};
 const p={x:1,y:64,z:3};
@@ -54,6 +109,19 @@ const authorized=[
  {command:'auto_goal',goal:'dragon_then_netherite_run',durationSeconds:21600}
 ];
 const {validateCommand:validateBot}=require('../windows-companion/minecraft-bot/friend_protocol.cjs');
+for(const resource of safeGatherResources){
+ const input={command:'auto_goal',goal:'gather',resource,targetCount:4,durationSeconds:300};
+ assert.equal(validateBot(input),null,'Companion accepts safe resource '+resource);ok++;
+ const r=run(input,true);
+ assert.equal(r.prepared.resource,resource,'Guardian forwards safe resource '+resource);ok++;
+}
+for(const block of safeBuildMaterials){
+ const input={command:'auto_goal',goal:'build_volume',position:{x:1,y:64,z:3},
+  block,width:2,depth:2,height:1,shape:'floor',durationSeconds:300};
+ assert.equal(validateBot(input),null,'Companion accepts safe build material '+block);ok++;
+ const r=run(input,true);
+ assert.equal(r.prepared.block,block,'Guardian forwards safe build material '+block);ok++;
+}
 for(const input of authorized){
  assert.equal(validateBot(input),null,'Bot accepts '+JSON.stringify(input));ok++;
  const r=run(input,true);
@@ -64,6 +132,13 @@ for(const input of authorized){
 }
 for(const input of [
  {command:'auto_goal',goal:'gather',resource:'command_block',targetCount:1},
+ {command:'auto_goal',goal:'gather',resource:'bedrock',targetCount:1},
+ {command:'auto_goal',goal:'gather',resource:'barrier',targetCount:1},
+ {command:'auto_goal',goal:'gather',resource:'tnt',targetCount:1},
+ {command:'auto_goal',goal:'build_volume',position:{x:1,y:64,z:3},block:'tnt',width:2,depth:2,height:1,shape:'floor'},
+ {command:'auto_goal',goal:'build_volume',position:{x:1,y:64,z:3},block:'bedrock',width:2,depth:2,height:1,shape:'floor'},
+ {command:'auto_goal',goal:'build_volume',position:{x:1,y:64,z:3},block:'barrier',width:2,depth:2,height:1,shape:'floor'},
+ {command:'auto_goal',goal:'build_volume',position:{x:1,y:64,z:3},block:'lava',width:2,depth:2,height:1,shape:'floor'},
  {command:'auto_goal',goal:'gather',resource:'diamond',targetCount:100},
  {command:'auto_goal',goal:'craft',item:'dragon_egg',targetCount:1},
  {command:'auto_goal',goal:'equip',item:'diamond_sword',destinationSlot:'head'},

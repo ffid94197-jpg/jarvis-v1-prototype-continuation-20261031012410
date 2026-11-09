@@ -8,6 +8,7 @@ const {roofedRoomSteps}=require('./structure_goal.cjs');
 const {SMELT_RECIPES}=require('./smelt_goal.cjs');
 const {validTransferSpec}=require('./container_goal.cjs');
 const {validCropSpec}=require('./crop_goal.cjs');
+const {validFeedPair}=require('./animal_feeding.cjs');
 // A whole armor set is an owner-defined four-slot objective, not permission
 // to select arbitrary equipment or execute raw Minecraft actions.
 function armorEquipSteps(ownerText){
@@ -50,6 +51,10 @@ function parseOwnerPrimitive(text){
  // Coordinates must come from the owner's actual words, not the model's guess.
  let m=new RegExp('^(?:go|walk|move|travel|navigate)(?: to)? (?:coordinates? )?'+coord+'$').exec(s);
  if(m)return {command:'auto_goal',goal:'travel',destination:point(m),arrivalRange:2};
+ m=new RegExp('^(?:fish|catch (?:a |one )?fish)(?: once)? (?:in|from) (?:the |a |nearby )?(?:water|pond|river|lake) (?:at |at coordinates? )?'+coord+'$').exec(s);
+ if(m)return {command:'fish_once',position:point(m)};
+ m=new RegExp('^(?:sleep|rest)(?: through the night)? (?:in|on) (?:the |a |that |my )?bed (?:at |at coordinates? )?'+coord+'$').exec(s);
+ if(m)return {command:'sleep_in_bed',position:point(m)};
  m=new RegExp('^(?:inspect|examine|check|look at)(?: the)? block(?: at)? '+coord+'$').exec(s);
  if(m)return {command:'inspect_block',position:point(m)};
  m=new RegExp('^(?:dig|break|mine)(?: the)? block(?: at)? '+coord+'$').exec(s);
@@ -86,7 +91,7 @@ function parseOwnerPrimitive(text){
 const PRIMITIVE_FIELDS=Object.freeze({
  craft_item:['item','count'],equip_item:['item','destination'],
  inspect_block:['position'],dig_block:['position'],
- navigate:['position','range'],interact_block:['position'],
+ navigate:['position','range'],interact_block:['position'],sleep_in_bed:['position'],fish_once:['position'],feed_animal:['entityId','item'],row_boat:['entityId','durationMs'],
  interact_entity:['entityId'],place_block:['item','reference','face'],
  move:['directionInput','durationMs'],use_item:['hand'],say:['text'],
  inspect_villager:['entityId'],trade_villager:['entityId','tradeIndex','times'],
@@ -104,6 +109,10 @@ function modelPrimitiveGrounded(command,ownerText,context){
   inspect_block:/\b(?:inspect|examine|check|look at)\b/,
   dig_block:/\b(?:mine|dig|break)\b/,navigate:/\b(?:go|walk|travel|navigate|move)\b/,
   interact_block:/\b(?:interact|activate|open|use)\b/,
+  sleep_in_bed:/\b(?:sleep|rest)\b/,
+  fish_once:/\b(?:fish|catch)\b/,
+  feed_animal:/\bfeed\b/,
+  row_boat:/\b(?:row|paddle)\b/,
   interact_entity:/\b(?:interact|trade|mount|use)\b/,
   place_block:/\b(?:place|put|build)\b/,move:/\b(?:move|walk|step)\b/,
   use_item:/\b(?:use|eat|consume|shoot)\b/,say:/\b(?:say|tell|message)\b/,
@@ -160,6 +169,42 @@ function modelPrimitiveGrounded(command,ownerText,context){
      /^(?:deepslate_)?(?:iron|diamond)_ore$/.test(observed.name)?
        [String(observed.name).includes('diamond')?'diamond':'iron','ore']:[];
    if(![noun,...aliases].some(label=>s.includes(label)))return false;
+ }
+ if(command.command==='row_boat'){
+  if(!/\b(?:row|paddle)\b/.test(s)||!/\bboat\b/.test(s)||
+     !/\bforward\b/.test(s)||
+     /\b(?:don't|do not|never|avoid|stop|then|and)\b/.test(s))return false;
+  const v=Number.isSafeInteger(command.entityId)&&Array.isArray(scene?.boats)?
+    scene.boats.find(b=>b.id===command.entityId&&b.distance<=3.5&&
+      /^(?:[a-z_]+_)?(?:boat|raft)$/.test(String(b.name||''))):null;
+  const t=s.match(/\bfor (\d{3,4}) (?:ms|milliseconds)\b/);
+  if(!v||!Number.isSafeInteger(command.durationMs)||
+     command.durationMs<300||command.durationMs>1200||
+     (t?Number(t[1])!==command.durationMs:command.durationMs!==600))return false;
+ }
+ if(command.command==='feed_animal'){
+  if(/\b(?:don't|do not|never|avoid|not to|must not|breed|tame|then|and)\b/.test(s)||
+     /\b(?:two|three|four|five|six|seven|eight|nine|ten|many|several|\d+)\b/.test(s))return false;
+  const animal=Number.isInteger(command.entityId)&&Array.isArray(scene?.animals)?
+    scene.animals.find(a=>a.id===command.entityId&&a.distance<=4.3):null;
+  const item=String(command.item||'').replace(/_/g,' ');
+  if(!animal||!validFeedPair(animal.name,command.item)||
+     !s.includes(animal.name)||!s.includes(item))return false;
+ }
+ if(command.command==='fish_once'){
+  if(!/\b(?:water|pond|river|lake)\b/.test(s)||
+     /\b(?:two|three|four|five|six|seven|eight|nine|ten|many|several|multiple|\d+)\s+(?:fish|salmon|cod|times)\b/.test(s)||
+     /\b(?:and|then|also|before|next|repeat|keep going)\b/.test(s)||
+     /\b(?:don't|do not|never|avoid|not to|must not)\b/.test(s)||
+     !Array.isArray(scene?.nearbyBlocks)||
+     !scene.nearbyBlocks.some(b=>b.name==='water'&&
+       b.x===target?.x&&b.y===target?.y&&b.z===target?.z))return false;
+ }
+ if(command.command==='sleep_in_bed'){
+  if(!/\bbed\b/.test(s)||/\b(?:don't|do not|never|avoid|not to|must not)\b/.test(s) || !Array.isArray(scene?.nearbyBlocks) ||
+     !scene.nearbyBlocks.some(b=>/^[a-z_]+_bed$/.test(String(b?.name||''))&&
+       b.x===target?.x&&b.y===target?.y&&b.z===target?.z))
+    return false;
  }
  if(command.command==='attack_hostile'){
   const threat=Number.isInteger(command.entityId)&&Array.isArray(scene?.threats)?

@@ -5,7 +5,7 @@
  * run shell commands, trust other players' chat, or claim task completion.
  */
 const {lateGamePlan} = require('./late_game.cjs');
-const {RESOURCES,SAFE_GENERIC_RESOURCES,ORE_RESOURCE_RULES,resourcePlan}=require('./resource_goal.cjs');
+const {RESOURCES,SAFE_GENERIC_RESOURCES,ORE_RESOURCE_RULES,resourceCount,resourcePlan}=require('./resource_goal.cjs');
 const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,buildPlan,validVolumeSpec,volumePlan}=require('./structure_goal.cjs');
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
@@ -14,6 +14,7 @@ const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
 const {validSmeltSpec,smeltPlan}=require('./smelt_goal.cjs');
 const {validTransferSpec,transferPlan}=require('./container_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
+const {ANIMAL_FOOD}=require('./animal_feeding.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
 const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','farm_crop','sequence','craft','equip','smelt','transfer']);
@@ -70,6 +71,21 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     if(d<=10)villagers.push({id:e.id,name:'villager',distance:Math.round(d*10)/10});
   }
   villagers.sort((a,b)=>a.distance-b.distance);
+  const animals=[];
+  for(const e of Object.values(bot.entities||{})){
+    if(!e?.position||!Object.hasOwn(ANIMAL_FOOD,e.name)||!p||!Number.isInteger(e.id))continue;
+    const d=number(e.position.distanceTo(p),1e9);
+    if(d<=8)animals.push({id:e.id,name:e.name,distance:Math.round(d*10)/10});
+  }
+  animals.sort((a,b)=>a.distance-b.distance);
+  const boats=[];
+  for(const entity of Object.values(bot.entities||{})){
+    if(!entity?.position||!p||!Number.isInteger(entity.id)||
+       !/^(?:[a-z_]+_)?(?:boat|raft)$/.test(String(entity.name||'')))continue;
+    const distance=number(entity.position.distanceTo(p),1e9);
+    if(distance<=8)boats.push({id:entity.id,name:entity.name,distance:Math.round(distance*10)/10});
+  }
+  boats.sort((a,b)=>a.distance-b.distance);
   const inventory={logs:countLike(inv,n=>/(?:^|_)log$/.test(n)),planks:countLike(inv,n=>/_planks$/.test(n)),sticks:inv.stick||0,
     table:inv.crafting_table||0,woodenPickaxe:inv.wooden_pickaxe||0,stonePickaxe:inv.stone_pickaxe||0,stoneSword:inv.stone_sword||0,cobblestone:inv.cobblestone||0,
     food:countLike(inv,n=>FOOD.test(n)),rawIron:inv.raw_iron||0,ironIngot:inv.iron_ingot||0,ironPickaxe:inv.iron_pickaxe||0,diamondPickaxe:inv.diamond_pickaxe||0,diamonds:inv.diamond||0,diamondSword:inv.diamond_sword||0,diamondHelmet:inv.diamond_helmet||0,diamondChestplate:inv.diamond_chestplate||0,diamondLeggings:inv.diamond_leggings||0,diamondBoots:inv.diamond_boots||0,furnace:inv.furnace||0,coal:inv.coal||0,obsidian:inv.obsidian||0,
@@ -133,6 +149,7 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
   const dragons=Object.values(bot.entities||{}).filter(e=>e?.name==='ender_dragon' && e?.position);
   const crystals=Object.values(bot.entities||{}).filter(e=>e?.name==='end_crystal' && e?.position);
   return {joined:!!p,dimension:bot.game?.dimension||'minecraft:overworld',
+    sleeping:bot.isSleeping===true,daylight:bot.time?.isDay===true,
     smithingTableNearby,netherPortalNearby,strongholdPortalFrameNearby,strongholdMissingEyes,endPortalPresent,endPortalActivated,
     wornNetherite,wornDiamond,heldNetheriteSword,equipped,exitPortalPresent,
     dragonPresent:dragons.length>0,dragonId:dragons[0]?.id??null,
@@ -147,7 +164,7 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     position:p?{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}:null,
     ownerVisible:!!owner,ownerDistance:p&&owner?Math.round(p.distanceTo(owner)):null,
     ownerPosition:owner?{x:Math.floor(owner.x),y:Math.floor(owner.y),z:Math.floor(owner.z)}:null,
-    threats:threats.slice(0,6),villagers:villagers.slice(0,3),
+    threats:threats.slice(0,6),villagers:villagers.slice(0,3),animals:animals.slice(0,3),boats:boats.slice(0,3),
     inventory,timeOfDay:bot.time?.timeOfDay??null};
 }
 function decide(goal, world, failures={}, progress={}) {
@@ -494,7 +511,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(goal==='equip' && !validEquipSpec({goal,item:spec?.item,destination:spec?.destination}))
       throw Error('Unsupported equipment item or slot');
     if(goal==='sequence' && !validSequence(spec?.steps))
-      throw Error('Sequence requires one to eight typed valid subgoals');
+      throw Error('Sequence requires one to sixteen typed valid subgoals');
     if(goal==='travel' && (!spec?.destination ||
        !['x','y','z'].every(k=>Number.isInteger(spec.destination[k]) &&
          Math.abs(spec.destination[k])<=30000000) ||
@@ -550,6 +567,21 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     return true;
   }
   function status(){return JSON.parse(JSON.stringify(state));}
+  // The first joined server inventory for EACH gather stage fixes the baseline.
+  // No mutable model text or old milestone may set the start count.
+  function gatherBaseline(world,resource,stageIndex){
+    if(world?.joined!==true||!world.inventory||typeof world.inventory!=='object')
+      return null;
+    const observed=resourceCount(world,resource),m=state.milestones;
+    if(!Number.isSafeInteger(observed)||observed<0)return null;
+    if(m.gatherStageIndex!==stageIndex||m.gatherResource!==resource||
+       !Number.isSafeInteger(m.gatherInitialCount)){
+      m.gatherStageIndex=stageIndex;
+      m.gatherResource=resource;
+      m.gatherInitialCount=observed;
+    }
+    return m.gatherInitialCount;
+  }
   function next(world){
     if(state.status!=='running')return {kind:'idle',why:'Automation not running'};
     if(clock()>=state.deadline||state.steps>=maxSteps){state.status='expired';state.why='Goal time/step budget exhausted';return {kind:'idle',why:state.why};}
@@ -577,7 +609,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(!d && (state.goal==='sequence'||state.goal==='shelter')){
       // Do not mark a composed goal complete by merely issuing the steps.
       // Recompute every stage against the current server-backed world and
-      // advance across at most eight already-proven stages in one tick.
+      // advance across at most sixteen already-proven stages in one tick.
       for(let n=0;n<=state.sequence.length;n++){
         if(state.sequenceIndex>=state.sequence.length){
           d={kind:'complete',why:'All authorized sequence stages independently verified'};
@@ -600,8 +632,17 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           stage.goal==='build_volume'?
           {...world,buildVolumeCells:world.buildVolumeCellsByStage?.[state.sequenceIndex]}:
           stage.goal==='farm_wheat'?
-          {...world,wheatCells:world.wheatCellsByStage?.[state.sequenceIndex]}:world;
-        d=decide(stage.goal,stageWorld,state.failures,{...state,...stage});
+          {...world,wheatCells:world.wheatCellsByStage?.[state.sequenceIndex]}:
+          stage.goal==='farm_crop'?
+          {...world,cropCells:world.cropCellsByStage?.[state.sequenceIndex]}:world;
+        const initial=stage.goal==='gather'?
+          gatherBaseline(stageWorld,stage.resource,state.sequenceIndex):null;
+        if(stage.goal==='gather'&&initial===null){
+          d={kind:'wait',why:'Gather stage requires a fresh joined server inventory'};
+          break;
+        }
+        d=decide(stage.goal,stageWorld,state.failures,
+          {...state,...stage,...(initial!==null?{gatherInitialCount:initial}:{})});
         if(d.kind!=='complete')break;
         state.sequenceIndex++;
         // Each ordered furnace stage must earn its own actual verified
@@ -609,12 +650,22 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         state.milestones.smeltedOutput=0;
         state.milestones.craftedOutput=0;
         state.milestones.wheatHarvested=0;
+        state.milestones.harvestedCropCount=0;
+        delete state.milestones.gatherInitialCount;
+        delete state.milestones.gatherStageIndex;
+        delete state.milestones.gatherResource;
         state.failures={};
         // An arrival proof for a prior target must never prove the next one.
         state.milestones.travelArrivalVerified=false;
       }
       if(!d)d={kind:'blocked',why:'No valid stage decision'};
-    }else if(!d) d=decide(state.goal,world,state.failures,state);
+    }else if(!d){
+      const initial=state.goal==='gather'?gatherBaseline(world,state.resource,-1):null;
+      d=state.goal==='gather'&&initial===null?
+        {kind:'wait',why:'Gather goal requires a fresh joined server inventory'}:
+        decide(state.goal,world,state.failures,
+          {...state,...(initial!==null?{gatherInitialCount:initial}:{})});
+    }
     // Replan from a different *observed safe* travel waypoint after repeated
     // pathfinder failure. Never change the owner's destination or silently
     // declare arrival from a successful detour.
@@ -712,6 +763,24 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(d.kind==='fight_dragon' &&
        (state.milestones.dragonAttackInputs||0)>=96)
       d={kind:'blocked',why:'Ninety-six observed Dragon melee attempts did not prove the real Dragon death'};
+    // Publish task-bound NEW-inventory evidence only for a completed standalone
+    // gather goal. A planning decision or existing stack alone is not proof.
+    // The owner/Guardian Core checks these values against its fresh observed
+    // inventory; an absent/mismatched receipt must fail closed.
+    if(d.kind==='complete' && state.goal==='gather'){
+      const initial=state.milestones.gatherInitialCount;
+      const current=resourceCount(world,state.resource);
+      if(world?.joined!==true||!Number.isSafeInteger(initial)||
+         !Number.isSafeInteger(current)||initial<0||current<initial||
+         current-initial<state.targetCount){
+        d={kind:'blocked',why:'Gather completion lacks fresh task-bound physical inventory increase'};
+      }else{
+        state.milestones.initialCount=initial;
+        state.milestones.currentCount=current;
+        state.milestones.newItems=current-initial;
+        state.milestones.gatherDone=true;
+      }
+    }
     state.lastDecision=d;
     if(d.kind==='complete'){state.status='complete';state.why=d.why;}
     if(d.kind==='blocked'){state.status='blocked';state.why=d.why;}
@@ -720,6 +789,9 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
   }
   function record(decision, outcome){
     if(state.status!=='running' || !decision)return;
+    const activeCrop=state.goal==='farm_crop'?state.crop:
+      state.goal==='sequence'&&state.sequence?.[state.sequenceIndex]?.goal==='farm_crop'?
+        state.sequence[state.sequenceIndex].crop:null;
     const ok=outcome?.ok===true && outcome?.verified===true &&
       (decision.kind!=='survey_generic'||(
         SAFE_GENERIC_RESOURCES.has(decision.resource)&&
@@ -734,10 +806,10 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         (outcome.proof==='wheat_harvest'&&
           Number.isInteger(outcome.count)&&outcome.count>=1&&outcome.count<=64)) &&
       (decision.kind!=='harvest_crop' ||
-        (outcome.proof==='crop_harvest'&&outcome.crop===state.crop &&
+        (outcome.proof==='crop_harvest'&&activeCrop!==null&&outcome.crop===activeCrop &&
           Number.isInteger(outcome.count)&&outcome.count>=1&&outcome.count<=64)) &&
       (decision.kind!=='plant_crop' ||
-        (outcome.proof==='crop_planted'&&outcome.crop===state.crop)) &&
+        (outcome.proof==='crop_planted'&&activeCrop!==null&&outcome.crop===activeCrop)) &&
       (decision.kind!=='approach_container' ||
         outcome.proof==='container_approach') &&
       (decision.kind!=='transfer_inventory' ||
@@ -783,7 +855,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           (state.milestones.wheatHarvested||0)+outcome.count);
       }
       if(decision.kind==='harvest_crop'&&outcome.proof==='crop_harvest' &&
-         outcome.crop===state.crop)
+         activeCrop!==null&&outcome.crop===activeCrop)
         state.milestones.harvestedCropCount=Math.min(16,
           (state.milestones.harvestedCropCount||0)+outcome.count);
       if(decision.kind==='transfer_inventory'&&outcome.proof==='container_transfer')

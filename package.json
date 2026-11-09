@@ -84,7 +84,9 @@
     "test:corpus-validator": "node scripts/autonomy/verify-corpus-validator.cjs",
     "test:cua-driver-offline": "node scripts/verify-cua-driver-offline.mjs",
     "test:local-project-build-offline": "node scripts/verify-local-project-build.cjs",
-    "test:local-project-build-windows-live": "node scripts/verify-local-project-build-windows-live.cjs"
+    "test:local-project-build-windows-live": "node scripts/verify-local-project-build-windows-live.cjs",
+    "test:self-improvement-offline": "node scripts/verify-self-improvement-offline.cjs",
+    "test:self-evolution-offline": "node scripts/verify-self-evolution-offline.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -150,6 +152,7 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.186.1",
+    "typescript": "^5",
     "uuid": "^11.1.0",
     "vaul": "^1.1.2",
     "z-ai-web-dev-sdk": "^0.0.18",
@@ -166,7 +169,6 @@
     "eslint-config-next": "^16.1.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "tailwindcss": "^4",
-    "tw-animate-css": "^1.3.5",
-    "typescript": "^5"
+    "tw-animate-css": "^1.3.5"
   }
 }

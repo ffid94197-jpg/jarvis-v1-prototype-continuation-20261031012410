@@ -11,7 +11,8 @@ const VICTORY=['dragonSeen','dragonKilled','exitPortalObserved','endReturned',
 // in the compact receipt: JARVIS Core checks the smelting count against
 // the exact original owner request, and bow/bridge counts explain bounded
 // End attempt exhaustion without claiming hit or island arrival.
-const REQUIRED_COUNTERS=['craftedOutput','wheatHarvested','harvestedCropCount','transferDone','smeltedOutput','dragonRangedShots',
+const REQUIRED_COUNTERS=['craftedOutput','wheatHarvested','harvestedCropCount','transferDone','smeltedOutput',
+ 'initialCount','currentCount','newItems','gatherDone','dragonRangedShots',
  'dragonStanceTrips','endBridgeTiles'];
 const boundedString=(x,n)=>typeof x==='string'?x.slice(0,n):null;
 const boundedNum=x=>Number.isFinite(x)?x:null;
@@ -20,6 +21,13 @@ function safeMilestones(input){
  const out={};
  for(const key of VICTORY){
   if(raw[key]===true || raw[key]===false)out[key]=raw[key];
+ }
+ // Reserve space for attested counts before optional UI milestones; the
+ // model must never misread a trimmed status as a successfully verified task.
+ for(const key of REQUIRED_COUNTERS){
+  const val=raw[key];
+  if(typeof val==='boolean'||typeof val==='number'&&Number.isSafeInteger(val)&&Math.abs(val)<1e9)
+   out[key]=val;
  }
  for(const [key,val] of Object.entries(raw)){
   if(Object.keys(out).length>=32)break;

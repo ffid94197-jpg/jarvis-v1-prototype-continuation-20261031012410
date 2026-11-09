@@ -272,7 +272,7 @@ export async function executeTool(
     integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;arguments?:Record<string,unknown>};
     memory?: {ownerId:string;query:string;limit:number};
     world?: {ownerId:string;query:string;limit:number};
-    evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill";id?:string;sourceTaskId?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
+    evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill"|"diagnose"|"auto_apply_repair"|"verify_repair";id?:string;sourceTaskId?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
   };
   switch (tool) {
     case "evolution_skill_stage":
@@ -281,12 +281,43 @@ export async function executeTool(
     case "evolution_skill_run":
     case "evolution_skill_expand":
     case "evolution_repair_stage":
-    case "evolution_repair_list": {
+    case "evolution_repair_list":
+    case "evolution_diagnose":
+    case "evolution_repair_apply": {
       const request=prepared.evolution;
       if(!request || isCancelled())
         return {ok:false,tool,evidence:"",error:"Guardian evolution owner/session unavailable"};
       const ownerId=request.ownerId;
       try{
+        if(request.action==="diagnose"){
+          const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
+          const report=await diagnoseOwnerRuntime(ownerId,db);
+          return {ok:report.status==="diagnosed"||report.status==="no_recent_tasks",
+            tool,evidence:"Read-only owner-scoped runtime diagnosis; no code changed and no effects retried",
+            detail:{...report,readOnly:true,repairAuthorizationGranted:false}};
+        }
+        if(request.action==="auto_apply_repair"){
+          if(!request.id)return {ok:false,tool,evidence:"",error:"Repair ID missing"};
+          const {getRepair,autoApplyRepair}=await import("../evolution/repairVault.mjs");
+          const staged=await getRepair(ownerId,request.id);
+          const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
+          const diagnosis=await diagnoseOwnerRuntime(ownerId,db);
+          const taskRef=taskId.slice(-8);
+          const currentPattern=diagnosis.patterns?.find((item:{id:string;requiresSourceInspection:boolean;taskRefs?:string[]})=>
+            item.id===staged.diagnosisPatternId&&item.requiresSourceInspection===true&&
+            Array.isArray(item.taskRefs)&&item.taskRefs.includes(taskRef));
+          if(!currentPattern)
+            return {ok:false,tool,evidence:"",
+              error:"Automatic repair requires a current repairable runtime diagnosis signal"};
+          const result=await autoApplyRepair(ownerId,request.id,taskId);
+          const verified=result.state==="verified"&&result.verified===true;
+          const effectUnknown=!verified&&(result.state==="effect_unknown"||result.state==="applied");
+          return {ok:verified,tool,
+            evidence:verified
+              ?"Bounded self-repair applied and static syntax verified; project tests/runtime acceptance were not run"
+              :"Bounded self-repair did not reach verified state; inspect repair ledger and rollback status",
+            detail:{...result,effectUnknown,sourceContentsReturned:false,runtimeTestsExecuted:false}};
+        }
         if(request.action==="learn_skill"){
           const {learnFromCompletedTask}=await import("../evolution/learnFromTask.mjs");
           const learned=await learnFromCompletedTask(ownerId,db,request.sourceTaskId);
@@ -319,10 +350,27 @@ export async function executeTool(
             detail:{...plan,untrustedInstructions:true,queueRequested:runRequested}};
         }
         if(request.action==="stage_repair"){
+          let diagnosisPatternId:string|undefined;
+          if(process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1"){
+            const spec=request.candidate as {diagnosis?:unknown};
+            const match=typeof spec?.diagnosis==="string"
+              ?spec.diagnosis.match(/\b(diag_[0-9a-f]{20})\b/):null;
+            if(!match)return {ok:false,tool,evidence:"",
+              error:"Automatic repair staging requires a current diagnosis pattern ID in the repair rationale"};
+            const {diagnoseOwnerRuntime}=await import("../evolution/diagnostics.mjs");
+            const diagnosis=await diagnoseOwnerRuntime(ownerId,db);
+            const taskRef=taskId.slice(-8);
+            const pattern=diagnosis.patterns?.find((item:{id:string;requiresSourceInspection:boolean;taskRefs?:string[]})=>
+              item.id===match[1]&&item.requiresSourceInspection===true&&
+              Array.isArray(item.taskRefs)&&item.taskRefs.includes(taskRef));
+            if(!pattern)return {ok:false,tool,evidence:"",
+              error:"Automatic repair staging is allowed only for a current repairable code-failure signal"};
+            diagnosisPatternId=match[1];
+          }
           const {stageRepair}=await import("../evolution/repairVault.mjs");
-          const candidate=await stageRepair(ownerId,request.candidate);
-          return {ok:true,tool,evidence:"Repair candidate STAGED, no file modified; owner approval required",
-            detail:{...candidate,applied:false,executed:false,ownerApprovalRequired:true}};
+          const candidate=await stageRepair(ownerId,request.candidate,{taskId,diagnosisPatternId});
+          return {ok:true,tool,evidence:"Repair candidate STAGED, no file modified; automatic apply remains bounded by owner policy",
+            detail:{...candidate,applied:false,executed:false,ownerApprovalRequired:process.env.JARVIS_SELF_REPAIR_AUTO_APPLY!=="1"}};
         }
         if(request.action==="list_repairs"){
           const {listRepairs}=await import("../evolution/repairVault.mjs");
@@ -332,7 +380,22 @@ export async function executeTool(
               truncated:pending.length>8,sourceContentReturned:false}};
         }
         return {ok:false,tool,evidence:"",error:"Unknown guarded evolution operation"};
-      }catch(e){return {ok:false,tool,evidence:"",error:e instanceof Error?e.message:"Evolution registry unavailable"};}
+      }catch(e){
+        let effectUnknown=false;
+        if(tool==="evolution_repair_apply"&&typeof request.id==="string"){
+          try{
+            const {getRepairState,isRepairOutcomeUncertain}=await import("../evolution/repairVault.mjs");
+            const latest=await getRepairState(ownerId,request.id);
+            effectUnknown=isRepairOutcomeUncertain(latest.state);
+          }catch{
+            // If the repair ledger cannot establish whether a write occurred,
+            // preserve quarantine rather than assume the target is unchanged.
+            effectUnknown=true;
+          }
+        }
+        return {ok:false,tool,evidence:"",error:e instanceof Error?e.message:"Evolution registry unavailable",
+          detail:effectUnknown?{effectUnknown:true}:undefined};
+      }
     }
     case "memory_recall": {
       if(!prepared.memory || isCancelled() ||

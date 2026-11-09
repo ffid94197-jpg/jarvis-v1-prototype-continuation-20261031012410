@@ -58,8 +58,14 @@ function resourcePlan(world,failures={},progress={},delegate){
  if(!RESOURCES.has(resource)||!Number.isInteger(count)||count<1||count>64)
    return required('blocked','Invalid or unsupported resource acquisition target');
  const have=resourceCount(world,resource);
- if(have>=count)return required('complete',
-   'Server-backed '+resource+' quantity '+have+' >= '+count);
+ // When run through the real task controller, acquisition must be NEW since
+ // this owner-authorized stage's first real inventory observation. A previously
+ // held stack may be used as a prerequisite, but never as fresh task output.
+ const baseline=Number.isSafeInteger(progress.gatherInitialCount)&&
+   progress.gatherInitialCount>=0?progress.gatherInitialCount:0;
+ const newly=Math.max(0,have-baseline);
+ if(newly>=count)return required('complete',
+   'Server-backed '+resource+' newly acquired '+newly+' >= '+count);
  const inv=world.inventory||{};
  const stage=goal=>{
    if(typeof delegate!=='function')
@@ -122,7 +128,7 @@ function resourcePlan(world,failures={},progress={},delegate){
      ' and verify inventory increase',{resource});
  }
  switch(resource){
- case 'logs':return required('collect_wood','Gather '+(count-have)+' more physical logs');
+ case 'logs':return required('collect_wood','Gather '+(count-newly)+' more new physical logs');
  case 'planks':
    return (inv.logs||0)>0?required('craft_planks','Craft observed logs into planks'):
      required('collect_wood','Obtain logs for planks');

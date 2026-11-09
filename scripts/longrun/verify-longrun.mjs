@@ -80,7 +80,7 @@ for(let round=0;round<rounds;round++){
 // pause replay, and no-effect-unknown retry. These are static integration
 // checks; the real Prisma/Windows worker must still be tested on-device.
 const worker=readFileSync(resolve(root,'scripts/longrun/worker.ts'),'utf8');
-for(const invariant of ['status !== \'ACTIVE\'','db.$transaction','leaseOwner:WORKER_ID','buildReplayFromJournal','runTask({','reconcileCrashedTasks','pendingGuiVerification>0','activeTaskId:null','maxTotalSteps','Unsafe interrupted task state'])check(worker.includes(invariant),`worker invariant ${invariant}`);
+for(const invariant of ['status !== \'ACTIVE\'','db.$transaction','leaseOwner:WORKER_ID','buildReplayFromJournal','runTask({','reconcileCrashedTasks','pendingGuiVerification>0','activeTaskId:null','maxTotalSteps','Unsafe interrupted task state',"finalTask.status!==lastStatus","finalTask.ownerId!==owner.id","finalTask.stepsUsed>row.maxTotalSteps"])check(worker.includes(invariant),`worker invariant ${invariant}`);
 const api=readFileSync(resolve(root,'src/app/api/jarvis/routines/route.ts'),'utf8');
 for(const invariant of ['requireActiveSession','role!==\'OWNER\'','ownerId:auth.ctx.principalId','maxRuns>10000','maxTotalSteps>384','where:{id:body.id,ownerId:auth.ctx.principalId}'])check(api.includes(invariant),`API invariant ${invariant}`);
 console.log(JSON.stringify({pass:true,rounds,perRound,decisions,recoveries,blocked,cycles,assertions:checks, simulated:true,realWindows:false,realPrisma:false}));

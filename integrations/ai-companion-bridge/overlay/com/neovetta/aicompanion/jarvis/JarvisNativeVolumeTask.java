@@ -34,8 +34,9 @@ import java.util.Set;
  */
 public final class JarvisNativeVolumeTask extends Task {
     private static final Set<String> MATERIALS=Set.of(
-        "cobblestone","oak_planks","spruce_planks","birch_planks",
-        "stone_bricks","dirt","netherrack");
+        "cobblestone","cobbled_deepslate","stone","dirt",
+        "oak_planks","spruce_planks","birch_planks","stone_bricks",
+        "oak_log","glass","sandstone","netherrack");
     private static final int MAX_CELLS=64;
     private final CompanionEntity entity;
     private final ServerWorld world;

@@ -9,11 +9,13 @@ import {mutationOriginError} from "@/lib/agent/auth/origin";
 import {authorizeToolCall} from "@/lib/agent/guardian/guardian";
 import {db} from "@/lib/db";
 import {learnFromCompletedTask} from "@/lib/agent/evolution/learnFromTask.mjs";
+import {diagnoseOwnerRuntime} from "@/lib/agent/evolution/diagnostics.mjs";
+import {getPerformanceSummary} from "@/lib/agent/evolution/selfImprovement.mjs";
 import {
   listSkills,getSkill,stageSkill,changeSkill,expandSkill,EvolutionError
 } from "@/lib/agent/evolution/skillForge.mjs";
 import {
-  listRepairs,inspectRecovery,getRepair,stageRepair,approveRepair,applyRepair,rollbackRepair,
+  listRepairs,inspectRecovery,getRepair,stageRepair,approveRepair,applyRepair,verifyRepair,rollbackRepair,
   RepairError
 } from "@/lib/agent/evolution/repairVault.mjs";
 
@@ -41,12 +43,21 @@ const headers={"Cache-Control":"no-store"};
 export async function GET(req:NextRequest){
   const session=await gate(req,false);if(!session.ok)return session.response;
   try{
-    const [skills,repairs,recovery]=await Promise.all([
+    const [skills,repairs,recovery,diagnostics,performance]=await Promise.all([
       listSkills(session.ownerId,{includeDrafts:true}),listRepairs(session.ownerId),
-      inspectRecovery(session.ownerId)
+      inspectRecovery(session.ownerId),diagnoseOwnerRuntime(session.ownerId,db),
+      getPerformanceSummary(session.ownerId).catch(()=>({
+        status:"unavailable",sampleCount:0,skills:[],
+        privacy:{rawObjectivesStored:false,rawArgumentsStored:false,secretsStored:false}
+      }))
     ]);
-    return Response.json({skills,repairs,recovery,mode:"native_guardian_controlled",
-      autoExecution:false,ownerApprovalRequired:true},{headers});
+    return Response.json({skills,repairs,recovery,diagnostics,performance,mode:"native_guardian_controlled",
+      repairPolicy:{mode:process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1"?"bounded_auto":"owner_approval_required",
+        enabled:process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1",
+        scope:"JARVIS_AGENT_WORKSPACE safe non-protected files",maxAutomaticRepairsPerTask:1,
+        verification:"static syntax only; project tests/runtime acceptance remain separate"},
+      automaticSkillExecution:false,automaticRepairExecutionEnabled:process.env.JARVIS_SELF_REPAIR_AUTO_APPLY==="1",
+      ownerApprovalRequiredForSkills:true},{headers});
   }catch(e){return error(e);}
 }
 export async function POST(req:NextRequest){
@@ -66,7 +77,7 @@ export async function POST(req:NextRequest){
   // ledger as ordinary agent tools. Only this authenticated/origin-checked
   // control plane may present ownerControlPlane=true; Core cannot do so.
   const mutations=new Set(["stage_skill","approve_skill","disable_skill","learn_skill",
-    "stage_repair","approve_repair","apply_repair","rollback_repair"]);
+    "stage_repair","approve_repair","apply_repair","verify_repair","rollback_repair"]);
   if(typeof body.action==="string" && mutations.has(body.action)){
     const decision=await authorizeToolCall(
       {taskId:null,ownerId:owner,ownerControlPlane:true},
@@ -90,16 +101,31 @@ export async function POST(req:NextRequest){
         return Response.json(await changeSkill(owner,body.id,"approve"),{headers});
       case "disable_skill":
         return Response.json(await changeSkill(owner,body.id,"disable"),{headers});
-      case "expand_skill":
-        return Response.json(await expandSkill(owner,body.id,body.inputs),{headers});
+      case "expand_skill": {
+        // HTTP JSON is unknown until validated; skillForge applies its stricter
+        // limits to individual input names and values after this shape check.
+        if(typeof body.id!=="string" || !/^sk_[0-9a-f]{32}$/.test(body.id) ||
+           (body.inputs!==undefined &&
+            (!body.inputs || typeof body.inputs!=="object" || Array.isArray(body.inputs))))
+          return Response.json({error:"Invalid skill expansion ID or inputs"},{status:400});
+        return Response.json(await expandSkill(owner,body.id,
+          (body.inputs??{}) as Record<string,unknown>),{headers});
+      }
       case "stage_repair":
         return Response.json(await stageRepair(owner,body.candidate),{headers});
       case "repair_details":
         return Response.json(await getRepair(owner,body.id),{headers});
       case "approve_repair":
         return Response.json(await approveRepair(owner,body.id),{headers});
-      case "apply_repair":
-        return Response.json(await applyRepair(owner,body.id),{headers});
+      case "apply_repair": {
+        const applied=await applyRepair(owner,body.id);
+        if(applied.state!=="applied")return Response.json(applied,{headers});
+        const verification=await verifyRepair(owner,body.id);
+        return Response.json({...verification,application:applied,staticSyntaxVerified:verification.verified===true,
+          runtimeTestsExecuted:false},{headers});
+      }
+      case "verify_repair":
+        return Response.json(await verifyRepair(owner,body.id),{headers});
       case "rollback_repair":
         return Response.json(await rollbackRepair(owner,body.id),{headers});
       default:return Response.json({error:"Unknown owner action"},{status:400});

@@ -2,7 +2,7 @@
 'use strict';
 /** Pure command validation; identical contract for stdin and in-game chat. */
 const {RESOURCES}=require('./resource_goal.cjs');
-const {validSequence}=require('./mission_sequence.cjs');
+const {validSequence,MAX_SEQUENCE_STEPS}=require('./mission_sequence.cjs');
 const {validBuildSpec,validVolumeSpec}=require('./structure_goal.cjs');
 const {validFarmSpec}=require('./wheat_goal.cjs');
 const {validCropSpec}=require('./crop_goal.cjs');
@@ -10,6 +10,7 @@ const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {validSmeltSpec}=require('./smelt_goal.cjs');
 const {validTransferSpec}=require('./container_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
+const {validFeedArgs}=require('./animal_feeding.cjs');
 const SIMPLE = new Set(['follow','stop','jump','look','status','come','stay','guard','collect_wood','inventory','observe','auto_status','auto_stop','auto_checkpoint','auto_resume']);
 function validateCommand(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return 'Invalid command';
@@ -125,12 +126,12 @@ function validateCommand(input) {
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&
           input.durationSeconds<=43200)) ? null :
-      'Autonomous goal invalid. Gather needs quantity 1-64; travel needs coordinates/radius 1-8; sequence allows 1-8 validated steps; duration 10-43200';
+      'Autonomous goal invalid. Gather needs quantity 1-64; travel needs coordinates/radius 1-8; sequence allows 1-'+MAX_SEQUENCE_STEPS+' validated steps; duration 10-43200';
   }
   // Bounded general-purpose player primitives. All IDs/names are validated before I/O.
   const primitiveFields={
     navigate:['position','range'],dig_block:['position'],inspect_block:['position'],
-    interact_block:['position'],equip_item:['item','destination'],
+    interact_block:['position'],sleep_in_bed:['position'],fish_once:['position'],feed_animal:['entityId','item'],row_boat:['entityId','durationMs'],equip_item:['item','destination'],
     craft_item:['item','count'],place_block:['item','reference','face'],
     use_item:['hand'],interact_entity:['entityId'],
     move:['directionInput','durationMs'],say:['text'],
@@ -144,10 +145,14 @@ function validateCommand(input) {
   const pos = v => v && typeof v === 'object' && !Array.isArray(v) &&
     Object.keys(v).length===3 &&
     ['x','y','z'].every(k=>Number.isInteger(v[k]) && Math.abs(v[k])<=30000000);
+  if (input.command==='row_boat')return Number.isSafeInteger(input.entityId)&&input.entityId>=0&&input.entityId<=200000&&
+    Number.isSafeInteger(input.durationMs)&&input.durationMs>=300&&input.durationMs<=1200?
+    null:'Boat segment requires exact entity ID and duration 300–1200 ms';
+  if (input.command==='feed_animal')return validFeedArgs(input)?null:'Feeding needs one observed passive animal ID and approved food';
   if (input.command === 'navigate')
     return pos(input.position) && (input.range===undefined || (Number.isInteger(input.range) && input.range>=1 && input.range<=8))
       ? null : 'Navigate needs integer position and optional range 1–8';
-  if (['dig_block','inspect_block','interact_block'].includes(input.command))
+  if (['dig_block','inspect_block','interact_block','sleep_in_bed','fish_once'].includes(input.command))
     return pos(input.position)?null:'Block command needs integer position';
   if (input.command === 'equip_item')
     return itemName(input.item) && ['hand','head','torso','legs','feet','off-hand'].includes(input.destination||'hand')

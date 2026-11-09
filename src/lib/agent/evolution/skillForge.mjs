@@ -17,7 +17,7 @@ export class EvolutionError extends Error {
 }
 const ROOT=path.resolve(process.env.JARVIS_EVOLUTION_ROOT ||
   path.join(process.cwd(),"data","jarvis-evolution"));
-const MAX_SKILLS=64,MAX_STEPS=8,MAX_MANIFEST_BYTES=2800;
+const MAX_SKILLS=64,MAX_STEPS=16,MAX_MANIFEST_BYTES=6400;
 const SAFE_TOOLS=new Set([
   "create_folder","read_file","list_dir","write_file","edit_file",
   "memory_recall","world_recall","windows_discover_apps","windows_find_capability",
@@ -74,7 +74,7 @@ export function normalizeSkillDraft(raw){
       /[\x00-\x08\x0b-\x1f\x7f]/.test(description))
     throw new EvolutionError("Short bounded description required");
   if(!Array.isArray(steps)||steps.length<1||steps.length>MAX_STEPS)
-    throw new EvolutionError("Skill must contain 1–8 stages");
+    throw new EvolutionError("Skill must contain 1–16 stages");
   const normalized=steps.map((step,i)=>{
     if(!object(step)||Object.keys(step).some(k=>!["tool","args","why"].includes(k))||
        typeof step.tool!=="string"||!SAFE_TOOLS.has(step.tool)||!object(step.args)||
@@ -140,7 +140,7 @@ const summary=item=>({id:item.id,name:item.manifest.name,
   description:item.manifest.description,status:item.status,
   version:item.manifest.schemaVersion,digest:item.digest,createdAt:item.createdAt,
   approvedAt:item.approvedAt||null,stageCount:item.manifest.steps.length,
-  crucible:item.crucible||null});
+  crucible:item.crucible||null,sourceTaskIds:Array.isArray(item.sourceTaskIds)?item.sourceTaskIds.slice(0,16):[]});
 export async function listSkills(owner,{includeDrafts=false}={}){
   const items=await read(owner);
   return items.filter(x=>includeDrafts||x.status==="approved").map(summary);
@@ -151,16 +151,30 @@ export async function getSkill(owner,id){
   if(!item)throw new EvolutionError("Skill not found",404);
   return {...summary(item),manifest:item.manifest};
 }
-export async function stageSkill(owner,raw){
+export async function stageSkill(owner,raw,metadata={}){
+  const sourceTaskId=metadata?.sourceTaskId;
+  if(sourceTaskId!==undefined&&(typeof sourceTaskId!=="string"||
+      !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(sourceTaskId)))
+    throw new EvolutionError("Invalid source task provenance",409);
   const manifest=normalizeSkillDraft(raw),crucible=assessSkill(manifest),
     digest=hash(JSON.stringify(manifest));
   return serialized(owner,async()=>{
     const items=await read(owner);
     const existing=items.find(x=>x.digest===digest&&x.status!=="disabled");
-    if(existing)return {...summary(existing),alreadyExists:true};
+    if(existing){
+      if(sourceTaskId){
+        existing.sourceTaskIds=Array.isArray(existing.sourceTaskIds)?existing.sourceTaskIds:[];
+        if(!existing.sourceTaskIds.includes(sourceTaskId)){
+          existing.sourceTaskIds=[...existing.sourceTaskIds,sourceTaskId].slice(-16);
+          await write(owner,items);
+        }
+      }
+      return {...summary(existing),alreadyExists:true};
+    }
     if(items.length>=MAX_SKILLS)throw new EvolutionError("Skill capacity reached",409);
     const item={id:"sk_"+crypto.randomBytes(16).toString("hex"),
-      status:"staged",manifest,digest,crucible,createdAt:new Date().toISOString()};
+      status:"staged",manifest,digest,crucible,
+      sourceTaskIds:sourceTaskId?[sourceTaskId]:[],createdAt:new Date().toISOString()};
     items.push(item);await write(owner,items);
     return summary(item);
   });

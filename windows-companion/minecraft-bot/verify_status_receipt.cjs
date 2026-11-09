@@ -32,5 +32,20 @@ assert.equal(huge.status,'blocked');cases++;
 assert.equal(huge.milestones.dragonKilled,false);cases++;
 assert.equal(huge.milestones.netheriteEquipped,false);cases++;
 assert.equal(huge.sequence,undefined,'Do not emit oversized sequence data');cases++;
+const gather=check({...core,goal:'gather',status:'complete',resource:'cobblestone',
+ targetCount:20,milestones:{initialCount:21,currentCount:41,newItems:20,gatherDone:true}});
+assert.equal(gather.milestones.initialCount,21);cases++;
+assert.equal(gather.milestones.currentCount,41);cases++;
+assert.equal(gather.milestones.newItems,20);cases++;
+assert.equal(gather.milestones.gatherDone,true);cases++;
+const crowded=check({...core,goal:'gather',status:'complete',resource:'diamond',
+ targetCount:2,milestones:{
+  ...Object.fromEntries(Array.from({length:75},(_,i)=>['optional'+i,true])),
+  initialCount:5,currentCount:7,newItems:2,gatherDone:true
+ }});
+assert.equal(crowded.milestones.initialCount,5);cases++;
+assert.equal(crowded.milestones.currentCount,7);cases++;
+assert.equal(crowded.milestones.newItems,2);cases++;
+assert.equal(crowded.milestones.gatherDone,true);cases++;
 assert.throws(()=>compactAutonomyStatus({status:'complete'}));cases++;
 console.log('MINECRAFT_STATUS_RECEIPT '+cases+'/'+cases+' PASS (offline bounded JSON)');

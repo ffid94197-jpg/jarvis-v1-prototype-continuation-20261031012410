@@ -11,6 +11,7 @@
  */
 
 import { db } from "@/lib/db";
+import { randomUUID } from "node:crypto";
 import { validateDesktopTool, type DesktopPrepared } from "../windows/policy";
 import { prepareLocalProjectBuild, type LocalProjectBuildPrepared } from "../tools/localProjectBuild";
 import {
@@ -39,7 +40,7 @@ export interface PreparedArgs {
   integration?: {ownerId:string;id?:string;url?:string;server?:string;name?:string;operation?:string;arguments?:Record<string,unknown>};
   memory?: {ownerId:string;query:string;limit:number};
   world?: {ownerId:string;query:string;limit:number};
-  evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill";
+  evolution?: {ownerId:string;action:"stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill"|"diagnose"|"auto_apply_repair"|"verify_repair";
     id?:string;sourceTaskId?:string;manifest?:unknown;candidate?:unknown;inputs?:Record<string,unknown>};
 }
 
@@ -47,6 +48,9 @@ export interface GuardianDecision {
   verdict: GuardianVerdict;
   reason?: string;
   prepared?: PreparedArgs;
+  /** Set only after durable audit creation for an allowed Core-owned task. */
+  auditId?: string;
+  auditedTaskId?: string;
 }
 
 /** Tools the Guardian knows about. Anything else is denied as unknown. */
@@ -96,7 +100,7 @@ export const GUARDIAN_KNOWN_TOOLS = [
   "minecraft_companion_stop",
   "adoption_stage_github", "adoption_list", "adoption_skill", "adoption_mcp_list", "adoption_mcp_call",
   "evolution_skill_stage", "evolution_skill_list", "evolution_skill_expand", "evolution_skill_run",
-  "evolution_repair_stage", "evolution_repair_list", "evolution_skill_learn", "evolution_owner_control",
+  "evolution_repair_stage", "evolution_repair_list", "evolution_skill_learn", "evolution_diagnose", "evolution_repair_apply", "evolution_owner_control",
 ] as const;
 
 export type GuardianTool = (typeof GUARDIAN_KNOWN_TOOLS)[number];
@@ -111,16 +115,18 @@ async function writeAudit(
   args: Record<string, unknown>,
   verdict: GuardianVerdict,
   reason: string,
-): Promise<boolean> {
+): Promise<string|null> {
   // TEST-ONLY fault injection (documented in core/faults.ts): a simulated
   // audit-trail failure must flip the decision to DENY (fail-closed,
   // DUR-07). Inert unless JARVIS_TEST_FAULT=audit is explicitly set.
   if (process.env.JARVIS_TEST_FAULT === "audit") {
-    return false;
+    return null;
   }
   try {
+    const auditId=randomUUID();
     await db.auditLog.create({
       data: {
+        id: auditId,
         taskId: taskId ?? null,
         tool,
         // Audit is accountability metadata, NOT a second secret store.
@@ -133,9 +139,9 @@ async function writeAudit(
         reason: reason.slice(0, 1000),
       },
     });
-    return true;
+    return auditId;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -156,7 +162,7 @@ export async function authorizeToolCall(
           decision=deny("Owner-only trusted control plane authorization required");break;
         }
         const permitted=new Set(["stage_skill","approve_skill","disable_skill","learn_skill",
-          "stage_repair","approve_repair","apply_repair","rollback_repair"]);
+          "stage_repair","approve_repair","apply_repair","rollback_repair","verify_repair"]);
         const action=rawArgs.action;
         if(typeof action!=="string"||!permitted.has(action) ||
            Object.keys(rawArgs).some(k=>!["action","id","sourceTaskId"].includes(k))){
@@ -178,7 +184,7 @@ export async function authorizeToolCall(
           decision=deny("Exact type-matching candidate ID required");break;
         }
         decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
-          action:action as "stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill",
+          action:action as "stage_skill"|"list_skills"|"expand_skill"|"stage_repair"|"list_repairs"|"learn_skill"|"verify_repair",
           id:typeof rawArgs.id==="string"?rawArgs.id:undefined,
           sourceTaskId:typeof rawArgs.sourceTaskId==="string"?rawArgs.sourceTaskId:undefined}}};
         break;
@@ -225,6 +231,25 @@ export async function authorizeToolCall(
         }
         decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
           action:"expand_skill",id:rawArgs.id,inputs:inputs as Record<string,unknown>}}};break;
+      }
+      case "evolution_diagnose": {
+        if(!ctx.ownerId || Object.keys(rawArgs).length!==0){
+          decision=deny("Read-only runtime diagnosis requires an authenticated owner and no arguments");break;
+        }
+        decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,action:"diagnose"}}};break;
+      }
+      case "evolution_repair_apply": {
+        if(process.env.JARVIS_SELF_REPAIR_AUTO_APPLY!=="1"){
+          decision=deny("Bounded automatic repair is disabled by owner policy");break;
+        }
+        if(!ctx.ownerId || !ctx.taskId ||
+           !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(ctx.taskId) ||
+           Object.keys(rawArgs).some(k=>k!=="id") ||
+           typeof rawArgs.id!=="string" || !/^rp_[0-9a-f]{32}$/.test(rawArgs.id)){
+          decision=deny("A fresh staged repair ID and authenticated owner are required");break;
+        }
+        decision={verdict:"allow",prepared:{evolution:{ownerId:ctx.ownerId,
+          action:"auto_apply_repair",id:rawArgs.id}}};break;
       }
       case "evolution_repair_stage": {
         if(!ctx.ownerId || Object.keys(rawArgs).some(k=>k!=="candidate") ||
@@ -414,10 +439,18 @@ export async function authorizeToolCall(
       case "windows_desktop_type":
       case "windows_desktop_keys":
       case "windows_desktop_scroll":
-      case "windows_minecraft_input":
+      case "windows_minecraft_input": {
+        // Normal Windows actions and read-only discovery have their own
+        // validated, audited policy. Never require Minecraft spawn intent.
+        const validated=validateDesktopTool(tool,rawArgs);
+        decision=validated.ok
+          ? {verdict:"allow",prepared:{desktop:validated.prepared}}
+          : deny(validated.reason);
+        break;
+      }
       case "minecraft_companion_spawn": {
-        // This context flag is set ONLY by runTask's exact explicit-spawn
-        // intent parser. A model-selected spawn tool cannot assert it.
+        // Only a Core-authored explicit owner spawn request may start a new
+        // companion. This special gate must not affect regular Windows tools.
         if(ctx.coreSpawnIntent!==true || !ctx.ownerId || !ctx.taskId ||
            Object.keys(rawArgs).length!==0){
           decision=deny("Explicit Core-authored owner spawn intent required");break;
@@ -474,7 +507,9 @@ export async function authorizeToolCall(
   if (!audited) {
     return deny("guardian audit trail unavailable — action blocked (fail-closed)");
   }
-  return decision;
+  return decision.verdict==="allow"&&ctx.taskId
+    ? {...decision,auditId:audited,auditedTaskId:ctx.taskId}
+    : decision;
 }
 
 export { WORKSPACE_ROOT };

@@ -127,6 +127,20 @@ async function runRoutine(id:string) {
     if(settled.count!==1){await block(id,'Persisted attempt/cursor mismatch; no replay permitted.');return;}
     const attempt=await db.agentRoutineAttempt.findUnique({where:{taskId},
       select:{taskId:true,routineId:true,stepIndex:true,routeIndex:true,outcome:true}});
+    // A stored attempt outcome is not enough to advance a long-running
+    // routine. Re-read the authoritative task row after the attempt write:
+    // the actual settled state, owner and task identity must still agree.
+    // A crash, concurrent cancel, stale worker or later state transition
+    // must stop this worker instead of replaying external effects.
+    const finalTask=await db.agentTask.findUnique({where:{id:taskId},
+      select:{id:true,ownerId:true,status:true,stepsUsed:true}});
+    if(!finalTask||finalTask.ownerId!==owner.id||
+       finalTask.status!==lastStatus||finalTask.id!==attempt?.taskId||
+       !Number.isSafeInteger(finalTask.stepsUsed)||
+       finalTask.stepsUsed>row.maxTotalSteps){
+      await block(id,'Durable task settlement no longer matches claimed routine outcome; manual reconciliation required.');
+      return;
+    }
     const next=advanceFromPersistedCheckpoint(plan,{
       taskId,routineId:id,stepIndex:row.stepIndex,routeIndex:row.routeIndex,outcome:lastStatus
     },attempt);

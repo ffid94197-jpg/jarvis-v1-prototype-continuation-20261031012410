@@ -5,7 +5,7 @@ import {parseInventorySource} from "./inventoryIntegrity";
  * under the default workspace or call that an executed owner request.
  */
 export function unsupportedFileDestination(objective:string):"absolute_path"|"desktop"|null {
- const createsFile=/\b(?:create|make|write|save|generate|put|place)\b/i.test(objective) &&
+ const createsFile=/\b(?:create|crate|make|write|save|generate|put|place)\b/i.test(objective) &&
    /(?:\b(?:file|folder|directory)\b|\.[a-z0-9]{1,8}\b)/i.test(objective);
  if(!createsFile)return null;
  if(/(?:^|[^a-z0-9_])(?:[a-z]:[\\/]|\\\\[^\\/\s]+[\\/])/i.test(objective))

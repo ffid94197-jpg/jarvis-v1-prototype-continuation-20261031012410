@@ -496,7 +496,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:"Enable Minecraft LAN companion."};
     const command=String(args.command||"");
     const allowed=["follow","stop","jump","move","look","status","come","stay","guard","collect_wood","inventory","say","observe","auto_goal","auto_status","auto_stop",
-      "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block",
+      "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block","sleep_in_bed",
       "interact_entity","use_item","natural_goal","auto_checkpoint","auto_resume",
       "attack_hostile","inspect_villager","trade_villager","transfer_container","enchant_item"];
     if (!allowed.includes(command)) return {ok:false,reason:"Unknown Minecraft companion command."};
@@ -517,7 +517,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     const name=(value:unknown):value is string=>typeof value==='string' && /^[a-z0-9_]{1,64}$/.test(value);
     if (command==='navigate' && (!pos(args.position) || (args.range!==undefined && (!Number.isInteger(args.range) || (args.range as number)<1 || (args.range as number)>8))))
       return {ok:false,reason:'Bounded navigation requires integer target coordinates.'};
-    if (['dig_block','inspect_block','interact_block'].includes(command) && !pos(args.position))
+    if (['dig_block','inspect_block','interact_block','sleep_in_bed'].includes(command) && !pos(args.position))
       return {ok:false,reason:'Block operation requires safe integer coordinates.'};
     if (command==='equip_item' && (!name(args.item)||!['hand','head','torso','legs','feet'].includes(String(args.destination||'hand'))))
       return {ok:false,reason:'Invalid equipment item/destination.'};
@@ -554,7 +554,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       inspect_villager:["entityId"],
       trade_villager:["entityId","tradeIndex","times"],
       transfer_container:["position","item","count","operation"],
-      enchant_item:["position","item","choice"]
+      enchant_item:["position","item","choice"],
+      sleep_in_bed:["position"]
     };
     if(Object.hasOwn(directFields,command) &&
        Object.keys(args).some(k=>k!=="command"&&!directFields[command].includes(k)))
@@ -577,7 +578,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       }
     }
     if(command==='natural_goal')prepared.text=args.text as string;
-    if(['navigate','dig_block','inspect_block','interact_block'].includes(command))prepared.position=args.position as {x:number;y:number;z:number};
+    if(['navigate','dig_block','inspect_block','interact_block','sleep_in_bed'].includes(command))prepared.position=args.position as {x:number;y:number;z:number};
     if(command==='navigate'&&args.range!==undefined)prepared.range=args.range as number;
     if(['equip_item','craft_item','place_block'].includes(command))prepared.item=args.item as string;
     if(command==='equip_item')prepared.destination=String(args.destination||'hand');

@@ -496,7 +496,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:"Enable Minecraft LAN companion."};
     const command=String(args.command||"");
     const allowed=["follow","stop","jump","move","look","status","come","stay","guard","collect_wood","inventory","say","observe","auto_goal","auto_status","auto_stop",
-      "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block","sleep_in_bed","fish_once","feed_animal",
+      "inspect_block","navigate","dig_block","equip_item","craft_item","place_block","interact_block","sleep_in_bed","fish_once","feed_animal","row_boat",
       "interact_entity","use_item","natural_goal","auto_checkpoint","auto_resume",
       "attack_hostile","inspect_villager","trade_villager","transfer_container","enchant_item"];
     if (!allowed.includes(command)) return {ok:false,reason:"Unknown Minecraft companion command."};
@@ -528,6 +528,11 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       return {ok:false,reason:'Block placement requires reference coordinates and an adjacent face.'};
     if (command==='interact_entity' && (!Number.isInteger(args.entityId)||(args.entityId as number)<0))
       return {ok:false,reason:'Entity ID must be a nonnegative integer.'};
+    if(command==="row_boat" &&
+       (!Number.isSafeInteger(args.entityId)||Number(args.entityId)<0||
+        Number(args.entityId)>200000||!Number.isSafeInteger(args.durationMs)||
+        Number(args.durationMs)<300||Number(args.durationMs)>1200))
+      return {ok:false,reason:"Boat motion requires bounded observed entity ID and 300–1200 ms"};
     if(command==="feed_animal" &&
        (!Number.isInteger(args.entityId)||Number(args.entityId)<0||Number(args.entityId)>200000||
         !['wheat','carrot','potato','beetroot','wheat_seeds','beetroot_seeds','pumpkin_seeds','melon_seeds'].includes(String(args.item))))
@@ -561,7 +566,8 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
       enchant_item:["position","item","choice"],
       sleep_in_bed:["position"],
       fish_once:["position"],
-      feed_animal:["entityId","item"]
+      feed_animal:["entityId","item"],
+      row_boat:["entityId","durationMs"]
     };
     if(Object.hasOwn(directFields,command) &&
        Object.keys(args).some(k=>k!=="command"&&!directFields[command].includes(k)))
@@ -592,6 +598,7 @@ export function validateDesktopTool(tool: string, args: Record<string, unknown>)
     if(command==='place_block'){prepared.reference=args.reference as {x:number;y:number;z:number};prepared.face=args.face as {x:number;y:number;z:number};}
     if(command==='interact_entity')prepared.entityId=args.entityId as number;
     if(command==='feed_animal'){prepared.entityId=args.entityId as number;prepared.item=args.item as string;}
+    if(command==='row_boat'){prepared.entityId=args.entityId as number;prepared.durationMs=args.durationMs as number;}
     if(["attack_hostile","inspect_villager","trade_villager"].includes(command))prepared.entityId=args.entityId as number;
     if(command==='attack_hostile')prepared.maxSwings=args.maxSwings as number;
     if(command==='trade_villager'){prepared.tradeIndex=args.tradeIndex as number;prepared.times=args.times as number;}

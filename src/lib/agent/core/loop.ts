@@ -59,6 +59,7 @@ import { arbitrateCompletion } from "./verifier";
 import { classifyRequestIntent, isModelDisclosureQuestion } from "./requestIntent";
 import { needsPriorTaskContext, priorTaskContext, selectPriorTask } from "./priorTaskContext";
 import { parseInventorySource, validateInventoryDraft } from "./inventoryIntegrity";
+import { unsupportedFileDestination } from "./taskInputGate";
 import { AutonomyGate, REPEATABLE_INPUT_TOOLS, DESKTOP_GUI_EFFECTS, hasDirectProof, desktopObjectiveRequiresActions } from "./autonomyGate";
 import { compactToolObservation } from "./observation";
 import {acceptedSkillQueue, type ActiveSkillQueue} from "./approvedSkillQueue";
@@ -588,6 +589,22 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
     return;
   }
   emitStatus("planning");
+
+  // Defense-in-depth: the HTTP task gate rejects explicit OS/desktop file
+  // destinations, but long-running routines can invoke Core directly.
+  // Refuse before any model or file tool can silently replace an external
+  // destination with a relative basename under the workspace.
+  const unsupportedDestination=unsupportedFileDestination(objective);
+  if(unsupportedDestination){
+    const reason="FILE_TARGET_OUTSIDE_WORKSPACE: requested "+
+      (unsupportedDestination==="desktop"?"Desktop":"absolute Windows path")+
+      " destination cannot be fulfilled by the scoped file tools. "+
+      "No new file effect dispatched. Choose an authorized Windows workflow or "+
+      "ask for a filename relative to the operator-configured JARVIS_AGENT_WORKSPACE.";
+    await persistStep(taskId,seq+1,"error",{note:reason});
+    await settleAndReport(taskId,"failed",stepsUsed,reason,emit,{effectsHappened:false});
+    return;
+  }
 
   // Direct Minecraft missions are handled through the Core's normal
   // Guardian/audit/effect controls without requiring a cloud model call.

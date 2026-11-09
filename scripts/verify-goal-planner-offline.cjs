@@ -38,6 +38,12 @@ check('a renamed or reordered plan is not a materially different strategy',()=>{
     {id:'second',description:'Craft tools',dependsOn:['first'],evidence:'Readback B'}
   ]};
   assert.equal(hasMaterialPlanRevision(simple,renamed),false);
+  const cosmetic={...simple,milestones:[
+    {...simple.milestones[0],description:'Retry to collect wood again'},
+    {...simple.milestones[1],description:'Try to craft tools again'}
+  ]};
+  assert.equal(hasMaterialPlanRevision(simple,cosmetic),false,
+    'Retry labels alone are not an alternative strategy');
 });
 check('a substantively different approach is allowed for a bounded replan',()=>{
   const alternative={schemaVersion:1,milestones:[

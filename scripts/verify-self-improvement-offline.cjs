@@ -78,6 +78,27 @@ const crypto=require("node:crypto");
     assert.ok(regression.candidateMedianFailures>regression.baselineMedianFailures);
     assert.equal(regression.approvalChanged,false);
 
+    const noSuccessOwner="unverified-candidate-"+crypto.randomUUID();
+    const noSuccessSkill="sk_33333333333333333333333333333333";
+    for(let i=0;i<3;i++){
+      await improvement.recordTaskOutcome(noSuccessOwner,{
+        taskId:"00000000-0000-4000-8000-00000000040"+i,
+        objective:"Repair failing build",skillId:null,status:"failed",
+        stepCount:40,elapsedMs:40000,failureCount:4,uncertainEffects:0,verified:false
+      });
+      await improvement.recordTaskOutcome(noSuccessOwner,{
+        taskId:"00000000-0000-4000-8000-00000000041"+i,
+        objective:"Repair failing build",skillId:noSuccessSkill,status:"failed",
+        stepCount:1,elapsedMs:1000,failureCount:0,uncertainEffects:0,verified:false
+      });
+    }
+    const noSuccess=await improvement.evaluateSkillPerformance(
+      noSuccessOwner,noSuccessSkill,"Repair failing build");
+    assert.equal(noSuccess.status,"no_verified_success",
+      "A candidate that only fails cannot claim efficiency-based success");
+    assert.equal(noSuccess.candidateSuccessRate,0);
+    assert.equal(noSuccess.approvalChanged,false);
+
     const insufficient=await improvement.evaluateSkillPerformance(owner,
       "sk_fedcba9876543210fedcba9876543210","A task with no matched baseline");
     assert.equal(insufficient.status,"insufficient_evidence");

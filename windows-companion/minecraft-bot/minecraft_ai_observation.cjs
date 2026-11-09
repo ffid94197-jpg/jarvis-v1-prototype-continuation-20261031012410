@@ -118,6 +118,7 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay',nativeGoal=null,
     threats:Array.isArray(world.threats)?world.threats.slice(0,6):[],
     villagers:Array.isArray(world.villagers)?world.villagers.slice(0,2):[],
     animals:Array.isArray(world.animals)?world.animals.slice(0,3):[],
+    boats:Array.isArray(world.boats)?world.boats.slice(0,3):[],
     nearbyBlocks:Array.isArray(nearby)?nearby.slice(0,12):[],lastAction:String(lastAction).slice(0,100)
   };
   // The native executor, never the model, chooses this evidence target.
@@ -137,6 +138,7 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay',nativeGoal=null,
   while(result.length>1750 && ordered.length>8){ordered.pop();slim.inventory.raw=Object.fromEntries(ordered);includeAttestedFood();result=JSON.stringify(slim);}
   if(result.length>1750){slim.villagers=[];result=JSON.stringify(slim);}
   if(result.length>1750){slim.animals=[];result=JSON.stringify(slim);}
+  if(result.length>1750){slim.boats=[];result=JSON.stringify(slim);}
   if(result.length>1750){slim.threats=[];slim.lastAction='';result=JSON.stringify(slim);}
   if(result.length>1750)throw Error('Minecraft observation too large to attest');
   return result;

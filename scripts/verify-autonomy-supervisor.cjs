@@ -37,6 +37,15 @@ const gate=new AutonomyGate();
 check(!gate.completionWarning(),'empty task has no false pending proof');
 check(new AutonomyGate(2).pendingGuiVerification===2,'unverified GUI proof debt restored after resume');
 check(new AutonomyGate(2).completionWarning()!==null,'resumed GUI task cannot falsely complete');
+const reordered=new AutonomyGate();
+const orderedA={window:'Notepad',element:'save',clickCount:1};
+const orderedB={clickCount:1,element:'save',window:'Notepad'};
+for(const args of [orderedA,orderedB])
+ reordered.observe('windows_desktop_click',args,{ok:true,detail:{uiEffectVerified:false}});
+const duplicate=reordered.observe('windows_desktop_click',orderedA,
+ {ok:true,detail:{uiEffectVerified:false}});
+check(duplicate.stalled,'Reordered identical desktop action must stall after three unverified attempts');
+check(reordered.repeatedAttempts===3,'Canonical GUI action identity does not depend on JSON key order');
 const resumed=new AutonomyGate(2);
 resumed.observe('windows_native_verify',{titleContains:'Notepad'},{ok:true,detail:{proofVerified:true}});
 check(resumed.pendingGuiVerification===1,'one resumed UI proof clears only one outstanding action');

@@ -177,6 +177,12 @@ export async function evaluateSkillPerformance(owner,skillId,objective){
   };
   if(baseline.length<3||candidate.length<3)
     return {...summary,recommendation:"Collect at least three matched baseline runs and three candidate runs; no improvement is claimed."};
+  // Fewer steps or shorter failed attempts do not demonstrate that a skill
+  // works. Require a genuine verified candidate success before assessing
+  // efficiency improvements. This remains observational, not causal proof.
+  if(candidate.every(x=>!x.verified))
+    return {...summary,status:"no_verified_success",
+      recommendation:"No candidate run achieved independently verified success. Efficiency metrics on failed runs cannot prove self-improvement; retain the baseline and collect successful evidence."};
   const failuresRegressed=summary.baselineMedianFailures!==null&&
     summary.candidateMedianFailures!==null&&
     summary.candidateMedianFailures>summary.baselineMedianFailures;

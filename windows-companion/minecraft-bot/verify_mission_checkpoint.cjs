@@ -19,6 +19,22 @@ try{
   {goal:'gather',resource:'logs',targetCount:8},
   {goal:'travel',destination:{x:40,y:64,z:-5},arrivalRange:2}
  ]});
+ const cropController=createController({clock,maxSeconds:43200,maxSteps:40});
+ cropController.start('farm_crop',2400,{crop:'beetroot',
+   position:{x:4,y:65,z:8},width:2,depth:1,targetCount:3});
+ ok(c.save(cropController.status())&&c.load().ok&&
+   c.load().spec.crop==='beetroot'&&c.load().spec.position.x===4,
+   'Owner-approved crop intent can survive a disconnect without claiming harvest');
+ const recoveredCrop=createController({clock,maxSeconds:43200,maxSteps:40});
+ recoveredCrop.start('farm_crop',c.load().remainingSeconds,c.load().spec);
+ ok(recoveredCrop.status().status==='running' &&
+    Object.keys(recoveredCrop.status().milestones).length===0,
+   'Crop recovery starts without stale harvesting, planting or inventory receipts');
+ const forged=makeLease(cropController.status(),identity,clock());
+ ok(!validateLease({...forged,spec:{...forged.spec,crop:'lava'}},identity,clock()).ok,
+   'Unknown crop in persisted lease cannot gain authority');
+ ok(!validateLease({...forged,spec:{...forged.spec,unsafeScript:'x'}},identity,clock()).ok,
+   'Persisted crop lease forbids extra executable-shaped metadata');
  const buildController=createController({clock,maxSeconds:43200,maxSteps:40});
  buildController.start('build',1200,{block:'cobblestone',length:2,axis:'z+',
    position:{x:3,y:65,z:7}});

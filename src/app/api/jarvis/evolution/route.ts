@@ -101,8 +101,16 @@ export async function POST(req:NextRequest){
         return Response.json(await changeSkill(owner,body.id,"approve"),{headers});
       case "disable_skill":
         return Response.json(await changeSkill(owner,body.id,"disable"),{headers});
-      case "expand_skill":
-        return Response.json(await expandSkill(owner,body.id,body.inputs),{headers});
+      case "expand_skill": {
+        // HTTP JSON is unknown until validated; skillForge applies its stricter
+        // limits to individual input names and values after this shape check.
+        if(typeof body.id!=="string" || !/^sk_[0-9a-f]{32}$/.test(body.id) ||
+           (body.inputs!==undefined &&
+            (!body.inputs || typeof body.inputs!=="object" || Array.isArray(body.inputs))))
+          return Response.json({error:"Invalid skill expansion ID or inputs"},{status:400});
+        return Response.json(await expandSkill(owner,body.id,
+          (body.inputs??{}) as Record<string,unknown>),{headers});
+      }
       case "stage_repair":
         return Response.json(await stageRepair(owner,body.candidate),{headers});
       case "repair_details":

@@ -825,7 +825,8 @@ export class MinecraftAiGate {
          !['x','y','z'].every(k=>Number.isInteger((target as Record<string,unknown>)[k])))
         return {ok:false,reason:'Sleep requires exact integer Minecraft bed coordinates only'};
       const owner=this.objective.toLowerCase().trim();
-      if(!/\b(?:sleep|rest)\b/.test(owner)||!/\bbed\b/.test(owner))
+      if(!/\b(?:sleep|rest)\b/.test(owner)||!/\bbed\b/.test(owner)||
+         /\b(?:don't|do not|never|avoid|not to|must not)\b/.test(owner))
         return {ok:false,reason:'Owner did not explicitly request sleeping in a bed'};
       const observed=(this.observed.nearbyBlocks||[]).filter(b=>
         /^[a-z_]+_bed$/.test(String(b.name))&&

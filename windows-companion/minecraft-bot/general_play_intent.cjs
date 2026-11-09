@@ -165,7 +165,7 @@ function modelPrimitiveGrounded(command,ownerText,context){
    if(![noun,...aliases].some(label=>s.includes(label)))return false;
  }
  if(command.command==='sleep_in_bed'){
-  if(!/\bbed\b/.test(s) || !Array.isArray(scene?.nearbyBlocks) ||
+  if(!/\bbed\b/.test(s)||/\b(?:don't|do not|never|avoid|not to|must not)\b/.test(s) || !Array.isArray(scene?.nearbyBlocks) ||
      !scene.nearbyBlocks.some(b=>/^[a-z_]+_bed$/.test(String(b?.name||''))&&
        b.x===target?.x&&b.y===target?.y&&b.z===target?.z))
     return false;

@@ -834,6 +834,7 @@ export class MinecraftAiGate {
       const owner=this.objective.toLowerCase().trim();
       if(!/\b(?:fish|catch)\b/.test(owner)||!/\b(?:water|pond|river|lake)\b/.test(owner)||
          /\b(?:two|three|four|five|six|seven|eight|nine|ten|many|several|multiple|\d+)\s+(?:fish|salmon|cod|times)\b/.test(owner)||
+         /\b(?:and|then|also|before|next|repeat|keep going)\b/.test(owner)||
          /\b(?:don't|do not|never|avoid|not to|must not)\b/.test(owner))
         return {ok:false,reason:'Owner did not explicitly authorize one fishing action in water'};
       const waters=(this.observed.nearbyBlocks||[]).filter(b=>b.name==='water');
@@ -1396,7 +1397,9 @@ export class MinecraftAiGate {
       return {verified:false,reason:'No matching owner-task fishing receipt plus new physical caught-fish inventory'};
     }
     if(/\b(?:sleep|rest)\b/.test(s)&&/\bbed\b/.test(s)){
-      if(this.sleepReceipt && (o.sleeping===true||o.daylight===true))
+      const nightCompletion=/\b(?:through the night|until morning|skip the night)\b/.test(s);
+      if(this.sleepReceipt && (nightCompletion?o.daylight===true:
+         (o.sleeping===true||o.daylight===true)))
         return {verified:true,reason:o.daylight===true?
           'Owner sleep action verified and fresh game observation confirms daylight':
           'Owner sleep action verified and fresh game observation confirms sleeping; full night skip remains unproven'};

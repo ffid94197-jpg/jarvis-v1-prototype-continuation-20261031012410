@@ -439,10 +439,18 @@ export async function authorizeToolCall(
       case "windows_desktop_type":
       case "windows_desktop_keys":
       case "windows_desktop_scroll":
-      case "windows_minecraft_input":
+      case "windows_minecraft_input": {
+        // Normal Windows actions and read-only discovery have their own
+        // validated, audited policy. Never require Minecraft spawn intent.
+        const validated=validateDesktopTool(tool,rawArgs);
+        decision=validated.ok
+          ? {verdict:"allow",prepared:{desktop:validated.prepared}}
+          : deny(validated.reason);
+        break;
+      }
       case "minecraft_companion_spawn": {
-        // This context flag is set ONLY by runTask's exact explicit-spawn
-        // intent parser. A model-selected spawn tool cannot assert it.
+        // Only a Core-authored explicit owner spawn request may start a new
+        // companion. This special gate must not affect regular Windows tools.
         if(ctx.coreSpawnIntent!==true || !ctx.ownerId || !ctx.taskId ||
            Object.keys(rawArgs).length!==0){
           decision=deny("Explicit Core-authored owner spawn intent required");break;

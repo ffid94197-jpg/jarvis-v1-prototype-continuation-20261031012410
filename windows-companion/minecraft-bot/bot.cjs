@@ -1497,6 +1497,45 @@ async function action(q){
         return {ok:false,verified:false,error:'Transaction not verified: '+String(err.message||err).slice(0,160)};
       }finally{advancedBusy=false;}
     }
+    case 'row_boat':{
+      if(mode==='auto'||autoBusy||advancedBusy)
+        return {ok:false,error:'Boat movement requires an idle gameplay session'};
+      const vehicle=bot.entities[q.entityId],initial=bot.entity?.position?.clone?.();
+      if(bot.game?.gameMode!=='survival'||!spawned||!vehicle?.position||
+         !/^(?:[a-z_]+_)?(?:boat|raft)$/.test(String(vehicle.name||''))||
+         !initial||initial.distanceTo(vehicle.position)>3.5||
+         typeof bot.mount!=='function'||typeof bot.moveVehicle!=='function'||
+         typeof bot.dismount!=='function')
+        return {ok:false,error:'No nearby observed boat with available vehicle controls'};
+      if(bot.vehicle)return {ok:false,error:'Dismount the existing vehicle first'};
+      setMode('stay');const epoch=actionEpoch;advancedBusy=true;
+      try{
+        await bot.mount(vehicle);
+        await pause(230);
+        if(bot.vehicle?.id!==q.entityId||epoch!==actionEpoch||!spawned)
+          return {ok:false,verified:false,error:'Boat mounting not confirmed or owner cancelled'};
+        const from=bot.entity.position.clone(),deadline=Date.now()+q.durationMs;
+        while(Date.now()<deadline){
+          if(epoch!==actionEpoch||!spawned||bot.vehicle?.id!==q.entityId)
+            return {ok:false,verified:false,error:'Boat control cancelled or vehicle changed'};
+          bot.moveVehicle(0,1);
+          await pause(90);
+        }
+        const distance=Math.hypot(bot.entity.position.x-from.x,bot.entity.position.z-from.z);
+        if(!Number.isFinite(distance)||distance<0.5||distance>12)
+          return {ok:false,verified:false,error:'Boat control was issued but actual bounded travel is unproven'};
+        return {ok:true,verified:true,status:'Owner-observed boat #'+q.entityId+
+          ' moved '+distance.toFixed(2)+' blocks in '+q.durationMs+
+          ' milliseconds; destination arrival not implied'};
+      }catch(err){
+        return {ok:false,verified:false,
+          error:'Boat outcome unknown: '+String(err?.message||err).slice(0,150)};
+      }finally{
+        try{bot.moveVehicle(0,0);}catch{}
+        try{if(bot.vehicle?.id===q.entityId)await bot.dismount();}catch{}
+        advancedBusy=false;
+      }
+    }
     case 'feed_animal':{
       if(mode==='auto'||autoBusy||advancedBusy)
         return {ok:false,error:'Animal feeding requires an idle gameplay session'};

@@ -12,7 +12,7 @@ const {diggableObserved,MINABLE_STONE,isExposed,stances}=require('./mining_navig
 const {FEED_ITEMS}=require('./animal_feeding.cjs');
 const ORES=/^(?:(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore)$/;
 // Preserve completion-relevant items when the compact ACK must trim inventory.
-const CRITICAL_ITEMS=['cod','salmon','tropical_fish','pufferfish','cobblestone','diamond','iron_ingot','raw_iron','obsidian','flint',
+const CRITICAL_ITEMS=[...FEED_ITEMS,'cod','salmon','tropical_fish','pufferfish','cobblestone','diamond','iron_ingot','raw_iron','obsidian','flint',
  'netherrack','wooden_pickaxe','stone_pickaxe','iron_pickaxe','netherite_sword',
  'oak_log','spruce_log','birch_log','dark_oak_log','jungle_log','cherry_log'];
 const itemRank=new Map(CRITICAL_ITEMS.map((n,i)=>[n,i]));

@@ -5,7 +5,7 @@
  * run shell commands, trust other players' chat, or claim task completion.
  */
 const {lateGamePlan} = require('./late_game.cjs');
-const {RESOURCES,SAFE_GENERIC_RESOURCES,ORE_RESOURCE_RULES,resourcePlan}=require('./resource_goal.cjs');
+const {RESOURCES,SAFE_GENERIC_RESOURCES,ORE_RESOURCE_RULES,resourceCount,resourcePlan}=require('./resource_goal.cjs');
 const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
 const {validBuildSpec,buildPlan,validVolumeSpec,volumePlan}=require('./structure_goal.cjs');
 const {validFarmSpec,wheatPlan}=require('./wheat_goal.cjs');
@@ -550,6 +550,21 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     return true;
   }
   function status(){return JSON.parse(JSON.stringify(state));}
+  // The first joined server inventory for EACH gather stage fixes the baseline.
+  // No mutable model text or old milestone may set the start count.
+  function gatherBaseline(world,resource,stageIndex){
+    if(world?.joined!==true||!world.inventory||typeof world.inventory!=='object')
+      return null;
+    const observed=resourceCount(world,resource),m=state.milestones;
+    if(!Number.isSafeInteger(observed)||observed<0)return null;
+    if(m.gatherStageIndex!==stageIndex||m.gatherResource!==resource||
+       !Number.isSafeInteger(m.gatherInitialCount)){
+      m.gatherStageIndex=stageIndex;
+      m.gatherResource=resource;
+      m.gatherInitialCount=observed;
+    }
+    return m.gatherInitialCount;
+  }
   function next(world){
     if(state.status!=='running')return {kind:'idle',why:'Automation not running'};
     if(clock()>=state.deadline||state.steps>=maxSteps){state.status='expired';state.why='Goal time/step budget exhausted';return {kind:'idle',why:state.why};}
@@ -603,7 +618,14 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
           {...world,wheatCells:world.wheatCellsByStage?.[state.sequenceIndex]}:
           stage.goal==='farm_crop'?
           {...world,cropCells:world.cropCellsByStage?.[state.sequenceIndex]}:world;
-        d=decide(stage.goal,stageWorld,state.failures,{...state,...stage});
+        const initial=stage.goal==='gather'?
+          gatherBaseline(stageWorld,stage.resource,state.sequenceIndex):null;
+        if(stage.goal==='gather'&&initial===null){
+          d={kind:'wait',why:'Gather stage requires a fresh joined server inventory'};
+          break;
+        }
+        d=decide(stage.goal,stageWorld,state.failures,
+          {...state,...stage,...(initial!==null?{gatherInitialCount:initial}:{})});
         if(d.kind!=='complete')break;
         state.sequenceIndex++;
         // Each ordered furnace stage must earn its own actual verified
@@ -612,12 +634,21 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
         state.milestones.craftedOutput=0;
         state.milestones.wheatHarvested=0;
         state.milestones.harvestedCropCount=0;
+        delete state.milestones.gatherInitialCount;
+        delete state.milestones.gatherStageIndex;
+        delete state.milestones.gatherResource;
         state.failures={};
         // An arrival proof for a prior target must never prove the next one.
         state.milestones.travelArrivalVerified=false;
       }
       if(!d)d={kind:'blocked',why:'No valid stage decision'};
-    }else if(!d) d=decide(state.goal,world,state.failures,state);
+    }else if(!d){
+      const initial=state.goal==='gather'?gatherBaseline(world,state.resource,-1):null;
+      d=state.goal==='gather'&&initial===null?
+        {kind:'wait',why:'Gather goal requires a fresh joined server inventory'}:
+        decide(state.goal,world,state.failures,
+          {...state,...(initial!==null?{gatherInitialCount:initial}:{})});
+    }
     // Replan from a different *observed safe* travel waypoint after repeated
     // pathfinder failure. Never change the owner's destination or silently
     // declare arrival from a successful detour.

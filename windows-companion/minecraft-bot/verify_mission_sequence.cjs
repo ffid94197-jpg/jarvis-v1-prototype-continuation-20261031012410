@@ -77,8 +77,23 @@ ok(controller.next(world({logs:4,woodenPickaxe:1,cobblestone:5},
  'All three stages require actual world state before completing full mission');
 ok(controller.status().status==='complete'&&controller.status().sequenceIndex===3,
  'Full sequential plan settled only after final inventory proof');
+const repeated=createController({clock:()=>1000,maxSteps:60,maxSeconds:1000});
+repeated.start('sequence',300,{steps:[
+ {goal:'gather',resource:'logs',targetCount:2},
+ {goal:'gather',resource:'logs',targetCount:2}
+]});
+ok(repeated.next(world({logs:5})).kind==='collect_wood',
+ 'Preexisting five logs cannot prove a new gather-two objective');
+ok(repeated.next(world({logs:7})).kind==='collect_wood' &&
+   repeated.status().sequenceIndex===1,
+ 'Second gather stage cannot reuse first stage acquisition');
+ok(repeated.next(world({logs:7})).kind==='collect_wood',
+ 'Same inventory snapshot cannot count twice across owner stages');
+ok(repeated.next(world({logs:9})).kind==='complete',
+ 'Only two additional new logs settle the second gather stage');
 const deathRecovery=createController({clock:()=>1000,maxSteps:40,maxSeconds:1000});
 deathRecovery.start('sequence',300,{steps:goalSteps});
+deathRecovery.next(world());
 deathRecovery.next(world({logs:4}));
 ok(deathRecovery.status().sequenceIndex===1,'Prepare a partially completed task');
 deathRecovery.stop('Death: respawn pending');

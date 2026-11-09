@@ -64,8 +64,10 @@ const control=createController({clock:()=>100,maxSeconds:43200});
 control.start('gather',21600,{resource:'cobblestone',targetCount:20});
 check(control.status().resource==='cobblestone'&&control.status().targetCount===20,
  'Owner target persists across autonomous replanning');
-check(control.next(w({woodenPickaxe:1,cobblestone:21})).kind==='complete',
- 'The controller independently completes the goal based on actual quantity');
+check(control.next(w({woodenPickaxe:1,cobblestone:21})).kind==='mine_cobblestone',
+ 'Preexisting cobblestone cannot falsely satisfy a new acquisition goal');
+check(control.next(w({woodenPickaxe:1,cobblestone:41})).kind==='complete',
+ 'Twenty newly acquired cobblestone blocks settle the same authorized goal');
 check(control.status().status==='complete','Controller state settles as complete');
 let refused=false;try{createController().start('gather',300,{resource:'diamond',targetCount:100});}
 catch{refused=true}

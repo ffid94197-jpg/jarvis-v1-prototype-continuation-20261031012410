@@ -264,7 +264,7 @@ export async function runGuardianApprovedPlayerEngine(
            typeof state.status!=="string" ||
            !Number.isSafeInteger(state.since) ||
            !Number.isSafeInteger(current.missionSince) ||
-           Math.abs(Number(state.since)-current.missionSince)>60000 ||
+           Math.abs(Number(state.since)-Number(current.missionSince))>60000 ||
            !state.milestones || typeof state.milestones!=="object" ||
            Array.isArray(state.milestones))
           return {ok:false,error:"Native mission receipt does not belong to this Core task"};

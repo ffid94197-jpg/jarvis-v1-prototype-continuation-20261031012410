@@ -94,7 +94,7 @@ export function hasMaterialPlanRevision(previous:GoalPlan,next:GoalPlan):boolean
   // Modifiers such as "retry" or "try again" do not describe a new
   // strategy. Refuse these cosmetic rewrites as material changes.
   const cosmetic=new Set(['again','retry','reattempt','attempt','try','next',
-    'new','different','alternate','alternative','please','step']);
+    'new','different','alternate','alternative','please','step','to']);
   const fingerprint=(plan:GoalPlan)=>plan.milestones.map(m=>
     m.description.toLowerCase().normalize('NFKC').replace(/[^a-z0-9]+/g,' ')
       .trim().split(/\s+/).filter(word=>!cosmetic.has(word)).join(' ')

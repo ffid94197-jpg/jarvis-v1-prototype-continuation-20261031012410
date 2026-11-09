@@ -50,6 +50,8 @@ function parseOwnerPrimitive(text){
  // Coordinates must come from the owner's actual words, not the model's guess.
  let m=new RegExp('^(?:go|walk|move|travel|navigate)(?: to)? (?:coordinates? )?'+coord+'$').exec(s);
  if(m)return {command:'auto_goal',goal:'travel',destination:point(m),arrivalRange:2};
+ m=new RegExp('^(?:fish|catch (?:a |one )?fish)(?: once)? (?:in|from) (?:the |a |nearby )?(?:water|pond|river|lake) (?:at |at coordinates? )?'+coord+'$').exec(s);
+ if(m)return {command:'fish_once',position:point(m)};
  m=new RegExp('^(?:sleep|rest)(?: through the night)? (?:in|on) (?:the |a |that |my )?bed (?:at |at coordinates? )?'+coord+'$').exec(s);
  if(m)return {command:'sleep_in_bed',position:point(m)};
  m=new RegExp('^(?:inspect|examine|check|look at)(?: the)? block(?: at)? '+coord+'$').exec(s);
@@ -88,7 +90,7 @@ function parseOwnerPrimitive(text){
 const PRIMITIVE_FIELDS=Object.freeze({
  craft_item:['item','count'],equip_item:['item','destination'],
  inspect_block:['position'],dig_block:['position'],
- navigate:['position','range'],interact_block:['position'],sleep_in_bed:['position'],
+ navigate:['position','range'],interact_block:['position'],sleep_in_bed:['position'],fish_once:['position'],
  interact_entity:['entityId'],place_block:['item','reference','face'],
  move:['directionInput','durationMs'],use_item:['hand'],say:['text'],
  inspect_villager:['entityId'],trade_villager:['entityId','tradeIndex','times'],
@@ -107,6 +109,7 @@ function modelPrimitiveGrounded(command,ownerText,context){
   dig_block:/\b(?:mine|dig|break)\b/,navigate:/\b(?:go|walk|travel|navigate|move)\b/,
   interact_block:/\b(?:interact|activate|open|use)\b/,
   sleep_in_bed:/\b(?:sleep|rest)\b/,
+  fish_once:/\b(?:fish|catch)\b/,
   interact_entity:/\b(?:interact|trade|mount|use)\b/,
   place_block:/\b(?:place|put|build)\b/,move:/\b(?:move|walk|step)\b/,
   use_item:/\b(?:use|eat|consume|shoot)\b/,say:/\b(?:say|tell|message)\b/,
@@ -163,6 +166,13 @@ function modelPrimitiveGrounded(command,ownerText,context){
      /^(?:deepslate_)?(?:iron|diamond)_ore$/.test(observed.name)?
        [String(observed.name).includes('diamond')?'diamond':'iron','ore']:[];
    if(![noun,...aliases].some(label=>s.includes(label)))return false;
+ }
+ if(command.command==='fish_once'){
+  if(!/\b(?:water|pond|river|lake)\b/.test(s)||
+     /\b(?:don't|do not|never|avoid|not to|must not)\b/.test(s)||
+     !Array.isArray(scene?.nearbyBlocks)||
+     !scene.nearbyBlocks.some(b=>b.name==='water'&&
+       b.x===target?.x&&b.y===target?.y&&b.z===target?.z))return false;
  }
  if(command.command==='sleep_in_bed'){
   if(!/\bbed\b/.test(s)||/\b(?:don't|do not|never|avoid|not to|must not)\b/.test(s) || !Array.isArray(scene?.nearbyBlocks) ||

@@ -1493,6 +1493,43 @@ async function action(q){
         return {ok:false,verified:false,error:'Transaction not verified: '+String(err.message||err).slice(0,160)};
       }finally{advancedBusy=false;}
     }
+    case 'fish_once':{
+      if(mode==='auto'||autoBusy||advancedBusy)
+        return {ok:false,error:'Another gameplay transaction must finish first'};
+      const p=q.position,water=bot.blockAt(new Vec3(p.x,p.y,p.z));
+      if(bot.game?.gameMode!=='survival'||!bot.entity?.position||
+         !water||water.name!=='water'||
+         bot.entity.position.distanceTo(water.position)>6)
+        return {ok:false,error:'No reachable loaded water in survival mode at owner coordinates'};
+      const rod=bot.inventory?.items?.().find(i=>i.name==='fishing_rod'&&i.count>0);
+      if(!rod||typeof bot.fish!=='function')
+        return {ok:false,error:'Verified fishing rod or Mineflayer fishing API unavailable'};
+      const fishCount=()=>bot.inventory?.items?.().filter(i=>
+        ['cod','salmon','tropical_fish','pufferfish'].includes(i.name))
+          .reduce((n,i)=>n+i.count,0)||0;
+      const before=fishCount();
+      setMode('stay');const epoch=actionEpoch;advancedBusy=true;
+      try{
+        await bot.equip(rod,'hand');
+        if(epoch!==actionEpoch||!spawned||bot.heldItem?.name!=='fishing_rod')
+          return {ok:false,verified:false,error:'Fishing rod equip or owner authority was not confirmed'};
+        await bot.lookAt(water.position.offset(.5,.5,.5),true);
+        if(epoch!==actionEpoch||!spawned)
+          return {ok:false,verified:false,error:'Fishing cancelled before casting'};
+        await bot.fish();
+        const settled=await waitForInventoryIncrease({
+          before,read:fishCount,check:()=>{
+            if(epoch!==actionEpoch||!spawned)throw Error('Owner cancelled fishing');
+          },wait:pause,deadline:Date.now()+3500
+        });
+        if(!settled.ok)
+          return {ok:false,verified:false,error:'Fishing ended without server-verified NEW fish inventory'};
+        return {ok:true,verified:true,
+          status:'Fishing completed: '+(settled.after-before)+' new fish physically observed'};
+      }catch(err){
+        return {ok:false,verified:false,error:'Fishing result unverified: '+String(err?.message||err).slice(0,140)};
+      }finally{advancedBusy=false;}
+    }
     case 'sleep_in_bed':{
       if(mode==='auto'||autoBusy||advancedBusy)
         return {ok:false,error:'Another gameplay mission or transaction is in progress'};

@@ -7,7 +7,7 @@ const INTERACTIVE=/^(?:chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_tra
 const INTERESTING=/^(?:[a-z_]+_log|stone|cobblestone|deepslate|cobbled_deepslate|(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore|crafting_table|furnace|smithing_table|enchanting_table|[a-z_]+_bed|chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|nether_portal|end_portal_frame)$/;
 // Small, deliberately bounded sample of everyday loaded blocks for
 // general-purpose Minecraft tasks. Never mine blindly or infer world terrain.
-const GENERAL=/^(?:dirt|grass_block|sand|red_sand|gravel|clay|netherrack|mud|soul_sand|soul_soil|moss_block|andesite|diorite|granite|tuff|calcite|cobbled_deepslate|blackstone|basalt|coarse_dirt|rooted_dirt|snow|snow_block|cobblestone|[a-z_]+_planks|[a-z_]+_wool|[a-z_]+_log)$/;
+const GENERAL=/^(?:water|dirt|grass_block|sand|red_sand|gravel|clay|netherrack|mud|soul_sand|soul_soil|moss_block|andesite|diorite|granite|tuff|calcite|cobbled_deepslate|blackstone|basalt|coarse_dirt|rooted_dirt|snow|snow_block|cobblestone|[a-z_]+_planks|[a-z_]+_wool|[a-z_]+_log)$/;
 const {diggableObserved,MINABLE_STONE,isExposed,stances}=require('./mining_navigation.cjs');
 const ORES=/^(?:(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore)$/;
 // Preserve completion-relevant items when the compact ACK must trim inventory.
@@ -37,7 +37,8 @@ function loadedTargets(bot,{includeGeneral=false}={}){
       if(seen.has(key))continue;seen.add(key);
       // A buried ore in a loaded chunk is not an exposed mine target.
       // Reporting it as actionable causes the LLM to dispatch doomed digs.
-      const accessible=MINABLE_STONE.has(b.name)?
+      const accessible=b.name==='water'? !!p && Math.hypot(target.x-p.x,target.y-p.y,target.z-p.z)<=7:
+        MINABLE_STONE.has(b.name)?
         diggableObserved(bot,target,b): ORES.test(b.name)||GENERAL.test(b.name)?
         isExposed(bot,target)&&stances(bot,target).length>0:true;
       if(accessible)arr.push({name:b.name,...target});}catch{}

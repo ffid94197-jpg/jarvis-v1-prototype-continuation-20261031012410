@@ -18,6 +18,13 @@ function fingerprint(identity){
    identity.host.toLowerCase(),identity.port,identity.owner.toLowerCase()
  ])).digest('hex');
 }
+// A replayed sequence starts from stage zero. After a crash, its old
+// gathering, crafting, smelting or farming receipts are unavailable, so
+// re-executing those stages would risk duplicate consumption/acquisition.
+// Only replay a whole sequence when every stage rechecks an idempotent
+// visible postcondition (travel, building or equipped item). Otherwise
+// require a fresh owner-authored mission, not auto_resume.
+const RESTART_SAFE_SEQUENCE_GOALS=new Set(['travel','build','build_volume','equip']);
 function extractGoal(state){
  if(!state || state.status!=='running'||!Number.isSafeInteger(state.deadline))return null;
  const goal=state.goal;
@@ -45,7 +52,12 @@ function extractGoal(state){
    if(goal==='farm_crop')spec.crop=state.crop;
  }else if(goal==='shelter'){
    spec.width=state.width;spec.depth=state.depth;
- }else if(goal==='sequence')spec.steps=state.sequence;
+ }else if(goal==='sequence'){
+   if(!Array.isArray(state.sequence)||
+      !state.sequence.every(step=>step&&RESTART_SAFE_SEQUENCE_GOALS.has(step.goal)))
+     return null;
+   spec.steps=state.sequence;
+ }
  if(validateCommand({command:'auto_goal',...spec})!==null)return null;
  return JSON.parse(JSON.stringify(spec));
 }
@@ -75,7 +87,7 @@ function createCheckpoint(filePath,identity,{clock=Date.now}={}){
  const connection=fingerprint(identity);
  function save(state){
    const lease=makeLease(state,identity,clock());
-   if(!lease)return false;
+   if(!lease){clear();return false;}
    const tmp=filePath+'.'+process.pid+'.'+crypto.randomBytes(6).toString('hex')+'.tmp';
    try{
      fs.writeFileSync(tmp,JSON.stringify(lease)+'\n',{flag:'wx',mode:0o600});

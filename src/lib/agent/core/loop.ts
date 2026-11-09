@@ -63,7 +63,7 @@ import { AutonomyGate, REPEATABLE_INPUT_TOOLS, DESKTOP_GUI_EFFECTS, hasDirectPro
 import { compactToolObservation } from "./observation";
 import {acceptedSkillQueue, type ActiveSkillQueue} from "./approvedSkillQueue";
 import {directApprovedSkillIntent,isPreviewOnlySkillRequest} from "./skillIntent";
-import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, GoalProgressWatchdog, type GoalPlan, type GoalWatchdogLimits } from "./goalPlanner";
+import { requiresGoalPlan, requiresExternalActionEvidence, parseGoalPlan, goalPlanRequest, goalPlanContext, hasMaterialPlanRevision, GoalProgressWatchdog, type GoalPlan, type GoalWatchdogLimits } from "./goalPlanner";
 import { AUTONOMY_PROFILES, deriveStepBudget, type AutonomyProfile } from "./autonomyPolicy";
 
 export type TaskStatus = TaskState;
@@ -1662,7 +1662,7 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
         return;
       }
       if (watch === "blocked") {
-        const text = "Autonomous plan blocked by repeated identical failed actions after two revisions. No automatic third retry; inspect real state and reconcile any uncertain effects.";
+        const text = `Autonomous plan blocked by recurring ineffective actions after ${goalWatchdog.revisionCount} advisory revision(s). No further blind retry; inspect real state and reconcile uncertain effects.`;
         await persistStep(taskId,seq+1,"error",{note:text});
         await settleAndReport(taskId,effectJournalDegraded?"effect_unknown":"partial",stepsUsed,text,emit,{effectsHappened});
         return;
@@ -1678,7 +1678,8 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
             {role:"user",content:goalPlanRequest(objective,goalPlan,`${tool}: ${result.error??"failed"}`,reworkEvidence)},
           ]);
           const replacement = parseGoalPlan(changed);
-          if (!replacement) throw new Error("Invalid revised milestone plan");
+          if (!replacement || !hasMaterialPlanRevision(goalPlan,replacement))
+            throw new Error("Revised goal plan was invalid or materially unchanged");
           await db.agentStep.create({data:{taskId,seq,kind:"goal_replan",note:JSON.stringify(replacement)}});
           goalPlan=replacement;
           goalWatchdog.acknowledgeReplan();

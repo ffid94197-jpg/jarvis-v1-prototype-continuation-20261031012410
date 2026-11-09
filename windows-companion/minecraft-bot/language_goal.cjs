@@ -8,7 +8,7 @@ const {normalizeResource}=require('./resource_goal.cjs');
 const {RECIPES,EQUIPMENT}=require('./general_goal.cjs');
 const {SMELT_RECIPES}=require('./smelt_goal.cjs');
 const {validCropSpec}=require('./crop_goal.cjs');
-const {validStep}=require('./mission_sequence.cjs');
+const {validStep,MAX_SEQUENCE_STEPS}=require('./mission_sequence.cjs');
 const {roofedRoomSteps}=require('./structure_goal.cjs');
 const {parseOwnerPrimitive,PRIMITIVE_FIELDS,modelPrimitiveGrounded,modelGoalGrounded,modelSimpleGrounded,itemName,armorEquipSteps}=require('./general_play_intent.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
@@ -42,7 +42,7 @@ const SYSTEM=[
  'One action is never a whole mission. An action STARTED or DISPATCHED is not success; JARVIS must observe state and replan before any further effect.',
  'Other bounded native skills: inspect_villager {entityId}, trade_villager {entityId,tradeIndex,times}, transfer_container {position,item,count,operation}, enchant_item {position,item,choice}, attack_hostile {entityId,maxSwings}. Attack only a freshly observed owner-named allowed hostile, never a player, villager, passive mob, boss or creeper. An attack input is not proof of damage or death. The owner must explicitly request the exact target, offer, direction, item, and count. Only use freshly observed villagers/blocks; NEVER invent an ID or location, consume materials without owner approval, or claim success from a dispatch.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
- 'Sequence requires 1-8 validated typed goals. Never invent a Minecraft coordinate.',
+ 'Sequence requires 1-16 validated typed goals. Never invent a Minecraft coordinate.',
  'Shelter is a standalone owner-approved goal only for a small/simple/basic shelter or hut, optionally explicitly sized 3 by 3 to 4 by 4. JARVIS autonomously selects a 3x3x2 to 4x4x2 cobblestone site ONLY from fresh hazard-free nearby server observations. This goal may gather real cobblestone and must prove every physical floor, doorway and roof block. Never invent a site or claim completion from a plan.',
  'build_volume requires exactly position{x,y,z}, one supported survival block, width 1-5, depth 1-5, height 1-3 and shape floor, walls, entrance_walls, roof or solid, maximum 64 cells. The owner must explicitly request the block and actual 2D/3D dimensions and a real origin. Floors have height 1. Do not claim arbitrary houses/roofs supported.',
  'Example: {"command":"auto_goal","goal":"gather","resource":"diamond","targetCount":3}.',
@@ -234,8 +234,8 @@ function directIntent(raw){
  // promoted to an open-ended mission, and all stage parameters are validated.
  const parts=s.split(/\s+(?:and then|then|after that|next)\s+|\s+and\s+(?=(?:mine|craft|smelt|cook|refine|bake|make|build|gather|collect|equip|wear|travel|go|obtain|get|find|bring)\b)/);
  if(parts.length>1){
-  if(parts.length>8||parts.some(p=>!p.trim()))
-   return fail('Sequence must contain two to eight clear gameplay objectives');
+  if(parts.length>MAX_SEQUENCE_STEPS||parts.some(p=>!p.trim()))
+   return fail('Sequence must contain two to sixteen clear gameplay objectives');
   const steps=[];
   for(const part of parts){
    let candidate=directIntent(part);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const assert=require('node:assert/strict');
-const {validSequence,canonicalSequence}=require('./mission_sequence.cjs');
+const {validSequence,canonicalSequence,MAX_SEQUENCE_STEPS}=require('./mission_sequence.cjs');
 const {validBuildSpec}=require('./structure_goal.cjs');
 const {validateCommand}=require('./friend_protocol.cjs');
 const {createController}=require('./autonomy_engine.cjs');
@@ -29,7 +29,7 @@ ok(validateCommand({command:'auto_goal',goal:'sequence',steps:goalSteps,
  durationSeconds:300})===null,'Owner command validator approves bounded sequence');
 for(const bad of [
  [],
- Array(9).fill({goal:'tools'}),
+ Array(17).fill({goal:'tools'}),
  [{goal:'eval',code:'process.exit(0)'}],
  [{goal:'gather',resource:'command_block',targetCount:1}],
  [{goal:'travel',destination:{x:30000001,y:64,z:0},arrivalRange:2}],
@@ -40,6 +40,9 @@ for(const bad of [
  ok(validateCommand({command:'auto_goal',goal:'sequence',steps:bad})!==null,
    'Protocol denies every invalid multi-step plan');
 }
+const full=Array.from({length:MAX_SEQUENCE_STEPS},()=>({goal:'tools'}));
+ok(validSequence(full)&&validateCommand({command:'auto_goal',goal:'sequence',steps:full})===null,
+ 'Core and Mineflayer accept the same bounded sixteen-stage plan');
 const copy=canonicalSequence(goalSteps);copy[0].targetCount=1;
 ok(goalSteps[0].targetCount===4,
  'Mission sequence must be cloned rather than trusting mutable caller input');

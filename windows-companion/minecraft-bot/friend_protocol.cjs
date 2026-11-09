@@ -2,7 +2,7 @@
 'use strict';
 /** Pure command validation; identical contract for stdin and in-game chat. */
 const {RESOURCES}=require('./resource_goal.cjs');
-const {validSequence}=require('./mission_sequence.cjs');
+const {validSequence,MAX_SEQUENCE_STEPS}=require('./mission_sequence.cjs');
 const {validBuildSpec,validVolumeSpec}=require('./structure_goal.cjs');
 const {validFarmSpec}=require('./wheat_goal.cjs');
 const {validCropSpec}=require('./crop_goal.cjs');
@@ -125,7 +125,7 @@ function validateCommand(input) {
       (input.durationSeconds===undefined ||
         (Number.isInteger(input.durationSeconds) && input.durationSeconds>=10 &&
           input.durationSeconds<=43200)) ? null :
-      'Autonomous goal invalid. Gather needs quantity 1-64; travel needs coordinates/radius 1-8; sequence allows 1-8 validated steps; duration 10-43200';
+      'Autonomous goal invalid. Gather needs quantity 1-64; travel needs coordinates/radius 1-8; sequence allows 1-'+MAX_SEQUENCE_STEPS+' validated steps; duration 10-43200';
   }
   // Bounded general-purpose player primitives. All IDs/names are validated before I/O.
   const primitiveFields={

@@ -494,7 +494,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(goal==='equip' && !validEquipSpec({goal,item:spec?.item,destination:spec?.destination}))
       throw Error('Unsupported equipment item or slot');
     if(goal==='sequence' && !validSequence(spec?.steps))
-      throw Error('Sequence requires one to eight typed valid subgoals');
+      throw Error('Sequence requires one to sixteen typed valid subgoals');
     if(goal==='travel' && (!spec?.destination ||
        !['x','y','z'].every(k=>Number.isInteger(spec.destination[k]) &&
          Math.abs(spec.destination[k])<=30000000) ||
@@ -577,7 +577,7 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(!d && (state.goal==='sequence'||state.goal==='shelter')){
       // Do not mark a composed goal complete by merely issuing the steps.
       // Recompute every stage against the current server-backed world and
-      // advance across at most eight already-proven stages in one tick.
+      // advance across at most sixteen already-proven stages in one tick.
       for(let n=0;n<=state.sequence.length;n++){
         if(state.sequenceIndex>=state.sequence.length){
           d={kind:'complete',why:'All authorized sequence stages independently verified'};

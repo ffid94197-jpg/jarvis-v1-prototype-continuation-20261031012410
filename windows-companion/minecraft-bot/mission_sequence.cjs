@@ -10,6 +10,8 @@ const {validCropSpec}=require('./crop_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {validSmeltSpec}=require('./smelt_goal.cjs');
 const SIMPLE_STEPS=new Set(['tools','stone_age','iron_age']);
+// Matches the bounded native PlayerEngine, Guardian and Core sequence contract.
+const MAX_SEQUENCE_STEPS=16;
 function validPosition(p){
  return !!p&&typeof p==='object'&&!Array.isArray(p)&&Object.keys(p).length===3&&
    ['x','y','z'].every(k=>Number.isInteger(p[k])&&Math.abs(p[k])<=30000000);
@@ -37,10 +39,10 @@ function validStep(s){
  return false;
 }
 function validSequence(steps){
- return Array.isArray(steps)&&steps.length>=1&&steps.length<=8&&steps.every(validStep);
+ return Array.isArray(steps)&&steps.length>=1&&steps.length<=MAX_SEQUENCE_STEPS&&steps.every(validStep);
 }
 function canonicalSequence(steps){
  if(!validSequence(steps))throw Error('Invalid bounded autonomous goal sequence');
  return steps.map(s=>JSON.parse(JSON.stringify(s)));
 }
-module.exports={SIMPLE_STEPS,validStep,validSequence,canonicalSequence,validPosition};
+module.exports={SIMPLE_STEPS,MAX_SEQUENCE_STEPS,validStep,validSequence,canonicalSequence,validPosition};

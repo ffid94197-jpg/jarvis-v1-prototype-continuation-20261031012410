@@ -165,6 +165,58 @@ const crypto=require("node:crypto");
     assert.equal(incomplete.evidence.verified,false);
     assert.equal((await improvement.getPerformanceSummary(otherOwner)).sampleCount,2);
 
+    // Approved Forge skills can contain sixteen reviewed stages. Attribute
+    // only if every durable execution receipt is matched unambiguously.
+    const fullOwner="full-skill-owner-"+crypto.randomUUID();
+    const fullTask="00000000-0000-4000-8000-000000000501";
+    const fullSkill="sk_44444444444444444444444444444444";
+    const fullSteps=[
+      {seq:1,kind:"tool_call",tool:"evolution_skill_run",
+        argsJson:JSON.stringify({id:fullSkill})},
+      {seq:1,kind:"tool_result",tool:"evolution_skill_run",
+        resultJson:JSON.stringify({ok:true,detail:{queueRequested:true,
+          skillId:fullSkill,stageCount:16,
+          steps:Array.from({length:16},()=>({tool:"read_file"}))}})},
+      ...Array.from({length:16},(_,i)=>[
+        {seq:i+2,kind:"tool_call",tool:"read_file",
+          argsJson:JSON.stringify({path:"source/file"+i})},
+        {seq:i+2,kind:"tool_result",tool:"read_file",
+          resultJson:JSON.stringify({ok:true,tool:"read_file"})}
+      ]).flat()
+    ];
+    const fullDb={
+      agentTask:{findFirst:async()=>({id:fullTask,ownerId:fullOwner,
+        objective:"Read sixteen authorized files",status:"completed",
+        createdAt:new Date("2026-11-09T10:00:00Z"),
+        updatedAt:new Date("2026-11-09T10:00:08Z")})},
+      agentStep:{findMany:async()=>fullSteps},
+      effectRecord:{findMany:async()=>[]}
+    };
+    const fullResult=await improvement.recordTaskPerformanceFromJournal(
+      fullOwner,fullTask,fullDb,"completed");
+    assert.equal(fullResult.evidence.verified,true,
+      "All sixteen exactly paired approved stages must be attributable");
+    assert.equal(fullResult.skillId,fullSkill);
+
+    const duplicateOwner="duplicate-receipt-owner-"+crypto.randomUUID();
+    const ambiguousTask="00000000-0000-4000-8000-000000000502";
+    const ambiguousDb={
+      agentTask:{findFirst:async()=>({id:ambiguousTask,ownerId:duplicateOwner,
+        objective:"Read the requested file",status:"completed",
+        createdAt:new Date("2026-11-09T10:00:00Z"),
+        updatedAt:new Date("2026-11-09T10:00:02Z")})},
+      agentStep:{findMany:async()=>[
+        {seq:1,kind:"tool_call",tool:"read_file",argsJson:'{}'},
+        {seq:1,kind:"tool_result",tool:"read_file",resultJson:'{"ok":true}'},
+        {seq:1,kind:"tool_result",tool:"read_file",resultJson:'{"ok":true}'}
+      ]},
+      effectRecord:{findMany:async()=>[]}
+    };
+    const ambiguous=await improvement.recordTaskPerformanceFromJournal(
+      duplicateOwner,ambiguousTask,ambiguousDb,"completed");
+    assert.equal(ambiguous.evidence.verified,false,
+      "Two identical receipt rows may not certify one external action");
+
     const summary=await improvement.getPerformanceSummary(owner);
     assert.equal(summary.sampleCount,18);
     assert.equal(summary.privacy.rawObjectivesStored,false);

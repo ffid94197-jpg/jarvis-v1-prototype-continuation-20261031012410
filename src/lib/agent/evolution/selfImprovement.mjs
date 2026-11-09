@@ -231,15 +231,26 @@ export async function recordTaskPerformanceFromJournal(owner,taskId,db,settledSt
   ]);
   const calls=steps.filter(x=>x.kind==="tool_call");
   if(!calls.length)return {recorded:false,reason:"no_tool_execution"};
-  const results=new Map();
-  for(const row of steps.filter(x=>x.kind==="tool_result"))results.set(row.seq,row);
+  // A duplicate or ambiguous durable step cannot be reduced to whichever
+  // result was read last. Keep all rows per sequence, and refuse verified
+  // performance credit unless each call has exactly one matching receipt.
+  const results=new Map(),callCounts=new Map();
+  for(const row of steps.filter(x=>x.kind==="tool_result")){
+    const bucket=results.get(row.seq)||[];
+    bucket.push(row);results.set(row.seq,bucket);
+  }
+  for(const call of calls)callCounts.set(call.seq,(callCounts.get(call.seq)||0)+1);
   let failureCount=steps.filter(x=>x.kind==="error"||x.kind==="guardian_deny").length;
   let completeReceipts=true;
   for(const call of calls){
-    const receipt=results.get(call.seq);
-    if(!receipt||receipt.tool!==call.tool){completeReceipts=false;failureCount++;continue;}
-    try{const parsed=JSON.parse(receipt.resultJson||"{}");if(parsed.ok!==true)failureCount++;}
-    catch{failureCount++;completeReceipts=false;}
+    const batch=results.get(call.seq)||[];
+    if(batch.length!==1||callCounts.get(call.seq)!==1||
+       batch[0].tool!==call.tool){
+      completeReceipts=false;failureCount++;continue;
+    }
+    try{const parsed=JSON.parse(batch[0].resultJson||"{}");
+      if(parsed.ok!==true)failureCount++;
+    }catch{failureCount++;completeReceipts=false;}
   }
   const uncertainEffects=effects.filter(x=>x.status==="ADMITTED"||x.status==="EFFECT_UNKNOWN").length;
   const skillRuns=calls.filter(x=>x.tool==="evolution_skill_run");
@@ -251,20 +262,21 @@ export async function recordTaskPerformanceFromJournal(owner,taskId,db,settledSt
       if(typeof args.id!=="string"||!SKILL.test(args.id))
         return {recorded:false,reason:"skill_run_id_unverifiable"};
       skillId=args.id;
-      const runReceipt=results.get(run.seq);
-      const parsedRun=JSON.parse(runReceipt?.resultJson||"{}");
+      const runReceipts=results.get(run.seq)||[];
+      const parsedRun=JSON.parse(runReceipts.length===1?runReceipts[0].resultJson||"{}":"{}");
       const detail=parsedRun.detail;
       const expected=detail?.steps;
       const stageCount=detail?.stageCount;
       const following=calls.filter(call=>call.seq>run.seq).slice(0,stageCount);
       skillRunVerified=parsedRun.ok===true&&detail?.queueRequested===true&&
         detail?.skillId===skillId&&Array.isArray(expected)&&Number.isInteger(stageCount)&&
-        stageCount>=1&&stageCount<=8&&expected.length===stageCount&&
+        stageCount>=1&&stageCount<=16&&expected.length===stageCount&&
         following.length===stageCount&&following.every((call,index)=>{
           if(call.tool!==expected[index]?.tool)return false;
-          const receipt=results.get(call.seq);
-          if(!receipt||receipt.tool!==call.tool)return false;
-          try{return JSON.parse(receipt.resultJson||"{}").ok===true;}
+          const receipts=results.get(call.seq)||[];
+          if(receipts.length!==1||callCounts.get(call.seq)!==1||
+             receipts[0].tool!==call.tool)return false;
+          try{return JSON.parse(receipts[0].resultJson||"{}").ok===true;}
           catch{return false;}
         });
     }catch{return {recorded:false,reason:"skill_run_receipt_unreadable"};}

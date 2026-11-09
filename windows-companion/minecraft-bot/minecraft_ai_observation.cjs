@@ -78,8 +78,10 @@ function nativeItemForMission(state) {
     return typeof active.item==='string'&&/^[a-z_]{2,64}$/.test(active.item)?active.item:null;
   if(active.goal==='gather') {
     const resource=active.resource;
-    return typeof resource==='string'&&/^[a-z_]{2,64}$/.test(resource)&&
-      !['logs','planks','sticks'].includes(resource)?resource:null;
+    if(resource==='logs')return 'log';
+    if(resource==='planks')return 'planks';
+    if(resource==='sticks')return 'stick';
+    return typeof resource==='string'&&/^[a-z_]{2,64}$/.test(resource)?resource:null;
   }
   return null;
 }
@@ -90,7 +92,10 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay',nativeGoal=null,
   // readback for the EXACT target even when carrying many unrelated items.
   // Model-proposed item names never influence the read-only digest.
   const target=typeof nativeItem==='string'&&/^[a-z_]{2,64}$/.test(nativeItem)?nativeItem:null;
-  const rank=name=>name===target?-1:(itemRank.get(name)??1000);
+  const matchingTarget=name=>name===target ||
+    (target==='log'&&name.endsWith('_log')) ||
+    (target==='planks'&&name.endsWith('_planks'));
+  const rank=name=>matchingTarget(name)?-1:(itemRank.get(name)??1000);
   const ordered=Object.entries(raw)
     .filter(([k,n])=>/^[a-z0-9_]{1,64}$/.test(k)&&Number.isFinite(n)&&n>0)
     .sort(([a],[b])=>rank(a)-rank(b))

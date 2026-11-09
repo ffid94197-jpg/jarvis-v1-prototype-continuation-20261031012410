@@ -42,6 +42,15 @@ assert.equal(nativeItemForMission(sequence),'beetroot','Active sequence crop cho
 const completed={...sequence,sequenceIndex:2};
 assert.equal(nativeItemForMission(completed),'beetroot','Last stage output remains visible at completion');n++;
 assert.equal(nativeItemForMission({...sequence,sequenceIndex:0}),'diamond','Stage progression switches target');n++;
+assert.equal(nativeItemForMission({goal:'gather',resource:'sticks'}),'stick','Normalized stick item ID');n++;
+assert.equal(nativeItemForMission({goal:'gather',resource:'logs'}),'log','Wood log group prioritization');n++;
+assert.equal(nativeItemForMission({goal:'gather',resource:'planks'}),'planks','Plank group prioritization');n++;
+const full=Object.fromEntries(Array.from({length:40},(_,i)=>['unrelated_'+i,64]));
+full.stick=12;full.oak_planks=20;full.spruce_planks=8;full.birch_log=4;
+for(const [goal,target,required] of [['sticks','stick',12],['planks','oak_planks',20],['logs','birch_log',4]]){
+ const actual=JSON.parse(projectWorld({...base,inventory:{raw:full}},[], '', 'stay','gather',nativeItemForMission({goal:'gather',resource:goal})));
+ assert.equal(actual.inventory.raw[target],required,'Native gather target cannot be lost to unrelated stacks');n++;
+}
 const overloaded=Object.fromEntries(Array.from({length:45},(_,i)=>['random_'+i,64]));
 overloaded.beetroot=3;
 const projected=JSON.parse(projectWorld({...base,inventory:{raw:overloaded}},[],

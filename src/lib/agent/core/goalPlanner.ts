@@ -57,6 +57,11 @@ function isObj(x: unknown): x is Record<string, unknown> {
 function trimBounded(x: unknown, size: number): string | null {
   if (typeof x !== 'string') return null;
   const s=x.trim();
+  // A model-generated milestone is untrusted data, never a system prompt.
+  // Reject hidden control characters, role delimiters and executable fences
+  // before the plan can be persisted and fed back into future model context.
+  if(/[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/u.test(s)||
+     /\x60\x60\x60|<\|(?:system|developer|assistant|tool)\|>/i.test(s))return null;
   return s.length > 0 && s.length <= size ? s : null;
 }
 

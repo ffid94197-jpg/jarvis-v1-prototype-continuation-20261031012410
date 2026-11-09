@@ -99,6 +99,25 @@ const crypto=require("node:crypto");
     assert.equal(noSuccess.candidateSuccessRate,0);
     assert.equal(noSuccess.approvalChanged,false);
 
+    const failedCandidateOwner="failed-new-strategy-"+crypto.randomUUID();
+    const failedCandidateSkill="sk_55555555555555555555555555555555";
+    for(let i=0;i<3;i++){
+      await improvement.recordTaskOutcome(failedCandidateOwner,{
+        taskId:"00000000-0000-4000-8000-00000000060"+i,
+        objective:"Process a known valid work item",skillId:null,status:"completed",
+        stepCount:5,elapsedMs:5000,failureCount:0,uncertainEffects:0,verified:true
+      });
+      await improvement.recordTaskOutcome(failedCandidateOwner,{
+        taskId:"00000000-0000-4000-8000-00000000061"+i,
+        objective:"Process a known valid work item",skillId:failedCandidateSkill,status:"failed",
+        stepCount:1,elapsedMs:100,failureCount:1,uncertainEffects:0,verified:false
+      });
+    }
+    const failedCandidate=await improvement.evaluateSkillPerformance(
+      failedCandidateOwner,failedCandidateSkill,"Process a known valid work item");
+    assert.equal(failedCandidate.status,"regression",
+      "A never-successful skill that replaces a successful baseline is a regression");
+
     const insufficient=await improvement.evaluateSkillPerformance(owner,
       "sk_fedcba9876543210fedcba9876543210","A task with no matched baseline");
     assert.equal(insufficient.status,"insufficient_evidence");

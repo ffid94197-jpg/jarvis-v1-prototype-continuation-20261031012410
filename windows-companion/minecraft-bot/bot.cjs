@@ -34,6 +34,7 @@ const {validBuildSpec,observeBuild,validVolumeSpec,observeVolume,
   placementReference}=require('./structure_goal.cjs');
 const {validFarmSpec,observeWheat}=require('./wheat_goal.cjs');
 const {observeCrop}=require('./crop_goal.cjs');
+const {validFeedPair}=require('./animal_feeding.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {safeSurveyFeet}=require('./wood_navigation.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
@@ -1491,6 +1492,44 @@ async function action(q){
           status:String(result.detail||'Outcome unverified').slice(0,1600)};
       }catch(err){
         return {ok:false,verified:false,error:'Transaction not verified: '+String(err.message||err).slice(0,160)};
+      }finally{advancedBusy=false;}
+    }
+    case 'feed_animal':{
+      if(mode==='auto'||autoBusy||advancedBusy)
+        return {ok:false,error:'Animal feeding requires an idle gameplay session'};
+      const entity=bot.entities[q.entityId];
+      if(bot.game?.gameMode!=='survival'||!spawned||
+         !entity?.position||!Number.isInteger(entity.id)||entity.id!==q.entityId||
+         !validFeedPair(entity.name,q.item)||!bot.entity?.position||
+         bot.entity.position.distanceTo(entity.position)>4.3)
+        return {ok:false,error:'No approved nearby live passive animal with requested food'};
+      const item=bot.inventory?.items?.().find(x=>x.name===q.item&&x.count>0);
+      if(!item||typeof bot.activateEntity!=='function')
+        return {ok:false,error:'Physical food or Mineflayer entity-interaction API missing'};
+      setMode('stay');const epoch=actionEpoch;advancedBusy=true;
+      try{
+        await bot.equip(item,'hand');
+        if(epoch!==actionEpoch||!spawned||bot.heldItem?.name!==q.item)
+          return {ok:false,verified:false,error:'Owner stopped feeding or food was not equipped'};
+        const before=rawCount(bot,q.item);
+        if(before<1)return {ok:false,verified:false,error:'No server-observed food in inventory'};
+        await bot.activateEntity(entity);
+        const deadline=Date.now()+2800;
+        while(Date.now()<deadline && rawCount(bot,q.item)>=before){
+          if(epoch!==actionEpoch||!spawned)
+            return {ok:false,verified:false,error:'Owner cancelled feeding'};
+          await pause(160);
+        }
+        const current=bot.entities[q.entityId],after=rawCount(bot,q.item);
+        if(epoch!==actionEpoch||!spawned||after!==before-1||
+           !current||current.name!==entity.name||!current.position||
+           bot.entity.position.distanceTo(current.position)>6)
+          return {ok:false,verified:false,error:'Feed consumption or target identity not verified'};
+        return {ok:true,verified:true,status:'One '+q.item+
+          ' consumed by interacting with observed '+entity.name+
+          ' #'+entity.id+'; breeding/taming NOT verified'};
+      }catch(err){return {ok:false,verified:false,
+        error:'Animal feeding outcome unknown: '+String(err?.message||err).slice(0,140)};
       }finally{advancedBusy=false;}
     }
     case 'fish_once':{

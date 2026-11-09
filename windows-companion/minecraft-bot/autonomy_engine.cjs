@@ -14,6 +14,7 @@ const {validCraftSpec,validEquipSpec,generalPlan}=require('./general_goal.cjs');
 const {validSmeltSpec,smeltPlan}=require('./smelt_goal.cjs');
 const {validTransferSpec,transferPlan}=require('./container_goal.cjs');
 const {ALLOWED_HOSTILES}=require('./native_combat.cjs');
+const {ANIMAL_FOOD}=require('./animal_feeding.cjs');
 // An owner-issued long mission has a finite authority lease across all renewals.
 const MAX_MISSION_LIFETIME_MS=12*60*60*1000;
 const GOALS = new Set(['companion','netherite_dragon_run','dragon_then_netherite_run','netherite_armor_run','netherite_gear_run','shelter','defeat_hostile','survive','wood','tools','explore','follow','guard','stone_age','iron_age','dragon_run','gather','travel','build','build_volume','farm_wheat','farm_crop','sequence','craft','equip','smelt','transfer']);
@@ -70,6 +71,13 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     if(d<=10)villagers.push({id:e.id,name:'villager',distance:Math.round(d*10)/10});
   }
   villagers.sort((a,b)=>a.distance-b.distance);
+  const animals=[];
+  for(const e of Object.values(bot.entities||{})){
+    if(!e?.position||!Object.hasOwn(ANIMAL_FOOD,e.name)||!p||!Number.isInteger(e.id))continue;
+    const d=number(e.position.distanceTo(p),1e9);
+    if(d<=8)animals.push({id:e.id,name:e.name,distance:Math.round(d*10)/10});
+  }
+  animals.sort((a,b)=>a.distance-b.distance);
   const inventory={logs:countLike(inv,n=>/(?:^|_)log$/.test(n)),planks:countLike(inv,n=>/_planks$/.test(n)),sticks:inv.stick||0,
     table:inv.crafting_table||0,woodenPickaxe:inv.wooden_pickaxe||0,stonePickaxe:inv.stone_pickaxe||0,stoneSword:inv.stone_sword||0,cobblestone:inv.cobblestone||0,
     food:countLike(inv,n=>FOOD.test(n)),rawIron:inv.raw_iron||0,ironIngot:inv.iron_ingot||0,ironPickaxe:inv.iron_pickaxe||0,diamondPickaxe:inv.diamond_pickaxe||0,diamonds:inv.diamond||0,diamondSword:inv.diamond_sword||0,diamondHelmet:inv.diamond_helmet||0,diamondChestplate:inv.diamond_chestplate||0,diamondLeggings:inv.diamond_leggings||0,diamondBoots:inv.diamond_boots||0,furnace:inv.furnace||0,coal:inv.coal||0,obsidian:inv.obsidian||0,
@@ -148,7 +156,7 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     position:p?{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}:null,
     ownerVisible:!!owner,ownerDistance:p&&owner?Math.round(p.distanceTo(owner)):null,
     ownerPosition:owner?{x:Math.floor(owner.x),y:Math.floor(owner.y),z:Math.floor(owner.z)}:null,
-    threats:threats.slice(0,6),villagers:villagers.slice(0,3),
+    threats:threats.slice(0,6),villagers:villagers.slice(0,3),animals:animals.slice(0,3),
     inventory,timeOfDay:bot.time?.timeOfDay??null};
 }
 function decide(goal, world, failures={}, progress={}) {

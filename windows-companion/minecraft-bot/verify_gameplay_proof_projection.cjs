@@ -56,6 +56,14 @@ overloaded.beetroot=3;
 const projected=JSON.parse(projectWorld({...base,inventory:{raw:overloaded}},[],
  '','stay','sequence',nativeItemForMission(sequence)));
 assert.equal(projected.inventory.raw.beetroot,3,'Native target survives compact inventory truncation');n++;
+const newFish={...base,inventory:{...base.inventory,
+ raw:{cod:1,salmon:2,tropical_fish:1,pufferfish:1}}};
+const observedFish=JSON.parse(projectWorld(newFish,[],'','stay'));
+assert.equal(observedFish.inventory.raw.cod,1,'Fresh cod must remain in compact physical inventory');n++;
+assert.equal(observedFish.inventory.raw.pufferfish,1,'Fresh pufferfish must remain in compact physical inventory');n++;
+const observedBed=JSON.parse(projectWorld({...base,sleeping:true,daylight:false},[],'','stay'));
+assert.equal(observedBed.sleeping,true,'Real sleeping flag survives projection');n++;
+assert.equal(observedBed.daylight,false,'A bed does not imply sunrise');n++;
 const {loadedTargets}=moduleRef.exports;
 const targets=loadedTargets({
  entity:{position:{x:0,y:64,z:0}},

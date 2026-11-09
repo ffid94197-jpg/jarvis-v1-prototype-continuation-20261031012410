@@ -10,6 +10,8 @@ export type MinecraftAiObservation = {
   inventory: {logs?:number;woodenPickaxe?:number;raw?:Record<string,number>};
   health:number;
   hunger:number;
+  sleeping?:boolean;
+  daylight?:boolean;
   joined:boolean;
   busy:boolean;
   dimension?:string;
@@ -61,6 +63,8 @@ function observationFromResult(result:unknown): MinecraftAiObservation | null {
     const s=JSON.parse(detail.status) as MinecraftAiObservation;
     if (!s || s.joined!==true || typeof s.busy!=='boolean' || !point(s.position) ||
         !Number.isFinite(s.health) || !Number.isFinite(s.hunger) ||
+        (s.sleeping!==undefined&&typeof s.sleeping!=='boolean')||
+        (s.daylight!==undefined&&typeof s.daylight!=='boolean')||
         !s.inventory || typeof s.inventory!=='object') return null;
     // Only finite integer coordinates and well-formed names from real Mineflayer
     // snapshot data may be supplied as actionable model grounding.
@@ -708,6 +712,9 @@ export class MinecraftAiGate {
   // Standalone primitive gather must grow inventory from the FIRST trusted
   // observation and have an observed, admitted gameplay effect in this run.
   private primitiveBaseline:{resource:string;count:number}|null=null;
+  private fishBaseline:number|null=null;
+  private fishReceipt=false;
+  private sleepReceipt=false;
   private readonly primitiveEffectTools=new Set<string>();
   private nativeTransfer:{item:string;count:number;operation:string}|null=null;
   private nativeCrop:{crop:string;count:number}|null=null;
@@ -826,6 +833,7 @@ export class MinecraftAiGate {
         return {ok:false,reason:'Fishing requires exact integer water coordinates only'};
       const owner=this.objective.toLowerCase().trim();
       if(!/\b(?:fish|catch)\b/.test(owner)||!/\b(?:water|pond|river|lake)\b/.test(owner)||
+         /\b(?:two|three|four|five|six|seven|eight|nine|ten|many|several|multiple|\d+)\s+(?:fish|salmon|cod|times)\b/.test(owner)||
          /\b(?:don't|do not|never|avoid|not to|must not)\b/.test(owner))
         return {ok:false,reason:'Owner did not explicitly authorize one fishing action in water'};
       const waters=(this.observed.nearbyBlocks||[]).filter(b=>b.name==='water');
@@ -1119,6 +1127,12 @@ export class MinecraftAiGate {
     }
     if(args.command==='observe'){
       const latest=observationFromResult(result);
+      if(latest && this.fishBaseline===null && /\b(?:fish|catch)\b/i.test(this.objective)){
+        const fish=['cod','salmon','tropical_fish','pufferfish'];
+        const raw=latest.inventory.raw||{};
+        const held=fish.reduce((n,k)=>n+(Number(raw[k])||0),0);
+        if(Number.isSafeInteger(held)&&held>=0)this.fishBaseline=held;
+      }
       // Capture only ONCE for this Core execution. On budget resume there is
       // no trusted prior inventory baseline in memory: do not backfill it from
       // a late observation or mistake preexisting items for task output.
@@ -1180,6 +1194,14 @@ export class MinecraftAiGate {
         result as Record<string,unknown>:null;
       const detail=resultRecord?.detail && typeof resultRecord.detail==='object'?
         resultRecord.detail as Record<string,unknown>:null;
+      // Only the native companion's successful bounded transaction ACK,
+      // matched to THIS tool command, may explain subsequent physical
+      // fishing/sleep observations. A generic dispatched packet is not proof.
+      if(resultRecord?.ok===true&&detail?.botAcknowledged===true&&
+         detail?.command===args.command){
+        if(args.command==='fish_once')this.fishReceipt=true;
+        if(args.command==='sleep_in_bed')this.sleepReceipt=true;
+      }
       if(this.primitiveBaseline && resultRecord?.ok===true &&
          (detail?.botAcknowledged===true || detail?.verifiedGameReadback===true ||
           detail?.observed===true) &&
@@ -1364,6 +1386,21 @@ export class MinecraftAiGate {
       // not proof from dispatch or from the model's prose.
       return {verified:true,reason:'Same-task native '+target+
         ' goal completed '+expected+' independently verified physical stages and a fresh joined world observation'};
+    }
+    if(/\b(?:fish|catch)\b/.test(s)&&/\b(?:water|pond|river|lake)\b/.test(s)){
+      const count=['cod','salmon','tropical_fish','pufferfish']
+        .reduce((n,k)=>n+(Number(raw[k])||0),0);
+      if(this.fishReceipt && this.fishBaseline!==null &&
+         count>this.fishBaseline)
+        return {verified:true,reason:'Current owner fishing action confirmed by native receipt and fresh game inventory gained '+(count-this.fishBaseline)+' fish'};
+      return {verified:false,reason:'No matching owner-task fishing receipt plus new physical caught-fish inventory'};
+    }
+    if(/\b(?:sleep|rest)\b/.test(s)&&/\bbed\b/.test(s)){
+      if(this.sleepReceipt && (o.sleeping===true||o.daylight===true))
+        return {verified:true,reason:o.daylight===true?
+          'Owner sleep action verified and fresh game observation confirms daylight':
+          'Owner sleep action verified and fresh game observation confirms sleeping; full night skip remains unproven'};
+      return {verified:false,reason:'No task-bound sleep receipt and subsequent physical sleep/daylight observation'};
     }
     const mission=minecraftMissionFromObjective(objective);
     if(mission&&mission!=='companion'){

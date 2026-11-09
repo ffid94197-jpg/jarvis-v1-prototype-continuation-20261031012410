@@ -133,6 +133,7 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
   const dragons=Object.values(bot.entities||{}).filter(e=>e?.name==='ender_dragon' && e?.position);
   const crystals=Object.values(bot.entities||{}).filter(e=>e?.name==='end_crystal' && e?.position);
   return {joined:!!p,dimension:bot.game?.dimension||'minecraft:overworld',
+    sleeping:bot.isSleeping===true,daylight:bot.time?.isDay===true,
     smithingTableNearby,netherPortalNearby,strongholdPortalFrameNearby,strongholdMissingEyes,endPortalPresent,endPortalActivated,
     wornNetherite,wornDiamond,heldNetheriteSword,equipped,exitPortalPresent,
     dragonPresent:dragons.length>0,dragonId:dragons[0]?.id??null,

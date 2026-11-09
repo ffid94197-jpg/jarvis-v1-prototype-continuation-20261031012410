@@ -11,7 +11,7 @@ const GENERAL=/^(?:water|dirt|grass_block|sand|red_sand|gravel|clay|netherrack|m
 const {diggableObserved,MINABLE_STONE,isExposed,stances}=require('./mining_navigation.cjs');
 const ORES=/^(?:(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore)$/;
 // Preserve completion-relevant items when the compact ACK must trim inventory.
-const CRITICAL_ITEMS=['cobblestone','diamond','iron_ingot','raw_iron','obsidian','flint',
+const CRITICAL_ITEMS=['cod','salmon','tropical_fish','pufferfish','cobblestone','diamond','iron_ingot','raw_iron','obsidian','flint',
  'netherrack','wooden_pickaxe','stone_pickaxe','iron_pickaxe','netherite_sword',
  'oak_log','spruce_log','birch_log','dark_oak_log','jungle_log','cherry_log'];
 const itemRank=new Map(CRITICAL_ITEMS.map((n,i)=>[n,i]));
@@ -107,6 +107,7 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay',nativeGoal=null,
     joined:world.joined===true,position:world.position,dimension:world.dimension,
     nativeGoal:typeof nativeGoal==='string'&&nativeGoal.length<=64?nativeGoal:null,
     busy:['collect_wood','navigate','dig_block','come','auto'].includes(mode),
+    sleeping:world.sleeping===true,daylight:world.daylight===true,
     health:world.health,hunger:world.hunger,
     ownerVisible:world.ownerVisible===true,ownerDistance:world.ownerDistance,
     inventory:{logs:world.inventory?.logs||0,woodenPickaxe:world.inventory?.woodenPickaxe||0,raw:Object.fromEntries(ordered)},

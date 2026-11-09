@@ -169,6 +169,7 @@ function modelPrimitiveGrounded(command,ownerText,context){
  }
  if(command.command==='fish_once'){
   if(!/\b(?:water|pond|river|lake)\b/.test(s)||
+     /\b(?:two|three|four|five|six|seven|eight|nine|ten|many|several|multiple|\d+)\s+(?:fish|salmon|cod|times)\b/.test(s)||
      /\b(?:don't|do not|never|avoid|not to|must not)\b/.test(s)||
      !Array.isArray(scene?.nearbyBlocks)||
      !scene.nearbyBlocks.some(b=>b.name==='water'&&

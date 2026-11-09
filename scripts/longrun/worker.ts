@@ -70,8 +70,13 @@ async function runRoutine(id:string) {
     void (async()=>{
       const result=await db.agentRoutine.updateMany({where:{id,leaseOwner:WORKER_ID,enabled:true},data:{leaseUntil:new Date(Date.now()+LEASE_MS)}});
       if(result.count!==1) lostLease=true;
-      const current=await db.agentRoutine.findUnique({where:{id},select:{enabled:true}});
-      if(!current?.enabled) killed=true;
+      const [current,activeOwner]=await Promise.all([
+        db.agentRoutine.findUnique({where:{id},select:{enabled:true}}),
+        db.principal.findUnique({where:{id:row.ownerId},select:{status:true}})
+      ]);
+      // Owner deactivation during a multi-slice run revokes execution.
+      // The next Core cancellation boundary must stop any further effect.
+      if(!current?.enabled||activeOwner?.status!=='ACTIVE') killed=true;
     })().catch(()=>{lostLease=true;});
   },HEARTBEAT_MS);
   try {

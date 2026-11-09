@@ -19,7 +19,7 @@ for(const bad of [{...command,entityId:-1},{...command,item:'tnt'},
  {...command,shell:'ls'},{command:'feed_animal',entityId:19},
  {...command,entityId:200001}])
  ok(validateCommand(bad)!==null,'Malformed food or foreign instructions denied');
-const world={joined:true,busy:false,position:{x:1,y:64,z:2},
+const world={joined:true,busy:false,position:{x:1,y:64,z:2},nearbyBlocks:[],
  animals:[{id:19,name:'cow',distance:2}]};
 ok(modelPrimitiveGrounded(command,'feed cow with wheat',JSON.stringify(world)),
  'One owner-specified observed animal and food');

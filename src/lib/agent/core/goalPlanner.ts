@@ -86,6 +86,16 @@ export function validateGoalPlan(input: unknown): GoalPlan | null {
   return {schemaVersion:1,milestones};
 }
 
+/** A revised advisory plan needs a changed approach, not only new IDs.
+ * This check never authorizes actions or asserts completion.
+ */
+export function hasMaterialPlanRevision(previous:GoalPlan,next:GoalPlan):boolean {
+  if(!validateGoalPlan(previous)||!validateGoalPlan(next))return false;
+  const fingerprint=(plan:GoalPlan)=>plan.milestones.map(m=>
+    m.description.toLowerCase().normalize('NFKC').replace(/[^a-z0-9]+/g,' ').trim()
+  ).sort().join('|');
+  return fingerprint(previous)!==fingerprint(next);
+}
 export function parseGoalPlan(raw: string): GoalPlan | null {
   if (raw.length > 12000) return null;
   const s=raw.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
@@ -112,6 +122,8 @@ export interface GoalWatchdogSnapshot {
   failures: number;
   revisions: number;
   pendingReplan: boolean;
+  /** Bounded hashed failures, including interleaved retries across actions. */
+  failureHistory?: Array<{key:string;count:number}>;
 }
 
 function privateFingerprint(s: string): string {
@@ -154,6 +166,7 @@ export class GoalProgressWatchdog {
   private failures=0;
   private revisions=0;
   private pendingReplan=false;
+  private readonly recentFailures=new Map<string,number>();
   /**
    * How many times the Core may replan within scope before declaring the
    * objective blocked. Supplied by the owner autonomy tier (Part 2); clamped to
@@ -181,28 +194,53 @@ export class GoalProgressWatchdog {
     this.failures=saved.failures as number;
     this.revisions=saved.revisions as number;
     this.pendingReplan=saved.pendingReplan;
+    // Older checkpoints used only the last consecutive failure.
+    const history=saved.failureHistory;
+    if(history!==undefined){
+      if(!Array.isArray(history)||history.length>8||
+         history.some(e=>!isObj(e)||Object.keys(e).some(k=>!['key','count'].includes(k))||
+           typeof e.key!=='string'||!/^[0-9a-f]{64}$/.test(e.key)||
+           !Number.isInteger(e.count)||Number(e.count)<1||Number(e.count)>2)||
+         new Set(history.map(e=>e.key)).size!==history.length)
+        throw new Error('Invalid durable interleaved failure history');
+      for(const e of history)this.recentFailures.set(e.key,e.count);
+    }else if(this.lastFailureKey&&this.failures>0){
+      this.recentFailures.set(this.lastFailureKey,this.failures);
+    }
   }
   /** The replan budget actually in force, for honest NEXUS reporting. */
   get replanBudget(){return this.maxRevisions;}
   snapshot():GoalWatchdogSnapshot {
-    return {schemaVersion:1,lastFailureHash:this.lastFailureKey,failures:this.failures,revisions:this.revisions,pendingReplan:this.pendingReplan};
+    return {schemaVersion:1,lastFailureHash:this.lastFailureKey,failures:this.failures,revisions:this.revisions,pendingReplan:this.pendingReplan,
+      failureHistory:[...this.recentFailures].map(([key,count])=>({key,count}))};
   }
   get isReplanPending(){return this.pendingReplan;}
   acknowledgeReplan(){this.pendingReplan=false;}
   observe(tool:string,args:Record<string,unknown>,receipt:{ok:boolean;error?:string}): 'continue'|'replan'|'blocked' {
-    if (receipt.ok) {this.lastFailureKey='';this.failures=0;return 'continue';}
+    const key=privateFingerprint(tool+'|'+JSON.stringify(stableFailureArgs(args)));
+    if (receipt.ok) {
+      // Unrelated successful observations do not erase failed effects.
+      this.recentFailures.delete(key);
+      this.lastFailureKey='';this.failures=0;return 'continue';
+    }
     // A network exception, library error and timeout may have different
     // message text for the SAME repeatedly failed physical action. Counting
     // the error string lets a model loop indefinitely on unchanged inputs.
     // Hash only the canonical tool+arguments; receipt.ok still resets on
     // independently confirmed success.
-    const key=privateFingerprint(tool+'|'+JSON.stringify(stableFailureArgs(args)));
-    this.failures=key===this.lastFailureKey?this.failures+1:1;
+    const count=(this.recentFailures.get(key)??0)+1;
+    this.recentFailures.delete(key);
+    this.recentFailures.set(key,count);
+    while(this.recentFailures.size>8)
+      this.recentFailures.delete(this.recentFailures.keys().next().value as string);
+    this.failures=count;
     this.lastFailureKey=key;
     // Identical-failure threshold is a fixed safety property (mirrors
     // REPEAT_LIMIT_ALL_TIERS) and is deliberately NOT tier-tunable.
     if (this.failures < 3) return 'continue';
     this.failures=0;
+    // A new advisory strategy starts a fresh finite failure epoch.
+    this.recentFailures.clear();
     if (this.revisions>=this.maxRevisions) return 'blocked';
     this.revisions++;
     this.pendingReplan=true;

@@ -16,7 +16,7 @@ try{
  const c=createCheckpoint(file,identity,{clock});
  const controller=createController({clock,maxSeconds:43200,maxSteps:100});
  controller.start('sequence',3600,{steps:[
-  {goal:'gather',resource:'logs',targetCount:8},
+  {goal:'build',block:'cobblestone',position:{x:3,y:65,z:7},axis:'z+',length:2},
   {goal:'travel',destination:{x:40,y:64,z:-5},arrivalRange:2}
  ]});
  const cropController=createController({clock,maxSeconds:43200,maxSteps:40});
@@ -45,13 +45,22 @@ try{
  ok(c.save(active),'Authorized running sequence is stored');
  const saved=c.load();
  ok(saved.ok&&saved.remainingSeconds===3600,'Lease retains bounded original deadline');
- ok(saved.spec.steps.length===2&&saved.spec.steps[0].targetCount===8,'Validated stage specification survives');
- saved.spec.steps[0].targetCount=1;
- ok(c.load().spec.steps[0].targetCount===8,'Caller cannot mutate stored sequence');
+ ok(saved.spec.steps.length===2&&saved.spec.steps[0].block==='cobblestone','Restart-safe stage specification survives');
+ saved.spec.steps[0].block='tnt';
+ ok(c.load().spec.steps[0].block==='cobblestone','Caller cannot mutate stored sequence');
  const fresh=createController({clock,maxSeconds:43200});
  fresh.start(c.load().spec.goal,c.load().remainingSeconds,c.load().spec);
  ok(fresh.status().sequenceIndex===0&&Object.keys(fresh.status().milestones).length===0,
-   'Restart never replays old stage receipts or Dragon proof');
+   'Restart-safe sequence starts with no previously completed stage proof');
+ const unsafe=createController({clock,maxSeconds:43200,maxSteps:40});
+ unsafe.start('sequence',1200,{steps:[
+  {goal:'gather',resource:'logs',targetCount:8},
+  {goal:'travel',destination:{x:40,y:64,z:-5},arrivalRange:2}
+ ]});
+ ok(!c.save(unsafe.status())&&!c.load().ok,
+   'Non-idempotent gathering stage prevents a sequence restart and clears stale lease');
+ ok(c.save(active)&&c.load().ok,
+   'An owner-approved safe sequence can be saved again after rejected replay');
  ok(!createCheckpoint(file,{...identity,port:25566},{clock}).load().ok,
    'Different server port is rejected');
  ok(!createCheckpoint(file,{...identity,owner:'Stranger'},{clock}).load().ok,

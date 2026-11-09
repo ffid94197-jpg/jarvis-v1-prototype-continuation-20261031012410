@@ -91,7 +91,7 @@ function parseOwnerPrimitive(text){
 const PRIMITIVE_FIELDS=Object.freeze({
  craft_item:['item','count'],equip_item:['item','destination'],
  inspect_block:['position'],dig_block:['position'],
- navigate:['position','range'],interact_block:['position'],sleep_in_bed:['position'],fish_once:['position'],feed_animal:['entityId','item'],
+ navigate:['position','range'],interact_block:['position'],sleep_in_bed:['position'],fish_once:['position'],feed_animal:['entityId','item'],row_boat:['entityId','durationMs'],
  interact_entity:['entityId'],place_block:['item','reference','face'],
  move:['directionInput','durationMs'],use_item:['hand'],say:['text'],
  inspect_villager:['entityId'],trade_villager:['entityId','tradeIndex','times'],
@@ -112,6 +112,7 @@ function modelPrimitiveGrounded(command,ownerText,context){
   sleep_in_bed:/\b(?:sleep|rest)\b/,
   fish_once:/\b(?:fish|catch)\b/,
   feed_animal:/\bfeed\b/,
+  row_boat:/\b(?:row|paddle)\b/,
   interact_entity:/\b(?:interact|trade|mount|use)\b/,
   place_block:/\b(?:place|put|build)\b/,move:/\b(?:move|walk|step)\b/,
   use_item:/\b(?:use|eat|consume|shoot)\b/,say:/\b(?:say|tell|message)\b/,
@@ -168,6 +169,18 @@ function modelPrimitiveGrounded(command,ownerText,context){
      /^(?:deepslate_)?(?:iron|diamond)_ore$/.test(observed.name)?
        [String(observed.name).includes('diamond')?'diamond':'iron','ore']:[];
    if(![noun,...aliases].some(label=>s.includes(label)))return false;
+ }
+ if(command.command==='row_boat'){
+  if(!/\b(?:row|paddle)\b/.test(s)||!/\bboat\b/.test(s)||
+     !/\bforward\b/.test(s)||
+     /\b(?:don't|do not|never|avoid|stop|then|and)\b/.test(s))return false;
+  const v=Number.isSafeInteger(command.entityId)&&Array.isArray(scene?.boats)?
+    scene.boats.find(b=>b.id===command.entityId&&b.distance<=3.5&&
+      /^(?:[a-z_]+_)?(?:boat|raft)$/.test(String(b.name||''))):null;
+  const t=s.match(/\bfor (\d{3,4}) (?:ms|milliseconds)\b/);
+  if(!v||!Number.isSafeInteger(command.durationMs)||
+     command.durationMs<300||command.durationMs>1200||
+     (t?Number(t[1])!==command.durationMs:command.durationMs!==600))return false;
  }
  if(command.command==='feed_animal'){
   if(/\b(?:don't|do not|never|avoid|not to|must not|breed|tame|then|and)\b/.test(s)||

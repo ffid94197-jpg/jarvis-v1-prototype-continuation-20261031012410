@@ -746,6 +746,24 @@ function createController({clock=()=>Date.now(),maxSeconds=600,maxSteps=120}={})
     if(d.kind==='fight_dragon' &&
        (state.milestones.dragonAttackInputs||0)>=96)
       d={kind:'blocked',why:'Ninety-six observed Dragon melee attempts did not prove the real Dragon death'};
+    // Publish task-bound NEW-inventory evidence only for a completed standalone
+    // gather goal. A planning decision or existing stack alone is not proof.
+    // The owner/Guardian Core checks these values against its fresh observed
+    // inventory; an absent/mismatched receipt must fail closed.
+    if(d.kind==='complete' && state.goal==='gather'){
+      const initial=state.milestones.gatherInitialCount;
+      const current=resourceCount(world,state.resource);
+      if(world?.joined!==true||!Number.isSafeInteger(initial)||
+         !Number.isSafeInteger(current)||initial<0||current<initial||
+         current-initial<state.targetCount){
+        d={kind:'blocked',why:'Gather completion lacks fresh task-bound physical inventory increase'};
+      }else{
+        state.milestones.initialCount=initial;
+        state.milestones.currentCount=current;
+        state.milestones.newItems=current-initial;
+        state.milestones.gatherDone=true;
+      }
+    }
     state.lastDecision=d;
     if(d.kind==='complete'){state.status='complete';state.why=d.why;}
     if(d.kind==='blocked'){state.status='blocked';state.why=d.why;}

@@ -32,6 +32,7 @@ const tests=[
   'verify_structure_goal.cjs',
   'verify_wheat_goal.cjs',
   'verify_crop_goal.cjs',
+  'verify_sleep_bed.cjs',
   'verify_java_survival_campaign.cjs',
   'verify_late_game.cjs',
   'verify_late_skills.cjs',

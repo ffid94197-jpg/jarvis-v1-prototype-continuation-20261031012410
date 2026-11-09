@@ -131,7 +131,7 @@ function validateCommand(input) {
   // Bounded general-purpose player primitives. All IDs/names are validated before I/O.
   const primitiveFields={
     navigate:['position','range'],dig_block:['position'],inspect_block:['position'],
-    interact_block:['position'],sleep_in_bed:['position'],fish_once:['position'],feed_animal:['entityId','item'],equip_item:['item','destination'],
+    interact_block:['position'],sleep_in_bed:['position'],fish_once:['position'],feed_animal:['entityId','item'],row_boat:['entityId','durationMs'],equip_item:['item','destination'],
     craft_item:['item','count'],place_block:['item','reference','face'],
     use_item:['hand'],interact_entity:['entityId'],
     move:['directionInput','durationMs'],say:['text'],
@@ -145,6 +145,9 @@ function validateCommand(input) {
   const pos = v => v && typeof v === 'object' && !Array.isArray(v) &&
     Object.keys(v).length===3 &&
     ['x','y','z'].every(k=>Number.isInteger(v[k]) && Math.abs(v[k])<=30000000);
+  if (input.command==='row_boat')return Number.isSafeInteger(input.entityId)&&input.entityId>=0&&input.entityId<=200000&&
+    Number.isSafeInteger(input.durationMs)&&input.durationMs>=300&&input.durationMs<=1200?
+    null:'Boat segment requires exact entity ID and duration 300–1200 ms';
   if (input.command==='feed_animal')return validFeedArgs(input)?null:'Feeding needs one observed passive animal ID and approved food';
   if (input.command === 'navigate')
     return pos(input.position) && (input.range===undefined || (Number.isInteger(input.range) && input.range>=1 && input.range<=8))

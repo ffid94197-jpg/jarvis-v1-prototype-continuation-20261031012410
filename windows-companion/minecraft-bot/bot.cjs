@@ -1493,6 +1493,33 @@ async function action(q){
         return {ok:false,verified:false,error:'Transaction not verified: '+String(err.message||err).slice(0,160)};
       }finally{advancedBusy=false;}
     }
+    case 'sleep_in_bed':{
+      if(mode==='auto'||autoBusy||advancedBusy)
+        return {ok:false,error:'Another gameplay mission or transaction is in progress'};
+      if(bot.game?.gameMode!=='survival'||bot.time?.isDay!==false)
+        return {ok:false,error:'Sleeping requires a real survival world at night'};
+      const p=q.position,bed=bot.blockAt(new Vec3(p.x,p.y,p.z));
+      if(!bed||!/^[a-z_]+_bed$/.test(String(bed.name||''))||
+         !bot.entity?.position||bot.entity.position.distanceTo(bed.position)>4.5)
+        return {ok:false,error:'No directly reachable loaded bed at owner-approved coordinates'};
+      if(bed.getProperties?.().occupied===true)
+        return {ok:false,error:'Observed bed is occupied'};
+      if(typeof bot.sleep!=='function')
+        return {ok:false,error:'Mineflayer sleep API unavailable'};
+      setMode('stay');const epoch=actionEpoch;advancedBusy=true;
+      try{
+        await bot.sleep(bed);
+        if(epoch!==actionEpoch||!spawned)
+          return {ok:false,verified:false,error:'Sleep cancelled or disconnected'};
+        const entered=bot.isSleeping===true,daytime=bot.time?.isDay===true;
+        if(!entered&&!daytime)
+          return {ok:false,verified:false,error:'Sleep attempted, but entry/daylight not observed'};
+        return {ok:true,verified:true,status:daytime?
+          'Observed daylight after owner-authorized sleep':
+          'Observed bot sleeping in owner-approved bed; night skip NOT yet proven'};
+      }catch(e){return {ok:false,verified:false,error:'Sleep failed: '+String(e?.message||e).slice(0,160)};
+      }finally{advancedBusy=false;}
+    }
     case 'inspect_block':{
       const b=bot.blockAt(new Vec3(q.position.x,q.position.y,q.position.z));
       return {ok:!!b,status:b?JSON.stringify({name:b.name,position:q.position,metadata:b.metadata}):'Block not loaded'};

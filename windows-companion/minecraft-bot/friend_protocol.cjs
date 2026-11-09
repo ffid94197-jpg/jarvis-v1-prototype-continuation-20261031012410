@@ -130,7 +130,7 @@ function validateCommand(input) {
   // Bounded general-purpose player primitives. All IDs/names are validated before I/O.
   const primitiveFields={
     navigate:['position','range'],dig_block:['position'],inspect_block:['position'],
-    interact_block:['position'],equip_item:['item','destination'],
+    interact_block:['position'],sleep_in_bed:['position'],equip_item:['item','destination'],
     craft_item:['item','count'],place_block:['item','reference','face'],
     use_item:['hand'],interact_entity:['entityId'],
     move:['directionInput','durationMs'],say:['text'],
@@ -147,7 +147,7 @@ function validateCommand(input) {
   if (input.command === 'navigate')
     return pos(input.position) && (input.range===undefined || (Number.isInteger(input.range) && input.range>=1 && input.range<=8))
       ? null : 'Navigate needs integer position and optional range 1–8';
-  if (['dig_block','inspect_block','interact_block'].includes(input.command))
+  if (['dig_block','inspect_block','interact_block','sleep_in_bed'].includes(input.command))
     return pos(input.position)?null:'Block command needs integer position';
   if (input.command === 'equip_item')
     return itemName(input.item) && ['hand','head','torso','legs','feet','off-hand'].includes(input.destination||'hand')

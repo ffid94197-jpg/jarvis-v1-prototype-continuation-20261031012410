@@ -38,7 +38,7 @@ const SYSTEM=[
  'Long-horizon auto_goal smelt supports output items only from the native audited furnace list (iron_ingot, gold_ingot, copper_ingot, netherite_scrap, glass, stone, cooked_beef, cooked_porkchop, cooked_mutton, cooked_chicken, cooked_rabbit, baked_potato). The raw input and fuel are selected by the native planner from real inventory; no invented furnace transformations. A smelting targetCount is 1-16 and must match owner wording with inventory readback.',
  'One-shot durable auto_goal transfer allows owner-specified exact chest/barrel coordinates, real item, 1-64 quantity and deposit/withdraw. It requires both actual player and chest inventory changes, never retries ambiguous mutations or resumes a transfer after disconnect.',
  'Long-horizon auto_goal craft supports selected recipes; craft_item supports any item found in the live Minecraft registry when the server-confirmed inventory contains ingredients, with bounded count 1-16.',
- 'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
+ 'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, sleep_in_bed {position} (one freshly observed reachable bed; only at night; check game readback), inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
  'One action is never a whole mission. An action STARTED or DISPATCHED is not success; JARVIS must observe state and replan before any further effect.',
  'Other bounded native skills: inspect_villager {entityId}, trade_villager {entityId,tradeIndex,times}, transfer_container {position,item,count,operation}, enchant_item {position,item,choice}, attack_hostile {entityId,maxSwings}. Attack only a freshly observed owner-named allowed hostile, never a player, villager, passive mob, boss or creeper. An attack input is not proof of damage or death. The owner must explicitly request the exact target, offer, direction, item, and count. Only use freshly observed villagers/blocks; NEVER invent an ID or location, consume materials without owner approval, or claim success from a dispatch.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
@@ -310,6 +310,7 @@ function contextualIntent(text,context){
  const instruction=text.toLowerCase().trim()
    .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
    .replace(/\s+(?:please|for me)$/,'');
+ const sleeping=/^(?:sleep|rest)(?: through the night)? (?:in|on) (?:the |a |that |this |my )?(?:nearby )?bed$/.exec(instruction);
  const request=/^(?:open|close|activate|press|toggle|interact with|use) (?:the |a |an |that |this |my )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table)$/.exec(instruction);
  const travel=/^(?:go|walk|move|navigate|travel|head)(?: over)? to (?:the |a |that |this )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table|enchanting table)$/.exec(instruction);
  const inspect=/^(?:inspect|examine|look at|check) (?:the |a |that |this )?(?:nearby )?(chest|barrel|door|trapdoor|lever|button|furnace|crafting table|smithing table|enchanting table)$/.exec(instruction);
@@ -318,7 +319,7 @@ function contextualIntent(text,context){
  const storage=new RegExp('^(store|deposit|put|withdraw|take|retrieve) ('+COUNT_PATTERN+') ([a-z_ ]{2,56}) (?:in|into|from) (?:the |a |that )?(chest|barrel)$').exec(instruction);
  const enchanting=/^enchant (?:my |the |a |an )?([a-z_ ]{2,56}) (?:with |using )?(?:the )?(first|second|third) (?:choice|option)$/.exec(instruction);
  const fight=/^(?:attack|fight|defeat|kill|slay|eliminate|take out) (?:the |that |a |an )?(?:nearby )?([a-z_]+(?: [a-z_]+)?)(?: (?:up to )?(\d{1,2}) (?:hits|swings|times))?$/.exec(instruction);
- if(!request&&!travel&&!inspect&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight)return null;
+ if(!request&&!travel&&!inspect&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight&&!sleeping)return null;
  let scene;
  try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve nearby objects without a fresh game observation');}
  if(!scene||scene.joined!==true||scene.busy!==false||!Array.isArray(scene.nearbyBlocks))
@@ -386,9 +387,10 @@ function contextualIntent(text,context){
   furnace:/^furnace$/,
   'crafting table':/^crafting_table$/,
   'smithing table':/^smithing_table$/,
-  'enchanting table':/^enchanting_table$/
+  'enchanting table':/^enchanting_table$/,
+  bed:/^[a-z_]+_bed$/
  };
- const targetType=request?.[1]||travel?.[1]||inspect?.[1];
+ const targetType=request?.[1]||travel?.[1]||inspect?.[1]||(sleeping?'bed':null);
  const candidates=scene.nearbyBlocks.filter(b=>b && typeof b.name==='string' &&
    types[targetType]?.test(b.name) &&
    ['x','y','z'].every(k=>Number.isInteger(b[k]) && Math.abs(b[k])<=30000000) &&
@@ -399,6 +401,7 @@ function contextualIntent(text,context){
     'No matching nearby block present in the fresh observed world':
     'Multiple matching blocks are visible; specify its exact coordinates');
  const {x,y,z}=candidates[0],position={x,y,z};
+ if(sleeping)return canonicalIntent({command:'sleep_in_bed',position});
  if(travel)return canonicalIntent({command:'navigate',position,range:2});
  if(inspect)return canonicalIntent({command:'inspect_block',position});
  return canonicalIntent({command:'interact_block',position});

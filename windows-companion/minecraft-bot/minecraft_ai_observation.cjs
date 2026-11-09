@@ -3,8 +3,8 @@
  * No model calls, network effects or game mutations. Derives solely from a
  * Mineflayer digest and optional loaded block positions.
  */
-const INTERACTIVE=/^(?:chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|crafting_table|furnace|smithing_table|enchanting_table)$/;
-const INTERESTING=/^(?:[a-z_]+_log|stone|cobblestone|deepslate|cobbled_deepslate|(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore|crafting_table|furnace|smithing_table|enchanting_table|chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|nether_portal|end_portal_frame)$/;
+const INTERACTIVE=/^(?:chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|crafting_table|furnace|smithing_table|enchanting_table|[a-z_]+_bed)$/;
+const INTERESTING=/^(?:[a-z_]+_log|stone|cobblestone|deepslate|cobbled_deepslate|(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore|crafting_table|furnace|smithing_table|enchanting_table|[a-z_]+_bed|chest|trapped_chest|barrel|lever|[a-z_]+_door|[a-z_]+_trapdoor|[a-z_]+_button|nether_portal|end_portal_frame)$/;
 // Small, deliberately bounded sample of everyday loaded blocks for
 // general-purpose Minecraft tasks. Never mine blindly or infer world terrain.
 const GENERAL=/^(?:dirt|grass_block|sand|red_sand|gravel|clay|netherrack|mud|soul_sand|soul_soil|moss_block|andesite|diorite|granite|tuff|calcite|cobbled_deepslate|blackstone|basalt|coarse_dirt|rooted_dirt|snow|snow_block|cobblestone|[a-z_]+_planks|[a-z_]+_wool|[a-z_]+_log)$/;
@@ -30,6 +30,8 @@ function loadedTargets(bot,{includeGeneral=false}={}){
     if(!x || ![x.x,x.y,x.z].every(Number.isFinite))continue;
     if(p && Math.max(Math.abs(x.x-p.x),Math.abs(x.y-p.y),Math.abs(x.z-p.z))>14)continue;
     try{const b=bot.blockAt(x);if(!b?.name||!(INTERESTING.test(b.name)||(includeGeneral&&GENERAL.test(b.name))))continue;
+      // A bed has head and foot; expose only the head as an unambiguous target.
+      if(/^[a-z_]+_bed$/.test(b.name)&&b.getProperties?.().part!=='head')continue;
       const target={x:Math.floor(x.x),y:Math.floor(x.y),z:Math.floor(x.z)};
       const key=`${target.x},${target.y},${target.z}`;
       if(seen.has(key))continue;seen.add(key);

@@ -78,6 +78,14 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     if(d<=8)animals.push({id:e.id,name:e.name,distance:Math.round(d*10)/10});
   }
   animals.sort((a,b)=>a.distance-b.distance);
+  const boats=[];
+  for(const entity of Object.values(bot.entities||{})){
+    if(!entity?.position||!p||!Number.isInteger(entity.id)||
+       !/^(?:[a-z_]+_)?(?:boat|raft)$/.test(String(entity.name||'')))continue;
+    const distance=number(entity.position.distanceTo(p),1e9);
+    if(distance<=8)boats.push({id:entity.id,name:entity.name,distance:Math.round(distance*10)/10});
+  }
+  boats.sort((a,b)=>a.distance-b.distance);
   const inventory={logs:countLike(inv,n=>/(?:^|_)log$/.test(n)),planks:countLike(inv,n=>/_planks$/.test(n)),sticks:inv.stick||0,
     table:inv.crafting_table||0,woodenPickaxe:inv.wooden_pickaxe||0,stonePickaxe:inv.stone_pickaxe||0,stoneSword:inv.stone_sword||0,cobblestone:inv.cobblestone||0,
     food:countLike(inv,n=>FOOD.test(n)),rawIron:inv.raw_iron||0,ironIngot:inv.iron_ingot||0,ironPickaxe:inv.iron_pickaxe||0,diamondPickaxe:inv.diamond_pickaxe||0,diamonds:inv.diamond||0,diamondSword:inv.diamond_sword||0,diamondHelmet:inv.diamond_helmet||0,diamondChestplate:inv.diamond_chestplate||0,diamondLeggings:inv.diamond_leggings||0,diamondBoots:inv.diamond_boots||0,furnace:inv.furnace||0,coal:inv.coal||0,obsidian:inv.obsidian||0,
@@ -156,7 +164,7 @@ function digest(bot, ownerName, {dragonDead=false}={}) {
     position:p?{x:Math.floor(p.x),y:Math.floor(p.y),z:Math.floor(p.z)}:null,
     ownerVisible:!!owner,ownerDistance:p&&owner?Math.round(p.distanceTo(owner)):null,
     ownerPosition:owner?{x:Math.floor(owner.x),y:Math.floor(owner.y),z:Math.floor(owner.z)}:null,
-    threats:threats.slice(0,6),villagers:villagers.slice(0,3),animals:animals.slice(0,3),
+    threats:threats.slice(0,6),villagers:villagers.slice(0,3),animals:animals.slice(0,3),boats:boats.slice(0,3),
     inventory,timeOfDay:bot.time?.timeOfDay??null};
 }
 function decide(goal, world, failures={}, progress={}) {

@@ -59,6 +59,10 @@ assert.equal(projected.inventory.raw.beetroot,3,'Native target survives compact 
 const newFish={...base,inventory:{...base.inventory,
  raw:{cod:1,salmon:2,tropical_fish:1,pufferfish:1}}};
 const observedFish=JSON.parse(projectWorld(newFish,[],'','stay'));
+const foodGone=JSON.parse(projectWorld({...base,inventory:{raw:{}}},[], '', 'stay',null,'wheat'));
+assert.equal(foodGone.inventory.raw.wheat,0,'Consumed final food stack must report explicit zero');n++;
+const foodRemaining=JSON.parse(projectWorld({...base,inventory:{raw:{wheat:9}}},[], '', 'stay',null,'wheat'));
+assert.equal(foodRemaining.inventory.raw.wheat,9,'Trusted feed item count remains exact');n++;
 assert.equal(observedFish.inventory.raw.cod,1,'Fresh cod must remain in compact physical inventory');n++;
 assert.equal(observedFish.inventory.raw.pufferfish,1,'Fresh pufferfish must remain in compact physical inventory');n++;
 const observedBed=JSON.parse(projectWorld({...base,sleeping:true,daylight:false},[],'','stay'));

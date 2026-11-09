@@ -73,7 +73,10 @@ const autopilot=createController({maxSeconds:43200,maxSteps:20000});
 const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-mission.json'),{host,port,owner:leader});
 // Prefer the exact owner-authorized output in bounded observation receipts,
 // including a composed sequence's current verified stage.
-function nativeObservationItem(){return nativeItemForMission(autopilot.status());}
+let recentFeedProofItem=null;
+function nativeObservationItem(){
+ return nativeItemForMission(autopilot.status())||recentFeedProofItem;
+}
 let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
 let advancedBusy=false;
 let guardBusy=false;
@@ -1525,6 +1528,7 @@ async function action(q){
            !current||current.name!==entity.name||!current.position||
            bot.entity.position.distanceTo(current.position)>6)
           return {ok:false,verified:false,error:'Feed consumption or target identity not verified'};
+        recentFeedProofItem=q.item;
         return {ok:true,verified:true,status:'One '+q.item+
           ' consumed by interacting with observed '+entity.name+
           ' #'+entity.id+'; breeding/taming NOT verified'};

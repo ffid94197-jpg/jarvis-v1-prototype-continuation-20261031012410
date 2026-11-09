@@ -9,6 +9,7 @@ const INTERESTING=/^(?:[a-z_]+_log|stone|cobblestone|deepslate|cobbled_deepslate
 // general-purpose Minecraft tasks. Never mine blindly or infer world terrain.
 const GENERAL=/^(?:water|dirt|grass_block|sand|red_sand|gravel|clay|netherrack|mud|soul_sand|soul_soil|moss_block|andesite|diorite|granite|tuff|calcite|cobbled_deepslate|blackstone|basalt|coarse_dirt|rooted_dirt|snow|snow_block|cobblestone|[a-z_]+_planks|[a-z_]+_wool|[a-z_]+_log)$/;
 const {diggableObserved,MINABLE_STONE,isExposed,stances}=require('./mining_navigation.cjs');
+const {FEED_ITEMS}=require('./animal_feeding.cjs');
 const ORES=/^(?:(?:deepslate_)?(?:iron|diamond|gold|copper|coal|redstone|lapis|emerald)_ore|ancient_debris|nether_gold_ore|nether_quartz_ore)$/;
 // Preserve completion-relevant items when the compact ACK must trim inventory.
 const CRITICAL_ITEMS=['cod','salmon','tropical_fish','pufferfish','cobblestone','diamond','iron_ingot','raw_iron','obsidian','flint',
@@ -119,11 +120,21 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay',nativeGoal=null,
     animals:Array.isArray(world.animals)?world.animals.slice(0,3):[],
     nearbyBlocks:Array.isArray(nearby)?nearby.slice(0,12):[],lastAction:String(lastAction).slice(0,100)
   };
+  // The native executor, never the model, chooses this evidence target.
+  // When feeding consumes the last item, a missing stack is encoded as an
+  // explicit ZERO, not silently omitted by the 32-item display cap.
+  const includeAttestedFood=()=>{
+    if(target && FEED_ITEMS.includes(target)){
+      const count=Number(raw[target]??0);
+      slim.inventory.raw[target]=Number.isSafeInteger(count)&&count>=0?count:0;
+    }
+  };
+  includeAttestedFood();
   let result=JSON.stringify(slim);
   // Keep beneath companion transport's 1900-character ACK cap. NEVER cut JSON;
   // trim optional facts first so evidence remains well-formed.
   while(result.length>1750 && slim.nearbyBlocks.length){slim.nearbyBlocks.pop();result=JSON.stringify(slim);}
-  while(result.length>1750 && ordered.length>8){ordered.pop();slim.inventory.raw=Object.fromEntries(ordered);result=JSON.stringify(slim);}
+  while(result.length>1750 && ordered.length>8){ordered.pop();slim.inventory.raw=Object.fromEntries(ordered);includeAttestedFood();result=JSON.stringify(slim);}
   if(result.length>1750){slim.villagers=[];result=JSON.stringify(slim);}
   if(result.length>1750){slim.animals=[];result=JSON.stringify(slim);}
   if(result.length>1750){slim.threats=[];slim.lastAction='';result=JSON.stringify(slim);}

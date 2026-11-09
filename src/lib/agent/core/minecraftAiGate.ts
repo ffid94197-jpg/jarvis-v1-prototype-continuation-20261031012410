@@ -1423,8 +1423,10 @@ export class MinecraftAiGate {
     }
     if(/\bfeed\b/.test(s)){
       const receipt=this.feedReceipt;
-      const current=receipt?Number(raw[receipt.item])||0:0;
-      if(receipt&&current===receipt.startingCount-1 &&
+      const known=!!receipt&&Object.hasOwn(raw,receipt.item)&&
+        Number.isSafeInteger(raw[receipt.item])&&Number(raw[receipt.item])>=0;
+      const current=known&&receipt?Number(raw[receipt.item]):null;
+      if(receipt&&known&&current===receipt.startingCount-1 &&
          o.animals?.some(a=>a.id===receipt.entityId&&a.distance<=8))
         return {verified:true,reason:'A task-bound one-animal feeding action consumed exactly one server-observed '+receipt.item+' and the target animal remains visible; breeding and taming not established'};
       return {verified:false,reason:'No owner-task animal interaction receipt, exact one-item food decrease and fresh same-entity observation'};

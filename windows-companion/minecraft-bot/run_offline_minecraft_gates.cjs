@@ -35,6 +35,7 @@ const tests=[
   'verify_sleep_bed.cjs',
   'verify_fish_once.cjs',
   'verify_animal_feed.cjs',
+  'verify_boat_move.cjs',
   'verify_java_survival_campaign.cjs',
   'verify_late_game.cjs',
   'verify_late_skills.cjs',

@@ -400,7 +400,10 @@ export function mayStartNativeMinecraftGoal(
    }
    if(index>0&&step.goal==='smelt'&&
       /^(?:smelt|cook|bake|refine) (?:it|them)$/.test(stages[index].trim())){
-     const previous=args.steps[index-1] as Record<string,unknown>;
+     const previousRaw:unknown=args.steps[index-1];
+     if(!previousRaw||typeof previousRaw!=="object"||Array.isArray(previousRaw))
+       return false;
+     const previous=previousRaw as Record<string,unknown>;
      const outputByInput:Record<string,string>={
        raw_iron:'iron_ingot',raw_gold:'gold_ingot',
        raw_copper:'copper_ingot',sand:'glass',cobblestone:'stone'

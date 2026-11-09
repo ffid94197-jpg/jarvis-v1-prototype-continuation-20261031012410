@@ -42,7 +42,7 @@ type NativeMissionReceipt = {
 };
 
 const READ_ONLY = new Set(['observe','status','inventory','auto_status','inspect_block']);
-const CONTROLLED_EFFECTS = new Set(['collect_wood','craft_item','equip_item','navigate','dig_block','place_block','interact_block','inspect_villager','trade_villager','transfer_container','enchant_item','attack_hostile','stay','follow','come','guard','auto_stop','auto_resume','auto_goal','sleep_in_bed']);
+const CONTROLLED_EFFECTS = new Set(['collect_wood','craft_item','equip_item','navigate','dig_block','place_block','interact_block','inspect_villager','trade_villager','transfer_container','enchant_item','attack_hostile','stay','follow','come','guard','auto_stop','auto_resume','auto_goal','sleep_in_bed','fish_once']);
 const MAX_TARGET_DISTANCE = 16;
 // Keep native receipt admission aligned with the Core/Guardian/PlayerEngine catalogue.
 const NATIVE_GATHER_RESOURCES = new Set<string>(MINECRAFT_SAFE_GATHER_RESOURCES);
@@ -104,12 +104,12 @@ export function isMinecraftAiObjective(objective:string,minecraftModeEnabled=fal
   const otherDomain=/\b(?:browser|website|web page|file|folder|document|email|desktop|windows|chrome|terminal|powershell|repository|github|spreadsheet|database|notepad|application|app|youtube|video|music|audio|media|spotify|podcast|movie|stream|playback)\b/.test(s);
   if(otherDomain&&!explicitMinecraftScope)return false;
   const contextualMinecraftScope=minecraftModeEnabled&&!otherDomain&&
-    /\b(?:house|shelter|hut|wall|bridge|tower|castle|farm|wheat|carrots?|potatoes|villagers?|zombies?|skeletons?|spiders?|creepers?|dragon|nether|end|diamonds?|emeralds?|redstone|iron|gold|wood|planks|logs|pickaxes?|swords?|armor|armour|furnace|crafting table|chest|barrel|bed|boat|caves?|stronghold|ores?|blocks?|bucket|cake|portal|elytra|shulker|beacon|anvil|potions?|hunger|health)\b/.test(s);
+    /\b(?:house|shelter|hut|wall|bridge|tower|castle|farm|wheat|carrots?|potatoes|villagers?|zombies?|skeletons?|spiders?|creepers?|dragon|nether|end|diamonds?|emeralds?|redstone|iron|gold|wood|planks|logs|pickaxes?|swords?|armor|armour|furnace|crafting table|chest|barrel|bed|boat|water|pond|river|lake|caves?|stronghold|ores?|blocks?|bucket|cake|portal|elytra|shulker|beacon|anvil|potions?|hunger|health)\b/.test(s);
   const contextualMinecraftResource=minecraftModeEnabled&&!otherDomain&&
     MINECRAFT_SAFE_GATHER_RESOURCES.some(resource=>
       new RegExp("\\b"+resource.replace(/_/g,"[ _]")+"\\b").test(s));
   const minecraftScope=explicitMinecraftScope||contextualMinecraftScope||contextualMinecraftResource;
-  const actionGoal=/\b(?:play|gather|collect|get|bring|fetch|acquire|craft|mine|dig|excavate|defeat|kill|attack|beat|slay|finish|complete|win|start|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|cook|bake|refine|enchant|explore|travel|find|place|equip|wear|wield|fight|repair|use|open|close|activate|press|toggle|sleep|rest|stop|pause|cancel|halt)\b/.test(s);
+  const actionGoal=/\b(?:play|gather|collect|get|bring|fetch|acquire|craft|mine|dig|excavate|defeat|kill|attack|beat|slay|finish|complete|win|start|obtain|make|build|progress|survive|autonomously|observe|inspect|execute|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|cook|bake|refine|enchant|explore|travel|find|place|equip|wear|wield|fight|repair|use|open|close|activate|press|toggle|sleep|rest|fish|catch|stop|pause|cancel|halt)\b/.test(s);
   if ((minecraftScope||minecraftModeEnabled) && minecraftReadbackQuestion(objective)) return true;
   if (minecraftModeEnabled && /^(?:stop|pause|cancel|halt)$/.test(s)) return true;
   if (!(minecraftScope || resourceScope) || !actionGoal) return false;
@@ -134,7 +134,7 @@ export function isMinecraftObservationOnlyObjective(objective:string,minecraftMo
   const primary=s.split(/\b(?:do not|don't|never|stop if|if blocked|if an action fails)\b/,1)[0];
   const observation=/\b(?:observe|inspect)\b/.test(primary) ||
     /\b(?:minecraft_companion_command)\b/.test(primary) && /\bobserve\b/.test(primary);
-  const effects=/\b(?:craft|mine|gather|collect|get|bring|fetch|acquire|dig|place|navigate|build|defeat|kill|attack|equip|wear|wield|play|survive|progress|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|enchant|explore|travel|find|fight|repair|use|open|close|activate|press|toggle|sleep|rest|stop|pause|cancel|halt)\b/.test(primary);
+  const effects=/\b(?:craft|mine|gather|collect|get|bring|fetch|acquire|dig|place|navigate|build|defeat|kill|attack|equip|wear|wield|play|survive|progress|follow|come|protect|guard|defend|farm|trade|buy|purchase|deposit|withdraw|store|retrieve|transfer|smelt|enchant|explore|travel|find|fight|repair|use|open|close|activate|press|toggle|sleep|rest|fish|catch|stop|pause|cancel|halt)\b/.test(primary);
   return observation && !effects;
 }
 
@@ -816,6 +816,32 @@ export class MinecraftAiGate {
       return mayStartNativeMinecraftGoal(this.objective,args,this.observed,this.minecraftModeEnabled)?
         {ok:true,reason:'Owner-matched existing JARVIS bounded mission, requires later status/evidence'}:
         {ok:false,reason:'Unmatched or unsafe proposed native Minecraft mission; use observed primitives instead'};
+    }
+    if(command==='fish_once'){
+      const target=args.position;
+      if(Object.keys(args).some(k=>k!=='command'&&k!=='position')||
+         !target||typeof target!=='object'||Array.isArray(target)||
+         !point(target)||Object.keys(target).length!==3||
+         !['x','y','z'].every(k=>Number.isInteger((target as Record<string,unknown>)[k])))
+        return {ok:false,reason:'Fishing requires exact integer water coordinates only'};
+      const owner=this.objective.toLowerCase().trim();
+      if(!/\b(?:fish|catch)\b/.test(owner)||!/\b(?:water|pond|river|lake)\b/.test(owner)||
+         /\b(?:don't|do not|never|avoid|not to|must not)\b/.test(owner))
+        return {ok:false,reason:'Owner did not explicitly authorize one fishing action in water'};
+      const waters=(this.observed.nearbyBlocks||[]).filter(b=>b.name==='water');
+      if(!waters.some(b=>b.x===target.x&&b.y===target.y&&b.z===target.z))
+        return {ok:false,reason:'Fishing water must be freshly observed at the exact coordinates'};
+      if(Math.hypot(target.x-this.observed.position.x,target.y-this.observed.position.y,
+         target.z-this.observed.position.z)>6)
+        return {ok:false,reason:'Fishing water is beyond observed local reach'};
+      const triplets=owner.match(/-?\d{1,8}[\s,]+-?\d{1,8}[\s,]+-?\d{1,8}/g)||[];
+      if(triplets.length){
+        if(triplets.length!==1 || triplets[0].match(/-?\d+/g)?.map(Number)
+          .some((v,i)=>v!==[target.x,target.y,target.z][i]))
+          return {ok:false,reason:'Fishing water differs from owner-supplied coordinates'};
+      }else if(waters.length!==1)
+        return {ok:false,reason:'Multiple observed water locations; request exact coordinates'};
+      return {ok:true,reason:'One owner-authorized fishing action; require verified new physical fish inventory'};
     }
     if(command==='sleep_in_bed'){
       const target=args.position;

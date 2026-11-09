@@ -58,6 +58,31 @@ function loadedTargets(bot,{includeGeneral=false}={}){
   const extra=ranked.filter(b=>GENERAL.test(b.name)&&!keys.has(b.x+','+b.y+','+b.z)).slice(0,4);
   return [...core,...extra].slice(0,12);
 }
+/** Select the live controller's current authorized output item.
+ * A composed task can advance to a new crop/item while the observation JSON
+ * is capped; prioritize the actual current item, never an LLM-provided hint.
+ * This function is read-only and does not grant game authority.
+ */
+function nativeItemForMission(state) {
+  if(!state||typeof state!=='object')return null;
+  const steps=state.goal==='sequence'&&Array.isArray(state.sequence)?
+    state.sequence:null;
+  const idx=Number.isSafeInteger(state.sequenceIndex)?state.sequenceIndex:0;
+  const stage=steps&&steps.length&&idx>=0&&idx<=steps.length?
+    steps[Math.min(idx,steps.length-1)]:null;
+  const active=stage||state;
+  if(active.goal==='farm_crop')
+    return {carrots:'carrot',potatoes:'potato',beetroot:'beetroot'}[active.crop]||null;
+  if(active.goal==='farm_wheat')return 'wheat';
+  if(['craft','smelt','equip'].includes(active.goal))
+    return typeof active.item==='string'&&/^[a-z_]{2,64}$/.test(active.item)?active.item:null;
+  if(active.goal==='gather') {
+    const resource=active.resource;
+    return typeof resource==='string'&&/^[a-z_]{2,64}$/.test(resource)&&
+      !['logs','planks','sticks'].includes(resource)?resource:null;
+  }
+  return null;
+}
 function projectWorld(world,nearby=[],lastAction='',mode='stay',nativeGoal=null,nativeItem=null){
   if(!world || !world.position)throw Error('No observed Minecraft player position');
   const raw=world.inventory?.raw||{};
@@ -94,4 +119,4 @@ function projectWorld(world,nearby=[],lastAction='',mode='stay',nativeGoal=null,
   if(result.length>1750)throw Error('Minecraft observation too large to attest');
   return result;
 }
-module.exports={loadedTargets,projectWorld};
+module.exports={loadedTargets,projectWorld,nativeItemForMission};

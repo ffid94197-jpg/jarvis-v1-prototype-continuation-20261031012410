@@ -31,6 +31,22 @@ assert.equal(snapshot.wornNetherite,true);n++;
 assert.ok(JSON.stringify(snapshot).length<1900);n++;
 assert.equal(snapshot.inventory.raw.cobblestone,6);n++;
 assert.equal(snapshot.inventory.raw.diamond,2);n++;
+const {nativeItemForMission}=moduleRef.exports;
+const activeCrop={goal:'farm_crop',crop:'beetroot'};
+assert.equal(nativeItemForMission(activeCrop),'beetroot','Native beetroot output is retained');n++;
+const sequence={goal:'sequence',sequenceIndex:1,sequence:[
+ {goal:'gather',resource:'diamond',targetCount:1},
+ {goal:'farm_crop',crop:'beetroot',position:{x:2,y:64,z:4},width:2,depth:1,targetCount:2}
+]};
+assert.equal(nativeItemForMission(sequence),'beetroot','Active sequence crop chosen');n++;
+const completed={...sequence,sequenceIndex:2};
+assert.equal(nativeItemForMission(completed),'beetroot','Last stage output remains visible at completion');n++;
+assert.equal(nativeItemForMission({...sequence,sequenceIndex:0}),'diamond','Stage progression switches target');n++;
+const overloaded=Object.fromEntries(Array.from({length:45},(_,i)=>['random_'+i,64]));
+overloaded.beetroot=3;
+const projected=JSON.parse(projectWorld({...base,inventory:{raw:overloaded}},[],
+ '','stay','sequence',nativeItemForMission(sequence)));
+assert.equal(projected.inventory.raw.beetroot,3,'Native target survives compact inventory truncation');n++;
 const {loadedTargets}=moduleRef.exports;
 const targets=loadedTargets({
  entity:{position:{x:0,y:64,z:0}},

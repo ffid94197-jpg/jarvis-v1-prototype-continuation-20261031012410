@@ -37,7 +37,7 @@ const {observeCrop}=require('./crop_goal.cjs');
 const {validCraftSpec,validEquipSpec}=require('./general_goal.cjs');
 const {safeSurveyFeet}=require('./wood_navigation.cjs');
 const {waitForInventoryIncrease}=require('./inventory_settlement.cjs');
-const {loadedTargets,projectWorld}=require('./minecraft_ai_observation.cjs');
+const {loadedTargets,projectWorld,nativeItemForMission}=require('./minecraft_ai_observation.cjs');
 const {stances,reachableStances,isExposed,diggableObserved,rawCount,MINABLE_STONE}=require('./mining_navigation.cjs');
 const {stoneProposal,excavationProposal}=require('./stone_access.cjs');
 const {findCraftingSite,findCarvableCraftingAlcove}=require('./crafting_site.cjs');
@@ -70,14 +70,9 @@ let spawned=false, mode='follow', actionEpoch=0, followTimer, moveTimer, lastAct
 const failedDigTargets=new Map();
 const autopilot=createController({maxSeconds:43200,maxSteps:20000});
 const missionCheckpoint=createCheckpoint(path.join(__dirname,'.jarvis-minecraft-mission.json'),{host,port,owner:leader});
-// Keep the exact crop output visible in compact game observations even when
-// the player carries dozens of unrelated stacks. No invented quantity.
-function nativeObservationItem(){
-  const state=autopilot.status();
-  return state.goal==='farm_crop'?
-    (state.crop==='carrots'?'carrot':state.crop==='potatoes'?'potato':null):
-    state.goal==='farm_wheat'?'wheat':state.item;
-}
+// Prefer the exact owner-authorized output in bounded observation receipts,
+// including a composed sequence's current verified stage.
+function nativeObservationItem(){return nativeItemForMission(autopilot.status());}
 let autoBusy=false;let deathsOnCurrentGoal=0;let resumeAfterSpawn=false;let languageBusy=false;
 let advancedBusy=false;
 let guardBusy=false;

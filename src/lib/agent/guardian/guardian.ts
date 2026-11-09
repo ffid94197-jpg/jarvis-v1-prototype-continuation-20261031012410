@@ -11,6 +11,7 @@
  */
 
 import { db } from "@/lib/db";
+import { randomUUID } from "node:crypto";
 import { validateDesktopTool, type DesktopPrepared } from "../windows/policy";
 import { prepareLocalProjectBuild, type LocalProjectBuildPrepared } from "../tools/localProjectBuild";
 import {
@@ -47,6 +48,9 @@ export interface GuardianDecision {
   verdict: GuardianVerdict;
   reason?: string;
   prepared?: PreparedArgs;
+  /** Set only after durable audit creation for an allowed Core-owned task. */
+  auditId?: string;
+  auditedTaskId?: string;
 }
 
 /** Tools the Guardian knows about. Anything else is denied as unknown. */
@@ -111,16 +115,18 @@ async function writeAudit(
   args: Record<string, unknown>,
   verdict: GuardianVerdict,
   reason: string,
-): Promise<boolean> {
+): Promise<string|null> {
   // TEST-ONLY fault injection (documented in core/faults.ts): a simulated
   // audit-trail failure must flip the decision to DENY (fail-closed,
   // DUR-07). Inert unless JARVIS_TEST_FAULT=audit is explicitly set.
   if (process.env.JARVIS_TEST_FAULT === "audit") {
-    return false;
+    return null;
   }
   try {
+    const auditId=randomUUID();
     await db.auditLog.create({
       data: {
+        id: auditId,
         taskId: taskId ?? null,
         tool,
         // Audit is accountability metadata, NOT a second secret store.
@@ -133,9 +139,9 @@ async function writeAudit(
         reason: reason.slice(0, 1000),
       },
     });
-    return true;
+    return auditId;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -493,7 +499,9 @@ export async function authorizeToolCall(
   if (!audited) {
     return deny("guardian audit trail unavailable — action blocked (fail-closed)");
   }
-  return decision;
+  return decision.verdict==="allow"&&ctx.taskId
+    ? {...decision,auditId:audited,auditedTaskId:ctx.taskId}
+    : decision;
 }
 
 export { WORKSPACE_ROOT };

@@ -39,7 +39,7 @@ const SYSTEM=[
  'Long-horizon auto_goal smelt supports output items only from the native audited furnace list (iron_ingot, gold_ingot, copper_ingot, netherite_scrap, glass, stone, cooked_beef, cooked_porkchop, cooked_mutton, cooked_chicken, cooked_rabbit, baked_potato). The raw input and fuel are selected by the native planner from real inventory; no invented furnace transformations. A smelting targetCount is 1-16 and must match owner wording with inventory readback.',
  'One-shot durable auto_goal transfer allows owner-specified exact chest/barrel coordinates, real item, 1-64 quantity and deposit/withdraw. It requires both actual player and chest inventory changes, never retries ambiguous mutations or resumes a transfer after disconnect.',
  'Long-horizon auto_goal craft supports selected recipes; craft_item supports any item found in the live Minecraft registry when the server-confirmed inventory contains ingredients, with bounded count 1-16.',
- 'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, feed_animal {entityId,item} (one freshly observed owner-named cow/sheep/pig/chicken and exact approved food; verify one consumed item; never claim breeding), fish_once {position} (one freshly observed nearby water block and real fishing rod, inventory proof of new fish), sleep_in_bed {position} (one freshly observed reachable bed; only at night; check game readback), inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
+ 'Bounded general-purpose commands: craft_item {item,count}, equip_item {item,destination}, row_boat {entityId,durationMs} (one freshly observed owner-named boat, forward for 300–1200 ms, verify real displacement), feed_animal {entityId,item} (one freshly observed owner-named cow/sheep/pig/chicken and exact approved food; verify one consumed item; never claim breeding), fish_once {position} (one freshly observed nearby water block and real fishing rod, inventory proof of new fish), sleep_in_bed {position} (one freshly observed reachable bed; only at night; check game readback), inspect_block/dig_block/interact_block {position}, navigate {position,range}, place_block {item,reference,face}, move {directionInput,durationMs}, use_item {hand}. Use only explicitly owner-specified coordinates or fresh observed nearby block positions, never invented coordinates.',
  'One action is never a whole mission. An action STARTED or DISPATCHED is not success; JARVIS must observe state and replan before any further effect.',
  'Other bounded native skills: inspect_villager {entityId}, trade_villager {entityId,tradeIndex,times}, transfer_container {position,item,count,operation}, enchant_item {position,item,choice}, attack_hostile {entityId,maxSwings}. Attack only a freshly observed owner-named allowed hostile, never a player, villager, passive mob, boss or creeper. An attack input is not proof of damage or death. The owner must explicitly request the exact target, offer, direction, item, and count. Only use freshly observed villagers/blocks; NEVER invent an ID or location, consume materials without owner approval, or claim success from a dispatch.',
  'Equip requires item and destinationSlot. Travel requires observed coordinates destination {x,y,z} and arrivalRange 1-8.',
@@ -311,6 +311,7 @@ function contextualIntent(text,context){
  const instruction=text.toLowerCase().trim()
    .replace(/^(?:(?:can|could|would) you (?:please )?|please )/,'')
    .replace(/\s+(?:please|for me)$/,'');
+ const boating=/^(?:row|paddle|move) (?:the |a |that |this |my )?(?:nearby )?boat forward(?: for (\d{3,4}) (?:ms|milliseconds))?$/.exec(instruction);
  const feeding=/^feed (?:the |a |that |this )?(cow|sheep|pig|chicken) (?:with |some )?(wheat|carrot|potato|beetroot|wheat seeds|beetroot seeds|pumpkin seeds|melon seeds)$/.exec(instruction);
  const fishing=/^(?:fish|catch(?: a| one)? fish)(?: once)? (?:in|from) (?:the |a |nearby )?(?:nearby )?(?:water|pond|river|lake)$/.exec(instruction);
  const sleeping=/^(?:sleep|rest)(?: through the night)? (?:in|on) (?:the |a |that |this |my )?(?:nearby )?bed$/.exec(instruction);
@@ -322,11 +323,22 @@ function contextualIntent(text,context){
  const storage=new RegExp('^(store|deposit|put|withdraw|take|retrieve) ('+COUNT_PATTERN+') ([a-z_ ]{2,56}) (?:in|into|from) (?:the |a |that )?(chest|barrel)$').exec(instruction);
  const enchanting=/^enchant (?:my |the |a |an )?([a-z_ ]{2,56}) (?:with |using )?(?:the )?(first|second|third) (?:choice|option)$/.exec(instruction);
  const fight=/^(?:attack|fight|defeat|kill|slay|eliminate|take out) (?:the |that |a |an )?(?:nearby )?([a-z_]+(?: [a-z_]+)?)(?: (?:up to )?(\d{1,2}) (?:hits|swings|times))?$/.exec(instruction);
- if(!request&&!travel&&!inspect&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight&&!sleeping&&!fishing&&!feeding)return null;
+ if(!request&&!travel&&!inspect&&!villagerInspect&&!villageDeal&&!storage&&!enchanting&&!fight&&!sleeping&&!fishing&&!feeding&&!boating)return null;
  let scene;
  try{scene=JSON.parse(String(context||''));}catch{return fail('Cannot resolve nearby objects without a fresh game observation');}
  if(!scene||scene.joined!==true||scene.busy!==false||!Array.isArray(scene.nearbyBlocks))
    return fail('A fresh idle joined-game observation is required for object actions');
+ if(boating){
+  const durationMs=boating[1]?Number(boating[1]):600;
+  if(!Number.isSafeInteger(durationMs)||durationMs<300||durationMs>1200)
+    return fail('Boat movement must be 300–1200 milliseconds');
+  const boats=(Array.isArray(scene.boats)?scene.boats:[]).filter(b=>
+    Number.isSafeInteger(b?.id)&&b.id>=0&&b.id<=200000&&
+    /^(?:[a-z_]+_)?(?:boat|raft)$/.test(String(b.name||''))&&
+    Number.isFinite(b.distance)&&b.distance<=3.5);
+  if(boats.length!==1)return fail('Need exactly one nearby observed boat to row');
+  return canonicalIntent({command:'row_boat',entityId:boats[0].id,durationMs});
+ }
  if(feeding){
   const animal=feeding[1],item=feeding[2].replace(/ /g,'_');
   if(!validFeedPair(animal,item))return fail('Selected food cannot feed the named animal');

@@ -28,6 +28,8 @@ check(!modelPrimitiveGrounded(command,'fish once in water',JSON.stringify({
  ...scene,nearbyBlocks:[]})),'Unobserved water denied');
 check(!modelPrimitiveGrounded(command,'do not fish in water',JSON.stringify(scene)),
  'Negative owner intent cannot authorize a cast');
+check(!modelPrimitiveGrounded(command,'fish once in water and build a boat',JSON.stringify(scene)),
+ 'One fishing effect cannot silently satisfy a compound owner instruction');
 const seen=loadedTargets({
  entity:{position:{x:3,y:64,z:6}},
  findBlocks:()=>[{...position}],blockAt:()=>({name:'water'})

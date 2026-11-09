@@ -17,7 +17,7 @@ function loadModule(rel){
  assert.equal((out.diagnostics||[]).filter(x=>x.category===ts.DiagnosticCategory.Error).length,0,'TS parser errors');
  const ex={};vm.runInNewContext(out.outputText,{exports:ex,console,require},{timeout:3000});return ex;
 }
-const {parseGoalPlan,validateGoalPlan,goalPlanContext,requiresGoalPlan,requiresExternalActionEvidence,GoalProgressWatchdog,goalPlanRequest}=loadModule('src/lib/agent/core/goalPlanner.ts');
+const {parseGoalPlan,validateGoalPlan,goalPlanContext,requiresGoalPlan,requiresExternalActionEvidence,GoalProgressWatchdog,goalPlanRequest,hasMaterialPlanRevision}=loadModule('src/lib/agent/core/goalPlanner.ts');
 let count=0;function check(name,fn){fn();count++;console.log('PASS',name)}
 const simple={schemaVersion:1,milestones:[{id:'gather',description:'Collect wood',dependsOn:[],evidence:'Observed inventory contains logs'},{id:'craft',description:'Craft tools',dependsOn:['gather'],evidence:'Observed actual tool inventory'}]};
 check('valid milestone graph',()=>assert.equal(validateGoalPlan(simple).milestones.length,2));
@@ -32,6 +32,20 @@ check('cycles via backward references rejected',()=>assert.equal(validateGoalPla
 check('reject non-JSON',()=>assert.equal(parseGoalPlan('not json'),null));
 check('reject huge model output',()=>assert.equal(parseGoalPlan('x'.repeat(12001)),null));
 check('sanitize extra untrusted fields',()=>assert.ok(!('tool' in validateGoalPlan({...simple,milestones:[{...simple.milestones[0],tool:'run_command'},simple.milestones[1]]}).milestones[0])));
+check('a renamed or reordered plan is not a materially different strategy',()=>{
+  const renamed={schemaVersion:1,milestones:[
+    {id:'first',description:'Collect wood',dependsOn:[],evidence:'Readback A'},
+    {id:'second',description:'Craft tools',dependsOn:['first'],evidence:'Readback B'}
+  ]};
+  assert.equal(hasMaterialPlanRevision(simple,renamed),false);
+});
+check('a substantively different approach is allowed for a bounded replan',()=>{
+  const alternative={schemaVersion:1,milestones:[
+    {...simple.milestones[0],description:'Inspect existing inventory and reuse available logs'},
+    simple.milestones[1]
+  ]};
+  assert.equal(hasMaterialPlanRevision(simple,alternative),true);
+});
 check('long-horizon gaming goal detected',()=>assert.ok(requiresGoalPlan('From scratch get full Netherite and defeat Ender Dragon in Minecraft')));
 check('ordinary request not unnecessarily planned',()=>assert.ok(!requiresGoalPlan('Hi')));
 check('educational question not planned',()=>assert.ok(!requiresGoalPlan('How to defeat the Ender Dragon?')));
@@ -63,6 +77,30 @@ check('watchdog state survives serialized restart',()=>{
   assert.equal(afterCrash.snapshot().pendingReplan,false);
 });
 check('reject corrupted watchdog state',()=>assert.throws(()=>new GoalProgressWatchdog({schemaVersion:1,lastFailureHash:'raw-secret',failures:999,revisions:0,pendingReplan:false})));
+check('interleaved repeated failures force a replan and survive restart',()=>{
+  const w=new GoalProgressWatchdog();
+  const f={ok:false,error:'separate failure'};
+  assert.equal(w.observe('write_file',{path:'a'},f),'continue');
+  assert.equal(w.observe('read_file',{path:'b'},f),'continue');
+  assert.equal(w.observe('write_file',{path:'a'},f),'continue');
+  const snap=JSON.parse(JSON.stringify(w.snapshot()));
+  assert.equal(snap.failureHistory.length,2);
+  const resumed=new GoalProgressWatchdog(snap);
+  assert.equal(resumed.observe('read_file',{path:'b'},f),'continue');
+  assert.equal(resumed.observe('write_file',{path:'a'},f),'replan');
+});
+check('success of a different tool does not erase failed write attempts',()=>{
+  const w=new GoalProgressWatchdog(),f={ok:false};
+  assert.equal(w.observe('write_file',{path:'a'},f),'continue');
+  assert.equal(w.observe('observe',{}, {ok:true}),'continue');
+  assert.equal(w.observe('write_file',{path:'a'},f),'continue');
+  assert.equal(w.observe('write_file',{path:'a'},f),'replan');
+});
+check('corrupt persisted failure history is denied',()=>{
+  const state=new GoalProgressWatchdog().snapshot();
+  assert.throws(()=>new GoalProgressWatchdog({...state,
+    failureHistory:[{key:'not-a-hash',count:9}]}));
+});
 check('stored watchdog snapshot omits arguments and error',()=>{
   const w=new GoalProgressWatchdog();w.observe('tool',{secret:'PERSONAL_KEY_123'}, {ok:false,error:'internal secret'});
   assert.ok(!JSON.stringify(w.snapshot()).includes('PERSONAL_KEY_123'));

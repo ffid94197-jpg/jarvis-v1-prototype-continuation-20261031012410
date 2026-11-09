@@ -400,7 +400,7 @@ export function mayStartNativeMinecraftGoal(
    }
    if(index>0&&step.goal==='smelt'&&
       /^(?:smelt|cook|bake|refine) (?:it|them)$/.test(stages[index].trim())){
-     const previousRaw:unknown=args.steps[index-1];
+     const previousRaw:unknown=(args.steps as unknown[])[index-1];
      if(!previousRaw||typeof previousRaw!=="object"||Array.isArray(previousRaw))
        return false;
      const previous=previousRaw as Record<string,unknown>;
